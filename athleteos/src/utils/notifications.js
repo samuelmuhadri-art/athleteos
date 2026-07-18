@@ -1,0 +1,167 @@
+// ============================================================
+// AthleteOS — src/utils/notifications.js
+// Système centralisé de notifications automatiques.
+// ============================================================
+
+import { supabase } from "./supabaseClient";
+import { getAthleteMetricsForWeek } from "./chargeCalculations";
+
+// ─── ALERTES COACH ────────────────────────────────────────────────────────────
+
+export async function checkAndAlertACWR(clubId, athletes, weeklyCharge, currentWeek) {
+  for (const athlete of athletes) {
+    const metrics = getAthleteMetricsForWeek(athlete.id, weeklyCharge, currentWeek);
+
+    if (metrics.acwr > 1.3) {
+      const { data: existing } = await supabase.from("alerts").select("id")
+        .eq("club_id", clubId).eq("athlete_id", athlete.id).eq("type", "charge")
+        .gte("created_at", new Date(Date.now() - 7*86400000).toISOString()).limit(1);
+      if (!existing?.length) {
+        await supabase.from("alerts").insert({
+          club_id: clubId, athlete_id: athlete.id, type: "charge",
+          title: `⚠️ Surcharge — ${athlete.name}`,
+          description: `ACWR de ${metrics.acwr.toFixed(2)} (seuil 1.30). Risque élevé de blessure. Envisage une récupération.`,
+          severity: "élevée", is_read: false,
+        });
+      }
+    }
+
+    if (metrics.acwr < 0.8 && metrics.acwr > 0) {
+      const { data: existing } = await supabase.from("alerts").select("id")
+        .eq("club_id", clubId).eq("athlete_id", athlete.id).eq("type", "charge")
+        .ilike("title", "%sous-charge%")
+        .gte("created_at", new Date(Date.now() - 7*86400000).toISOString()).limit(1);
+      if (!existing?.length) {
+        await supabase.from("alerts").insert({
+          club_id: clubId, athlete_id: athlete.id, type: "charge",
+          title: `📉 Sous-charge — ${athlete.name}`,
+          description: `ACWR de ${metrics.acwr.toFixed(2)} (seuil 0.80). Risque de déconditionnement.`,
+          severity: "légère", is_read: false,
+        });
+      }
+    }
+  }
+}
+
+export async function alertSessionAbsence(clubId, athlete, session) {
+  const dateStr = session.sessionDate
+    ? new Date(session.sessionDate).toLocaleDateString("fr-BE", { weekday:"long", day:"numeric", month:"long" })
+    : session.day ?? "";
+  await supabase.from("alerts").insert({
+    club_id: clubId, athlete_id: athlete.id, type: "absence",
+    title: `❌ Absence — ${athlete.name}`,
+    description: `${athlete.name} n'a pas réalisé "${session.title}" du ${dateStr}.`,
+    severity: "modérée", is_read: false,
+  });
+}
+
+export async function alertNewInjury(clubId, athlete, injury) {
+  await supabase.from("alerts").insert({
+    club_id: clubId, athlete_id: athlete.id, type: "blessure",
+    title: `🩺 Blessure signalée — ${athlete.name}`,
+    description: `${athlete.name} a signalé : ${injury.name} (${injury.location}), intensité ${injury.intensity}/10.`,
+    severity: injury.intensity >= 7 ? "élevée" : injury.intensity >= 4 ? "modérée" : "légère",
+    is_read: false,
+  });
+}
+
+export async function alertAthleteSession(clubId, athlete, session) {
+  await supabase.from("alerts").insert({
+    club_id: clubId, athlete_id: athlete.id, type: "performance",
+    title: `📋 Séance planifiée par ${athlete.name}`,
+    description: `${athlete.name} a planifié "${session.title}" le ${
+      new Date(session.sessionDate || Date.now()).toLocaleDateString("fr-BE", { weekday:"long", day:"numeric", month:"long" })
+    }.`,
+    severity: "légère", is_read: false,
+  });
+}
+
+export async function alertNewRecord(clubId, athlete, discipline, result, compName) {
+  await supabase.from("alerts").insert({
+    club_id: clubId, athlete_id: athlete.id, type: "performance",
+    title: `🏆 Nouveau record — ${athlete.name}`,
+    description: `${athlete.name} a établi un nouveau record en ${discipline} : ${result}${compName ? ` lors de "${compName}"` : ""}.`,
+    severity: "info", is_read: false,
+  });
+}
+
+export async function checkUpcomingCompetitions(clubId, competitions) {
+  const today   = new Date();
+  const in7days = new Date(today.getTime() + 7*86400000);
+  const yesterday = new Date(today.getTime() - 86400000);
+
+  for (const comp of competitions) {
+    const compDate = new Date(comp.date);
+    if (compDate > yesterday && compDate <= in7days) {
+      const { data: existing } = await supabase.from("alerts").select("id")
+        .eq("club_id", clubId).eq("type", "competition")
+        .ilike("title", `%${comp.name}%`)
+        .gte("created_at", new Date(Date.now() - 86400000).toISOString()).limit(1);
+      if (!existing?.length) {
+        const days = Math.round((compDate - today) / 86400000);
+        await supabase.from("alerts").insert({
+          club_id: clubId, athlete_id: null, type: "competition",
+          title: `🏟️ ${comp.name} — dans ${days === 0 ? "aujourd'hui" : `${days} jour${days>1?"s":""}`}`,
+          description: `${comp.athleteIds?.length ?? 0} athlète${(comp.athleteIds?.length??0)>1?"s":""} engagé${(comp.athleteIds?.length??0)>1?"s":""}. Vérifier l'état de forme du groupe.`,
+          severity: days <= 2 ? "élevée" : "modérée", is_read: false,
+        });
+      }
+    }
+  }
+}
+
+// ─── NOTIFICATIONS ATHLÈTE ────────────────────────────────────────────────────
+
+export async function notifyAthleteNewSession(clubId, athleteIds, session) {
+  if (!athleteIds?.length) return;
+  const rows = athleteIds.map(athleteId => ({
+    athlete_id: athleteId, club_id: clubId, type: "new_session",
+    title: `📋 Nouvelle séance — ${session.title}`,
+    description: `Le coach a planifié "${session.title}" le ${
+      session.sessionDate
+        ? new Date(session.sessionDate).toLocaleDateString("fr-BE", { weekday:"long", day:"numeric", month:"long" })
+        : session.day ?? ""
+    }.`,
+    is_read: false,
+  }));
+  await supabase.from("athlete_notifications").insert(rows);
+}
+
+export async function notifyAthleteResult(clubId, athleteId, discipline, result, compName) {
+  await supabase.from("athlete_notifications").insert({
+    athlete_id: athleteId, club_id: clubId, type: "result_added",
+    title: `🏆 Résultat saisi — ${discipline}`,
+    description: `Ton résultat en ${discipline} lors de "${compName}" : ${result}.`,
+    is_read: false,
+  });
+}
+
+export async function notifyAthleteMessage(clubId, athleteId, coachName, preview) {
+  await supabase.from("athlete_notifications").insert({
+    athlete_id: athleteId, club_id: clubId, type: "message",
+    title: `💬 Message de ${coachName ?? "ton coach"}`,
+    description: preview ? preview.slice(0, 100) : "Tu as reçu un nouveau message.",
+    is_read: false,
+  });
+}
+
+export async function notifyGoalAchieved(clubId, athleteId, discipline, targetValue) {
+  await supabase.from("athlete_notifications").insert({
+    athlete_id: athleteId, club_id: clubId, type: "goal_achieved",
+    title: `🎯 Objectif atteint — ${discipline}`,
+    description: `Tu as atteint ton objectif de ${targetValue} en ${discipline}. Félicitations !`,
+    is_read: false,
+  });
+}
+
+export async function notifyAthleteCompetitionReminder(clubId, competition) {
+  if (!competition.athleteIds?.length) return;
+  const days = Math.round((new Date(competition.date) - new Date()) / 86400000);
+  const rows = competition.athleteIds.map(athleteId => ({
+    athlete_id: athleteId, club_id: clubId, type: "competition_reminder",
+    title: `🏟️ ${competition.name} dans ${days} jour${days>1?"s":""}`,
+    description: `La compétition a lieu le ${new Date(competition.date).toLocaleDateString("fr-BE", { weekday:"long", day:"numeric", month:"long" })}. Reste concentré !`,
+    is_read: false,
+  }));
+  await supabase.from("athlete_notifications").insert(rows);
+}
