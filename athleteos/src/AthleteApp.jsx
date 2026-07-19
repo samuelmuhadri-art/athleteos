@@ -911,177 +911,164 @@ const SessionDetailModal = memo(({ session, athlete, onClose, onSetStatus, onSet
 });
 
 function MonPlanning({ athlete, sessions, allAthletes, clubId, createdBy, onRpeChange, onStatusChange, onFeelingChange, onCommentChange, onRefresh }) {
-  const today = new Date();
-  const [viewYear,  setViewYear]  = useState(today.getFullYear());
-  const [viewMonth, setViewMonth] = useState(today.getMonth());
-  const [viewMode,  setViewMode]  = useState("month"); // "month" | "week"
-  const [selectedDate, setSelectedDate] = useState(today);
-  const [activeSession, setActiveSession] = useState(null);
-  const [showCreate, setShowCreate] = useState(false);
+  const today    = new Date();
+  const isMobile = typeof window !== "undefined" && window.innerWidth < 768;
 
-  const calDays = useMemo(() => getCalendarDays(viewYear, viewMonth), [viewYear, viewMonth]);
+  const [viewYear,      setViewYear]      = useState(today.getFullYear());
+  const [viewMonth,     setViewMonth]     = useState(today.getMonth());
+  const [viewMode,      setViewMode]      = useState(isMobile ? "agenda" : "month");
+  const [selectedDate,  setSelectedDate]  = useState(today);
+  const [activeSession, setActiveSession] = useState(null);
+  const [showCreate,    setShowCreate]    = useState(false);
 
   const sessionsByDate = useMemo(() => {
     const map = {};
     sessions.forEach(s => {
       if (!s.sessionDate) return;
-      const key = s.sessionDate.slice(0,10);
+      const key = s.sessionDate.slice(0, 10);
       if (!map[key]) map[key] = [];
       map[key].push(s);
     });
     return map;
   }, [sessions]);
 
-  const selectedDaySessions = useMemo(() => {
-    if (!selectedDate) return [];
-    const key = selectedDate.toISOString().slice(0,10);
-    return (sessionsByDate[key]??[]).sort((a,b)=>a.time.localeCompare(b.time));
-  }, [selectedDate, sessionsByDate]);
+  const calDays = useMemo(() => getCalendarDays(viewYear, viewMonth), [viewYear, viewMonth]);
 
-  // Vue semaine — 7 jours autour de la date sélectionnée
   const weekDays = useMemo(() => {
     const ref = selectedDate ?? today;
-    const dow = (ref.getDay()+6)%7;
-    const mon = new Date(ref); mon.setDate(ref.getDate()-dow);
-    return Array.from({length:7},(_,i)=>{ const d=new Date(mon); d.setDate(mon.getDate()+i); return d; });
-  }, [selectedDate, today]);
+    const dow = (ref.getDay() + 6) % 7;
+    const mon = new Date(ref);
+    mon.setDate(ref.getDate() - dow);
+    return Array.from({ length: 7 }, (_, i) => {
+      const d = new Date(mon); d.setDate(mon.getDate() + i); return d;
+    });
+  }, [selectedDate]);
 
-  const prevMonth = () => { if(viewMonth===0){setViewYear(y=>y-1);setViewMonth(11);}else setViewMonth(m=>m-1); };
-  const nextMonth = () => { if(viewMonth===11){setViewYear(y=>y+1);setViewMonth(0);}else setViewMonth(m=>m+1); };
-  const prevWeek  = () => { const d=new Date(selectedDate??today); d.setDate(d.getDate()-7); setSelectedDate(d); };
-  const nextWeek  = () => { const d=new Date(selectedDate??today); d.setDate(d.getDate()+7); setSelectedDate(d); };
+  const groupedByDate = useMemo(() => {
+    const sorted = [...sessions].filter(s => s.sessionDate).sort((a, b) => a.sessionDate.localeCompare(b.sessionDate));
+    const groups = [];
+    const seen = new Set();
+    sorted.forEach(s => {
+      const key = s.sessionDate.slice(0, 10);
+      if (!seen.has(key)) { seen.add(key); groups.push({ date: key, sessions: [] }); }
+      groups.find(g => g.date === key).sessions.push(s);
+    });
+    return groups;
+  }, [sessions]);
+
+  const prevMonth = () => { if (viewMonth === 0) { setViewYear(y => y-1); setViewMonth(11); } else setViewMonth(m => m-1); };
+  const nextMonth = () => { if (viewMonth === 11) { setViewYear(y => y+1); setViewMonth(0); } else setViewMonth(m => m+1); };
+  const prevWeek  = () => { const d = new Date(selectedDate ?? today); d.setDate(d.getDate()-7); setSelectedDate(d); setViewYear(d.getFullYear()); setViewMonth(d.getMonth()); };
+  const nextWeek  = () => { const d = new Date(selectedDate ?? today); d.setDate(d.getDate()+7); setSelectedDate(d); setViewYear(d.getFullYear()); setViewMonth(d.getMonth()); };
   const goToday   = () => { setViewYear(today.getFullYear()); setViewMonth(today.getMonth()); setSelectedDate(today); };
 
-  const liveActive = activeSession ? sessions.find(s=>s.id===activeSession.id)??activeSession : null;
+  const liveActive = activeSession ? sessions.find(s => s.id === activeSession.id) ?? activeSession : null;
+
+  const navLabel = useMemo(() => {
+    if (viewMode === "month") return `${MONTHS_FR[viewMonth]} ${viewYear}`;
+    const mon = weekDays[0], sun = weekDays[6];
+    if (mon.getMonth() === sun.getMonth())
+      return `${mon.getDate()} \u2013 ${sun.toLocaleDateString("fr-BE", { day: "numeric", month: "long" })}`;
+    return `${mon.toLocaleDateString("fr-BE", { day: "numeric", month: "short" })} \u2013 ${sun.toLocaleDateString("fr-BE", { day: "numeric", month: "short" })}`;
+  }, [viewMode, viewMonth, viewYear, weekDays]);
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-full" style={{ background: "#F5F5F2" }}>
+
       {/* Header */}
-      <div className="bg-white border-b border-slate-100 px-5 py-3 flex items-center justify-between gap-3 flex-shrink-0">
-        <div className="flex items-center gap-2">
-          {viewMode==="month"?(
-            <>
-              <button onClick={prevMonth} className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-500"><ChevronLeft size={16}/></button>
-              <span className="text-[15px] font-bold text-slate-800 min-w-[140px] text-center">{MONTHS_FR[viewMonth]} {viewYear}</span>
-              <button onClick={nextMonth} className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-500"><ChevronRight size={16}/></button>
-            </>
-          ):(
-            <>
-              <button onClick={prevWeek} className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-500"><ChevronLeft size={16}/></button>
-              <span className="text-[14px] font-bold text-slate-800 min-w-[180px] text-center">
-                {weekDays[0].toLocaleDateString("fr-BE",{day:"numeric",month:"short"})} – {weekDays[6].toLocaleDateString("fr-BE",{day:"numeric",month:"short",year:"numeric"})}
-              </span>
-              <button onClick={nextWeek} className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-500"><ChevronRight size={16}/></button>
-            </>
-          )}
-          <button onClick={goToday} className="px-2.5 py-1 rounded-lg text-[11px] font-semibold border border-slate-200 text-slate-600 hover:bg-slate-50">Auj.</button>
+      <div className="bg-white border-b border-slate-100 px-3 py-2.5 flex items-center justify-between gap-2 flex-shrink-0">
+        <div className="flex items-center gap-1">
+          <button onClick={viewMode === "month" ? prevMonth : prevWeek}
+            className="w-8 h-8 rounded-lg hover:bg-slate-100 text-slate-500 flex items-center justify-center">
+            <ChevronLeft size={16}/>
+          </button>
+          <span className="text-[13px] font-bold text-slate-800 min-w-[120px] text-center truncate">{navLabel}</span>
+          <button onClick={viewMode === "month" ? nextMonth : nextWeek}
+            className="w-8 h-8 rounded-lg hover:bg-slate-100 text-slate-500 flex items-center justify-center">
+            <ChevronRight size={16}/>
+          </button>
+          <button onClick={goToday} className="px-2 py-1 rounded-lg text-[10px] font-semibold border border-slate-200 text-slate-500 hover:bg-slate-50">Auj.</button>
         </div>
-        <div className="flex items-center gap-2">
-          <div className="flex rounded-lg border border-slate-200 overflow-hidden text-[11px] font-semibold">
-            <button onClick={()=>setViewMode("month")} className={["px-3 py-1.5 transition-colors",viewMode==="month"?"bg-slate-800 text-white":"bg-white text-slate-500 hover:bg-slate-50"].join(" ")}>Mois</button>
-            <button onClick={()=>setViewMode("week")}  className={["px-3 py-1.5 transition-colors",viewMode==="week" ?"bg-slate-800 text-white":"bg-white text-slate-500 hover:bg-slate-50"].join(" ")}>Semaine</button>
+        <div className="flex items-center gap-1.5">
+          <div className="flex rounded-lg border border-slate-200 overflow-hidden text-[10px] font-semibold">
+            <button onClick={() => setViewMode("agenda")} className={["px-2 py-1.5 transition-colors", viewMode==="agenda"?"bg-slate-800 text-white":"bg-white text-slate-500"].join(" ")}>Liste</button>
+            <button onClick={() => setViewMode("month")}  className={["px-2 py-1.5 transition-colors", viewMode==="month" ?"bg-slate-800 text-white":"bg-white text-slate-500"].join(" ")}>Mois</button>
+            <button onClick={() => setViewMode("week")}   className={["px-2 py-1.5 transition-colors", viewMode==="week"  ?"bg-slate-800 text-white":"bg-white text-slate-500"].join(" ")}>Sem.</button>
           </div>
-          <button onClick={()=>setShowCreate(true)}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-white text-[12px] font-semibold shadow-sm"
-            style={{background:"#1D9E75"}}>
-            <Plus size={13}/> Planifier
+          <button onClick={() => setShowCreate(true)} className="w-8 h-8 rounded-xl flex items-center justify-center text-white shadow-sm" style={{ background: "#1D9E75" }}>
+            <Plus size={15}/>
           </button>
         </div>
       </div>
 
-      <div className="flex flex-1 overflow-hidden">
-        {/* Calendrier */}
-        <div className="flex-1 overflow-auto p-4">
-          {viewMode==="month"?(
-            <>
-              <div className="grid grid-cols-7 mb-2">
-                {DAYS_SHORT.map(d=>(
-                  <div key={d} className="text-center text-[10px] font-bold text-slate-400 uppercase tracking-wider py-1.5">{d}</div>
-                ))}
-              </div>
-              <div className="grid grid-cols-7 gap-1">
-                {calDays.map(({date,cur},idx)=>{
-                  const key=date.toISOString().slice(0,10);
-                  const ds=sessionsByDate[key]??[];
-                  const isToday=isSameDay(date,today);
-                  const isSel=selectedDate&&isSameDay(date,selectedDate);
-                  return (
-                    <div key={idx} onClick={()=>setSelectedDate(date)}
-                      className={["min-h-[80px] rounded-xl p-1.5 cursor-pointer transition-all border",
-                        isToday?"bg-emerald-50 border-emerald-400 border-2":
-                        isSel?"bg-blue-50 border-blue-300 border-2":
-                        cur?"bg-white border-slate-100 hover:border-slate-300":"bg-slate-50/50 border-slate-50 opacity-40"].join(" ")}>
-                      <div className="flex items-center justify-between mb-1">
-                        <span className={["text-[12px] font-bold w-6 h-6 flex items-center justify-center rounded-full",
-                          isToday?"bg-emerald-500 text-white":cur?"text-slate-700":"text-slate-400"].join(" ")}>
-                          {date.getDate()}
-                        </span>
-                      </div>
-                      <div className="space-y-0.5">
-                        {ds.slice(0,3).map(s=>{
-                          const c=colorsFor(s.category);
-                          const val=s.validations?.find(v=>v.athleteId===athlete.id);
-                          return (
-                            <div key={s.id} onClick={e=>{e.stopPropagation();setActiveSession(s);}}
-                              className="px-1.5 py-0.5 rounded text-[9px] font-semibold truncate cursor-pointer hover:opacity-80"
-                              style={{background:c.bg,color:c.text,borderLeft:`2px solid ${c.border}`}}>
-                              {s.title}
-                            </div>
-                          );
-                        })}
-                        {ds.length>3&&<div className="text-[9px] text-slate-400 px-1">+{ds.length-3}</div>}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </>
-          ):(
-            /* Vue semaine */
-            <div className="grid grid-cols-7 gap-2 h-full">
-              {weekDays.map((date,i)=>{
-                const key=date.toISOString().slice(0,10);
-                const ds=(sessionsByDate[key]??[]).sort((a,b)=>a.time.localeCompare(b.time));
-                const isToday=isSameDay(date,today);
-                const isSel=isSameDay(date,selectedDate??today);
+      {/* ===== VUE AGENDA ===== */}
+      {viewMode === "agenda" && (
+        <div className="flex-1 overflow-y-auto">
+          {groupedByDate.length === 0 ? (
+            <div className="flex flex-col items-center justify-center h-64 text-slate-300 gap-3 p-6">
+              <CalendarDays size={36} strokeWidth={1.5}/>
+              <p className="text-[14px] font-semibold text-center">Aucune s\xe9ance planifi\xe9e</p>
+              <button onClick={() => setShowCreate(true)} className="px-4 py-2 rounded-xl text-white text-[12px] font-semibold" style={{ background: "#1D9E75" }}>Planifier une s\xe9ance</button>
+            </div>
+          ) : (
+            <div className="p-3 space-y-4">
+              {groupedByDate.map(({ date, sessions: ds }) => {
+                const dateObj = new Date(date);
+                const isToday = isSameDay(dateObj, today);
+                const isPast  = dateObj < new Date(today.toISOString().slice(0, 10));
                 return (
-                  <div key={i} className="flex flex-col gap-2">
-                    <div className={["text-center py-2 rounded-xl border",isToday?"bg-emerald-500 border-emerald-500":"bg-white border-slate-100"].join(" ")}
-                      onClick={()=>setSelectedDate(date)}>
-                      <p className={["text-[10px] font-semibold uppercase",isToday?"text-white":"text-slate-400"].join(" ")}>{DAYS_SHORT[i]}</p>
-                      <p className={["text-[16px] font-bold",isToday?"text-white":"text-slate-700"].join(" ")}>{date.getDate()}</p>
+                  <div key={date}>
+                    <div className="flex items-center gap-2 mb-2">
+                      <div className={["w-10 h-10 rounded-xl flex flex-col items-center justify-center flex-shrink-0",
+                        isToday ? "bg-emerald-500 text-white" : isPast ? "bg-slate-100 text-slate-400" : "bg-white border border-slate-200 text-slate-700"].join(" ")}>
+                        <span className="text-[9px] font-bold uppercase leading-none">{dateObj.toLocaleDateString("fr-BE",{weekday:"short"}).replace(".","")}</span>
+                        <span className="text-[15px] font-black leading-none">{dateObj.getDate()}</span>
+                      </div>
+                      <div>
+                        <p className={["text-[12px] font-bold", isToday?"text-emerald-600":isPast?"text-slate-400":"text-slate-700"].join(" ")}>
+                          {isToday ? "Aujourd\u2019hui" : dateObj.toLocaleDateString("fr-BE",{weekday:"long",day:"numeric",month:"long"})}
+                        </p>
+                        <p className="text-[10px] text-slate-400">{ds.length} s\xe9ance{ds.length>1?"s":""}</p>
+                      </div>
                     </div>
-                    <div className="flex-1 space-y-1.5 min-h-[300px]">
-                      {ds.map(s=>{
-                        const c=colorsFor(s.category);
-                        const val=s.validations?.find(v=>v.athleteId===athlete.id);
-                        const st=val?.status??"future";
+                    <div className="space-y-2 ml-3 pl-8 border-l-2 border-slate-100">
+                      {ds.sort((a,b)=>a.time.localeCompare(b.time)).map(s => {
+                        const c   = colorsFor(s.category);
+                        const val = s.validations?.find(v => v.athleteId === athlete.id);
+                        const st  = val?.status ?? "future";
+                        const rpeNeeded = isPast && !val?.rpe && st !== "none" && st !== "future";
                         return (
-                          <div key={s.id} onClick={()=>setActiveSession(s)}
-                            className="rounded-xl border cursor-pointer hover:shadow-md transition-all overflow-hidden"
-                            style={{borderColor:c.border,borderWidth:"1.5px"}}>
-                            <div className="px-2 py-1.5" style={{background:c.bg}}>
-                              <p className="text-[10px] font-bold uppercase" style={{color:c.text}}>{CATEGORIES.find(x=>x.id===s.category)?.label??s.type}</p>
-                            </div>
-                            <div className="px-2 py-2 bg-white">
-                              <p className="text-[11px] font-semibold text-slate-800 leading-tight truncate">{s.title}</p>
-                              <p className="text-[10px] text-slate-400 mt-0.5">{s.time}</p>
-                              {s.pdfUrl&&<p className="text-[9px] text-blue-500 mt-0.5">📄 PDF</p>}
-                              <div className="mt-1">
-                                <span className={["text-[9px] font-bold px-1.5 py-0.5 rounded-full",
-                                  st==="done"?"bg-emerald-50 text-emerald-700":st==="partial"?"bg-amber-50 text-amber-700":st==="none"?"bg-red-50 text-red-700":"bg-slate-100 text-slate-400"].join(" ")}>
-                                  {st==="done"?"✅":st==="partial"?"🟡":st==="none"?"❌":"🔵"} {st==="done"?"OK":st==="partial"?"Part.":st==="none"?"Abs.":"Prévu"}
+                          <div key={s.id} onClick={() => setActiveSession(s)}
+                            className={["bg-white rounded-2xl border cursor-pointer active:scale-[0.98] transition-all overflow-hidden shadow-sm",
+                              rpeNeeded ? "border-amber-300 border-2" : "border-slate-100"].join(" ")}>
+                            <div className="px-4 py-2.5 flex items-center justify-between"
+                              style={{ background: c.bg, borderBottom: `1.5px solid ${c.border}` }}>
+                              <div className="flex items-center gap-2">
+                                <span className="text-[10px] font-black uppercase tracking-wider" style={{ color: c.text }}>
+                                  {CATEGORIES.find(x => x.id === s.category)?.label ?? s.type}
                                 </span>
+                                {s.pdfUrl && <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-blue-100 text-blue-600">\ud83d\udcc4 PDF</span>}
                               </div>
+                              <span className={["text-[10px] font-bold px-2 py-0.5 rounded-full",
+                                st==="done"?"bg-emerald-100 text-emerald-700":st==="partial"?"bg-amber-100 text-amber-700":st==="none"?"bg-red-100 text-red-700":"bg-white/60 text-slate-500"].join(" ")}>
+                                {st==="done"?"\u2705 Faite":st==="partial"?"\ud83d\udfe1 Partielle":st==="none"?"\u274c Absent":"\ud83d\udd35 Pr\xe9vue"}
+                              </span>
+                            </div>
+                            <div className="px-4 py-3">
+                              <p className="text-[15px] font-bold text-slate-800 leading-tight mb-1">{s.title}</p>
+                              <div className="flex items-center gap-3 text-[12px] text-slate-400">
+                                <span className="flex items-center gap-1"><Clock size={11}/> {s.time}</span>
+                                {s.durationMinutes && <span>{s.durationMinutes} min</span>}
+                                {val?.rpe != null && <span className="font-semibold text-slate-600">RPE {val.rpe}/10</span>}
+                              </div>
+                              {s.instructions && (
+                                <p className="text-[11px] text-amber-700 bg-amber-50 rounded-lg px-2.5 py-1.5 mt-2 line-clamp-2">\ud83d\udcac {s.instructions}</p>
+                              )}
+                              {rpeNeeded && <p className="text-[11px] font-bold text-amber-600 mt-2">\u23f3 RPE en attente \u00b7 Valide ta s\xe9ance</p>}
                             </div>
                           </div>
                         );
                       })}
-                      {ds.length===0&&(
-                        <div className="h-full flex items-center justify-center text-slate-200 text-[10px] font-medium border-2 border-dashed border-slate-100 rounded-xl min-h-[60px]">
-                          Repos
-                        </div>
-                      )}
                     </div>
                   </div>
                 );
@@ -1089,78 +1076,202 @@ function MonPlanning({ athlete, sessions, allAthletes, clubId, createdBy, onRpeC
             </div>
           )}
         </div>
+      )}
 
-        {/* Panneau latéral jour sélectionné */}
-        {selectedDate&&(
-          <div className="w-64 flex-shrink-0 bg-white border-l border-slate-100 flex flex-col overflow-hidden">
-            <div className="px-4 py-3 border-b border-slate-100 flex-shrink-0">
-              <div className="flex items-center justify-between">
-                <p className="text-[12px] font-bold text-slate-800">
-                  {selectedDate.toLocaleDateString("fr-BE",{weekday:"long",day:"numeric",month:"long"})}
-                </p>
-                <button onClick={()=>setSelectedDate(null)} className="p-1 rounded text-slate-400 hover:bg-slate-100"><X size={13}/></button>
-              </div>
-              <p className="text-[10px] text-slate-400 mt-0.5">{selectedDaySessions.length} séance{selectedDaySessions.length!==1?"s":""}</p>
-            </div>
-            <div className="flex-1 overflow-y-auto p-3 space-y-2">
-              {selectedDaySessions.length===0?(
-                <div className="flex flex-col items-center justify-center py-8 text-slate-300 gap-2">
-                  <CalendarDays size={24} strokeWidth={1.5}/>
-                  <p className="text-[11px] text-center">Aucune séance</p>
-                  <button onClick={()=>setShowCreate(true)} className="text-[11px] font-semibold text-emerald-600">+ Planifier</button>
+      {/* ===== VUE MOIS ===== */}
+      {viewMode === "month" && (
+        <div className="flex-1 overflow-y-auto p-3">
+          <div className="grid grid-cols-7 mb-1.5">
+            {DAYS_SHORT.map(d => <div key={d} className="text-center text-[9px] font-bold text-slate-400 uppercase tracking-wider py-1">{d}</div>)}
+          </div>
+          <div className="grid grid-cols-7 gap-0.5">
+            {calDays.map(({ date, cur }, idx) => {
+              const key     = date.toISOString().slice(0, 10);
+              const ds      = sessionsByDate[key] ?? [];
+              const isToday = isSameDay(date, today);
+              const isSel   = selectedDate && isSameDay(date, selectedDate);
+              return (
+                <div key={idx}
+                  onClick={() => { setSelectedDate(date); if (ds.length > 0 && isMobile) setViewMode("agenda"); }}
+                  className={["min-h-[52px] rounded-xl p-1 cursor-pointer transition-all border",
+                    isToday?"bg-emerald-50 border-emerald-300 border-2":isSel?"bg-blue-50 border-blue-200 border-2":
+                    cur?"bg-white border-slate-100 hover:border-slate-200":"bg-slate-50/50 border-transparent opacity-40"].join(" ")}>
+                  <div className="flex items-center justify-center mb-0.5">
+                    <span className={["text-[12px] font-bold w-6 h-6 flex items-center justify-center rounded-full",
+                      isToday?"bg-emerald-500 text-white":cur?"text-slate-700":"text-slate-400"].join(" ")}>
+                      {date.getDate()}
+                    </span>
+                  </div>
+                  <div className="flex flex-wrap gap-0.5 justify-center md:block md:space-y-0.5">
+                    {ds.slice(0,3).map(s => {
+                      const c = colorsFor(s.category);
+                      return (
+                        <div key={s.id}>
+                          <div className="md:hidden w-1.5 h-1.5 rounded-full" style={{ background: c.border }}
+                            onClick={e => { e.stopPropagation(); setActiveSession(s); }}/>
+                          <div className="hidden md:flex items-center gap-0.5 px-1 py-0.5 rounded text-[9px] font-semibold truncate cursor-pointer hover:opacity-80"
+                            style={{ background: c.bg, color: c.text, borderLeft: `2px solid ${c.border}` }}
+                            onClick={e => { e.stopPropagation(); setActiveSession(s); }}>
+                            <span className="truncate">{s.title}</span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                    {ds.length > 3 && <div className="md:hidden w-1.5 h-1.5 rounded-full bg-slate-300"/>}
+                    {ds.length > 3 && <div className="hidden md:block text-[9px] text-slate-400 px-0.5">+{ds.length-3}</div>}
+                  </div>
                 </div>
-              ):(
-                selectedDaySessions.map(s=>{
-                  const c=colorsFor(s.category);
-                  const val=s.validations?.find(v=>v.athleteId===athlete.id);
+              );
+            })}
+          </div>
+          {selectedDate && (() => {
+            const key = selectedDate.toISOString().slice(0, 10);
+            const ds  = (sessionsByDate[key] ?? []).sort((a,b) => a.time.localeCompare(b.time));
+            if (!ds.length) return null;
+            return (
+              <div className="mt-4 space-y-2">
+                <p className="text-[12px] font-bold text-slate-600 mb-2">{selectedDate.toLocaleDateString("fr-BE",{weekday:"long",day:"numeric",month:"long"})}</p>
+                {ds.map(s => {
+                  const c   = colorsFor(s.category);
+                  const val = s.validations?.find(v => v.athleteId === athlete.id);
+                  const st  = val?.status ?? "future";
                   return (
-                    <div key={s.id} onClick={()=>setActiveSession(s)}
-                      className="rounded-xl border cursor-pointer hover:shadow-md transition-all overflow-hidden"
-                      style={{borderColor:c.border,borderWidth:"1.5px"}}>
-                      <div className="px-3 py-1.5" style={{background:c.bg}}>
-                        <span className="text-[9px] font-bold uppercase" style={{color:c.text}}>{CATEGORIES.find(x=>x.id===s.category)?.label}</span>
+                    <div key={s.id} onClick={() => setActiveSession(s)}
+                      className="bg-white rounded-2xl border border-slate-100 overflow-hidden cursor-pointer active:scale-[0.98] transition-all shadow-sm">
+                      <div className="px-4 py-2.5 flex items-center justify-between" style={{ background: c.bg, borderBottom: `1.5px solid ${c.border}` }}>
+                        <span className="text-[10px] font-bold uppercase" style={{ color: c.text }}>{CATEGORIES.find(x=>x.id===s.category)?.label??s.type}</span>
+                        <span className={["text-[9px] font-bold px-1.5 py-0.5 rounded-full",
+                          st==="done"?"bg-emerald-100 text-emerald-700":st==="partial"?"bg-amber-100 text-amber-700":st==="none"?"bg-red-100 text-red-700":"bg-white/60 text-slate-400"].join(" ")}>
+                          {st==="done"?"\u2705":st==="partial"?"\ud83d\udfe1":st==="none"?"\u274c":"\ud83d\udd35"}
+                        </span>
                       </div>
-                      <div className="px-3 py-2 bg-white">
-                        <p className="text-[12px] font-semibold text-slate-800">{s.title}</p>
-                        <p className="text-[10px] text-slate-400 mt-0.5">{s.time}{s.durationMinutes?` · ${s.durationMinutes}min`:""}</p>
-                        {s.pdfUrl&&<p className="text-[9px] text-blue-500 mt-1">📄 PDF joint</p>}
-                        {val?.status&&(
-                          <span className={["text-[9px] font-bold px-1.5 py-0.5 rounded-full mt-1 inline-block",
-                            val.status==="done"?"bg-emerald-50 text-emerald-700":val.status==="partial"?"bg-amber-50 text-amber-700":"bg-red-50 text-red-700"].join(" ")}>
-                            {val.status==="done"?"✅ Réalisée":val.status==="partial"?"🟡 Partielle":"❌ Absent"}
-                          </span>
-                        )}
+                      <div className="px-4 py-3">
+                        <p className="text-[13px] font-bold text-slate-800">{s.title}</p>
+                        <p className="text-[11px] text-slate-400 mt-0.5">{s.time}{s.durationMinutes?` \u00b7 ${s.durationMinutes} min`:""}{ val?.rpe!=null?` \u00b7 RPE ${val.rpe}`:""}</p>
+                        {s.pdfUrl && <p className="text-[10px] text-blue-500 mt-1">\ud83d\udcc4 PDF joint</p>}
                       </div>
                     </div>
                   );
-                })
-              )}
-            </div>
-            {selectedDaySessions.length>0&&(
-              <div className="p-3 border-t border-slate-100 flex-shrink-0">
-                <button onClick={()=>setShowCreate(true)} className="w-full flex items-center justify-center gap-1.5 py-2 rounded-lg text-[11px] font-semibold text-emerald-600 bg-emerald-50 hover:bg-emerald-100 border border-emerald-100">
-                  <Plus size={12}/> Ajouter
-                </button>
+                })}
               </div>
-            )}
-          </div>
-        )}
-      </div>
-
-      {liveActive&&(
-        <SessionDetailModal
-          session={liveActive} athlete={athlete}
-          onClose={()=>setActiveSession(null)}
-          onSetStatus={onStatusChange} onSetRpe={onRpeChange}
-          onSetFeeling={onFeelingChange} onSetComment={onCommentChange}
-        />
+            );
+          })()}
+        </div>
       )}
-      {showCreate&&(
-        <CreateSessionModal
-          athlete={athlete} allAthletes={allAthletes}
-          clubId={clubId} createdBy={createdBy}
-          onClose={()=>setShowCreate(false)} onCreated={onRefresh}
-        />
+
+      {/* ===== VUE SEMAINE ===== */}
+      {viewMode === "week" && (
+        <div className="flex-1 overflow-y-auto">
+          {/* Mobile : strip horizontal */}
+          <div className="md:hidden">
+            <div className="flex overflow-x-auto gap-2 px-3 py-2.5 bg-white border-b border-slate-100 scrollbar-hide">
+              {weekDays.map((date, i) => {
+                const isToday = isSameDay(date, today);
+                const isSel   = isSameDay(date, selectedDate ?? today);
+                const hasSess = (sessionsByDate[date.toISOString().slice(0,10)] ?? []).length > 0;
+                return (
+                  <button key={i} onClick={() => setSelectedDate(date)}
+                    className={["flex-shrink-0 flex flex-col items-center gap-0.5 w-10 py-2 rounded-xl transition-all",
+                      isToday?"bg-emerald-500":isSel?"bg-slate-800":"bg-transparent"].join(" ")}>
+                    <span className={["text-[9px] font-bold uppercase",(isToday||isSel)?"text-white/70":"text-slate-400"].join(" ")}>{DAYS_SHORT[i]}</span>
+                    <span className={["text-[16px] font-black",(isToday||isSel)?"text-white":"text-slate-700"].join(" ")}>{date.getDate()}</span>
+                    {hasSess && <div className={["w-1 h-1 rounded-full",(isToday||isSel)?"bg-white/60":"bg-emerald-400"].join(" ")}/>}
+                  </button>
+                );
+              })}
+            </div>
+            <div className="p-3 space-y-2">
+              {(() => {
+                const key = (selectedDate ?? today).toISOString().slice(0, 10);
+                const ds  = (sessionsByDate[key] ?? []).sort((a,b) => a.time.localeCompare(b.time));
+                if (!ds.length) return (
+                  <div className="flex flex-col items-center justify-center py-12 text-slate-300 gap-2">
+                    <CalendarDays size={28} strokeWidth={1.5}/>
+                    <p className="text-[12px]">Repos ce jour</p>
+                    <button onClick={() => setShowCreate(true)} className="text-[11.5px] font-semibold text-emerald-600">+ Planifier</button>
+                  </div>
+                );
+                return ds.map(s => {
+                  const c   = colorsFor(s.category);
+                  const val = s.validations?.find(v => v.athleteId === athlete.id);
+                  const st  = val?.status ?? "future";
+                  return (
+                    <div key={s.id} onClick={() => setActiveSession(s)}
+                      className="bg-white rounded-2xl border border-slate-100 overflow-hidden cursor-pointer active:scale-[0.98] transition-all shadow-sm">
+                      <div className="px-4 py-2.5 flex items-center justify-between" style={{ background: c.bg, borderBottom: `1.5px solid ${c.border}` }}>
+                        <span className="text-[10px] font-bold uppercase" style={{ color: c.text }}>{CATEGORIES.find(x=>x.id===s.category)?.label??s.type}</span>
+                        <span className={["text-[9px] font-bold px-1.5 py-0.5 rounded-full",
+                          st==="done"?"bg-emerald-100 text-emerald-700":st==="partial"?"bg-amber-100 text-amber-700":st==="none"?"bg-red-100 text-red-700":"bg-white/60 text-slate-400"].join(" ")}>
+                          {st==="done"?"\u2705 Faite":st==="partial"?"\ud83d\udfe1":st==="none"?"\u274c":"\ud83d\udd35 Pr\xe9vue"}
+                        </span>
+                      </div>
+                      <div className="px-4 py-3">
+                        <p className="text-[15px] font-bold text-slate-800">{s.title}</p>
+                        <div className="flex items-center gap-3 text-[12px] text-slate-400 mt-1">
+                          <span className="flex items-center gap-1"><Clock size={11}/> {s.time}</span>
+                          {s.durationMinutes && <span>{s.durationMinutes} min</span>}
+                        </div>
+                        {s.instructions && <p className="text-[11px] text-amber-700 bg-amber-50 rounded-lg px-2.5 py-1.5 mt-2 line-clamp-2">\ud83d\udcac {s.instructions}</p>}
+                        {s.pdfUrl && (
+                          <a href={s.pdfUrl} target="_blank" rel="noopener noreferrer" onClick={e=>e.stopPropagation()}
+                            className="text-[11px] text-blue-600 font-semibold mt-2 flex items-center gap-1 w-fit">\ud83d\udcc4 Voir le PDF</a>
+                        )}
+                        {val?.rpe != null && <p className="text-[11px] font-semibold text-slate-500 mt-1">RPE {val.rpe}/10</p>}
+                      </div>
+                    </div>
+                  );
+                });
+              })()}
+            </div>
+          </div>
+          {/* Desktop : grille 7 colonnes */}
+          <div className="hidden md:block p-4">
+            <div className="grid grid-cols-7 gap-2">
+              {weekDays.map((date, i) => {
+                const key     = date.toISOString().slice(0, 10);
+                const ds      = (sessionsByDate[key] ?? []).sort((a,b) => a.time.localeCompare(b.time));
+                const isToday = isSameDay(date, today);
+                return (
+                  <div key={i} className="flex flex-col gap-1.5">
+                    <div className={["text-center py-2 rounded-xl border",isToday?"bg-emerald-500 border-emerald-500":"bg-white border-slate-100"].join(" ")}>
+                      <p className={["text-[9px] font-bold uppercase",isToday?"text-white/70":"text-slate-400"].join(" ")}>{DAYS_SHORT[i]}</p>
+                      <p className={["text-[15px] font-black",isToday?"text-white":"text-slate-700"].join(" ")}>{date.getDate()}</p>
+                    </div>
+                    <div className="space-y-1.5">
+                      {ds.map(s => {
+                        const c  = colorsFor(s.category);
+                        const val= s.validations?.find(v=>v.athleteId===athlete.id);
+                        const st = val?.status??"future";
+                        return (
+                          <div key={s.id} onClick={()=>setActiveSession(s)} className="rounded-xl border overflow-hidden cursor-pointer hover:shadow-md transition-all" style={{borderColor:c.border,borderWidth:"1.5px"}}>
+                            <div className="px-2 py-1" style={{background:c.bg}}><p className="text-[9px] font-bold uppercase truncate" style={{color:c.text}}>{CATEGORIES.find(x=>x.id===s.category)?.label??s.type}</p></div>
+                            <div className="px-2 py-2 bg-white">
+                              <p className="text-[11px] font-semibold text-slate-800 truncate">{s.title}</p>
+                              <p className="text-[10px] text-slate-400">{s.time}</p>
+                              <span className={["text-[9px] font-bold px-1 py-0.5 rounded-full mt-1 inline-block",st==="done"?"bg-emerald-50 text-emerald-700":st==="partial"?"bg-amber-50 text-amber-700":st==="none"?"bg-red-50 text-red-700":"bg-slate-100 text-slate-400"].join(" ")}>
+                                {st==="done"?"\u2705":st==="partial"?"\ud83d\udfe1":st==="none"?"\u274c":"\ud83d\udd35"}
+                              </span>
+                            </div>
+                          </div>
+                        );
+                      })}
+                      {!ds.length && <div className="h-16 flex items-center justify-center text-slate-200 text-[9px] border-2 border-dashed border-slate-100 rounded-xl">Repos</div>}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {liveActive && (
+        <SessionDetailModal session={liveActive} athlete={athlete} onClose={() => setActiveSession(null)}
+          onSetStatus={onStatusChange} onSetRpe={onRpeChange} onSetFeeling={onFeelingChange} onSetComment={onCommentChange}/>
+      )}
+      {showCreate && (
+        <CreateSessionModal athlete={athlete} allAthletes={allAthletes} clubId={clubId} createdBy={createdBy}
+          onClose={() => setShowCreate(false)} onCreated={onRefresh}/>
       )}
     </div>
   );
@@ -2577,6 +2688,22 @@ export default function AthleteApp() {
   }, [clubId, profile?.id]);
 
   useEffect(() => { fetchAll(); }, [fetchAll]);
+
+  // ═══ Realtime : sessions + notifications athlète ══════════════════════════
+  useEffect(() => {
+    if (!clubId || !profile?.id) return;
+    const ch = supabase
+      .channel(`athlete-app-${profile.id}`)
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "sessions", filter: `club_id=eq.${clubId}` }, () => fetchAll())
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "sessions", filter: `club_id=eq.${clubId}` }, () => fetchAll())
+      .on("postgres_changes", { event: "DELETE", schema: "public", table: "sessions" }, () => fetchAll())
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "athlete_notifications", filter: `athlete_id=eq.${profile.id}` },
+        (payload) => { setMyNotifs(prev => [payload.new, ...prev]); })
+      .subscribe();
+    return () => supabase.removeChannel(ch);
+  }, [clubId, profile?.id, fetchAll]);
+
+
 
   // ═══ Handlers ═════════════════════════════════════════════════════════════
   const handleRpe = useCallback(async (sid,aid,rpe) => {
