@@ -46,15 +46,17 @@ export function usePushNotifications(athleteId, clubId, userId = null) {
       if (perm !== "granted") return;
 
       const existingSub = await registration.pushManager.getSubscription();
-      if (existingSub) {
-        await existingSub.unsubscribe();
-        // Supprimer l'ancien abonnement
-        await supabase.from("push_subscriptions")
-          .delete()
-          .eq("endpoint", existingSub.endpoint);
-        setSubscribed(false);
-        return;
-      }
+if (existingSub) {
+  // Désabonner
+  await existingSub.unsubscribe();
+  await supabase.from("push_subscriptions")
+    .delete()
+    .eq("endpoint", existingSub.endpoint);
+  setSubscribed(false);
+  // Réenregistrer le SW pour permettre un nouvel abonnement
+  await registration.update();
+  return;
+}
 
       const sub     = await registration.pushManager.subscribe({
         userVisibleOnly:      true,
