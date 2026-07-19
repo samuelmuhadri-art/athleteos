@@ -5,13 +5,19 @@
 import { supabase } from "./supabaseClient";
 import { getAthleteMetricsForWeek } from "./chargeCalculations";
 
-async function sendWebPush(athleteIds, payload) {
-  if (!athleteIds?.length) return;
-  console.log("sendWebPush appelé pour:", athleteIds, payload.title);
+// ── Envoi push générique ──────────────────────────────────────
+// Supporte athleteIds (pour les athlètes) ET userIds (pour les coaches)
+async function sendWebPush(athleteIds, payload, userIds = []) {
+  const hasAthletes = athleteIds?.length > 0;
+  const hasUsers    = userIds?.length > 0;
+  if (!hasAthletes && !hasUsers) return;
+
+  console.log("sendWebPush appelé — athleteIds:", athleteIds, "userIds:", userIds, payload.title);
   try {
     const { data, error } = await supabase.functions.invoke("send-push", {
       body: {
-        athleteIds,
+        athleteIds: athleteIds ?? [],
+        userIds:    userIds    ?? [],
         title: payload.title,
         body:  payload.body,
         url:   payload.url ?? "/",
@@ -101,8 +107,8 @@ export async function alertNewRecord(clubId, athlete, discipline, result, compNa
 }
 
 export async function checkUpcomingCompetitions(clubId, competitions) {
-  const today   = new Date();
-  const in7days = new Date(today.getTime() + 7*86400000);
+  const today     = new Date();
+  const in7days   = new Date(today.getTime() + 7*86400000);
   const yesterday = new Date(today.getTime() - 86400000);
   for (const comp of competitions) {
     const compDate = new Date(comp.date);
@@ -129,7 +135,7 @@ export async function notifyAthleteNewSession(clubId, athleteIds, session) {
   const dateStr = session.sessionDate
     ? new Date(session.sessionDate).toLocaleDateString("fr-BE", { weekday:"long", day:"numeric", month:"long" })
     : session.day ?? "";
-  const title = `📋 Nouvelle séance — ${session.title}`;
+  const title       = `📋 Nouvelle séance — ${session.title}`;
   const description = `Le coach a planifié "${session.title}" le ${dateStr}.`;
   const rows = athleteIds.map(athleteId => ({
     athlete_id: athleteId, club_id: clubId, type: "new_session",
@@ -156,7 +162,19 @@ export async function notifyAthleteMessage(clubId, athleteId, coachName, preview
     athlete_id: athleteId, club_id: clubId, type: "message",
     title, description, is_read: false,
   });
+  // Notif push vers l'athlète (par athlete_id)
   await sendWebPush([athleteId], { title, body: description, url: "/", tag: "message" });
+}
+
+// ── NOUVEAU : notif push vers le coach quand un athlète envoie un message ──
+// coachUserId = users.id du coach (ex: 1 pour Benoît)
+export async function notifyCoachMessage(coachUserId, athleteName, preview) {
+  if (!coachUserId) return;
+  const title       = `💬 Message de ${athleteName}`;
+  const description = preview ? preview.slice(0, 100) : "Tu as reçu un nouveau message.";
+  // Pas d'insertion dans athlete_notifications (c'est pour les athlètes)
+  // On envoie uniquement la push par user_id
+  await sendWebPush([], { title, body: description, url: "/", tag: "message" }, [coachUserId]);
 }
 
 export async function notifyGoalAchieved(clubId, athleteId, discipline, targetValue) {

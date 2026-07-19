@@ -27,6 +27,7 @@ import {
 } from "./utils/chargeCalculations";
 import { notifyGoalAchieved } from "./utils/notifications";
 import { usePushNotifications, PushToggleButton } from "./hooks/usePushNotifications";
+import { notifyGoalAchieved, notifyCoachMessage } from "./utils/notifications";
 
 // ─── Nav ──────────────────────────────────────────────────────────────────────
 const NAV_ITEMS = [
@@ -1883,7 +1884,11 @@ function MaMessagerie({ athlete, coachUserId, athleteUserId, coachName }) {
     const {data,error}=await supabase.from("messages")
       .insert({sender_id:athleteUserId,receiver_id:coachUserId,content:text,is_read:false})
       .select().single();
-    if(!error&&data) setMessages(p=>[...p,data]);
+    if(!error&&data) {
+      setMessages(p=>[...p,data]);
+      // Notif push vers le coach (par user_id)
+      notifyCoachMessage(coachUserId, athlete.name, text).catch(console.warn);
+    }
     setSending(false);
   };
 
