@@ -659,7 +659,7 @@ function Dashboard({ athlete, weeklyCharge, sessions, competitions, lastMessages
 // VUE 2 — MON PLANNING
 // ══════════════════════════════════════════════════════════════════════════════
 
-const CreateSessionModal = memo(({ athlete, allAthletes, clubId, createdBy, onClose, onCreated }) => {
+ const CreateSessionModal = memo(({ athlete, allAthletes, clubId, createdBy, coachUserId, onClose, onCreated }) => {
   const inputCls = "w-full border border-slate-200 rounded-lg px-3 py-2 text-[13px] text-slate-700 focus:outline-none focus:ring-2 focus:ring-emerald-400 bg-white";
   const labelCls = "block text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1";
   const today = new Date().toISOString().split("T")[0];
@@ -701,6 +701,7 @@ const CreateSessionModal = memo(({ athlete, allAthletes, clubId, createdBy, onCl
         description:`${athlete.name} a planifié "${form.title}" (${catLabel}) le ${new Date(form.sessionDate).toLocaleDateString("fr-BE",{day:"numeric",month:"long"})}.`,
         severity:"légère", is_read:false,
       });
+      if (coachUserId) notifyCoachMessage(coachUserId, athlete.name, `${athlete.name} a planifié "${form.title}" le ${new Date(form.sessionDate).toLocaleDateString("fr-BE",{day:"numeric",month:"long"})}`).catch(console.warn);
       onCreated(); onClose();
     } catch(e) { setErr(e.message??"Erreur"); setSaving(false); }
   };
@@ -867,7 +868,7 @@ const SessionDetailModal = memo(({ session, athlete, onClose, onSetStatus, onSet
   );
 });
 
-function MonPlanning({ athlete, sessions, allAthletes, clubId, createdBy, onRpeChange, onStatusChange, onFeelingChange, onCommentChange, onRefresh }) {
+function MonPlanning({ athlete, sessions, allAthletes, clubId, createdBy, coachUserId, onRpeChange, onStatusChange, onFeelingChange, onCommentChange, onRefresh }) {
   const today    = new Date();
   const isMobile = typeof window !== "undefined" && window.innerWidth < 768;
 
@@ -1224,6 +1225,7 @@ function MonPlanning({ athlete, sessions, allAthletes, clubId, createdBy, onRpeC
       )}
       {showCreate && (
         <CreateSessionModal athlete={athlete} allAthletes={allAthletes} clubId={clubId} createdBy={createdBy}
+          coachUserId={coachUserId}
           onClose={() => setShowCreate(false)} onCreated={onRefresh}/>
       )}
     </div>
@@ -2774,9 +2776,10 @@ export default function AthleteApp() {
               myPerformances={myPerformances} onNavigate={navigate}/>
           )}
           {activeView==="planning"&&(
-            <MonPlanning
+           <MonPlanning
               athlete={athlete} sessions={sessions} allAthletes={allAthletes}
               clubId={clubId} createdBy={profile?.id}
+              coachUserId={coachUserId}
               onRpeChange={handleRpe} onStatusChange={handleStatus}
               onFeelingChange={handleFeeling} onCommentChange={handleComment}
               onRefresh={fetchAll}
