@@ -1,12 +1,45 @@
 // ============================================================
 // AthleteOS — src/utils/notifications.js
-// Système centralisé de notifications automatiques.
+// Notifications centralisées :
+// - Alertes coach (table alerts)
+// - Notifications athlète (table athlete_notifications)
+// - Web Push système via Supabase Edge Function (nouveau)
 // ============================================================
 
 import { supabase } from "./supabaseClient";
 import { getAthleteMetricsForWeek } from "./chargeCalculations";
 
-// ─── ALERTES COACH ────────────────────────────────────────────────────────────
+// ─── WEB PUSH — envoi via Edge Function ───────────────────────
+
+/**
+ * Envoie une notification push système sur le téléphone des athlètes.
+ * Requiert la table push_subscriptions et l'Edge Function send-push.
+ *
+ * @param {number[]} athleteIds - IDs des athlètes à notifier
+ * @param {object}   payload    - { title, body, url?, tag? }
+ */
+async function sendWebPush(athleteIds, payload) {
+  if (!athleteIds?.length) return;
+
+  try {
+    // Appel de l'Edge Function Supabase
+    const { error } = await supabase.functions.invoke("send-push", {
+      body: {
+        athleteIds,
+        title: payload.title,
+        body:  payload.body,
+        url:   payload.url ?? "/",
+        tag:   payload.tag ?? "athleteos",
+      },
+    });
+    if (error) console.warn("Web Push error:", error.message);
+  } catch (err) {
+    // Non bloquant : si le push échoue, l'app continue
+    console.warn("Web Push non disponible:", err.message);
+  }
+}
+
+// ─── ALERTES COACH ────────────────────────────────────────────
 
 export async function checkAndAlertACWR(clubId, athletes, weeklyCharge, currentWeek) {
   for (const athlete of athletes) {
@@ -110,58 +143,99 @@ export async function checkUpcomingCompetitions(clubId, competitions) {
   }
 }
 
-// ─── NOTIFICATIONS ATHLÈTE ────────────────────────────────────────────────────
+// ─── NOTIFICATIONS ATHLÈTE ────────────────────────────────────
 
+/**
+ * Notifie les athlètes d'une nouvelle séance planifiée par le coach.
+ * DOUBLE NOTIFICATION :
+ * 1. Insertion en BDD (athlete_notifications) → badge dans l'app
+ * 2. Web Push système → notification sur le téléphone
+ */
 export async function notifyAthleteNewSession(clubId, athleteIds, session) {
   if (!athleteIds?.length) return;
+
+  const dateStr = session.sessionDate
+    ? new Date(session.sessionDate).toLocaleDateString("fr-BE", { weekday:"long", day:"numeric", month:"long" })
+    : session.day ?? "";
+
+  const title = `📋 Nouvelle séance — ${session.title}`;
+  const description = `Le coach a planifié "${session.title}" le ${dateStr}.`;
+
+  // 1. Notification in-app (BDD)
   const rows = athleteIds.map(athleteId => ({
     athlete_id: athleteId, club_id: clubId, type: "new_session",
-    title: `📋 Nouvelle séance — ${session.title}`,
-    description: `Le coach a planifié "${session.title}" le ${
-      session.sessionDate
-        ? new Date(session.sessionDate).toLocaleDateString("fr-BE", { weekday:"long", day:"numeric", month:"long" })
-        : session.day ?? ""
-    }.`,
+    title,
+    description,
     is_read: false,
   }));
   await supabase.from("athlete_notifications").insert(rows);
-}
 
-export async function notifyAthleteResult(clubId, athleteId, discipline, result, compName) {
-  await supabase.from("athlete_notifications").insert({
-    athlete_id: athleteId, club_id: clubId, type: "result_added",
-    title: `🏆 Résultat saisi — ${discipline}`,
-    description: `Ton résultat en ${discipline} lors de "${compName}" : ${result}.`,
-    is_read: false,
+  // 2. Web Push système (non bloquant)
+  await sendWebPush(athleteIds, {
+    title,
+    body: description,
+    url:  "/",
+    tag:  `session-${session.title}`,
   });
 }
 
+export async function notifyAthleteResult(clubId, athleteId, discipline, result, compName) {
+  const title       = `🏆 Résultat saisi — ${discipline}`;
+  const description = `Ton résultat en ${discipline} lors de "${compName}" : ${result}.`;
+
+  await supabase.from("athlete_notifications").insert({
+    athlete_id: athleteId, club_id: clubId, type: "result_added",
+    title, description, is_read: false,
+  });
+
+  await sendWebPush([athleteId], { title, body: description, tag: "result" });
+}
+
 export async function notifyAthleteMessage(clubId, athleteId, coachName, preview) {
+  const title       = `💬 Message de ${coachName ?? "ton coach"}`;
+  const description = preview ? preview.slice(0, 100) : "Tu as reçu un nouveau message.";
+
   await supabase.from("athlete_notifications").insert({
     athlete_id: athleteId, club_id: clubId, type: "message",
-    title: `💬 Message de ${coachName ?? "ton coach"}`,
-    description: preview ? preview.slice(0, 100) : "Tu as reçu un nouveau message.",
-    is_read: false,
+    title, description, is_read: false,
+  });
+
+  // Push prioritaire pour les messages
+  await sendWebPush([athleteId], {
+    title,
+    body: description,
+    url:  "/",
+    tag:  "message", // remplace la notif précédente du même tag
   });
 }
 
 export async function notifyGoalAchieved(clubId, athleteId, discipline, targetValue) {
+  const title       = `🎯 Objectif atteint — ${discipline}`;
+  const description = `Tu as atteint ton objectif de ${targetValue} en ${discipline}. Félicitations !`;
+
   await supabase.from("athlete_notifications").insert({
     athlete_id: athleteId, club_id: clubId, type: "goal_achieved",
-    title: `🎯 Objectif atteint — ${discipline}`,
-    description: `Tu as atteint ton objectif de ${targetValue} en ${discipline}. Félicitations !`,
-    is_read: false,
+    title, description, is_read: false,
   });
+
+  await sendWebPush([athleteId], { title, body: description, tag: "goal" });
 }
 
 export async function notifyAthleteCompetitionReminder(clubId, competition) {
   if (!competition.athleteIds?.length) return;
-  const days = Math.round((new Date(competition.date) - new Date()) / 86400000);
+  const days        = Math.round((new Date(competition.date) - new Date()) / 86400000);
+  const title       = `🏟️ ${competition.name} dans ${days} jour${days>1?"s":""}`;
+  const description = `La compétition a lieu le ${new Date(competition.date).toLocaleDateString("fr-BE", { weekday:"long", day:"numeric", month:"long" })}. Reste concentré !`;
+
   const rows = competition.athleteIds.map(athleteId => ({
     athlete_id: athleteId, club_id: clubId, type: "competition_reminder",
-    title: `🏟️ ${competition.name} dans ${days} jour${days>1?"s":""}`,
-    description: `La compétition a lieu le ${new Date(competition.date).toLocaleDateString("fr-BE", { weekday:"long", day:"numeric", month:"long" })}. Reste concentré !`,
-    is_read: false,
+    title, description, is_read: false,
   }));
   await supabase.from("athlete_notifications").insert(rows);
+
+  await sendWebPush(competition.athleteIds, {
+    title,
+    body: description,
+    tag:  `comp-${competition.id}`,
+  });
 }
