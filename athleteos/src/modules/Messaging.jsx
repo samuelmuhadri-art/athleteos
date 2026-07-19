@@ -371,10 +371,10 @@ function Messaging() {
   setAllMessages((prev) => [...prev, { id: data.id, senderId: data.sender_id, receiverId: data.receiver_id, content: data.content, date: data.created_at, isRead: data.is_read }]);
 
   // Notif athlète
-  if (data && athlete?.userId) {
+  if (data && athlete?.id) {
     await notifyAthleteMessage(
       clubId,
-      athlete.userId,
+      athlete.id,
       profile?.name ?? "Coach",
       text
     );
