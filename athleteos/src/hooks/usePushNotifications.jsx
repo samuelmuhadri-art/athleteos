@@ -1,7 +1,3 @@
-// ============================================================
-// AthleteOS — src/hooks/usePushNotifications.jsx
-// ============================================================
-
 import { useState, useEffect, useCallback } from "react";
 import { supabase } from "../utils/supabaseClient";
 
@@ -51,7 +47,6 @@ export function usePushNotifications(athleteId, clubId, userId = null) {
       }
       const subJson = sub.toJSON();
 
-      // Supprimer l'ancien si existe, puis insérer proprement
       await supabase.from("push_subscriptions").delete().eq("endpoint", subJson.endpoint);
       const { error } = await supabase.from("push_subscriptions").insert({
         club_id:    clubId,
@@ -69,6 +64,54 @@ export function usePushNotifications(athleteId, clubId, userId = null) {
       console.error("Push subscription error:", err);
     }
   }, [swReady, registration, athleteId, clubId, userId, subscribed]);
+
+  // ── Ré-enregistrement automatique quand athleteId devient disponible ──────
+  // Sur mobile athlète, athlete?.id est null au premier render puis devient
+  // l'id réel après fetchAll. Si l'utilisateur a déjà accordé la permission
+  // et qu'une subscription existe dans le navigateur mais pas en base
+  // (athlete_id=null), on corrige automatiquement dès que l'id est connu.
+  useEffect(() => {
+    if (!athleteId || !swReady || !registration || !clubId) return;
+    if (Notification.permission !== "granted") return;
+
+    const fixSubscription = async () => {
+      const sub = await registration.pushManager.getSubscription();
+      if (!sub) return; // pas d'abonnement navigateur, rien à corriger
+
+      const subJson = sub.toJSON();
+
+      // Vérifie si cet endpoint existe déjà en base avec le bon athlete_id
+      const { data: existing } = await supabase
+        .from("push_subscriptions")
+        .select("id, athlete_id")
+        .eq("endpoint", subJson.endpoint)
+        .single();
+
+      if (existing && existing.athlete_id === athleteId) {
+        // Déjà correct
+        setSubscribed(true);
+        return;
+      }
+
+      // Supprime l'ancienne ligne (avec athlete_id=null ou mauvais id)
+      await supabase.from("push_subscriptions").delete().eq("endpoint", subJson.endpoint);
+
+      // Réinsère avec le bon athlete_id
+      const { error } = await supabase.from("push_subscriptions").insert({
+        club_id:    clubId,
+        endpoint:   subJson.endpoint,
+        p256dh:     subJson.keys?.p256dh,
+        auth:       subJson.keys?.auth,
+        user_agent: navigator.userAgent.slice(0, 200),
+        athlete_id: athleteId,
+        user_id:    userId ?? null,
+      });
+
+      if (!error) setSubscribed(true);
+    };
+
+    fixSubscription().catch(console.error);
+  }, [athleteId, swReady, registration, clubId, userId]);
 
   return { subscribed, subscribe, permissionState, swReady };
 }
