@@ -1,7 +1,9 @@
 // ============================================================
-// AthleteOS — src/AthleteApp.jsx  (refonte complète)
-// Vue athlète : riche, visuelle, motivante
-// Navigation : Tableau de bord | Mon Planning | Mes Perfs | Messagerie
+// AthleteOS — src/AthleteApp.jsx
+// CORRECTIONS :
+// 1. usePushNotifications remonté AVANT les guards (règle des hooks React)
+//    athlete?.id est passé dynamiquement — null au départ, mis à jour après fetch
+// 2. PushToggleButton correctement placé dans header mobile + panneau notifs
 // ============================================================
 
 import { useState, useCallback, useEffect, useMemo, memo } from "react";
@@ -143,13 +145,11 @@ function computeBadges({ athlete, weeklyCharge, sessions, competitions, myPerfor
   const myPerfs = myPerformances ?? [];
   const myRecords = Object.keys(athlete.records ?? {});
 
-  // ── Streak badges ──
   if (streak >= 1)  badges.push({ id:"streak1",  emoji:"🔥", label:"Premier feu",      desc:"1 semaine consécutive",      color:"#EF9F27", unlocked:true  });
   if (streak >= 3)  badges.push({ id:"streak3",  emoji:"🔥", label:"En feu",           desc:"3 semaines consécutives",    color:"#EF9F27", unlocked:true  });
   if (streak >= 5)  badges.push({ id:"streak5",  emoji:"⚡", label:"Inarrêtable",      desc:"5 semaines consécutives",    color:"#E24B4A", unlocked:true  });
   if (streak >= 10) badges.push({ id:"streak10", emoji:"💥", label:"Légende",          desc:"10 semaines consécutives",   color:"#7C3AED", unlocked:true  });
 
-  // ── Séances validées ──
   const totalDone = allSessions.reduce((acc,s) =>
     acc + (s.validations?.filter(v=>v.athleteId===athlete.id&&v.status==="done").length??0), 0);
   if (totalDone >= 1)   badges.push({ id:"s1",   emoji:"✅", label:"Premier pas",      desc:"1 séance réalisée",          color:"#1D9E75", unlocked:true  });
@@ -158,11 +158,9 @@ function computeBadges({ athlete, weeklyCharge, sessions, competitions, myPerfor
   if (totalDone >= 50)  badges.push({ id:"s50",  emoji:"🚀", label:"Acharné",          desc:"50 séances réalisées",       color:"#7C3AED", unlocked:true  });
   if (totalDone >= 100) badges.push({ id:"s100", emoji:"👑", label:"Élite",            desc:"100 séances réalisées",      color:"#EF9F27", unlocked:true  });
 
-  // ── Compétitions ──
   if (myComps.length >= 1) badges.push({ id:"c1",  emoji:"🏟️", label:"Compétiteur",   desc:"1ère compétition",           color:"#E24B4A", unlocked:true  });
   if (myComps.length >= 5) badges.push({ id:"c5",  emoji:"🎯", label:"Guerrier",       desc:"5 compétitions au compteur", color:"#E24B4A", unlocked:true  });
 
-  // ── Records battus ──
   const prBeat = myPerfs.filter(p => {
     const rec = athlete.records?.[p.discipline];
     if (!rec) return false;
@@ -174,17 +172,14 @@ function computeBadges({ athlete, weeklyCharge, sessions, competitions, myPerfor
   if (prBeat >= 1) badges.push({ id:"pr1", emoji:"🏆", label:"Record battu",          desc:"1 record personnel amélioré",color:"#EF9F27", unlocked:true  });
   if (prBeat >= 3) badges.push({ id:"pr3", emoji:"🌟", label:"Recordman",             desc:"3 records améliorés",        color:"#EF9F27", unlocked:true  });
 
-  // ── Disciplines ──
   const discCount = [...new Set([...myRecords,...myPerfs.map(p=>p.discipline)])].length;
   if (discCount >= 1) badges.push({ id:"d1",  emoji:"🎪", label:"Spécialiste",        desc:"1 discipline maîtrisée",     color:"#0284C7", unlocked:true  });
   if (discCount >= 3) badges.push({ id:"d3",  emoji:"🎭", label:"Polyvalent",         desc:"3 disciplines pratiquées",   color:"#7C3AED", unlocked:true  });
   if (discCount >= 5) badges.push({ id:"d5",  emoji:"🦁", label:"Décathlonien",       desc:"5+ disciplines pratiquées",  color:"#E24B4A", unlocked:true  });
 
-  // ── Performances ajoutées ──
   if (myPerfs.length >= 5)  badges.push({ id:"p5",  emoji:"📊", label:"Analytique",   desc:"5 performances enregistrées",color:"#1D9E75", unlocked:true  });
   if (myPerfs.length >= 20) badges.push({ id:"p20", emoji:"📈", label:"Data driven",  desc:"20 performances suivies",    color:"#378ADD", unlocked:true  });
 
-  // ── ACWR optimal ──
   const myCharge = weeklyCharge.filter(w=>w.athleteId===athlete.id);
   const optimalWeeks = myCharge.filter(w => {
     const m = getAthleteMetricsForWeek(athlete.id, weeklyCharge, w.week);
@@ -193,7 +188,6 @@ function computeBadges({ athlete, weeklyCharge, sessions, competitions, myPerfor
   if (optimalWeeks >= 3) badges.push({ id:"acwr3", emoji:"⚖️", label:"Équilibré",     desc:"3 semaines en zone optimale",color:"#1D9E75", unlocked:true  });
   if (optimalWeeks >= 8) badges.push({ id:"acwr8", emoji:"🎯", label:"Maestro",        desc:"8 semaines en zone optimale",color:"#7C3AED", unlocked:true  });
 
-  // ── Badges verrouillés (pour montrer la progression) ──
   if (streak < 3)    badges.push({ id:"l_s3",   emoji:"🔒", label:"En feu",           desc:`${3-streak} semaine${3-streak>1?"s":""} de plus`,  color:"#cbd5e1", unlocked:false });
   if (totalDone < 10) badges.push({ id:"l_s10",  emoji:"🔒", label:"Régulier",        desc:`${10-totalDone} séance${10-totalDone>1?"s":""} de plus`, color:"#cbd5e1", unlocked:false });
   if (myComps.length < 1) badges.push({ id:"l_c1", emoji:"🔒", label:"Compétiteur",   desc:"Participe à ta 1ère compét.", color:"#cbd5e1", unlocked:false });
@@ -201,7 +195,6 @@ function computeBadges({ athlete, weeklyCharge, sessions, competitions, myPerfor
   return badges;
 }
 
-// Composant badge individuel
 function BadgeItem({ badge }) {
   return (
     <div className={["flex flex-col items-center gap-1.5 p-3 rounded-2xl border text-center transition-all",
@@ -220,7 +213,7 @@ function BadgeItem({ badge }) {
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
-// VUE 1 — TABLEAU DE BORD (Bloc 2+3 — charge enrichie + badges dopamine)
+// VUE 1 — TABLEAU DE BORD
 // ══════════════════════════════════════════════════════════════════════════════
 function Dashboard({ athlete, weeklyCharge, sessions, competitions, lastMessages, coachName, myPerformances, onNavigate }) {
   const today = new Date();
@@ -232,25 +225,19 @@ function Dashboard({ athlete, weeklyCharge, sessions, competitions, lastMessages
 
   const status = getStatusLabel(metrics.readiness, metrics.fatigue, metrics.acwr);
 
-  // Prochaine compétition
   const nextComp = useMemo(() =>
     competitions
       .filter((c) => c.athleteIds.includes(athlete.id) && new Date(c.date) >= today)
       .sort((a,b) => new Date(a.date)-new Date(b.date))[0] ?? null,
   [competitions, athlete.id]);
 
-  // Séances de la semaine
   const weekSessions = useMemo(() =>
     sessions.filter((s) => s.week === currentWeek).sort((a,b) => a.time.localeCompare(b.time)),
   [sessions, currentWeek]);
 
-  // Records principaux
   const topRecords = Object.entries(athlete.records ?? {}).slice(0, 4);
-
-  // Blessures actives
   const activeInjuries = (athlete.injuries ?? []).filter((i) => i.status !== "résolu");
 
-  // Historique charge des 8 dernières semaines pour graphique
   const chargeHistory = useMemo(() => {
     const myCharge = weeklyCharge.filter(w => w.athleteId === athlete.id);
     if (!myCharge.length) return [];
@@ -262,7 +249,6 @@ function Dashboard({ athlete, weeklyCharge, sessions, competitions, lastMessages
     }));
   }, [weeklyCharge, athlete.id]);
 
-  // Tendance charge (cette semaine vs précédente)
   const chargeTrend = useMemo(() => {
     const myCharge = weeklyCharge.filter(w => w.athleteId === athlete.id);
     const curr = myCharge.find(w => w.week === currentWeek)?.rawLoad ?? 0;
@@ -270,7 +256,6 @@ function Dashboard({ athlete, weeklyCharge, sessions, competitions, lastMessages
     return prev > 0 ? Math.round(((curr - prev) / prev) * 100) : null;
   }, [weeklyCharge, athlete.id, currentWeek]);
 
-  // Streak entraînements (semaines consécutives avec au moins 1 séance validée)
   const streak = useMemo(() => {
     let s = 0;
     for (let w = currentWeek; w >= currentWeek - 20; w--) {
@@ -283,7 +268,6 @@ function Dashboard({ athlete, weeklyCharge, sessions, competitions, lastMessages
 
   const hasCharge = weeklyCharge.some(w => w.athleteId === athlete.id);
 
-  // Badges
   const badges = useMemo(() => computeBadges({
     athlete, weeklyCharge, sessions, competitions, myPerformances, streak, currentWeek,
   }), [athlete, weeklyCharge, sessions, competitions, myPerformances, streak, currentWeek]);
@@ -291,7 +275,6 @@ function Dashboard({ athlete, weeklyCharge, sessions, competitions, lastMessages
   const unlockedBadges = badges.filter(b => b.unlocked);
   const lockedBadges   = badges.filter(b => !b.unlocked);
 
-  // Notification nouveau PR (badge "pop" si perf récente = PR)
   const latestPR = useMemo(() => {
     const sevenDaysAgo = new Date(); sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
     return (myPerformances ?? []).find(p => {
@@ -337,7 +320,6 @@ function Dashboard({ athlete, weeklyCharge, sessions, competitions, lastMessages
           </div>
         </div>
 
-        {/* KPIs hero */}
         <div className="relative mt-5 grid grid-cols-4 gap-3">
           {[
             { label: "Readiness", value: metrics.readiness, hint: "/100" },
@@ -358,7 +340,6 @@ function Dashboard({ athlete, weeklyCharge, sessions, competitions, lastMessages
         {/* ── Colonne gauche ── */}
         <div className="lg:col-span-2 space-y-5">
 
-          {/* Charge hebdomadaire graphique */}
           {hasCharge && chargeHistory.length > 0 && (
             <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5">
               <div className="flex items-center justify-between mb-4">
@@ -376,8 +357,6 @@ function Dashboard({ athlete, weeklyCharge, sessions, competitions, lastMessages
                   </div>
                 )}
               </div>
-
-              {/* Barres manuelles pour plus de contrôle visuel */}
               <div className="flex items-end gap-1.5 h-[100px]">
                 {chargeHistory.map((w, i) => {
                   const maxCharge = Math.max(...chargeHistory.map(x => x.charge), 1);
@@ -399,8 +378,6 @@ function Dashboard({ athlete, weeklyCharge, sessions, competitions, lastMessages
                   );
                 })}
               </div>
-
-              {/* Légende ACWR + zone */}
               <div className="mt-4 grid grid-cols-3 gap-3">
                 {[
                   { label: "ACWR", value: metrics.acwr.toFixed(2), color: acwrColor(metrics.acwr), sub: "0.8–1.3 optimal" },
@@ -414,8 +391,6 @@ function Dashboard({ athlete, weeklyCharge, sessions, competitions, lastMessages
                   </div>
                 ))}
               </div>
-
-              {/* Jauge ACWR visuelle */}
               <div className="mt-4">
                 <div className="flex items-center justify-between text-[10px] text-slate-400 mb-1">
                   <span>Sous-charge</span>
@@ -433,7 +408,6 @@ function Dashboard({ athlete, weeklyCharge, sessions, competitions, lastMessages
             </div>
           )}
 
-          {/* Scores de forme détaillés */}
           {hasCharge && (
             <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5">
               <h3 className="text-[14px] font-bold text-slate-800 mb-4">État de forme détaillé</h3>
@@ -463,7 +437,6 @@ function Dashboard({ athlete, weeklyCharge, sessions, competitions, lastMessages
             </div>
           )}
 
-          {/* Séances de la semaine */}
           <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
             <div className="px-5 py-4 border-b border-slate-50 flex items-center justify-between">
               <div>
@@ -508,7 +481,6 @@ function Dashboard({ athlete, weeklyCharge, sessions, competitions, lastMessages
             )}
           </div>
 
-          {/* Notification PR récent */}
           {latestPR && (
             <div className="rounded-2xl p-4 text-white relative overflow-hidden"
               style={{background:"linear-gradient(135deg, #EF9F27 0%, #f59e0b 100%)"}}>
@@ -527,7 +499,6 @@ function Dashboard({ athlete, weeklyCharge, sessions, competitions, lastMessages
             </div>
           )}
 
-          {/* Records */}
           {topRecords.length > 0 && (
             <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
               <div className="px-5 py-4 border-b border-slate-50 flex items-center justify-between">
@@ -554,7 +525,6 @@ function Dashboard({ athlete, weeklyCharge, sessions, competitions, lastMessages
             </div>
           )}
 
-          {/* Badges & Achievements */}
           <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5">
             <div className="flex items-center justify-between mb-4">
               <div>
@@ -568,7 +538,6 @@ function Dashboard({ athlete, weeklyCharge, sessions, competitions, lastMessages
                 <span className="text-[13px] font-black text-amber-600">{unlockedBadges.length}</span>
               </div>
             </div>
-
             {unlockedBadges.length === 0 ? (
               <div className="text-center py-6 text-slate-300">
                 <p className="text-[12px]">Commence à t'entraîner pour débloquer tes premiers badges !</p>
@@ -593,8 +562,6 @@ function Dashboard({ athlete, weeklyCharge, sessions, competitions, lastMessages
 
         {/* ── Colonne droite ── */}
         <div className="space-y-5">
-
-          {/* Prochaine compétition */}
           {nextComp && (
             <div className="rounded-2xl p-5 text-white"
               style={{ background: "linear-gradient(135deg, #E24B4A 0%, #c73a39 100%)" }}>
@@ -624,7 +591,6 @@ function Dashboard({ athlete, weeklyCharge, sessions, competitions, lastMessages
             </div>
           )}
 
-          {/* Streak */}
           {streak > 0 && (
             <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5 text-center">
               <p className="text-[40px] font-black text-amber-500">🔥 {streak}</p>
@@ -633,7 +599,6 @@ function Dashboard({ athlete, weeklyCharge, sessions, competitions, lastMessages
             </div>
           )}
 
-          {/* Blessures actives */}
           {activeInjuries.length > 0 && (
             <div className="bg-amber-50 border border-amber-100 rounded-2xl p-5">
               <div className="flex items-center gap-2 mb-3">
@@ -648,7 +613,6 @@ function Dashboard({ athlete, weeklyCharge, sessions, competitions, lastMessages
                       <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700">{inj.intensity}/10</span>
                     </div>
                     <p className="text-[11px] text-slate-400">📍 {inj.location}</p>
-                    {/* Barre d'intensité */}
                     <div className="mt-1.5 h-1.5 bg-slate-100 rounded-full overflow-hidden">
                       <div className="h-full rounded-full" style={{
                         width:`${(inj.intensity/10)*100}%`,
@@ -661,7 +625,6 @@ function Dashboard({ athlete, weeklyCharge, sessions, competitions, lastMessages
             </div>
           )}
 
-          {/* Dernier message coach */}
           {lastMessages.length > 0 && (
             <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5">
               <div className="flex items-center justify-between mb-3">
@@ -679,7 +642,6 @@ function Dashboard({ athlete, weeklyCharge, sessions, competitions, lastMessages
             </div>
           )}
 
-          {/* Pas de données charge */}
           {!hasCharge && (
             <div className="bg-slate-50 rounded-2xl border border-dashed border-slate-200 p-6 text-center">
               <BarChart2 size={28} className="mx-auto mb-2 text-slate-300" strokeWidth={1.5}/>
@@ -694,10 +656,9 @@ function Dashboard({ athlete, weeklyCharge, sessions, competitions, lastMessages
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
-// VUE 2 — MON PLANNING (calendrier mensuel/semaine comme le coach)
+// VUE 2 — MON PLANNING
 // ══════════════════════════════════════════════════════════════════════════════
 
-// Modal création séance athlète
 const CreateSessionModal = memo(({ athlete, allAthletes, clubId, createdBy, onClose, onCreated }) => {
   const inputCls = "w-full border border-slate-200 rounded-lg px-3 py-2 text-[13px] text-slate-700 focus:outline-none focus:ring-2 focus:ring-emerald-400 bg-white";
   const labelCls = "block text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1";
@@ -795,7 +756,6 @@ const CreateSessionModal = memo(({ athlete, allAthletes, clubId, createdBy, onCl
   );
 });
 
-// Modal détail séance (athlète)
 const SessionDetailModal = memo(({ session, athlete, onClose, onSetStatus, onSetRpe, onSetFeeling, onSetComment }) => {
   const c = colorsFor(session.category);
   const val = session.validations?.find(v=>v.athleteId===athlete.id);
@@ -839,7 +799,6 @@ const SessionDetailModal = memo(({ session, athlete, onClose, onSetStatus, onSet
             </a>
           )}
 
-          {/* Présence */}
           <div>
             <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2">Présence</p>
             <div className="flex gap-2">
@@ -855,7 +814,6 @@ const SessionDetailModal = memo(({ session, athlete, onClose, onSetStatus, onSet
             </div>
           </div>
 
-          {/* RPE */}
           {val?.status&&val.status!=="none"&&(
             <div>
               <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2">
@@ -874,7 +832,6 @@ const SessionDetailModal = memo(({ session, athlete, onClose, onSetStatus, onSet
             </div>
           )}
 
-          {/* Feeling */}
           {(val?.status==="done"||val?.status==="partial")&&(
             <div>
               <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2">
@@ -890,7 +847,6 @@ const SessionDetailModal = memo(({ session, athlete, onClose, onSetStatus, onSet
             </div>
           )}
 
-          {/* Commentaire */}
           {(val?.status==="done"||val?.status==="partial")&&(
             <div>
               <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2">Commentaire</p>
@@ -969,14 +925,12 @@ function MonPlanning({ athlete, sessions, allAthletes, clubId, createdBy, onRpeC
     if (viewMode === "month") return `${MONTHS_FR[viewMonth]} ${viewYear}`;
     const mon = weekDays[0], sun = weekDays[6];
     if (mon.getMonth() === sun.getMonth())
-      return `${mon.getDate()} \u2013 ${sun.toLocaleDateString("fr-BE", { day: "numeric", month: "long" })}`;
-    return `${mon.toLocaleDateString("fr-BE", { day: "numeric", month: "short" })} \u2013 ${sun.toLocaleDateString("fr-BE", { day: "numeric", month: "short" })}`;
+      return `${mon.getDate()} – ${sun.toLocaleDateString("fr-BE", { day: "numeric", month: "long" })}`;
+    return `${mon.toLocaleDateString("fr-BE", { day: "numeric", month: "short" })} – ${sun.toLocaleDateString("fr-BE", { day: "numeric", month: "short" })}`;
   }, [viewMode, viewMonth, viewYear, weekDays]);
 
   return (
     <div className="flex flex-col h-full" style={{ background: "#F5F5F2" }}>
-
-      {/* Header */}
       <div className="bg-white border-b border-slate-100 px-3 py-2.5 flex items-center justify-between gap-2 flex-shrink-0">
         <div className="flex items-center gap-1">
           <button onClick={viewMode === "month" ? prevMonth : prevWeek}
@@ -1008,8 +962,8 @@ function MonPlanning({ athlete, sessions, allAthletes, clubId, createdBy, onRpeC
           {groupedByDate.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-64 text-slate-300 gap-3 p-6">
               <CalendarDays size={36} strokeWidth={1.5}/>
-              <p className="text-[14px] font-semibold text-center">Aucune s\xe9ance planifi\xe9e</p>
-              <button onClick={() => setShowCreate(true)} className="px-4 py-2 rounded-xl text-white text-[12px] font-semibold" style={{ background: "#1D9E75" }}>Planifier une s\xe9ance</button>
+              <p className="text-[14px] font-semibold text-center">Aucune séance planifiée</p>
+              <button onClick={() => setShowCreate(true)} className="px-4 py-2 rounded-xl text-white text-[12px] font-semibold" style={{ background: "#1D9E75" }}>Planifier une séance</button>
             </div>
           ) : (
             <div className="p-3 space-y-4">
@@ -1027,9 +981,9 @@ function MonPlanning({ athlete, sessions, allAthletes, clubId, createdBy, onRpeC
                       </div>
                       <div>
                         <p className={["text-[12px] font-bold", isToday?"text-emerald-600":isPast?"text-slate-400":"text-slate-700"].join(" ")}>
-                          {isToday ? "Aujourd\u2019hui" : dateObj.toLocaleDateString("fr-BE",{weekday:"long",day:"numeric",month:"long"})}
+                          {isToday ? "Aujourd'hui" : dateObj.toLocaleDateString("fr-BE",{weekday:"long",day:"numeric",month:"long"})}
                         </p>
-                        <p className="text-[10px] text-slate-400">{ds.length} s\xe9ance{ds.length>1?"s":""}</p>
+                        <p className="text-[10px] text-slate-400">{ds.length} séance{ds.length>1?"s":""}</p>
                       </div>
                     </div>
                     <div className="space-y-2 ml-3 pl-8 border-l-2 border-slate-100">
@@ -1048,11 +1002,11 @@ function MonPlanning({ athlete, sessions, allAthletes, clubId, createdBy, onRpeC
                                 <span className="text-[10px] font-black uppercase tracking-wider" style={{ color: c.text }}>
                                   {CATEGORIES.find(x => x.id === s.category)?.label ?? s.type}
                                 </span>
-                                {s.pdfUrl && <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-blue-100 text-blue-600">\ud83d\udcc4 PDF</span>}
+                                {s.pdfUrl && <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-blue-100 text-blue-600">📄 PDF</span>}
                               </div>
                               <span className={["text-[10px] font-bold px-2 py-0.5 rounded-full",
                                 st==="done"?"bg-emerald-100 text-emerald-700":st==="partial"?"bg-amber-100 text-amber-700":st==="none"?"bg-red-100 text-red-700":"bg-white/60 text-slate-500"].join(" ")}>
-                                {st==="done"?"\u2705 Faite":st==="partial"?"\ud83d\udfe1 Partielle":st==="none"?"\u274c Absent":"\ud83d\udd35 Pr\xe9vue"}
+                                {st==="done"?"✅ Faite":st==="partial"?"🟡 Partielle":st==="none"?"❌ Absent":"🔵 Prévue"}
                               </span>
                             </div>
                             <div className="px-4 py-3">
@@ -1063,9 +1017,9 @@ function MonPlanning({ athlete, sessions, allAthletes, clubId, createdBy, onRpeC
                                 {val?.rpe != null && <span className="font-semibold text-slate-600">RPE {val.rpe}/10</span>}
                               </div>
                               {s.instructions && (
-                                <p className="text-[11px] text-amber-700 bg-amber-50 rounded-lg px-2.5 py-1.5 mt-2 line-clamp-2">\ud83d\udcac {s.instructions}</p>
+                                <p className="text-[11px] text-amber-700 bg-amber-50 rounded-lg px-2.5 py-1.5 mt-2 line-clamp-2">💬 {s.instructions}</p>
                               )}
-                              {rpeNeeded && <p className="text-[11px] font-bold text-amber-600 mt-2">\u23f3 RPE en attente \u00b7 Valide ta s\xe9ance</p>}
+                              {rpeNeeded && <p className="text-[11px] font-bold text-amber-600 mt-2">⏳ RPE en attente · Valide ta séance</p>}
                             </div>
                           </div>
                         );
@@ -1143,13 +1097,13 @@ function MonPlanning({ athlete, sessions, allAthletes, clubId, createdBy, onRpeC
                         <span className="text-[10px] font-bold uppercase" style={{ color: c.text }}>{CATEGORIES.find(x=>x.id===s.category)?.label??s.type}</span>
                         <span className={["text-[9px] font-bold px-1.5 py-0.5 rounded-full",
                           st==="done"?"bg-emerald-100 text-emerald-700":st==="partial"?"bg-amber-100 text-amber-700":st==="none"?"bg-red-100 text-red-700":"bg-white/60 text-slate-400"].join(" ")}>
-                          {st==="done"?"\u2705":st==="partial"?"\ud83d\udfe1":st==="none"?"\u274c":"\ud83d\udd35"}
+                          {st==="done"?"✅":st==="partial"?"🟡":st==="none"?"❌":"🔵"}
                         </span>
                       </div>
                       <div className="px-4 py-3">
                         <p className="text-[13px] font-bold text-slate-800">{s.title}</p>
-                        <p className="text-[11px] text-slate-400 mt-0.5">{s.time}{s.durationMinutes?` \u00b7 ${s.durationMinutes} min`:""}{ val?.rpe!=null?` \u00b7 RPE ${val.rpe}`:""}</p>
-                        {s.pdfUrl && <p className="text-[10px] text-blue-500 mt-1">\ud83d\udcc4 PDF joint</p>}
+                        <p className="text-[11px] text-slate-400 mt-0.5">{s.time}{s.durationMinutes?` · ${s.durationMinutes} min`:""}{ val?.rpe!=null?` · RPE ${val.rpe}`:""}</p>
+                        {s.pdfUrl && <p className="text-[10px] text-blue-500 mt-1">📄 PDF joint</p>}
                       </div>
                     </div>
                   );
@@ -1163,7 +1117,6 @@ function MonPlanning({ athlete, sessions, allAthletes, clubId, createdBy, onRpeC
       {/* ===== VUE SEMAINE ===== */}
       {viewMode === "week" && (
         <div className="flex-1 overflow-y-auto">
-          {/* Mobile : strip horizontal */}
           <div className="md:hidden">
             <div className="flex overflow-x-auto gap-2 px-3 py-2.5 bg-white border-b border-slate-100 scrollbar-hide">
               {weekDays.map((date, i) => {
@@ -1203,7 +1156,7 @@ function MonPlanning({ athlete, sessions, allAthletes, clubId, createdBy, onRpeC
                         <span className="text-[10px] font-bold uppercase" style={{ color: c.text }}>{CATEGORIES.find(x=>x.id===s.category)?.label??s.type}</span>
                         <span className={["text-[9px] font-bold px-1.5 py-0.5 rounded-full",
                           st==="done"?"bg-emerald-100 text-emerald-700":st==="partial"?"bg-amber-100 text-amber-700":st==="none"?"bg-red-100 text-red-700":"bg-white/60 text-slate-400"].join(" ")}>
-                          {st==="done"?"\u2705 Faite":st==="partial"?"\ud83d\udfe1":st==="none"?"\u274c":"\ud83d\udd35 Pr\xe9vue"}
+                          {st==="done"?"✅ Faite":st==="partial"?"🟡":st==="none"?"❌":"🔵 Prévue"}
                         </span>
                       </div>
                       <div className="px-4 py-3">
@@ -1212,10 +1165,10 @@ function MonPlanning({ athlete, sessions, allAthletes, clubId, createdBy, onRpeC
                           <span className="flex items-center gap-1"><Clock size={11}/> {s.time}</span>
                           {s.durationMinutes && <span>{s.durationMinutes} min</span>}
                         </div>
-                        {s.instructions && <p className="text-[11px] text-amber-700 bg-amber-50 rounded-lg px-2.5 py-1.5 mt-2 line-clamp-2">\ud83d\udcac {s.instructions}</p>}
+                        {s.instructions && <p className="text-[11px] text-amber-700 bg-amber-50 rounded-lg px-2.5 py-1.5 mt-2 line-clamp-2">💬 {s.instructions}</p>}
                         {s.pdfUrl && (
                           <a href={s.pdfUrl} target="_blank" rel="noopener noreferrer" onClick={e=>e.stopPropagation()}
-                            className="text-[11px] text-blue-600 font-semibold mt-2 flex items-center gap-1 w-fit">\ud83d\udcc4 Voir le PDF</a>
+                            className="text-[11px] text-blue-600 font-semibold mt-2 flex items-center gap-1 w-fit">📄 Voir le PDF</a>
                         )}
                         {val?.rpe != null && <p className="text-[11px] font-semibold text-slate-500 mt-1">RPE {val.rpe}/10</p>}
                       </div>
@@ -1225,7 +1178,6 @@ function MonPlanning({ athlete, sessions, allAthletes, clubId, createdBy, onRpeC
               })()}
             </div>
           </div>
-          {/* Desktop : grille 7 colonnes */}
           <div className="hidden md:block p-4">
             <div className="grid grid-cols-7 gap-2">
               {weekDays.map((date, i) => {
@@ -1250,7 +1202,7 @@ function MonPlanning({ athlete, sessions, allAthletes, clubId, createdBy, onRpeC
                               <p className="text-[11px] font-semibold text-slate-800 truncate">{s.title}</p>
                               <p className="text-[10px] text-slate-400">{s.time}</p>
                               <span className={["text-[9px] font-bold px-1 py-0.5 rounded-full mt-1 inline-block",st==="done"?"bg-emerald-50 text-emerald-700":st==="partial"?"bg-amber-50 text-amber-700":st==="none"?"bg-red-50 text-red-700":"bg-slate-100 text-slate-400"].join(" ")}>
-                                {st==="done"?"\u2705":st==="partial"?"\ud83d\udfe1":st==="none"?"\u274c":"\ud83d\udd35"}
+                                {st==="done"?"✅":st==="partial"?"🟡":st==="none"?"❌":"🔵"}
                               </span>
                             </div>
                           </div>
@@ -1279,30 +1231,29 @@ function MonPlanning({ athlete, sessions, allAthletes, clubId, createdBy, onRpeC
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
-// VUE 3 — MES PERFORMANCES (Bloc 1 — athlète autonome)
+// VUE 3 — MES PERFORMANCES
 // ══════════════════════════════════════════════════════════════════════════════
 
-// Disciplines prédéfinies + types
 const DISC_PRESETS = [
-  { name: "100m",        type: "sprint",  unit: "s",   hib: false },
-  { name: "200m",        type: "sprint",  unit: "s",   hib: false },
-  { name: "400m",        type: "sprint",  unit: "s",   hib: false },
+  { name: "100m",        type: "sprint",    unit: "s",     hib: false },
+  { name: "200m",        type: "sprint",    unit: "s",     hib: false },
+  { name: "400m",        type: "sprint",    unit: "s",     hib: false },
   { name: "800m",        type: "endurance", unit: "min:s", hib: false },
   { name: "1500m",       type: "endurance", unit: "min:s", hib: false },
-  { name: "60m haies",   type: "sprint",  unit: "s",   hib: false },
-  { name: "100m haies",  type: "sprint",  unit: "s",   hib: false },
-  { name: "110m haies",  type: "sprint",  unit: "s",   hib: false },
-  { name: "400m haies",  type: "sprint",  unit: "s",   hib: false },
-  { name: "Longueur",    type: "saut",    unit: "m",   hib: true  },
-  { name: "Triple saut", type: "saut",    unit: "m",   hib: true  },
-  { name: "Hauteur",     type: "saut",    unit: "m",   hib: true  },
-  { name: "Perche",      type: "saut",    unit: "m",   hib: true  },
-  { name: "Poids",       type: "lancer",  unit: "m",   hib: true  },
-  { name: "Disque",      type: "lancer",  unit: "m",   hib: true  },
-  { name: "Javelot",     type: "lancer",  unit: "m",   hib: true  },
-  { name: "Marteau",     type: "lancer",  unit: "m",   hib: true  },
-  { name: "Décathlon",   type: "combine", unit: "pts", hib: true  },
-  { name: "Heptathlon",  type: "combine", unit: "pts", hib: true  },
+  { name: "60m haies",   type: "sprint",    unit: "s",     hib: false },
+  { name: "100m haies",  type: "sprint",    unit: "s",     hib: false },
+  { name: "110m haies",  type: "sprint",    unit: "s",     hib: false },
+  { name: "400m haies",  type: "sprint",    unit: "s",     hib: false },
+  { name: "Longueur",    type: "saut",      unit: "m",     hib: true  },
+  { name: "Triple saut", type: "saut",      unit: "m",     hib: true  },
+  { name: "Hauteur",     type: "saut",      unit: "m",     hib: true  },
+  { name: "Perche",      type: "saut",      unit: "m",     hib: true  },
+  { name: "Poids",       type: "lancer",    unit: "m",     hib: true  },
+  { name: "Disque",      type: "lancer",    unit: "m",     hib: true  },
+  { name: "Javelot",     type: "lancer",    unit: "m",     hib: true  },
+  { name: "Marteau",     type: "lancer",    unit: "m",     hib: true  },
+  { name: "Décathlon",   type: "combine",   unit: "pts",   hib: true  },
+  { name: "Heptathlon",  type: "combine",   unit: "pts",   hib: true  },
 ];
 
 const DISC_TYPE_COLORS = {
@@ -1320,7 +1271,6 @@ function getDiscHib(discName) {
   return DISC_PRESETS.find(d => d.name === discName)?.hib ?? false;
 }
 
-// Modal ajout performance
 const AddPerfModal = memo(({ athlete, clubId, onClose, onAdded }) => {
   const inputCls = "w-full border border-slate-200 rounded-lg px-3 py-2 text-[13px] text-slate-700 focus:outline-none focus:ring-2 focus:ring-emerald-400 bg-white";
   const labelCls = "block text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1";
@@ -1333,15 +1283,15 @@ const AddPerfModal = memo(({ athlete, clubId, onClose, onAdded }) => {
     value: "",
     performanceDate: today,
     context: "",
-    source: "training", // "training" | "competition"
+    source: "training",
   });
   const [saving, setSaving] = useState(false);
   const [err,    setErr]    = useState(null);
   const set = (k,v) => setForm(f=>({...f,[k]:v}));
 
-  const finalDisc     = form.useCustom ? form.customDisc : form.discipline;
-  const discType      = getDiscType(finalDisc);
-  const discColors    = DISC_TYPE_COLORS[discType] ?? DISC_TYPE_COLORS.sprint;
+  const finalDisc  = form.useCustom ? form.customDisc : form.discipline;
+  const discType   = getDiscType(finalDisc);
+  const discColors = DISC_TYPE_COLORS[discType] ?? DISC_TYPE_COLORS.sprint;
 
   const handleSubmit = async () => {
     if (!finalDisc.trim() || !form.value.trim() || !form.performanceDate) return;
@@ -1359,7 +1309,6 @@ const AddPerfModal = memo(({ athlete, clubId, onClose, onAdded }) => {
       });
       if (e) throw e;
 
-      // Mise à jour auto du record si meilleur
       const hib = getDiscHib(finalDisc);
       const { data: existingRec } = await supabase.from("records")
         .select("*").eq("athlete_id", athlete.id).eq("discipline", finalDisc).single();
@@ -1400,11 +1349,8 @@ const AddPerfModal = memo(({ athlete, clubId, onClose, onAdded }) => {
           </div>
           <button onClick={onClose} disabled={saving} className="p-1.5 rounded-lg hover:bg-black/10"><X size={18} style={{color:discColors.text}}/></button>
         </div>
-
         <div className="flex-1 overflow-y-auto px-6 py-5 space-y-4">
           {err&&<div className="bg-red-50 border border-red-100 rounded-lg px-3 py-2.5 text-[12px] text-red-700">{err}</div>}
-
-          {/* Discipline */}
           <div>
             <label className={labelCls}>Discipline *</label>
             <div className="flex items-center gap-2 mb-2">
@@ -1426,8 +1372,6 @@ const AddPerfModal = memo(({ athlete, clubId, onClose, onAdded }) => {
               </select>
             )}
           </div>
-
-          {/* Type badge */}
           <div className="flex items-center gap-2">
             <span className="text-[11px] font-bold px-2.5 py-1 rounded-full" style={{background:discColors.bg,color:discColors.text}}>
               {discType === "sprint" ? "⚡ Sprint/Haies" :
@@ -1436,8 +1380,6 @@ const AddPerfModal = memo(({ athlete, clubId, onClose, onAdded }) => {
                discType === "lancer" ? "🎯 Lancer" : "🏆 Combiné"}
             </span>
           </div>
-
-          {/* Résultat */}
           <div>
             <label className={labelCls}>Résultat *</label>
             <input className={inputCls}
@@ -1449,15 +1391,11 @@ const AddPerfModal = memo(({ athlete, clubId, onClose, onAdded }) => {
               }
               value={form.value} onChange={e=>set("value",e.target.value)}/>
           </div>
-
-          {/* Date */}
           <div>
             <label className={labelCls}>Date *</label>
             <input type="date" className={inputCls} value={form.performanceDate}
               onChange={e=>set("performanceDate",e.target.value)}/>
           </div>
-
-          {/* Source */}
           <div>
             <label className={labelCls}>Contexte</label>
             <div className="flex gap-2">
@@ -1470,8 +1408,6 @@ const AddPerfModal = memo(({ athlete, clubId, onClose, onAdded }) => {
               ))}
             </div>
           </div>
-
-          {/* Notes */}
           <div>
             <label className={labelCls}>Notes (optionnel)</label>
             <textarea className={`${inputCls} resize-none`} rows={2}
@@ -1479,7 +1415,6 @@ const AddPerfModal = memo(({ athlete, clubId, onClose, onAdded }) => {
               value={form.context} onChange={e=>set("context",e.target.value)}/>
           </div>
         </div>
-
         <div className="px-6 py-4 border-t border-slate-100 flex items-center justify-between gap-3 flex-shrink-0">
           <button onClick={onClose} disabled={saving} className="px-4 py-2 rounded-lg bg-slate-100 text-slate-600 text-[13px] font-medium hover:bg-slate-200 disabled:opacity-40">Annuler</button>
           <button onClick={handleSubmit} disabled={!form.value.trim()||(form.useCustom?!form.customDisc.trim():false)||saving}
@@ -1493,7 +1428,6 @@ const AddPerfModal = memo(({ athlete, clubId, onClose, onAdded }) => {
   );
 });
 
-// Modal ajout objectif
 const AddGoalModal = memo(({ athlete, clubId, allDiscs, onClose, onAdded }) => {
   const inputCls = "w-full border border-slate-200 rounded-lg px-3 py-2 text-[13px] text-slate-700 focus:outline-none focus:ring-2 focus:ring-emerald-400 bg-white";
   const labelCls = "block text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1";
@@ -1570,7 +1504,6 @@ const AddGoalModal = memo(({ athlete, clubId, allDiscs, onClose, onAdded }) => {
 });
 
 function MesPerformances({ athlete, competitions, myPerformances, myGoals, clubId, onRefresh }) {
-  // Toutes les disciplines pratiquées (records + performances ajoutées)
   const allDiscs = useMemo(() => {
     const fromRecords = Object.keys(athlete.records ?? {});
     const fromPerfs   = [...new Set((myPerformances ?? []).map(p => p.discipline))];
@@ -1582,14 +1515,12 @@ function MesPerformances({ athlete, competitions, myPerformances, myGoals, clubI
   const [showGoalModal,setShowGoalModal]= useState(false);
   const [deleting,     setDeleting]     = useState(null);
 
-  // Init discipline sélectionnée
   useEffect(() => {
     if (!selectedDisc && allDiscs.length > 0) setSelectedDisc(allDiscs[0]);
   }, [allDiscs, selectedDisc]);
 
   const rec = selectedDisc ? athlete.records[selectedDisc] : null;
 
-  // Performances pour la discipline sélectionnée
   const discPerfs = useMemo(() => {
     if (!selectedDisc) return [];
     return (myPerformances ?? [])
@@ -1597,7 +1528,6 @@ function MesPerformances({ athlete, competitions, myPerformances, myGoals, clubI
       .sort((a,b) => new Date(a.performance_date)-new Date(b.performance_date));
   }, [selectedDisc, myPerformances]);
 
-  // + résultats compétition
   const compResults = useMemo(() => {
     if (!selectedDisc) return [];
     const results = [];
@@ -1608,14 +1538,11 @@ function MesPerformances({ athlete, competitions, myPerformances, myGoals, clubI
     return results;
   }, [selectedDisc, competitions, athlete.id]);
 
-  // Données unifiées pour le graphique
   const chartData = useMemo(() => {
-    const hib = getDiscHib(selectedDisc ?? "");
     const allPoints = [
       ...discPerfs.map(p => ({ date: p.performance_date, label: new Date(p.performance_date).toLocaleDateString("fr-BE",{day:"2-digit",month:"short"}), result: p.value, source: p.source, note: p.context })),
       ...compResults.map(r => ({ date: r.date, label: new Date(r.date).toLocaleDateString("fr-BE",{day:"2-digit",month:"short"}), result: r.value, source: "competition", note: r.label })),
     ].sort((a,b) => new Date(a.date)-new Date(b.date));
-
     return allPoints.map(p => {
       const { value } = parsePerf(p.result);
       return { ...p, numValue: value };
@@ -1625,7 +1552,6 @@ function MesPerformances({ athlete, competitions, myPerformances, myGoals, clubI
   const isTime = chartData.length > 0 && !getDiscHib(selectedDisc ?? "");
   const discColors = DISC_TYPE_COLORS[getDiscType(selectedDisc ?? "")] ?? DISC_TYPE_COLORS.sprint;
 
-  // Meilleure perf dans l'historique
   const bestPerf = useMemo(() => {
     if (!chartData.length) return null;
     const hib = getDiscHib(selectedDisc ?? "");
@@ -1644,8 +1570,6 @@ function MesPerformances({ athlete, competitions, myPerformances, myGoals, clubI
 
   return (
     <div className="p-4 space-y-4 max-w-4xl mx-auto">
-
-      {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
           <h2 className="text-[20px] font-bold text-slate-800">Mes performances</h2>
@@ -1664,7 +1588,6 @@ function MesPerformances({ athlete, competitions, myPerformances, myGoals, clubI
         </div>
       </div>
 
-      {/* Objectifs actifs */}
       {(myGoals??[]).length > 0 && (
         <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
           <div className="px-5 py-4 border-b border-slate-50 flex items-center justify-between">
@@ -1681,7 +1604,6 @@ function MesPerformances({ athlete, competitions, myPerformances, myGoals, clubI
               const pv = rec ? parsePerf(rec.pr) : null;
               const tv = parsePerf(g.target_value);
               const progress = pv?.value && tv?.value ? (hib ? Math.min(100,Math.round((pv.value/tv.value)*100)) : Math.min(100,Math.round((tv.value/pv.value)*100))) : null;
-
               return (
                 <div key={g.id} className="px-5 py-3.5">
                   <div className="flex items-center justify-between mb-2">
@@ -1727,7 +1649,6 @@ function MesPerformances({ athlete, competitions, myPerformances, myGoals, clubI
         </div>
       )}
 
-      {/* Sélection discipline */}
       <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5">
         <h3 className="text-[13px] font-bold text-slate-700 mb-3">Mes épreuves</h3>
         {allDiscs.length === 0 ? (
@@ -1758,7 +1679,6 @@ function MesPerformances({ athlete, competitions, myPerformances, myGoals, clubI
 
       {selectedDisc && (
         <>
-          {/* Records */}
           <div className="grid grid-cols-3 gap-4">
             {rec ? (
               <>
@@ -1784,7 +1704,6 @@ function MesPerformances({ athlete, competitions, myPerformances, myGoals, clubI
             </div>
           </div>
 
-          {/* % du PR */}
           {rec && (() => {
             const sb=parsePerf(rec.sb), pr=parsePerf(rec.pr);
             if (!sb.value||!pr.value) return null;
@@ -1807,7 +1726,6 @@ function MesPerformances({ athlete, competitions, myPerformances, myGoals, clubI
             );
           })()}
 
-          {/* Graphique */}
           {chartData.length >= 2 ? (
             <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5">
               <div className="flex items-start justify-between mb-4">
@@ -1869,7 +1787,6 @@ function MesPerformances({ athlete, competitions, myPerformances, myGoals, clubI
             </div>
           ) : null}
 
-          {/* Historique liste */}
           {(discPerfs.length > 0 || compResults.length > 0) && (
             <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
               <div className="px-5 py-4 border-b border-slate-50 flex items-center justify-between">
@@ -1901,7 +1818,6 @@ function MesPerformances({ athlete, competitions, myPerformances, myGoals, clubI
                       </p>
                     </div>
                     <p className="text-[16px] font-black flex-shrink-0" style={{color:discColors.border}}>{p.result}</p>
-                    {/* Supprimer uniquement les perfs ajoutées par l'athlète */}
                     {p.source !== "competition" && (() => {
                       const original = discPerfs.find(dp => dp.performance_date === p.date && dp.value === p.result);
                       if (!original) return null;
@@ -1921,20 +1837,10 @@ function MesPerformances({ athlete, competitions, myPerformances, myGoals, clubI
       )}
 
       {showAddModal && (
-        <AddPerfModal
-          athlete={athlete} clubId={clubId}
-          onClose={()=>setShowAddModal(false)}
-          onAdded={onRefresh}
-        />
+        <AddPerfModal athlete={athlete} clubId={clubId} onClose={()=>setShowAddModal(false)} onAdded={onRefresh}/>
       )}
-
       {showGoalModal && (
-        <AddGoalModal
-          athlete={athlete} clubId={clubId}
-          allDiscs={allDiscs}
-          onClose={()=>setShowGoalModal(false)}
-          onAdded={onRefresh}
-        />
+        <AddGoalModal athlete={athlete} clubId={clubId} allDiscs={allDiscs} onClose={()=>setShowGoalModal(false)} onAdded={onRefresh}/>
       )}
     </div>
   );
@@ -1948,7 +1854,6 @@ function MaMessagerie({ athlete, coachUserId, athleteUserId, coachName }) {
   const [input,    setInput]    = useState("");
   const [loading,  setLoading]  = useState(true);
   const [sending,  setSending]  = useState(false);
-  const bottomRef = { current: null };
 
   const fetchMessages = useCallback(async () => {
     if (!coachUserId||!athleteUserId) return;
@@ -1993,7 +1898,6 @@ function MaMessagerie({ athlete, coachUserId, athleteUserId, coachName }) {
 
   return (
     <div className="flex flex-col max-w-2xl mx-auto" style={{height:"calc(100vh - 64px)"}}>
-      {/* Header */}
       <div className="bg-white border-b border-slate-100 px-5 py-4 flex items-center gap-3 flex-shrink-0">
         <div className="w-10 h-10 rounded-full bg-emerald-500 flex items-center justify-center text-white text-[12px] font-bold flex-shrink-0">
           {initialsFromName(coachName??"Coach")}
@@ -2003,8 +1907,6 @@ function MaMessagerie({ athlete, coachUserId, athleteUserId, coachName }) {
           <p className="text-[11px] text-slate-400">Head coach</p>
         </div>
       </div>
-
-      {/* Messages */}
       <div className="flex-1 overflow-y-auto px-5 py-4 space-y-3" style={{background:"#FAFAFA"}}>
         {loading ? <LoadingState message="Chargement…"/> : messages.length===0 ? (
           <div className="flex flex-col items-center justify-center h-full text-slate-300 gap-2">
@@ -2033,8 +1935,6 @@ function MaMessagerie({ athlete, coachUserId, athleteUserId, coachName }) {
           );
         })}
       </div>
-
-      {/* Input */}
       <div className="flex-shrink-0 px-4 py-3 bg-white border-t border-slate-100 flex items-end gap-2">
         <div className="flex-1 bg-slate-100 rounded-2xl px-4 py-2.5">
           <textarea className="w-full bg-transparent resize-none text-[13px] text-slate-700 placeholder-slate-400 focus:outline-none max-h-28 min-h-[20px]"
@@ -2053,13 +1953,11 @@ function MaMessagerie({ athlete, coachUserId, athleteUserId, coachName }) {
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
-// VUE 5 — MON CLUB (fil social BeReal — version complète)
-// Caméra directe mobile, commentaires, album photo, notifs in-app, 7j expiry
+// VUE 5 — MON CLUB
 // ══════════════════════════════════════════════════════════════════════════════
 
 const REACTION_EMOJIS = ["🔥","💪","👏","⚡","🎯","❤️"];
 
-// Notification in-app
 function SocialNotif({ notif, onDismiss }) {
   useEffect(() => { const t = setTimeout(onDismiss, 5000); return () => clearTimeout(t); }, [onDismiss]);
   return (
@@ -2080,7 +1978,6 @@ function SocialNotif({ notif, onDismiss }) {
   );
 }
 
-// Modal commentaires
 const CommentsModal = memo(({ post, postAthlete, athlete, allAthletes, onClose, onCommentAdded }) => {
   const [comments, setComments] = useState([]);
   const [input,    setInput]    = useState("");
@@ -2178,7 +2075,6 @@ const CommentsModal = memo(({ post, postAthlete, athlete, allAthletes, onClose, 
   );
 });
 
-// Modal album photo
 const PhotoAlbumModal = memo(({ posts, allAthletes, onClose }) => {
   const photos = posts.filter(p => p.image_url);
   const [selected, setSelected] = useState(null);
@@ -2280,7 +2176,6 @@ function MonClub({ athlete, allAthletes, clubId, sessions, profile }) {
 
   useEffect(() => { fetchPosts(); }, [fetchPosts]);
 
-  // Realtime — notif in-app
   useEffect(() => {
     if (!clubId) return;
     const ch = supabase.channel("social-realtime")
@@ -2351,10 +2246,7 @@ function MonClub({ athlete, allAthletes, clubId, sessions, profile }) {
 
   return (
     <div className="max-w-xl mx-auto" style={{ minHeight: "100%" }}>
-
       {notif && <SocialNotif notif={notif} onDismiss={() => setNotif(null)}/>}
-
-      {/* Header sticky */}
       <div className="sticky top-0 z-10 bg-white/95 backdrop-blur border-b border-slate-100 px-5 py-3 flex items-center justify-between">
         <div>
           <h2 className="text-[16px] font-bold text-slate-800">Mon club</h2>
@@ -2365,7 +2257,6 @@ function MonClub({ athlete, allAthletes, clubId, sessions, profile }) {
             className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-slate-200 text-slate-600 text-[12px] font-semibold hover:bg-slate-50">
             <Image size={13}/> Album
           </button>
-          {/* Caméra directe mobile */}
           <label className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-white text-[12px] font-semibold cursor-pointer"
             style={{ background: "#1D9E75" }}>
             <Camera size={13}/> Photo
@@ -2380,8 +2271,6 @@ function MonClub({ athlete, allAthletes, clubId, sessions, profile }) {
       </div>
 
       <div className="p-4 space-y-4">
-
-        {/* Formulaire */}
         {showCreate && (
           <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
             <div className="px-4 py-3 border-b border-slate-50 flex items-center gap-3">
@@ -2441,7 +2330,6 @@ function MonClub({ athlete, allAthletes, clubId, sessions, profile }) {
           </div>
         )}
 
-        {/* Fil */}
         {loading ? (
           <div className="text-center py-16 text-slate-300">
             <div className="w-8 h-8 border-2 border-slate-200 border-t-emerald-500 rounded-full animate-spin mx-auto mb-3"/>
@@ -2496,12 +2384,10 @@ function MonClub({ athlete, allAthletes, clubId, sessions, profile }) {
                   </button>
                 )}
               </div>
-
               {post.image_url && (
                 <img src={post.image_url} alt="post" className="w-full max-h-96 object-cover cursor-pointer"
                   onClick={() => setActiveComments(post)}/>
               )}
-
               <div className="px-4 py-3">
                 <p className="text-[13.5px] text-slate-700 leading-relaxed">{post.content}</p>
                 {linkedSess && (
@@ -2515,7 +2401,6 @@ function MonClub({ athlete, allAthletes, clubId, sessions, profile }) {
                   </div>
                 )}
               </div>
-
               <div className="px-4 pb-4">
                 {Object.keys(rxCounts).length > 0 && (
                   <div className="flex items-center gap-1.5 mb-3 flex-wrap">
@@ -2566,13 +2451,16 @@ function MonClub({ athlete, allAthletes, clubId, sessions, profile }) {
           onCommentAdded={() => fetchPosts()}
         />
       )}
-
       {showAlbum && (
         <PhotoAlbumModal posts={allPosts} allAthletes={allAthletes} onClose={() => setShowAlbum(false)}/>
       )}
     </div>
   );
 }
+
+// ══════════════════════════════════════════════════════════════════════════════
+// COMPOSANT PRINCIPAL — AthleteApp
+// ══════════════════════════════════════════════════════════════════════════════
 export default function AthleteApp() {
   const { profile, clubId, signOut } = useAuth();
 
@@ -2586,12 +2474,22 @@ export default function AthleteApp() {
   const [coachUserId,     setCoachUserId]     = useState(null);
   const [coachName,       setCoachName]       = useState(null);
   const [lastMessages,    setLastMessages]    = useState([]);
-  const [myPerformances,  setMyPerformances]  = useState([]); // athlete_performances
-  const [myGoals,         setMyGoals]         = useState([]); // athlete_goals
-  const [myNotifs,        setMyNotifs]        = useState([]); // athlete_notifications
+  const [myPerformances,  setMyPerformances]  = useState([]);
+  const [myGoals,         setMyGoals]         = useState([]);
+  const [myNotifs,        setMyNotifs]        = useState([]);
   const [showNotifs,      setShowNotifs]      = useState(false);
   const [loading,         setLoading]         = useState(true);
   const [error,           setError]           = useState(null);
+
+  // ── Push notifications ────────────────────────────────────────────────────
+  // IMPORTANT : appelé AVANT les guards (règle React : hooks toujours en tête).
+  // athlete?.id sera null au premier render puis mis à jour après fetchAll.
+  // Le hook tolère null et ne crée pas d'abonnement tant que l'id est absent.
+  const { subscribed, subscribe, permissionState } = usePushNotifications(
+    athlete?.id ?? null,
+    clubId
+    // userId omis intentionnellement : l'athlète s'abonne via athlete_id, pas user_id
+  );
 
   // ═══ Chargement ═══════════════════════════════════════════════════════════
   const fetchAll = useCallback(async () => {
@@ -2600,7 +2498,11 @@ export default function AthleteApp() {
       setLoading(true); setError(null);
 
       const athleteRes = await supabase.from("athletes").select("*").eq("user_id", profile.id).single();
-      if (athleteRes.error || !athleteRes.data) { setError("Aucun profil athlète lié à ton compte. Contacte ton coach."); setLoading(false); return; }
+      if (athleteRes.error || !athleteRes.data) {
+        setError("Aucun profil athlète lié à ton compte. Contacte ton coach.");
+        setLoading(false);
+        return;
+      }
 
       const a = athleteRes.data;
       const athleteId = a.id;
@@ -2617,6 +2519,7 @@ export default function AthleteApp() {
         supabase.from("athlete_goals").select("*").eq("athlete_id",athleteId).order("created_at",{ascending:false}),
         supabase.from("athlete_notifications").select("*").eq("athlete_id",athleteId).order("created_at",{ascending:false}).limit(20),
       ]);
+
       setMyPerformances(myPerfsRes.data ?? []);
       setMyGoals(goalsRes.data ?? []);
       setMyNotifs(notifsRes?.data ?? []);
@@ -2625,7 +2528,6 @@ export default function AthleteApp() {
       setCoachUserId(coachId);
       setCoachName(coachRes.data?.name ?? null);
 
-      // Derniers messages du coach
       if (coachId) {
         const {data:msgs}=await supabase.from("messages").select("*")
           .or(`and(sender_id.eq.${coachId},receiver_id.eq.${profile.id}),and(sender_id.eq.${profile.id},receiver_id.eq.${coachId})`)
@@ -2690,21 +2592,12 @@ export default function AthleteApp() {
 
   useEffect(() => { fetchAll(); }, [fetchAll]);
 
-  // ═══ Realtime : sessions + notifications athlète ══════════════════════════
- useEffect(() => {
-  if (!clubId || !profile?.id) return;
-  const ch = supabase
-    .channel(`athlete-${profile.id}`)
-    .on("postgres_changes", { event: "*", schema: "public", table: "sessions" }, () => fetchAll())
-    .on("postgres_changes", { event: "*", schema: "public", table: "session_athletes" }, () => fetchAll())
-    .on("postgres_changes", { event: "INSERT", schema: "public", table: "athlete_notifications" }, (payload) => {
-      if (payload.new.athlete_id === athlete?.id) {
-        setMyNotifs(prev => [payload.new, ...prev]);
-      }
-    })
-    .subscribe();
-  return () => supabase.removeChannel(ch);
-}, [clubId, profile?.id, fetchAll]);
+  // ═══ Realtime ═════════════════════════════════════════════════════════════
+  // Section intentionnellement vide.
+  // Les handlers RPE/status/feeling/comment font uniquement une mise à jour
+  // locale + write Supabase sans fetchAll(), ce qui évite tout rechargement.
+  // Si un realtime est ajouté à l'avenir, filtrer sur athlete_id et
+  // utiliser setSessions (patch local) plutôt que fetchAll().
 
   // ═══ Handlers ═════════════════════════════════════════════════════════════
   const handleRpe = useCallback(async (sid,aid,rpe) => {
@@ -2728,7 +2621,8 @@ export default function AthleteApp() {
   }, []);
 
   const navigate = useCallback((view) => { setActiveView(view); setMobileOpen(false); }, []);
- const { subscribed, subscribe, permissionState } = usePushNotifications(athlete?.id ?? null, clubId);
+
+  // ── Guards (APRÈS tous les hooks) ─────────────────────────────────────────
   if (loading) return <LoadingState message="Chargement de ton espace…"/>;
   if (error || !athlete) return (
     <div className="min-h-screen flex items-center justify-center p-6" style={{background:"#F5F5F2"}}>
@@ -2746,10 +2640,8 @@ export default function AthleteApp() {
     <div className="flex h-screen overflow-hidden" style={{background:"#F5F5F2",fontFamily:"'DM Sans', system-ui, sans-serif"}}>
       {mobileOpen&&<div className="fixed inset-0 bg-black/30 z-20 md:hidden" onClick={()=>setMobileOpen(false)}/>}
 
-      {/* Sidebar — desktop seulement */}
-      <aside className={[
-        "hidden md:flex flex-col bg-white border-r border-slate-100 z-30 w-56 flex-shrink-0",
-      ].join(" ")}>
+      {/* Sidebar desktop */}
+      <aside className="hidden md:flex flex-col bg-white border-r border-slate-100 z-30 w-56 flex-shrink-0">
         <div className="flex items-center gap-2.5 px-4 h-16 border-b border-slate-100 flex-shrink-0">
           <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
             style={{background:"linear-gradient(135deg,#1D9E75 0%,#16826C 100%)"}}>
@@ -2780,7 +2672,6 @@ export default function AthleteApp() {
             <p className="text-[12.5px] font-semibold text-slate-700 truncate">{athlete.name}</p>
             <p className="text-[11px] text-slate-400">Athlète</p>
           </div>
-          {/* Badge notifs */}
           <button onClick={()=>setShowNotifs(v=>!v)}
             className="relative p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors flex-shrink-0">
             <Bell size={15}/>
@@ -2815,15 +2706,16 @@ export default function AthleteApp() {
               )}
             </div>
             <div className="max-h-80 overflow-y-auto divide-y divide-slate-50">
-             {myNotifs.length === 0 ? (
-  <div className="px-4 py-6 text-center text-[11px] text-slate-300 space-y-3">
-    <p>Aucune notification</p>
-    <PushToggleButton
-      subscribed={subscribed}
-      onToggle={subscribe}
-      permissionState={permissionState}
-    />
-  </div>
+              {myNotifs.length === 0 ? (
+                <div className="px-4 py-6 text-center space-y-3">
+                  <p className="text-[11px] text-slate-300">Aucune notification</p>
+                  {/* Bouton push dans le panneau notifs desktop */}
+                  <PushToggleButton
+                    subscribed={subscribed}
+                    onToggle={subscribe}
+                    permissionState={permissionState}
+                  />
+                </div>
               ) : myNotifs.map(n => {
                 const diff = (new Date()-new Date(n.created_at))/1000;
                 const ago = diff<60?"À l'instant":diff<3600?`${Math.floor(diff/60)}min`:diff<86400?`${Math.floor(diff/3600)}h`:`${Math.floor(diff/86400)}j`;
@@ -2852,7 +2744,6 @@ export default function AthleteApp() {
       {/* Zone principale */}
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
         <header className="h-14 md:h-16 bg-white border-b border-slate-100 flex items-center gap-3 px-4 flex-shrink-0">
-          {/* Logo mobile */}
           <div className="flex md:hidden items-center gap-2">
             <div className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0"
               style={{ background: "linear-gradient(135deg, #1D9E75, #16826C)" }}>
@@ -2862,7 +2753,14 @@ export default function AthleteApp() {
           </div>
           <h1 className="hidden md:block text-[16px] font-semibold text-slate-800 tracking-tight">{currentNav?.label??"Mon espace"}</h1>
           <div className="flex-1"/>
-          
+          {/* Bouton push dans le header — visible desktop */}
+          <div className="hidden md:block">
+            <PushToggleButton
+              subscribed={subscribed}
+              onToggle={subscribe}
+              permissionState={permissionState}
+            />
+          </div>
         </header>
 
         <main className="flex-1 overflow-y-auto pb-20 md:pb-0">
@@ -2882,12 +2780,9 @@ export default function AthleteApp() {
           )}
           {activeView==="performances"&&(
             <MesPerformances
-              athlete={athlete}
-              competitions={competitions}
-              myPerformances={myPerformances}
-              myGoals={myGoals}
-              clubId={clubId}
-              onRefresh={fetchAll}
+              athlete={athlete} competitions={competitions}
+              myPerformances={myPerformances} myGoals={myGoals}
+              clubId={clubId} onRefresh={fetchAll}
             />
           )}
           {activeView==="messagerie"&&(
@@ -2912,7 +2807,6 @@ export default function AthleteApp() {
           {NAV_ITEMS.map(item => {
             const Icon = item.icon;
             const isActive = activeView === item.id;
-            const unread = item.id === "messagerie" ? 0 : 0;
             return (
               <button key={item.id} onClick={() => navigate(item.id)}
                 className={["flex-1 flex flex-col items-center justify-center gap-1 py-2.5 transition-all",
@@ -2929,7 +2823,7 @@ export default function AthleteApp() {
               </button>
             );
           })}
-          {/* Notifs */}
+          {/* Bouton push + notifs dans la bottom nav mobile */}
           <button onClick={() => setShowNotifs(v=>!v)}
             className={["flex-1 flex flex-col items-center justify-center gap-1 py-2.5 transition-all",
               showNotifs ? "text-emerald-600" : "text-slate-400"].join(" ")}>
@@ -2941,12 +2835,64 @@ export default function AthleteApp() {
                 </span>
               )}
             </div>
-            <button onClick={subscribe}
-  className="text-[9px] font-semibold text-emerald-500">
-  {subscribed ? "🔔 ON" : "🔔 OFF"}
-</button>
+            {/* Indicateur push intégré sous l'icône notifs */}
+            <span className="text-[9px] font-semibold text-center" style={{ color: subscribed ? "#1D9E75" : "inherit" }}>
+              {subscribed ? "🔔 ON" : "Notifs"}
+            </span>
           </button>
         </div>
+
+        {/* Panneau notifs mobile (slide du bas) */}
+        {showNotifs && (
+          <div className="fixed inset-0 z-40" onClick={() => setShowNotifs(false)}>
+            <div className="absolute bottom-16 left-0 right-0 bg-white rounded-t-2xl border-t border-slate-200 shadow-2xl max-h-[60vh] flex flex-col"
+              onClick={e => e.stopPropagation()}>
+              <div className="px-5 py-3 border-b border-slate-100 flex items-center justify-between flex-shrink-0">
+                <p className="text-[14px] font-bold text-slate-800">Notifications</p>
+                <div className="flex items-center gap-3">
+                  {/* Bouton push dans le panneau notifs mobile */}
+                  <PushToggleButton
+                    subscribed={subscribed}
+                    onToggle={subscribe}
+                    permissionState={permissionState}
+                  />
+                  {myNotifs.filter(n=>!n.is_read).length > 0 && (
+                    <button onClick={async()=>{
+                      await supabase.from("athlete_notifications").update({is_read:true}).eq("athlete_id",athlete.id).eq("is_read",false);
+                      fetchAll();
+                    }} className="text-[11px] font-semibold text-emerald-600">
+                      Tout lire
+                    </button>
+                  )}
+                </div>
+              </div>
+              <div className="flex-1 overflow-y-auto divide-y divide-slate-50">
+                {myNotifs.length === 0 ? (
+                  <div className="px-5 py-8 text-center text-[12px] text-slate-300">Aucune notification</div>
+                ) : myNotifs.map(n => {
+                  const diff = (new Date()-new Date(n.created_at))/1000;
+                  const ago = diff<60?"À l'instant":diff<3600?`${Math.floor(diff/60)}min`:diff<86400?`${Math.floor(diff/3600)}h`:`${Math.floor(diff/86400)}j`;
+                  return (
+                    <div key={n.id} className={["px-5 py-3.5 cursor-pointer hover:bg-slate-50",!n.is_read?"bg-blue-50/30":""].join(" ")}
+                      onClick={async()=>{
+                        if(!n.is_read) await supabase.from("athlete_notifications").update({is_read:true}).eq("id",n.id);
+                        fetchAll(); setShowNotifs(false);
+                      }}>
+                      <div className="flex items-start gap-2.5">
+                        {!n.is_read && <div className="w-2 h-2 rounded-full bg-blue-500 mt-1.5 flex-shrink-0"/>}
+                        <div className="flex-1 min-w-0">
+                          <p className="text-[12.5px] font-semibold text-slate-700 leading-tight">{n.title}</p>
+                          {n.description && <p className="text-[11px] text-slate-400 mt-0.5 line-clamp-2">{n.description}</p>}
+                          <p className="text-[10px] text-slate-300 mt-1">{ago}</p>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        )}
       </nav>
     </div>
   );

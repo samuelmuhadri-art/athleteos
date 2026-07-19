@@ -1,8 +1,9 @@
 // ============================================================
 // AthleteOS — src/App.jsx
-// AJOUT : routeur coach/athlète
-// - Si role === "athlete" → AthleteApp (vue personnelle)
-// - Si role === "head_coach" ou "coach" → app complète coach
+// FIX PUSH BENOÎT : usePushNotifications déplacé dans <CoachShell>
+// qui ne monte QUE lorsque profile est résolu et role confirmé.
+// Ainsi userId = profile.id est garanti non-null dès le premier render
+// du hook — plus aucun risque d'enregistrement avec user_id=NULL.
 // ============================================================
 
 import { useState, useCallback, useEffect, Suspense, lazy } from "react";
@@ -15,7 +16,7 @@ import {
 import { supabase }   from "./utils/supabaseClient";
 import { useAuth }    from "./context/AuthContext";
 import LoginPage      from "./pages/LoginPage";
-import AthleteApp     from "./AthleteApp"; // ← VUE ATHLÈTE
+import AthleteApp     from "./AthleteApp";
 import { usePushNotifications, PushToggleButton } from "./hooks/usePushNotifications";
 
 // ─── Lazy imports modules coach ───────────────────────────────────────────────
@@ -84,17 +85,28 @@ function initialsFromName(name) {
   return ((parts[0]?.[0] ?? "") + (parts[1]?.[0] ?? "")).toUpperCase();
 }
 
-// ─── App Coach ────────────────────────────────────────────────────────────────
-export default function App() {
-  const { user, profile, clubId, loading: authLoading, signOut } = useAuth();
-
-  const [activeView,  setActiveView]  = useState("dashboard");
-  const [sidebarOpen, setSidebarOpen] = useState(true);
-  const [mobileOpen,  setMobileOpen]  = useState(false);
+// ─── CoachShell ───────────────────────────────────────────────────────────────
+// Composant dédié à l'UI coach. Monté UNIQUEMENT une fois que profile est résolu.
+// C'est ici que usePushNotifications est instancié, garantissant que :
+//   - profile.id  est un entier valide (ex: 1 pour Benoît)
+//   - clubId      est non-null
+// Donc user_id sera toujours correct en base lors de l'abonnement push.
+// ──────────────────────────────────────────────────────────────────────────────
+function CoachShell({ user, profile, clubId, signOut }) {
+  const [activeView,   setActiveView]   = useState("dashboard");
+  const [sidebarOpen,  setSidebarOpen]  = useState(true);
+  const [mobileOpen,   setMobileOpen]   = useState(false);
   const [unreadAlerts, setUnreadAlerts] = useState(0);
 
-  const { subscribed, subscribe, permissionState } = usePushNotifications(null, clubId, profile?.id);
-  console.log("Push hook - profile.id:", profile?.id, "clubId:", clubId);
+  // ── Push notifications coach ──────────────────────────────────────────────
+  // athleteId=null car Benoît est coach, pas athlète.
+  // userId=profile.id est GARANTI non-null ici (CoachShell monte après guard).
+  const { subscribed, subscribe, permissionState } = usePushNotifications(
+    null,        // athleteId
+    clubId,      // clubId
+    profile.id   // userId — ici c'est 1 (Benoît), jamais null
+  );
+
   // ── Badge alertes non lues ────────────────────────────────────────────────
   const fetchUnreadCount = useCallback(async () => {
     if (!clubId) return;
@@ -114,25 +126,17 @@ export default function App() {
     setMobileOpen(false);
   }, [activeView, fetchUnreadCount]);
 
-  // ── Guards auth ───────────────────────────────────────────────────────────
-  if (authLoading) return <AuthLoader />;
-  if (!user)       return <LoginPage />;
-
-  // ── Routeur rôle : athlète → vue dédiée ──────────────────────────────────
-  if (profile?.role === "athlete") return <AthleteApp />;
-
-  // ── App coach (head_coach ou coach) ───────────────────────────────────────
   const currentNav    = NAV_ITEMS.find((n) => n.id === activeView);
-  const coachName     = profile?.name ?? user.email ?? "Coach";
+  const coachName     = profile.name ?? user.email ?? "Coach";
   const coachInitials = initialsFromName(coachName);
-  const coachRole     = profile?.role === "head_coach" ? "Head coach" : "Coach";
+  const coachRole     = profile.role === "head_coach" ? "Head coach" : "Coach";
 
   return (
     <div
       className="flex h-screen overflow-hidden"
       style={{ background: "#F5F5F2", fontFamily: "'DM Sans', system-ui, sans-serif" }}
     >
-      {/* ── Overlay mobile ─────────────────────────────────────────────── */}
+      {/* ── Overlay mobile ───────────────────────────────────────────── */}
       {mobileOpen && (
         <div
           className="fixed inset-0 bg-black/30 z-20 md:hidden"
@@ -140,9 +144,9 @@ export default function App() {
         />
       )}
 
-      {/* ════════════════════════════════════════════════════════════════
+      {/* ══════════════════════════════════════════════════════════════
           SIDEBAR
-      ════════════════════════════════════════════════════════════════ */}
+      ══════════════════════════════════════════════════════════════ */}
       <aside
         className={[
           "flex flex-col bg-white border-r border-slate-100 z-30 transition-all duration-300 ease-in-out flex-shrink-0",
@@ -258,9 +262,9 @@ export default function App() {
         </div>
       </aside>
 
-      {/* ════════════════════════════════════════════════════════════════
+      {/* ══════════════════════════════════════════════════════════════
           ZONE PRINCIPALE
-      ════════════════════════════════════════════════════════════════ */}
+      ══════════════════════════════════════════════════════════════ */}
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
         <header className="h-16 bg-white border-b border-slate-100 flex items-center gap-4 px-6 flex-shrink-0">
           <button
@@ -273,11 +277,14 @@ export default function App() {
             {currentNav?.label ?? "AthleteOS"}
           </h1>
           <div className="flex-1" />
+
+          {/* Bouton push — profile.id est garanti ici */}
           <PushToggleButton
-  subscribed={subscribed}
-  onToggle={subscribe}
-  permissionState={permissionState}
-/>
+            subscribed={subscribed}
+            onToggle={subscribe}
+            permissionState={permissionState}
+          />
+
           <div className="hidden sm:flex items-center gap-1.5 text-[12px] text-slate-400 bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-100">
             <CalendarDays size={13} />
             <span>
@@ -295,5 +302,34 @@ export default function App() {
         </main>
       </div>
     </div>
+  );
+}
+
+// ─── App (router racine) ──────────────────────────────────────────────────────
+// Rôle unique : vérifier auth, router vers le bon shell.
+// Aucun état UI, aucun hook métier ici.
+// ──────────────────────────────────────────────────────────────────────────────
+export default function App() {
+  const { user, profile, clubId, loading: authLoading, signOut } = useAuth();
+
+  if (authLoading) return <AuthLoader />;
+  if (!user)       return <LoginPage />;
+
+  // Athlète → vue dédiée
+  if (profile?.role === "athlete") return <AthleteApp />;
+
+  // Coach/head_coach → shell complet
+  // On attend que profile soit résolu (non-null) avant de monter CoachShell.
+  // Pendant ce bref instant (auth OK mais profil en cours de fetch),
+  // on affiche le loader plutôt que de monter avec profile=null.
+  if (!profile) return <AuthLoader />;
+
+  return (
+    <CoachShell
+      user={user}
+      profile={profile}
+      clubId={clubId}
+      signOut={signOut}
+    />
   );
 }
