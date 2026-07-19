@@ -24,6 +24,7 @@ import {
   getStatusLabel,
 } from "./utils/chargeCalculations";
 import { notifyGoalAchieved } from "./utils/notifications";
+import { usePushNotifications, PushToggleButton } from "./hooks/usePushNotifications";
 
 // ─── Nav ──────────────────────────────────────────────────────────────────────
 const NAV_ITEMS = [
@@ -2727,7 +2728,7 @@ export default function AthleteApp() {
   }, []);
 
   const navigate = useCallback((view) => { setActiveView(view); setMobileOpen(false); }, []);
-
+  const { subscribed, subscribe, permissionState } = usePushNotifications(athlete?.id, clubId);
   if (loading) return <LoadingState message="Chargement de ton espace…"/>;
   if (error || !athlete) return (
     <div className="min-h-screen flex items-center justify-center p-6" style={{background:"#F5F5F2"}}>
@@ -2854,10 +2855,15 @@ export default function AthleteApp() {
           </div>
           <h1 className="hidden md:block text-[16px] font-semibold text-slate-800 tracking-tight">{currentNav?.label??"Mon espace"}</h1>
           <div className="flex-1"/>
-          <div className="hidden sm:flex items-center gap-1.5 text-[12px] text-slate-400 bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-100">
-            <CalendarDays size={13}/>
-            <span>{new Date().toLocaleDateString("fr-BE",{weekday:"long",day:"numeric",month:"long",year:"numeric"})}</span>
-          </div>
+          <PushToggleButton
+  subscribed={subscribed}
+  onToggle={subscribe}
+  permissionState={permissionState}
+/>
+<div className="hidden sm:flex items-center gap-1.5 text-[12px] text-slate-400 bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-100">
+  <CalendarDays size={13}/>
+  <span>{new Date().toLocaleDateString("fr-BE",{weekday:"long",day:"numeric",month:"long",year:"numeric"})}</span>
+</div>
         </header>
 
         <main className="flex-1 overflow-y-auto pb-20 md:pb-0">
