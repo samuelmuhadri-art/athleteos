@@ -16,6 +16,7 @@ import { supabase }   from "./utils/supabaseClient";
 import { useAuth }    from "./context/AuthContext";
 import LoginPage      from "./pages/LoginPage";
 import AthleteApp     from "./AthleteApp"; // ← VUE ATHLÈTE
+import { usePushNotifications, PushToggleButton } from "./hooks/usePushNotifications";
 
 // ─── Lazy imports modules coach ───────────────────────────────────────────────
 const Dashboard    = lazy(() => import("./modules/Dashboard"));
@@ -92,6 +93,7 @@ export default function App() {
   const [mobileOpen,  setMobileOpen]  = useState(false);
   const [unreadAlerts, setUnreadAlerts] = useState(0);
 
+  const { subscribed, subscribe, permissionState } = usePushNotifications(null, clubId, profile?.id);
   // ── Badge alertes non lues ────────────────────────────────────────────────
   const fetchUnreadCount = useCallback(async () => {
     if (!clubId) return;
@@ -270,6 +272,11 @@ export default function App() {
             {currentNav?.label ?? "AthleteOS"}
           </h1>
           <div className="flex-1" />
+          <PushToggleButton
+  subscribed={subscribed}
+  onToggle={subscribe}
+  permissionState={permissionState}
+/>
           <div className="hidden sm:flex items-center gap-1.5 text-[12px] text-slate-400 bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-100">
             <CalendarDays size={13} />
             <span>
