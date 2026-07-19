@@ -94,6 +94,7 @@ export default function App() {
   const [unreadAlerts, setUnreadAlerts] = useState(0);
 
   const { subscribed, subscribe, permissionState } = usePushNotifications(null, clubId, profile?.id);
+  console.log("Push hook - profile.id:", profile?.id, "clubId:", clubId);
   // ── Badge alertes non lues ────────────────────────────────────────────────
   const fetchUnreadCount = useCallback(async () => {
     if (!clubId) return;
