@@ -13,7 +13,7 @@ import {
 } from "react";
 import { Send, Search, MessageSquare, Check, CheckCheck } from "lucide-react";
 import { supabase }   from "../utils/supabaseClient";
-import { notifyAthleteMessage } from "../utils/notifations";
+import { notifyAthleteMessage } from "../utils/notifications";
 import { useAuth }    from "../context/AuthContext";
 import LoadingState   from "../components/ui/LoadingState";
 import ErrorState     from "../components/ui/ErrorState";
