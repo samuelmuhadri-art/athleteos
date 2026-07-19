@@ -1,4 +1,6 @@
 import { precacheAndRoute } from 'workbox-precaching'
+// v2
+import { precacheAndRoute } from 'workbox-precaching'
 
 precacheAndRoute(self.__WB_MANIFEST)
 
