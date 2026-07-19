@@ -1,6 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import webpush from "https://esm.sh/web-push@3.6.6";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -9,41 +8,37 @@ const corsHeaders = {
 };
 
 serve(async (req) => {
+  console.log("send-push reçu", req.method);
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
   }
 
-  const { athleteIds, title, body, url, tag } = await req.json();
+  try {
+    const body = await req.json();
+    console.log("body:", JSON.stringify(body));
 
-  const supabase = createClient(
-    Deno.env.get("SUPABASE_URL")!,
-    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
-  );
+    const { athleteIds, title, body: msgBody } = body;
 
-  webpush.setVapidDetails(
-    "mailto:contact@athleteos.app",
-    Deno.env.get("VAPID_PUBLIC_KEY")!,
-    Deno.env.get("VAPID_PRIVATE_KEY")!
-  );
+    const supabase = createClient(
+      Deno.env.get("SUPABASE_URL")!,
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
+    );
 
-  const { data: subs } = await supabase
-    .from("push_subscriptions")
-    .select("*")
-    .in("athlete_id", athleteIds);
+    const { data: subs, error: subErr } = await supabase
+      .from("push_subscriptions")
+      .select("*")
+      .in("athlete_id", athleteIds);
 
-  const payload = JSON.stringify({ title, body, url: url ?? "/", tag });
+    console.log("subs trouvés:", subs?.length, subErr);
 
-  const results = await Promise.allSettled(
-    (subs ?? []).map((sub) =>
-      webpush.sendNotification(
-        { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } },
-        payload
-      )
-    )
-  );
-
-  return new Response(JSON.stringify({
-    sent:   results.filter(r => r.status === "fulfilled").length,
-    failed: results.filter(r => r.status === "rejected").length,
-  }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    return new Response(JSON.stringify({ received: true, subs: subs?.length ?? 0 }), {
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  } catch (err) {
+    console.error("Erreur:", err.message);
+    return new Response(JSON.stringify({ error: err.message }), {
+      status: 500,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
 });
