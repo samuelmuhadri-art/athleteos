@@ -2728,7 +2728,7 @@ export default function AthleteApp() {
   }, []);
 
   const navigate = useCallback((view) => { setActiveView(view); setMobileOpen(false); }, []);
-  const { subscribed, subscribe, permissionState } = usePushNotifications(athlete?.id, clubId);
+ const { subscribed, subscribe, permissionState } = usePushNotifications(athlete?.id ?? null, clubId);
   if (loading) return <LoadingState message="Chargement de ton espace…"/>;
   if (error || !athlete) return (
     <div className="min-h-screen flex items-center justify-center p-6" style={{background:"#F5F5F2"}}>
@@ -2816,7 +2816,15 @@ export default function AthleteApp() {
             </div>
             <div className="max-h-80 overflow-y-auto divide-y divide-slate-50">
               {myNotifs.length === 0 ? (
-                <div className="px-4 py-6 text-center text-[11px] text-slate-300">Aucune notification</div>
+               {myNotifs.length === 0 ? (
+  <div className="px-4 py-6 text-center text-[11px] text-slate-300 space-y-3">
+    <p>Aucune notification</p>
+    <PushToggleButton
+      subscribed={subscribed}
+      onToggle={subscribe}
+      permissionState={permissionState}
+    />
+  </div>
               ) : myNotifs.map(n => {
                 const diff = (new Date()-new Date(n.created_at))/1000;
                 const ago = diff<60?"À l'instant":diff<3600?`${Math.floor(diff/60)}min`:diff<86400?`${Math.floor(diff/3600)}h`:`${Math.floor(diff/86400)}j`;
@@ -2855,15 +2863,7 @@ export default function AthleteApp() {
           </div>
           <h1 className="hidden md:block text-[16px] font-semibold text-slate-800 tracking-tight">{currentNav?.label??"Mon espace"}</h1>
           <div className="flex-1"/>
-          <PushToggleButton
-  subscribed={subscribed}
-  onToggle={subscribe}
-  permissionState={permissionState}
-/>
-<div className="hidden sm:flex items-center gap-1.5 text-[12px] text-slate-400 bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-100">
-  <CalendarDays size={13}/>
-  <span>{new Date().toLocaleDateString("fr-BE",{weekday:"long",day:"numeric",month:"long",year:"numeric"})}</span>
-</div>
+          
         </header>
 
         <main className="flex-1 overflow-y-auto pb-20 md:pb-0">
@@ -2942,7 +2942,10 @@ export default function AthleteApp() {
                 </span>
               )}
             </div>
-            <span className="text-[9px] font-semibold">Notifs</span>
+            <button onClick={subscribe}
+  className="text-[9px] font-semibold text-emerald-500">
+  {subscribed ? "🔔 ON" : "🔔 OFF"}
+</button>
           </button>
         </div>
       </nav>
