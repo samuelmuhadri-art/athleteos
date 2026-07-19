@@ -47,14 +47,11 @@ export function usePushNotifications(athleteId, clubId, userId = null) {
 
       const existingSub = await registration.pushManager.getSubscription();
 if (existingSub) {
-  // Désabonner
-  await existingSub.unsubscribe();
+  // Supprimer seulement en BDD, garder l'abonnement navigateur intact
   await supabase.from("push_subscriptions")
     .delete()
     .eq("endpoint", existingSub.endpoint);
   setSubscribed(false);
-  // Réenregistrer le SW pour permettre un nouvel abonnement
-  await registration.update();
   return;
 }
 
