@@ -2691,20 +2691,20 @@ export default function AthleteApp() {
   useEffect(() => { fetchAll(); }, [fetchAll]);
 
   // ═══ Realtime : sessions + notifications athlète ══════════════════════════
-  useEffect(() => {
-    if (!clubId || !profile?.id) return;
-    const ch = supabase
-      .channel(`athlete-app-${profile.id}`)
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "sessions", filter: `club_id=eq.${clubId}` }, () => fetchAll())
-      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "sessions", filter: `club_id=eq.${clubId}` }, () => fetchAll())
-      .on("postgres_changes", { event: "DELETE", schema: "public", table: "sessions" }, () => fetchAll())
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "athlete_notifications", filter: `athlete_id=eq.${profile.id}` },
-        (payload) => { setMyNotifs(prev => [payload.new, ...prev]); })
-      .subscribe();
-    return () => supabase.removeChannel(ch);
-  }, [clubId, profile?.id, fetchAll]);
-
-
+ useEffect(() => {
+  if (!clubId || !profile?.id) return;
+  const ch = supabase
+    .channel(`athlete-${profile.id}`)
+    .on("postgres_changes", { event: "*", schema: "public", table: "sessions" }, () => fetchAll())
+    .on("postgres_changes", { event: "*", schema: "public", table: "session_athletes" }, () => fetchAll())
+    .on("postgres_changes", { event: "INSERT", schema: "public", table: "athlete_notifications" }, (payload) => {
+      if (payload.new.athlete_id === athlete?.id) {
+        setMyNotifs(prev => [payload.new, ...prev]);
+      }
+    })
+    .subscribe();
+  return () => supabase.removeChannel(ch);
+}, [clubId, profile?.id, fetchAll]);
 
   // ═══ Handlers ═════════════════════════════════════════════════════════════
   const handleRpe = useCallback(async (sid,aid,rpe) => {
