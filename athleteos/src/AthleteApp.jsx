@@ -25,7 +25,6 @@ import {
   getAthleteMetricsForWeek,
   getStatusLabel,
 } from "./utils/chargeCalculations";
-import { notifyGoalAchieved } from "./utils/notifications";
 import { usePushNotifications, PushToggleButton } from "./hooks/usePushNotifications";
 import { notifyGoalAchieved, notifyCoachMessage } from "./utils/notifications";
 
