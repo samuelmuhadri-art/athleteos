@@ -72,9 +72,9 @@ if (existingSub) {
         user_id:    userId ?? null,
       };
 
-      const { error } = await supabase
-        .from("push_subscriptions")
-        .upsert(row, { onConflict: "endpoint" });
+     // Supprimer l'ancien si existe, puis insérer
+await supabase.from("push_subscriptions").delete().eq("endpoint", subJson.endpoint);
+const { error } = await supabase.from("push_subscriptions").insert(row);
 
       if (error) throw error;
       setSubscribed(true);
