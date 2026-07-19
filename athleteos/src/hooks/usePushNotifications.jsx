@@ -117,25 +117,22 @@ export function usePushNotifications(athleteId, clubId, userId = null) {
 }
 
 export function PushToggleButton({ subscribed, onToggle, permissionState }) {
-  const isBlocked = permissionState === "denied";
   const noSupport = !("serviceWorker" in navigator) || !("PushManager" in window);
   if (noSupport) return null;
 
   return (
     <button
       onClick={onToggle}
-      disabled={isBlocked || subscribed}
+      disabled={subscribed}
       className={[
         "flex items-center gap-2 px-3 py-2 rounded-xl text-[12px] font-semibold border transition-all",
         subscribed
           ? "bg-emerald-50 border-emerald-300 text-emerald-700 cursor-default"
-          : isBlocked
-          ? "bg-slate-50 border-slate-200 text-slate-400 cursor-not-allowed"
           : "bg-white border-slate-200 text-slate-600 hover:border-slate-300",
       ].join(" ")}
     >
       <span>{subscribed ? "🔔" : "🔕"}</span>
-      <span>{subscribed ? "Notifs actives" : isBlocked ? "Bloquées" : "Activer les notifs"}</span>
+      <span>{subscribed ? "Notifs actives" : "Activer les notifs"}</span>
     </button>
   );
 }
