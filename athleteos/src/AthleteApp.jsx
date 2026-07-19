@@ -2815,8 +2815,7 @@ export default function AthleteApp() {
               )}
             </div>
             <div className="max-h-80 overflow-y-auto divide-y divide-slate-50">
-              {myNotifs.length === 0 ? (
-               {myNotifs.length === 0 ? (
+             {myNotifs.length === 0 ? (
   <div className="px-4 py-6 text-center text-[11px] text-slate-300 space-y-3">
     <p>Aucune notification</p>
     <PushToggleButton
