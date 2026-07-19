@@ -801,6 +801,16 @@ function Planning() {
     else setViewMonth((m) => m + 1);
     setSelectedDate(null);
   };
+  const prevWeek = () => {
+  const d = new Date(selectedDate ?? today);
+  d.setDate(d.getDate() - 7);
+  setSelectedDate(d);
+};
+const nextWeek = () => {
+  const d = new Date(selectedDate ?? today);
+  d.setDate(d.getDate() + 7);
+  setSelectedDate(d);
+};
   const goToday = () => {
     setViewYear(today.getFullYear());
     setViewMonth(today.getMonth());
