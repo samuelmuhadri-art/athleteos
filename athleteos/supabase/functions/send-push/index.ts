@@ -2,9 +2,15 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import webpush from "https://esm.sh/web-push@3.6.6";
 
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+};
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
-    return new Response("ok", { headers: { "Access-Control-Allow-Origin": "*" } });
+    return new Response("ok", { headers: corsHeaders });
   }
 
   const { athleteIds, title, body, url, tag } = await req.json();
@@ -39,5 +45,5 @@ serve(async (req) => {
   return new Response(JSON.stringify({
     sent:   results.filter(r => r.status === "fulfilled").length,
     failed: results.filter(r => r.status === "rejected").length,
-  }), { headers: { "Content-Type": "application/json" } });
+  }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
 });
