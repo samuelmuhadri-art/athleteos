@@ -1,8 +1,9 @@
 // ============================================================
 // AthleteOS — src/AthleteApp.jsx
-// FUSION ULTIME :
-// - Base : Code 2 (Badges avancés, Auto-PR, Push hooks corrigés)
-// - Ajout : Code 1 (Module Wellness / Hooper Index complet)
+// CORRECTIONS :
+// 1. usePushNotifications remonté AVANT les guards (règle des hooks React)
+//    athlete?.id est passé dynamiquement — null au départ, mis à jour après fetch
+// 2. PushToggleButton correctement placé dans header mobile + panneau notifs
 // ============================================================
 
 import { useState, useCallback, useEffect, useMemo, memo } from "react";
@@ -135,174 +136,6 @@ const ChartTooltip = ({ active, payload, label }) => {
 };
 
 // ══════════════════════════════════════════════════════════════════════════════
-// WELLNESS MODAL — questionnaire matinal (Hooper Index)
-// ══════════════════════════════════════════════════════════════════════════════
-const WELLNESS_QUESTIONS = [
-  {
-    key:    "sleep",
-    label:  "Qualité du sommeil",
-    icon:   Moon,
-    color:  "#7C3AED",
-    desc:   ["Très mauvais", "Mauvais", "Correct", "Bon", "Excellent"],
-  },
-  {
-    key:    "energy",
-    label:  "Niveau d'énergie",
-    icon:   Battery,
-    color:  "#0284C7",
-    desc:   ["Épuisé", "Fatigué", "Correct", "Energique", "Très energique"],
-  },
-  {
-    key:    "soreness",
-    label:  "Courbatures / douleurs",
-    icon:   HeartPulse,
-    color:  "#E24B4A",
-    desc:   ["Aucune", "Légères", "Modérées", "Importantes", "Très importantes"],
-    inverted: true,
-  },
-  {
-    key:    "mood",
-    label:  "Humeur",
-    icon:   Smile,
-    color:  "#EF9F27",
-    desc:   ["Très mauvaise", "Mauvaise", "Neutre", "Bonne", "Excellente"],
-  },
-  {
-    key:    "stress",
-    label:  "Niveau de stress",
-    icon:   Activity,
-    color:  "#E24B4A",
-    desc:   ["Aucun", "Faible", "Modéré", "Élevé", "Très élevé"],
-    inverted: true,
-  },
-];
-
-const WellnessModal = memo(({ athlete, clubId, onClose, onSaved }) => {
-  const [form, setForm] = useState({ sleep: null, energy: null, soreness: null, mood: null, stress: null });
-  const [notes, setNotes] = useState("");
-  const [saving, setSaving] = useState(false);
-  const [err, setErr] = useState(null);
-
-  const allAnswered = Object.values(form).every(v => v !== null);
-  const previewScore = useMemo(() => computeWellnessScore(form), [form]);
-
-  const handleSubmit = async () => {
-    if (!allAnswered) return;
-    setSaving(true); setErr(null);
-    try {
-      const today = new Date().toISOString().split("T")[0];
-      const { error } = await supabase.from("athlete_wellness").upsert({
-        athlete_id: athlete.id,
-        club_id:    clubId,
-        date:       today,
-        sleep:      form.sleep,
-        energy:     form.energy,
-        soreness:   form.soreness,
-        mood:       form.mood,
-        stress:     form.stress,
-        notes:      notes.trim() || null,
-      }, { onConflict: "athlete_id,date" });
-      if (error) throw error;
-      onSaved({ ...form, notes: notes.trim() || null, date: today });
-      onClose();
-    } catch(e) {
-      setErr(e.message ?? "Erreur lors de l'enregistrement");
-      setSaving(false);
-    }
-  };
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4"
-      style={{ background: "rgba(15,23,42,0.6)" }}>
-      <div className="bg-white rounded-t-2xl sm:rounded-2xl shadow-2xl w-full sm:max-w-md max-h-[95vh] sm:max-h-[90vh] flex flex-col overflow-hidden">
-        {/* Header */}
-        <div className="px-6 py-5 border-b border-slate-100 flex-shrink-0"
-          style={{ background: "linear-gradient(135deg, #f0fdf4, #dcfce7)" }}>
-          <div className="flex items-center justify-between mb-1">
-            <div>
-              <h3 className="text-[16px] font-bold text-emerald-800">🌅 Comment tu vas ce matin ?</h3>
-              <p className="text-[12px] text-emerald-600 mt-0.5">
-                {new Date().toLocaleDateString("fr-BE", { weekday: "long", day: "numeric", month: "long" })}
-              </p>
-            </div>
-            <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-emerald-100">
-              <X size={18} className="text-emerald-600"/>
-            </button>
-          </div>
-          {previewScore !== null && (
-            <div className="mt-3 flex items-center gap-2 bg-white/60 rounded-xl px-4 py-2.5">
-              <div className="text-[22px] font-black" style={{ color: scoreColor(previewScore) }}>{previewScore}</div>
-              <div>
-                <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Score wellness</p>
-                <p className="text-[10px] text-slate-400">
-                  {previewScore >= 75 ? "Forme optimale 🟢" : previewScore >= 50 ? "Correct 🟡" : "Attention 🔴"}
-                </p>
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* Questions */}
-        <div className="flex-1 overflow-y-auto px-6 py-5 space-y-5">
-          {err && <div className="bg-red-50 border border-red-100 rounded-lg px-3 py-2.5 text-[12px] text-red-700">{err}</div>}
-          {WELLNESS_QUESTIONS.map((q) => {
-            const Icon = q.icon;
-            return (
-              <div key={q.key}>
-                <div className="flex items-center gap-2 mb-3">
-                  <div className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0" style={{ background: q.color + "18" }}>
-                    <Icon size={14} color={q.color}/>
-                  </div>
-                  <span className="text-[13px] font-semibold text-slate-700">{q.label}</span>
-                  {q.inverted && <span className="text-[9px] font-semibold text-slate-300 uppercase tracking-wider ml-1">(moins = mieux)</span>}
-                </div>
-                <div className="flex gap-2">
-                  {[1,2,3,4,5].map((v) => {
-                    const selected = form[q.key] === v;
-                    const visualGood = q.inverted ? (v <= 2) : (v >= 4);
-                    const visualBad  = q.inverted ? (v >= 4) : (v <= 2);
-                    const btnColor   = selected ? (visualGood ? "#1D9E75" : visualBad ? "#E24B4A" : "#EF9F27") : undefined;
-                    return (
-                      <button key={v} onClick={() => setForm(f => ({ ...f, [q.key]: v }))}
-                        className={["flex-1 flex flex-col items-center gap-1.5 py-3 rounded-xl border transition-all",
-                          selected ? "text-white shadow-sm scale-105" : "bg-white border-slate-200 text-slate-500 hover:border-slate-300 hover:bg-slate-50"
-                        ].join(" ")}
-                        style={selected ? { background: btnColor, borderColor: btnColor } : {}}>
-                        <span className="text-[16px] font-black">{v}</span>
-                        <span className="text-[8px] font-semibold text-center leading-tight px-1" style={selected ? { color: "rgba(255,255,255,0.85)" } : {}}>
-                          {q.desc[v-1]}
-                        </span>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            );
-          })}
-          <div>
-            <label className="block text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-2">Note (optionnel)</label>
-            <textarea
-              className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-[13px] text-slate-700 focus:outline-none focus:ring-2 focus:ring-emerald-400 bg-white resize-none"
-              rows={2} placeholder="Contexte, ressenti particulier…" value={notes} onChange={e => setNotes(e.target.value)}
-            />
-          </div>
-        </div>
-
-        {/* Footer */}
-        <div className="px-6 py-4 border-t border-slate-100 flex items-center justify-between gap-3 flex-shrink-0">
-          <button onClick={onClose} disabled={saving} className="px-4 py-2.5 rounded-xl bg-slate-100 text-slate-600 text-[13px] font-medium hover:bg-slate-200 disabled:opacity-40">
-            Plus tard
-          </button>
-          <button onClick={handleSubmit} disabled={!allAnswered || saving} className="flex items-center gap-2 px-6 py-2.5 rounded-xl text-white text-[13px] font-semibold disabled:opacity-40 transition-all" style={{ background: "#1D9E75" }}>
-            {saving ? <><div className="w-3.5 h-3.5 border-2 border-white/40 border-t-white rounded-full animate-spin"/>Enregistrement…</> : <>✅ Valider</>}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-});
-
-// ══════════════════════════════════════════════════════════════════════════════
 // SYSTÈME DE BADGES & ACHIEVEMENTS (Bloc 3)
 // ══════════════════════════════════════════════════════════════════════════════
 
@@ -322,11 +155,11 @@ function computeBadges({ athlete, weeklyCharge, sessions, competitions, myPerfor
     acc + (s.validations?.filter(v=>v.athleteId===athlete.id&&v.status==="done").length??0), 0);
   if (totalDone >= 1)   badges.push({ id:"s1",   emoji:"✅", label:"Premier pas",      desc:"1 séance réalisée",          color:"#1D9E75", unlocked:true  });
   if (totalDone >= 10)  badges.push({ id:"s10",  emoji:"💪", label:"Régulier",         desc:"10 séances réalisées",       color:"#1D9E75", unlocked:true  });
-  if (totalDone >= 25)  badges.push({ id:"s25",  emoji:"🏋️", label:"Bosseur",          desc:"25 séances réalisées",       color:"#378ADD", unlocked:true  });
+  if (totalDone >= 25)  badges.push({ id:"s25",  emoji:"🏋️", label:"Bosseur",         desc:"25 séances réalisées",       color:"#378ADD", unlocked:true  });
   if (totalDone >= 50)  badges.push({ id:"s50",  emoji:"🚀", label:"Acharné",          desc:"50 séances réalisées",       color:"#7C3AED", unlocked:true  });
   if (totalDone >= 100) badges.push({ id:"s100", emoji:"👑", label:"Élite",            desc:"100 séances réalisées",      color:"#EF9F27", unlocked:true  });
 
-  if (myComps.length >= 1) badges.push({ id:"c1",  emoji:"🏟️", label:"Compétiteur",   desc:"1ère compétition",            color:"#E24B4A", unlocked:true  });
+  if (myComps.length >= 1) badges.push({ id:"c1",  emoji:"🏟️", label:"Compétiteur",   desc:"1ère compétition",           color:"#E24B4A", unlocked:true  });
   if (myComps.length >= 5) badges.push({ id:"c5",  emoji:"🎯", label:"Guerrier",       desc:"5 compétitions au compteur", color:"#E24B4A", unlocked:true  });
 
   const prBeat = myPerfs.filter(p => {
@@ -354,7 +187,7 @@ function computeBadges({ athlete, weeklyCharge, sessions, competitions, myPerfor
     return m.acwr >= 0.8 && m.acwr <= 1.3;
   }).length;
   if (optimalWeeks >= 3) badges.push({ id:"acwr3", emoji:"⚖️", label:"Équilibré",     desc:"3 semaines en zone optimale",color:"#1D9E75", unlocked:true  });
-  if (optimalWeeks >= 8) badges.push({ id:"acwr8", emoji:"🎯", label:"Maestro",       desc:"8 semaines en zone optimale",color:"#7C3AED", unlocked:true  });
+  if (optimalWeeks >= 8) badges.push({ id:"acwr8", emoji:"🎯", label:"Maestro",        desc:"8 semaines en zone optimale",color:"#7C3AED", unlocked:true  });
 
   if (streak < 3)    badges.push({ id:"l_s3",   emoji:"🔒", label:"En feu",           desc:`${3-streak} semaine${3-streak>1?"s":""} de plus`,  color:"#cbd5e1", unlocked:false });
   if (totalDone < 10) badges.push({ id:"l_s10",  emoji:"🔒", label:"Régulier",        desc:`${10-totalDone} séance${10-totalDone>1?"s":""} de plus`, color:"#cbd5e1", unlocked:false });
@@ -383,7 +216,124 @@ function BadgeItem({ badge }) {
 // ══════════════════════════════════════════════════════════════════════════════
 // VUE 1 — TABLEAU DE BORD
 // ══════════════════════════════════════════════════════════════════════════════
-function Dashboard({ athlete, weeklyCharge, sessions, competitions, lastMessages, coachName, myPerformances, wellnessToday, onNavigate, onOpenWellness }) {
+// ══════════════════════════════════════════════════════════════════════════════
+// WELLNESS MODAL — questionnaire matinal (Hooper Index)
+// Saw AE, Main LC, Gastin PB. (2016). BJSM 50(5), 281-291.
+// 5 dimensions : sommeil, énergie, courbatures, humeur, stress — chacune 1-5
+// S'affiche automatiquement si l'athlète n'a pas encore répondu aujourd'hui.
+// ══════════════════════════════════════════════════════════════════════════════
+const WELLNESS_QUESTIONS = [
+  { key: "sleep",    label: "Qualité du sommeil",     icon: Moon,       color: "#7C3AED", desc: ["Très mauvais","Mauvais","Correct","Bon","Excellent"],         inverted: false },
+  { key: "energy",   label: "Niveau d'énergie",        icon: Battery,    color: "#0284C7", desc: ["Épuisé","Fatigué","Correct","Énergique","Très énergique"],   inverted: false },
+  { key: "soreness", label: "Courbatures / douleurs",  icon: HeartPulse, color: "#E24B4A", desc: ["Aucune","Légères","Modérées","Importantes","Très importantes"], inverted: true  },
+  { key: "mood",     label: "Humeur",                  icon: Smile,      color: "#EF9F27", desc: ["Très mauvaise","Mauvaise","Neutre","Bonne","Excellente"],     inverted: false },
+  { key: "stress",   label: "Niveau de stress",        icon: Activity,   color: "#E24B4A", desc: ["Aucun","Faible","Modéré","Élevé","Très élevé"],              inverted: true  },
+];
+
+const WellnessModal = memo(({ athlete, clubId, onClose, onSaved }) => {
+  const [form, setForm] = useState({ sleep: null, energy: null, soreness: null, mood: null, stress: null });
+  const [notes, setNotes] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [err, setErr] = useState(null);
+
+  const allAnswered = Object.values(form).every(v => v !== null);
+  const previewScore = useMemo(() => computeWellnessScore(form), [form]);
+
+  const handleSubmit = async () => {
+    if (!allAnswered) return;
+    setSaving(true); setErr(null);
+    try {
+      const today = new Date().toISOString().split("T")[0];
+      const { error } = await supabase.from("athlete_wellness").upsert({
+        athlete_id: athlete.id, club_id: clubId, date: today,
+        sleep: form.sleep, energy: form.energy, soreness: form.soreness,
+        mood: form.mood, stress: form.stress, notes: notes.trim() || null,
+      }, { onConflict: "athlete_id,date" });
+      if (error) throw error;
+      onSaved({ ...form, notes: notes.trim() || null, date: today });
+      onClose();
+    } catch(e) { setErr(e.message ?? "Erreur"); setSaving(false); }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4"
+      style={{ background: "rgba(15,23,42,0.6)" }}>
+      <div className="bg-white rounded-t-2xl sm:rounded-2xl shadow-2xl w-full sm:max-w-md max-h-[95vh] sm:max-h-[90vh] flex flex-col overflow-hidden">
+        <div className="px-6 py-5 border-b border-slate-100 flex-shrink-0"
+          style={{ background: "linear-gradient(135deg, #f0fdf4, #dcfce7)" }}>
+          <div className="flex items-center justify-between mb-1">
+            <div>
+              <h3 className="text-[16px] font-bold text-emerald-800">🌅 Comment tu vas ce matin ?</h3>
+              <p className="text-[12px] text-emerald-600 mt-0.5">
+                {new Date().toLocaleDateString("fr-BE", { weekday: "long", day: "numeric", month: "long" })}
+              </p>
+            </div>
+            <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-emerald-100"><X size={18} className="text-emerald-600"/></button>
+          </div>
+          {previewScore !== null && (
+            <div className="mt-3 flex items-center gap-2 bg-white/60 rounded-xl px-4 py-2.5">
+              <div className="text-[22px] font-black" style={{ color: previewScore >= 75 ? "#1D9E75" : previewScore >= 50 ? "#EF9F27" : "#E24B4A" }}>{previewScore}</div>
+              <div>
+                <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Score wellness</p>
+                <p className="text-[10px] text-slate-400">{previewScore >= 75 ? "Forme optimale 🟢" : previewScore >= 50 ? "Correct 🟡" : "Attention 🔴"}</p>
+              </div>
+            </div>
+          )}
+        </div>
+        <div className="flex-1 overflow-y-auto px-6 py-5 space-y-5">
+          {err && <div className="bg-red-50 border border-red-100 rounded-lg px-3 py-2.5 text-[12px] text-red-700">{err}</div>}
+          {WELLNESS_QUESTIONS.map((q) => {
+            const Icon = q.icon;
+            return (
+              <div key={q.key}>
+                <div className="flex items-center gap-2 mb-3">
+                  <div className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0" style={{ background: q.color + "18" }}>
+                    <Icon size={14} color={q.color}/>
+                  </div>
+                  <span className="text-[13px] font-semibold text-slate-700">{q.label}</span>
+                  {q.inverted && <span className="text-[9px] font-semibold text-slate-300 uppercase tracking-wider ml-1">(moins = mieux)</span>}
+                </div>
+                <div className="flex gap-2">
+                  {[1,2,3,4,5].map((v) => {
+                    const selected = form[q.key] === v;
+                    const visualGood = q.inverted ? v <= 2 : v >= 4;
+                    const visualBad  = q.inverted ? v >= 4 : v <= 2;
+                    const btnColor = selected ? (visualGood ? "#1D9E75" : visualBad ? "#E24B4A" : "#EF9F27") : undefined;
+                    return (
+                      <button key={v} onClick={() => setForm(f => ({ ...f, [q.key]: v }))}
+                        className={["flex-1 flex flex-col items-center gap-1.5 py-3 rounded-xl border transition-all",
+                          selected ? "text-white shadow-sm scale-105" : "bg-white border-slate-200 text-slate-500 hover:border-slate-300 hover:bg-slate-50"
+                        ].join(" ")}
+                        style={selected ? { background: btnColor, borderColor: btnColor } : {}}>
+                        <span className="text-[16px] font-black">{v}</span>
+                        <span className="text-[8px] font-semibold text-center leading-tight px-1"
+                          style={selected ? { color: "rgba(255,255,255,0.85)" } : {}}>{q.desc[v-1]}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })}
+          <div>
+            <label className="block text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-2">Note (optionnel)</label>
+            <textarea className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-[13px] text-slate-700 focus:outline-none focus:ring-2 focus:ring-emerald-400 bg-white resize-none"
+              rows={2} placeholder="Contexte, ressenti particulier…" value={notes} onChange={e => setNotes(e.target.value)}/>
+          </div>
+        </div>
+        <div className="px-6 py-4 border-t border-slate-100 flex items-center justify-between gap-3 flex-shrink-0">
+          <button onClick={onClose} disabled={saving} className="px-4 py-2.5 rounded-xl bg-slate-100 text-slate-600 text-[13px] font-medium hover:bg-slate-200 disabled:opacity-40">Plus tard</button>
+          <button onClick={handleSubmit} disabled={!allAnswered || saving}
+            className="flex items-center gap-2 px-6 py-2.5 rounded-xl text-white text-[13px] font-semibold disabled:opacity-40" style={{ background: "#1D9E75" }}>
+            {saving ? <><div className="w-3.5 h-3.5 border-2 border-white/40 border-t-white rounded-full animate-spin"/>Enregistrement…</> : <>✅ Valider</>}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+});
+
+function Dashboard({ athlete, weeklyCharge, sessions, competitions, lastMessages, coachName, myPerformances, onNavigate, wellnessToday, onOpenWellness }) {
   const today = new Date();
   const currentWeek = getISOWeek(today);
 
@@ -457,8 +407,6 @@ function Dashboard({ athlete, weeklyCharge, sessions, competitions, lastMessages
     }) ?? null;
   }, [myPerformances, athlete.records]);
 
-  const wellnessScore = metrics.wellnessScore;
-
   return (
     <div className="p-4 space-y-4 max-w-4xl mx-auto">
 
@@ -513,10 +461,10 @@ function Dashboard({ athlete, weeklyCharge, sessions, competitions, lastMessages
               <h3 className="text-[14px] font-bold text-slate-800">Wellness du jour ✅</h3>
               <p className="text-[11px] text-slate-400 mt-0.5">Questionnaire matinal complété</p>
             </div>
-            {wellnessScore !== null && (
+            {metrics.wellnessScore !== null && (
               <div className="flex items-center gap-2 px-4 py-2 rounded-xl"
-                style={{ background: scoreColor(wellnessScore) + "15" }}>
-                <span className="text-[22px] font-black" style={{ color: scoreColor(wellnessScore) }}>{wellnessScore}</span>
+                style={{ background: (metrics.wellnessScore >= 75 ? "#1D9E75" : metrics.wellnessScore >= 50 ? "#EF9F27" : "#E24B4A") + "15" }}>
+                <span className="text-[22px] font-black" style={{ color: metrics.wellnessScore >= 75 ? "#1D9E75" : metrics.wellnessScore >= 50 ? "#EF9F27" : "#E24B4A" }}>{metrics.wellnessScore}</span>
                 <div>
                   <p className="text-[9px] font-bold text-slate-500 uppercase tracking-wider">Score</p>
                   <p className="text-[9px] text-slate-400">/100</p>
@@ -528,8 +476,8 @@ function Dashboard({ athlete, weeklyCharge, sessions, competitions, lastMessages
             {WELLNESS_QUESTIONS.map((q) => {
               const val = wellnessToday[q.key];
               const Icon = q.icon;
-              const displayGood = q.inverted ? (val <= 2) : (val >= 4);
-              const displayBad  = q.inverted ? (val >= 4) : (val <= 2);
+              const displayGood = q.inverted ? val <= 2 : val >= 4;
+              const displayBad  = q.inverted ? val >= 4 : val <= 2;
               const dotColor = displayGood ? "#1D9E75" : displayBad ? "#E24B4A" : "#EF9F27";
               return (
                 <div key={q.key} className="flex flex-col items-center gap-1.5 bg-slate-50 rounded-xl py-3 px-2">
@@ -541,29 +489,17 @@ function Dashboard({ athlete, weeklyCharge, sessions, competitions, lastMessages
             })}
           </div>
           {wellnessToday.notes && (
-            <p className="mt-3 text-[11.5px] text-slate-500 italic border-t border-slate-50 pt-3">
-              "{wellnessToday.notes}"
-            </p>
+            <p className="mt-3 text-[11.5px] text-slate-500 italic border-t border-slate-50 pt-3">"{wellnessToday.notes}"</p>
           )}
-          <button onClick={onOpenWellness}
-            className="mt-3 text-[11px] font-semibold text-slate-400 hover:text-emerald-600 transition-colors">
-            Modifier →
-          </button>
+          <button onClick={onOpenWellness} className="mt-3 text-[11px] font-semibold text-slate-400 hover:text-emerald-600 transition-colors">Modifier →</button>
         </div>
       ) : (
         <div className="bg-gradient-to-br from-emerald-50 to-teal-50 rounded-2xl border border-emerald-100 p-5 flex items-center justify-between gap-4">
           <div>
             <p className="text-[14px] font-bold text-emerald-800">🌅 Questionnaire matinal</p>
-            <p className="text-[12px] text-emerald-600 mt-1">
-              Prends 30 secondes pour indiquer comment tu te sens aujourd'hui.
-              Ça améliore ton score Readiness !
-            </p>
+            <p className="text-[12px] text-emerald-600 mt-1">Prends 30 secondes pour indiquer comment tu te sens. Ça améliore ton score Readiness !</p>
           </div>
-          <button onClick={onOpenWellness}
-            className="flex-shrink-0 px-4 py-2.5 rounded-xl text-white text-[12px] font-bold shadow-sm hover:shadow-md transition-all"
-            style={{ background: "#1D9E75" }}>
-            Remplir
-          </button>
+          <button onClick={onOpenWellness} className="flex-shrink-0 px-4 py-2.5 rounded-xl text-white text-[12px] font-bold shadow-sm" style={{ background: "#1D9E75" }}>Remplir</button>
         </div>
       )}
 
@@ -649,7 +585,6 @@ function Dashboard({ athlete, weeklyCharge, sessions, competitions, lastMessages
                   { label: "Forme", value: metrics.forme, color: scoreColor(metrics.forme), desc: "Condition physique estimée", inv: false },
                   { label: "Fatigue", value: metrics.fatigue, color: scoreColor(metrics.fatigue, true), desc: "Niveau de fatigue accumulée", inv: true },
                   { label: "Récupération", value: metrics.recuperation, color: scoreColor(metrics.recuperation), desc: "Capacité de récupération", inv: false },
-                  ...(wellnessScore !== null ? [{ label: "Wellness", value: wellnessScore, color: scoreColor(wellnessScore), desc: "Bien-être subjectif du matin", inv: false }] : []),
                   { label: "Risque blessure", value: metrics.risque, color: scoreColor(metrics.risque, true), desc: "Risque estimé de blessure", inv: true },
                 ].map(s => (
                   <div key={s.label}>
@@ -2722,14 +2657,19 @@ export default function AthleteApp() {
 
   // ── Wellness ─────────────────────────────────────────────────────────────
   const [wellnessToday,   setWellnessToday]   = useState(null);
-  const [showWellness,    setShowWellness]    = useState(false);
+  const [showWellness,    setShowWellness]     = useState(false);
 
   // ── Push notifications ────────────────────────────────────────────────────
+  // IMPORTANT : appelé AVANT les guards (règle React : hooks toujours en tête).
+  // athlete?.id sera null au premier render puis mis à jour après fetchAll.
+  // Le hook tolère null et ne crée pas d'abonnement tant que l'id est absent.
   const { subscribed, subscribe, permissionState, swReady } = usePushNotifications(
     athlete?.id ?? null,
     clubId
   );
 
+  // Demande automatique de permission push dès que le SW est prêt
+  // (comme sur CoachShell côté Benoît)
   useEffect(() => {
     if (swReady && !subscribed && permissionState !== "denied") {
       subscribe();
@@ -2753,7 +2693,7 @@ export default function AthleteApp() {
       const athleteId = a.id;
       const todayStr = new Date().toISOString().split("T")[0];
 
-      const [recordsRes,injuriesRes,perfHistRes,sessionsRes,compsRes,coachRes,allAthletesRes,myPerfsRes,goalsRes,notifsRes, wellnessRes] = await Promise.all([
+      const [recordsRes,injuriesRes,perfHistRes,sessionsRes,compsRes,coachRes,allAthletesRes,myPerfsRes,goalsRes,notifsRes,wellnessRes] = await Promise.all([
         supabase.from("records").select("*").eq("athlete_id",athleteId),
         supabase.from("injuries").select("*").eq("athlete_id",athleteId),
         supabase.from("performance_history").select("*").eq("athlete_id",athleteId),
@@ -2771,13 +2711,8 @@ export default function AthleteApp() {
       setMyGoals(goalsRes.data ?? []);
       setMyNotifs(notifsRes?.data ?? []);
 
-      // Gestion de la modale Wellness
-      if (wellnessRes.data) {
-        setWellnessToday(wellnessRes.data);
-        setShowWellness(false);
-      } else {
-        setWellnessToday(null);
-      }
+      // Wellness du jour
+      setWellnessToday(wellnessRes.data ?? null);
 
       const coachId = coachRes.data?.id ?? null;
       setCoachUserId(coachId);
@@ -2847,12 +2782,19 @@ export default function AthleteApp() {
 
   useEffect(() => { fetchAll(); }, [fetchAll]);
 
-  // Affiche la modale wellness après le chargement si pas encore répondu
+  // Ouvre la modale wellness automatiquement si pas encore répondu aujourd'hui
   useEffect(() => {
     if (athlete && !wellnessToday && !loading) {
       setShowWellness(true);
     }
   }, [athlete, wellnessToday, loading]);
+
+  // ═══ Realtime ═════════════════════════════════════════════════════════════
+  // Section intentionnellement vide.
+  // Les handlers RPE/status/feeling/comment font uniquement une mise à jour
+  // locale + write Supabase sans fetchAll(), ce qui évite tout rechargement.
+  // Si un realtime est ajouté à l'avenir, filtrer sur athlete_id et
+  // utiliser setSessions (patch local) plutôt que fetchAll().
 
   // ═══ Handlers ═════════════════════════════════════════════════════════════
   const handleRpe = useCallback(async (sid,aid,rpe) => {
@@ -2877,7 +2819,7 @@ export default function AthleteApp() {
 
   const navigate = useCallback((view) => { setActiveView(view); setMobileOpen(false); }, []);
 
-  // ── Guards ───────────────────────────────────────────────────────────────
+  // ── Guards (APRÈS tous les hooks) ─────────────────────────────────────────
   if (loading) return <LoadingState message="Chargement de ton espace…"/>;
   if (error || !athlete) return (
     <div className="min-h-screen flex items-center justify-center p-6" style={{background:"#F5F5F2"}}>
@@ -2943,7 +2885,7 @@ export default function AthleteApp() {
         </div>
       </aside>
 
-      {/* Panneau notifications desktop */}
+      {/* Panneau notifications */}
       {showNotifs && (
         <div className="fixed inset-0 z-40 flex" onClick={()=>setShowNotifs(false)}>
           <div className="ml-56 flex-1" />
@@ -2964,7 +2906,12 @@ export default function AthleteApp() {
               {myNotifs.length === 0 ? (
                 <div className="px-4 py-6 text-center space-y-3">
                   <p className="text-[11px] text-slate-300">Aucune notification</p>
-                  <PushToggleButton subscribed={subscribed} onToggle={subscribe} permissionState={permissionState} />
+                  {/* Bouton push dans le panneau notifs desktop */}
+                  <PushToggleButton
+                    subscribed={subscribed}
+                    onToggle={subscribe}
+                    permissionState={permissionState}
+                  />
                 </div>
               ) : myNotifs.map(n => {
                 const diff = (new Date()-new Date(n.created_at))/1000;
@@ -3003,8 +2950,13 @@ export default function AthleteApp() {
           </div>
           <h1 className="hidden md:block text-[16px] font-semibold text-slate-800 tracking-tight">{currentNav?.label??"Mon espace"}</h1>
           <div className="flex-1"/>
+          {/* Bouton push dans le header — visible desktop */}
           <div className="hidden md:block">
-            <PushToggleButton subscribed={subscribed} onToggle={subscribe} permissionState={permissionState} />
+            <PushToggleButton
+              subscribed={subscribed}
+              onToggle={subscribe}
+              permissionState={permissionState}
+            />
           </div>
         </header>
 
@@ -3012,8 +2964,8 @@ export default function AthleteApp() {
           {activeView==="dashboard"&&(
             <Dashboard athlete={athlete} weeklyCharge={weeklyCharge} sessions={sessions}
               competitions={competitions} lastMessages={lastMessages} coachName={coachName}
-              myPerformances={myPerformances} wellnessToday={wellnessToday} 
-              onNavigate={navigate} onOpenWellness={() => setShowWellness(true)}/>
+              myPerformances={myPerformances} onNavigate={navigate}
+              wellnessToday={wellnessToday} onOpenWellness={() => setShowWellness(true)}/>
           )}
           {activeView==="planning"&&(
            <MonPlanning
@@ -3070,6 +3022,7 @@ export default function AthleteApp() {
               </button>
             );
           })}
+          {/* Bouton push + notifs dans la bottom nav mobile */}
           <button onClick={() => setShowNotifs(v=>!v)}
             className={["flex-1 flex flex-col items-center justify-center gap-1 py-2.5 transition-all",
               showNotifs ? "text-emerald-600" : "text-slate-400"].join(" ")}>
@@ -3081,13 +3034,14 @@ export default function AthleteApp() {
                 </span>
               )}
             </div>
+            {/* Indicateur push intégré sous l'icône notifs */}
             <span className="text-[9px] font-semibold text-center" style={{ color: subscribed ? "#1D9E75" : "inherit" }}>
               {subscribed ? "🔔 ON" : "Notifs"}
             </span>
           </button>
         </div>
 
-        {/* Panneau notifs mobile */}
+        {/* Panneau notifs mobile (slide du bas) */}
         {showNotifs && (
           <div className="fixed inset-0 z-40" onClick={() => setShowNotifs(false)}>
             <div className="absolute bottom-16 left-0 right-0 bg-white rounded-t-2xl border-t border-slate-200 shadow-2xl max-h-[60vh] flex flex-col"
@@ -3095,7 +3049,12 @@ export default function AthleteApp() {
               <div className="px-5 py-3 border-b border-slate-100 flex items-center justify-between flex-shrink-0">
                 <p className="text-[14px] font-bold text-slate-800">Notifications</p>
                 <div className="flex items-center gap-3">
-                  <PushToggleButton subscribed={subscribed} onToggle={subscribe} permissionState={permissionState}/>
+                  {/* Bouton push dans le panneau notifs mobile */}
+                  <PushToggleButton
+                    subscribed={subscribed}
+                    onToggle={subscribe}
+                    permissionState={permissionState}
+                  />
                   {myNotifs.filter(n=>!n.is_read).length > 0 && (
                     <button onClick={async()=>{
                       await supabase.from("athlete_notifications").update({is_read:true}).eq("athlete_id",athlete.id).eq("is_read",false);
