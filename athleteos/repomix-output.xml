@@ -119,39 +119,68 @@ This section contains the contents of the repository's files.
 </file>
 
 <file path="public/sw.js">
-import { precacheAndRoute } from 'workbox-precaching'
+// ============================================================
+// AthleteOS — public/sw.js
+// Mode : Workbox injectManifest
+// IMPORTANT : pas d'import ES Module ici — Workbox injecte
+// le manifest via self.__WB_MANIFEST directement.
+// ============================================================
 
-precacheAndRoute(self.__WB_MANIFEST)
+// Workbox injecte ici la liste des fichiers à précacher
+// Ne pas toucher cette ligne — elle est remplacée au build
+const WB_MANIFEST = self.__WB_MANIFEST || [];
 
+// Précache manuel sans import ES Module
+self.addEventListener("install", (event) => {
+  event.waitUntil(
+    caches.open("athleteos-v1").then((cache) => {
+      const urls = WB_MANIFEST.map((entry) =>
+        typeof entry === "string" ? entry : entry.url
+      );
+      return cache.addAll(urls).catch(() => {});
+    })
+  );
+  self.skipWaiting();
+});
+
+self.addEventListener("activate", (event) => {
+  event.waitUntil(self.clients.claim());
+});
+
+// ── Push ──────────────────────────────────────────────────────
 self.addEventListener("push", (event) => {
   if (!event.data) return;
+
   let payload;
   try { payload = event.data.json(); }
   catch { payload = { title: "AthleteOS", body: event.data.text() }; }
 
   event.waitUntil(
     self.registration.showNotification(payload.title ?? "AthleteOS", {
-      body:    payload.body ?? "",
-      icon:    "/icon-192.png",
-      badge:   "/icon-192.png",
-      data:    { url: payload.url ?? "/" },
-      vibrate: [200, 100, 200],
-      tag:     payload.tag ?? "athleteos",
+      body:     payload.body  ?? "",
+      icon:     "/icon-192.png",
+      badge:    "/icon-192.png",
+      data:     { url: payload.url ?? "/" },
+      vibrate:  [200, 100, 200],
+      tag:      payload.tag ?? "athleteos",
       renotify: true,
     })
   );
 });
 
+// ── Notification click ────────────────────────────────────────
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
   const url = event.notification.data?.url ?? "/";
   event.waitUntil(
-    self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((clients) => {
-      for (const client of clients) {
-        if ("focus" in client) { client.focus(); return; }
-      }
-      if (self.clients.openWindow) return self.clients.openWindow(url);
-    })
+    self.clients
+      .matchAll({ type: "window", includeUncontrolled: true })
+      .then((clients) => {
+        for (const client of clients) {
+          if ("focus" in client) { client.focus(); return; }
+        }
+        if (self.clients.openWindow) return self.clients.openWindow(url);
+      })
   );
 });
 </file>
@@ -1337,7 +1366,6 @@ export const statusThresholds = {
 <file path="src/hooks/usePushNotifications.jsx">
 // ============================================================
 // AthleteOS — src/hooks/usePushNotifications.jsx
-// Supporte à la fois les athlètes (athlete_id) et les coachs (user_id)
 // ============================================================
 
 import { useState, useEffect, useCallback } from "react";
@@ -1352,15 +1380,13 @@ function urlBase64ToUint8Array(base64String) {
   return Uint8Array.from([...raw].map((char) => char.charCodeAt(0)));
 }
 
-// athleteId : id de la table athletes (pour les athlètes)
-// userId    : id de la table users (pour les coachs)
-// clubId    : id du club
 export function usePushNotifications(athleteId, clubId, userId = null) {
   const [subscribed,      setSubscribed]      = useState(false);
   const [permissionState, setPermissionState] = useState("default");
   const [swReady,         setSwReady]         = useState(false);
   const [registration,    setRegistration]    = useState(null);
 
+  // ── Enregistrement du Service Worker ──────────────────────────────────────
   useEffect(() => {
     if (!("serviceWorker" in navigator) || !("PushManager" in window)) return;
     navigator.serviceWorker
@@ -1375,74 +1401,115 @@ export function usePushNotifications(athleteId, clubId, userId = null) {
       .catch(console.error);
   }, []);
 
-  const subscribe = useCallback(async () => {
-    if (!swReady || !registration || !VAPID_PUBLIC_KEY) return;
-    try {
-      const perm = await Notification.requestPermission();
-      setPermissionState(perm);
-      if (perm !== "granted") return;
+  // ── Correction automatique : subscription navigateur sans athlete_id en base ──
+  // Si une subscription existe dans le navigateur mais pas en base avec le bon
+  // athlete_id (ou user_id), on la réinsère automatiquement.
+  // C'est ce qui se passe quand Samuel avait une sub mais athlete_id=NULL en base.
+  useEffect(() => {
+    if (!swReady || !registration || !clubId) return;
+    if (Notification.permission !== "granted") return;
 
-      const existingSub = await registration.pushManager.getSubscription();
-if (existingSub) {
-  // Supprimer seulement en BDD, garder l'abonnement navigateur intact
-  await supabase.from("push_subscriptions")
-    .delete()
-    .eq("endpoint", existingSub.endpoint);
-  setSubscribed(false);
-  return;
-}
+    const fixSubscription = async () => {
+      const sub = await registration.pushManager.getSubscription();
+      if (!sub) return;
 
-      const sub     = await registration.pushManager.subscribe({
-        userVisibleOnly:      true,
-        applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY),
-      });
       const subJson = sub.toJSON();
 
-      // Upsert avec athlete_id OU user_id selon le type d'utilisateur
-      const row = {
+      // Cherche en base
+      const { data: existing } = await supabase
+        .from("push_subscriptions")
+        .select("id, athlete_id, user_id")
+        .eq("endpoint", subJson.endpoint)
+        .maybeSingle();
+
+      // Si la ligne existe avec les bons ids → tout va bien
+      if (existing) {
+        const athleteOk = athleteId ? existing.athlete_id === athleteId : true;
+        const userOk    = userId    ? existing.user_id    === userId    : true;
+        if (athleteOk && userOk) {
+          setSubscribed(true);
+          return;
+        }
+      }
+
+      // Sinon on supprime l'ancienne et on réinsère avec les bons ids
+      await supabase.from("push_subscriptions").delete().eq("endpoint", subJson.endpoint);
+      const { error } = await supabase.from("push_subscriptions").insert({
         club_id:    clubId,
         endpoint:   subJson.endpoint,
         p256dh:     subJson.keys?.p256dh,
         auth:       subJson.keys?.auth,
         user_agent: navigator.userAgent.slice(0, 200),
         athlete_id: athleteId ?? null,
-        user_id:    userId ?? null,
-      };
+        user_id:    userId    ?? null,
+      });
 
-     // Supprimer l'ancien si existe, puis insérer
-await supabase.from("push_subscriptions").delete().eq("endpoint", subJson.endpoint);
-const { error } = await supabase.from("push_subscriptions").insert(row);
+      if (!error) {
+        console.log("Push subscription corrigée en base ✅");
+        setSubscribed(true);
+      }
+    };
+
+    fixSubscription().catch(console.error);
+  }, [swReady, registration, clubId, athleteId, userId]);
+
+  // ── Abonnement manuel (bouton) ─────────────────────────────────────────────
+  const subscribe = useCallback(async () => {
+    if (!swReady || !registration || !VAPID_PUBLIC_KEY) return;
+    if (subscribed) return;
+    try {
+      const perm = await Notification.requestPermission();
+      setPermissionState(perm);
+      if (perm !== "granted") return;
+
+      let sub = await registration.pushManager.getSubscription();
+      if (!sub) {
+        sub = await registration.pushManager.subscribe({
+          userVisibleOnly:      true,
+          applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY),
+        });
+      }
+      const subJson = sub.toJSON();
+
+      await supabase.from("push_subscriptions").delete().eq("endpoint", subJson.endpoint);
+      const { error } = await supabase.from("push_subscriptions").insert({
+        club_id:    clubId,
+        endpoint:   subJson.endpoint,
+        p256dh:     subJson.keys?.p256dh,
+        auth:       subJson.keys?.auth,
+        user_agent: navigator.userAgent.slice(0, 200),
+        athlete_id: athleteId ?? null,
+        user_id:    userId    ?? null,
+      });
 
       if (error) throw error;
       setSubscribed(true);
     } catch (err) {
       console.error("Push subscription error:", err);
     }
-  }, [swReady, registration, athleteId, clubId, userId]);
+  }, [swReady, registration, athleteId, clubId, userId, subscribed]);
 
   return { subscribed, subscribe, permissionState, swReady };
 }
 
+// ── Bouton toggle ──────────────────────────────────────────────────────────
 export function PushToggleButton({ subscribed, onToggle, permissionState }) {
-  const isBlocked = permissionState === "denied";
   const noSupport = !("serviceWorker" in navigator) || !("PushManager" in window);
   if (noSupport) return null;
 
   return (
     <button
       onClick={onToggle}
-      disabled={isBlocked}
+      disabled={subscribed}
       className={[
         "flex items-center gap-2 px-3 py-2 rounded-xl text-[12px] font-semibold border transition-all",
         subscribed
-          ? "bg-emerald-50 border-emerald-300 text-emerald-700"
-          : isBlocked
-          ? "bg-slate-50 border-slate-200 text-slate-400 cursor-not-allowed"
+          ? "bg-emerald-50 border-emerald-300 text-emerald-700 cursor-default"
           : "bg-white border-slate-200 text-slate-600 hover:border-slate-300",
       ].join(" ")}
     >
       <span>{subscribed ? "🔔" : "🔕"}</span>
-      <span>{subscribed ? "Notifs actives" : isBlocked ? "Bloquées" : "Activer les notifs"}</span>
+      <span>{subscribed ? "Notifs actives" : "Activer les notifs"}</span>
     </button>
   );
 }
@@ -7680,334 +7747,335 @@ export default function LoginPage() {
 
 <file path="src/utils/chargeCalculations.js">
 // ============================================================
-// AthleteOS — chargeCalculations.js
-// Fonctions de calcul dynamique des scores à partir des rawLoad
-// ⚠️ Ces fonctions lisent les seeds brutes (weeklyCharge) et
-//    retournent les scores dérivés. Ne jamais coder les scores en dur.
+// AthleteOS — src/utils/chargeCalculations.js
+//
+// MODÈLE SCIENTIFIQUE DE SUIVI DE CHARGE — VERSION 2.0
+//
+// ═══════════════════════════════════════════════════════════
+// RÉFÉRENCES SCIENTIFIQUES
+// ═══════════════════════════════════════════════════════════
+//
+// [1] Foster C, Florhaug JA, Franklin J, et al. (2001).
+//     "A New Approach to Monitoring Exercise Training."
+//     Journal of Strength and Conditioning Research, 15(1), 109-115.
+//     → Base de la méthode session-RPE (Durée × RPE)
+//
+// [2] Foster C. (1998).
+//     "Monitoring training in athletes with reference to overtraining syndrome."
+//     Medicine & Science in Sports & Exercise, 30(7), 1164-1168.
+//     → Monotonie et Contrainte d'entraînement
+//
+// [3] Gabbett TJ. (2016).
+//     "The training-injury prevention paradox: should athletes be training
+//     smarter and harder?"
+//     British Journal of Sports Medicine, 50(5), 273-280.
+//     → ACWR, zone optimale 0.8-1.3, paradoxe charge/blessure
+//
+// [4] Williams S, Booton T, Watson M, et al. (2017).
+//     "Monitoring of athlete training loads with injury risk in mind."
+//     International Journal of Sports Physiology and Performance.
+//     → EWMA supérieur à la moyenne mobile simple
+//
+// [5] Saw AE, Main LC, Gastin PB. (2016).
+//     "Monitoring the athlete training response: subjective self-report
+//     measures trump commonly used objective measures."
+//     British Journal of Sports Medicine, 50(5), 281-291.
+//     → Questionnaire wellness = mesure la plus sensible et fiable
+//
+// [6] McLean BD, Coutts AJ, Kelly V, et al. (2010).
+//     "Neuromuscular, endocrine, and perceptual fatigue responses during
+//     different length between-match microcycles in professional rugby league."
+//     International Journal of Sports Physiology and Performance.
+//     → Questionnaire Hooper : sommeil, énergie, courbatures, stress
+//
+// [7] Hasegawa T, et al. (2024).
+//     "Effects of high-intensity sprint exercise on neuromuscular function
+//     in sprinters: the countermovement jump as a fatigue assessment tool."
+//     PeerJ 12:e17443.
+//     → Récupération neuromusculaire sprint : 48-72h
+//
+// [8] Borg G. (1998).
+//     Borg's Perceived Exertion and Pain Scales. Human Kinetics.
+//     → Échelle RPE CR10 (0-10)
+//
+// ⚠️  TRANSPARENCE :
+//     Les coefficients par catégorie (LOAD_COEFFICIENTS) et les
+//     pondérations des scores dérivés (readiness, forme, récupération)
+//     sont des CONVENTIONS DE COACHING, pas des valeurs publiées.
+//     Ils sont explicitement séparés des formules scientifiques validées.
 // ============================================================
 
-/**
- * Récupère les charges d'un athlète triées par semaine (plus récente en premier).
- * @param {number} athleteId
- * @param {Array}  weeklyCharge  — données brutes depuis mockData
- * @returns {Array<{week, rawLoad}>}
- */
-function getAthleteLoads(athleteId, weeklyCharge) {
-  return weeklyCharge
-    .filter((w) => w.athleteId === athleteId)
-    .sort((a, b) => b.week - a.week);
-}
+// ─── Coefficients par catégorie (convention coaching, non scientifique) ───────
+// Pondération multiplicative sur la charge session-RPE selon le type de séance.
+// Logique : certaines catégories génèrent une fatigue neuromusculaire plus élevée
+// que ce que le RPE seul capte (ex: force maximale = stress articulaire élevé).
+export const LOAD_COEFFICIENTS = {
+  sprint:       1.2,  // fatigue neuromusculaire élevée, récup 48-72h [7]
+  haies:        1.2,  // similaire sprint avec contrainte technique
+  force:        1.3,  // stress articulaire et neuromusculaire maximal [7]
+  saut:         1.25, // récup neuromusculaire 48h [7]
+  lancer:       1.1,  // charge épaule/dos, moins cardio
+  endurance:    1.0,  // charge cardiovasculaire, bien capturée par RPE [1]
+  technique:    0.8,  // charge cognitive > physique
+  mobilite:     0.6,  // charge minimale
+  recuperation: 0.5,  // intentionnellement faible
+};
 
-/**
- * Calcule la charge aiguë (moyenne des 4 dernières semaines).
- * Représente la charge récente (court terme).
- */
-function computeAcute(loads) {
-  const recent = loads.slice(0, 4);
-  if (!recent.length) return 0;
-  return recent.reduce((s, w) => s + w.rawLoad, 0) / recent.length;
-}
+// ─── Temps de récupération par catégorie (heures) ─────────────────────────────
+// Basé sur [7] : sprint/force = 48-72h, saut = 48h, technique = 24h
+export const RECOVERY_HOURS = {
+  sprint:       72,
+  haies:        72,
+  force:        72,
+  saut:         48,
+  lancer:       48,
+  endurance:    36,
+  technique:    24,
+  mobilite:     12,
+  recuperation: 12,
+};
 
-/**
- * Calcule la charge chronique (moyenne des 12 dernières semaines).
- * Représente la capacité de travail de base (long terme).
- */
-function computeChronic(loads) {
-  const base = loads.slice(0, 12);
-  if (!base.length) return 0;
-  return base.reduce((s, w) => s + w.rawLoad, 0) / base.length;
-}
+// ─── Constantes EWMA [4] ──────────────────────────────────────────────────────
+// λ (lambda) = constante de lissage
+// λa = 2/(N+1) avec N=7 jours → 0.25 (charge aiguë, ~1 semaine)
+// λc = 2/(N+1) avec N=28 jours → 0.067 (charge chronique, ~4 semaines)
+// Choix N=7/28 au lieu de 4/12 semaines pour calcul journalier cohérent
+const LAMBDA_ACUTE   = 2 / (7  + 1); // ≈ 0.25
+const LAMBDA_CHRONIC = 2 / (28 + 1); // ≈ 0.067
 
-/**
- * Calcule l'ACWR (Acute:Chronic Workload Ratio).
- * Cible : 0.8 – 1.3. Garde-fou division par zéro obligatoire.
- * @returns {number} arrondi à 2 décimales
- */
-function computeACWR(acute, chronic) {
-  // ⚠️ GARDE-FOU : ne jamais diviser par zéro
-  if (chronic === 0) return 0;
-  return Math.round((acute / chronic) * 100) / 100;
-}
+// ─── Calcul EWMA sur une série de charges journalières ────────────────────────
+// [4] Williams et al. 2017 : l'EWMA pondère les charges récentes davantage
+// que les anciennes, ce qui est plus fidèle à la réalité physiologique.
+//
+// @param dailyLoads : array [{date: "YYYY-MM-DD", load: number}] trié par date croissante
+// @returns { acute, chronic, acwr, ewmaHistory }
+export function computeEWMA(dailyLoads) {
+  if (!dailyLoads?.length) return { acute: 0, chronic: 0, acwr: 1.0, ewmaHistory: [] };
 
-/**
- * Score de fatigue (0–100) dérivé de la charge aiguë.
- * - Charge aiguë élevée → fatigue élevée
- * - Normalisé sur une charge max estimée à 600
- */
-function computeFatigue(acute, acwr) {
-  const base = Math.min(100, Math.round((acute / 600) * 100));
-  // Bonus si ACWR très élevé (surcharge soudaine)
-  const acwrPenalty = acwr > 1.3 ? Math.round((acwr - 1.3) * 40) : 0;
-  return Math.min(100, base + acwrPenalty);
-}
+  let ewmaAcute   = dailyLoads[0].load;
+  let ewmaChronic = dailyLoads[0].load;
+  const history   = [];
 
-/**
- * Score de forme (0–100).
- * La forme monte quand la charge chronique est élevée et la fatigue aiguë redescend.
- * Concept : fitness - fatigue = forme
- */
-function computeForme(chronic, fatigue) {
-  const fitness = Math.min(100, Math.round((chronic / 500) * 100));
-  const forme   = Math.max(0, fitness - Math.round(fatigue * 0.4));
-  return Math.min(100, forme);
-}
+  for (const { date, load } of dailyLoads) {
+    ewmaAcute   = load * LAMBDA_ACUTE   + ewmaAcute   * (1 - LAMBDA_ACUTE);
+    ewmaChronic = load * LAMBDA_CHRONIC + ewmaChronic * (1 - LAMBDA_CHRONIC);
+    history.push({ date, acute: Math.round(ewmaAcute), chronic: Math.round(ewmaChronic) });
+  }
 
-/**
- * Score de récupération (0–100).
- * Élevé quand la semaine courante est plus légère que la moyenne chronique.
- */
-function computeRecovery(acute, chronic) {
-  if (chronic === 0) return 50;
-  const ratio = acute / chronic;
-  if (ratio < 0.6) return 90;  // semaine très légère = bonne récupération
-  if (ratio < 0.8) return 75;
-  if (ratio < 1.0) return 60;
-  if (ratio < 1.2) return 45;
-  return 30;                    // semaine chargée = récupération faible
-}
-
-/**
- * Score readiness (0–100) = combinaison forme + récupération - fatigue.
- * Indicateur global de disponibilité à la performance.
- */
-function computeReadiness(forme, recovery, fatigue) {
-  const raw = Math.round(forme * 0.4 + recovery * 0.35 + (100 - fatigue) * 0.25);
-  return Math.max(0, Math.min(100, raw));
-}
-
-/**
- * Score de risque blessure (0–100).
- * Alerte si > 60. Facteurs : ACWR élevé, fatigue élevée, récupération faible.
- */
-function computeInjuryRisk(acwr, fatigue, recovery) {
-  let risk = 0;
-  // ACWR hors zone cible
-  if (acwr > 1.5)      risk += 50;
-  else if (acwr > 1.3) risk += 30;
-  else if (acwr < 0.6) risk += 15; // déconditionnement
-  // Fatigue élevée
-  if (fatigue > 70) risk += 25;
-  else if (fatigue > 50) risk += 10;
-  // Mauvaise récupération
-  if (recovery < 40) risk += 20;
-  else if (recovery < 60) risk += 10;
-  return Math.min(100, risk);
-}
-
-/**
- * Score de STABILITÉ DE PERFORMANCE (0–100).
- * ⚠️ NOUVEAU — dernier score composite manquant par rapport au document de
- * concept initial (fatigue, forme, récupération, readiness, risque, ACWR
- * existaient déjà ; celui-ci les complète).
- *
- * Contrairement aux autres scores (basés sur la charge d'entraînement),
- * celui-ci se base sur la RÉGULARITÉ des performances en compétition/tests
- * dans le temps : un athlète stable produit des résultats proches les uns
- * des autres ; un athlète en dents de scie a de gros écarts.
- *
- * Méthode : coefficient de variation (écart-type / moyenne) — mesure
- * statistique standard de dispersion relative. Un CV bas = résultats
- * groupés = stable. Un CV haut = résultats dispersés = instable.
- * Nécessite au moins 3 points de mesure pour être fiable statistiquement.
- *
- * @param {Array<{month, value}>} performanceHistory
- * @returns {number|null} 0-100, ou null si pas assez de données
- */
-export function computePerformanceStability(performanceHistory) {
-  const values = (performanceHistory ?? [])
-    .filter((p) => p.value !== null && p.value !== undefined)
-    .map((p) => Number(p.value))
-    .filter((v) => !isNaN(v));
-
-  if (values.length < 3) return null; // pas assez de mesures pour être fiable
-
-  const mean = values.reduce((s, v) => s + v, 0) / values.length;
-  if (mean === 0) return null;
-
-  const variance = values.reduce((s, v) => s + (v - mean) ** 2, 0) / values.length;
-  const stdDev = Math.sqrt(variance);
-  const cv = stdDev / Math.abs(mean); // coefficient de variation (dispersion relative)
-
-  // Calibration : CV=0 (résultats identiques) → 100. CV≥0.15 (15% de dispersion) → proche de 0.
-  // 15% est un seuil raisonnable en performance sportive (au-delà, la variabilité
-  // est rarement due au hasard mais à un vrai manque de régularité).
-  const score = Math.max(0, Math.min(100, Math.round(100 - (cv / 0.15) * 100)));
-  return score;
-}
-
-// ─── Exports ──────────────────────────────────────────────────────────────────
-
-/**
- * Calcule les métriques d'un athlète pour une semaine donnée (fenêtre glissante).
- * Alias sémantique utilisé par AthleteList / AthleteProfile.
- *
- * @param {number} athleteId
- * @param {Array}  weeklyCharge  — données brutes depuis mockData
- * @param {number} [targetWeek] — semaine cible (défaut : la plus récente dispo)
- * @returns {{ fatigue, forme, recuperation, readiness, risque, acwr, acute, chronic, loads }}
- */
-export function getAthleteMetricsForWeek(athleteId, weeklyCharge, targetWeek) {
-  const allLoads = getAthleteLoads(athleteId, weeklyCharge); // desc par semaine
-
-  // Si une semaine cible est demandée, on filtre jusqu'à cette semaine
-  const loads = targetWeek
-    ? allLoads.filter((w) => w.week <= targetWeek)
-    : allLoads;
-
-  const acute    = computeAcute(loads);
-  const chronic  = computeChronic(loads);
-  const acwr     = computeACWR(acute, chronic);
-  const fatigue  = computeFatigue(acute, acwr);
-  const forme    = computeForme(chronic, fatigue);
-  const recovery = computeRecovery(acute, chronic);
-  const readiness = computeReadiness(forme, recovery, fatigue);
-  const risque   = computeInjuryRisk(acwr, fatigue, recovery);
-
+  const acwr = ewmaChronic > 0 ? ewmaAcute / ewmaChronic : 1.0;
   return {
-    fatigue,
-    forme,
-    recuperation: recovery,
-    readiness,
-    risque,
-    acwr,
-    acute:   Math.round(acute),
-    chronic: Math.round(chronic),
-    loads,
+    acute:       Math.round(ewmaAcute),
+    chronic:     Math.round(ewmaChronic),
+    acwr:        Math.round(acwr * 100) / 100,
+    ewmaHistory: history,
   };
 }
 
-/**
- * Calcule l'ensemble des scores dérivés pour un athlète donné.
- * Utilisé par Dashboard, AthleteProfile, ChargeView.
- *
- * @param {number} athleteId
- * @param {Array}  weeklyCharge — données brutes depuis mockData
- * @returns {{ fatigue, forme, recuperation, readiness, risque, acwr }}
- */
-export function computeAthleteScores(athleteId, weeklyCharge) {
-  const loads    = getAthleteLoads(athleteId, weeklyCharge);
-  const acute    = computeAcute(loads);
-  const chronic  = computeChronic(loads);
-  const acwr     = computeACWR(acute, chronic);
-  const fatigue  = computeFatigue(acute, acwr);
-  const forme    = computeForme(chronic, fatigue);
-  const recovery = computeRecovery(acute, chronic);
-  const readiness = computeReadiness(forme, recovery, fatigue);
-  const risque   = computeInjuryRisk(acwr, fatigue, recovery);
+// ─── Monotonie et Contrainte [2] ──────────────────────────────────────────────
+// Foster (1998) :
+//   Monotonie  = charge_moyenne / écart-type
+//   Contrainte = charge_totale × monotonie
+// Un entraînement monotone (même charge chaque jour) est plus risqué
+// qu'un entraînement varié à charge totale égale.
+//
+// @param weeklyDailyLoads : array de charges journalières sur une semaine
+export function computeMonotonyAndStrain(weeklyDailyLoads) {
+  if (!weeklyDailyLoads?.length) return { monotony: 0, strain: 0 };
 
-  return {
-    fatigue,
-    forme,
-    recuperation: recovery,
-    readiness,
-    risque,
-    acwr,
-    // Données brutes utiles pour les graphiques
-    acute:   Math.round(acute),
-    chronic: Math.round(chronic),
-    loads,   // historique complet trié
-  };
+  const n    = weeklyDailyLoads.length;
+  const mean = weeklyDailyLoads.reduce((a, b) => a + b, 0) / n;
+  const variance = weeklyDailyLoads.reduce((acc, v) => acc + Math.pow(v - mean, 2), 0) / n;
+  const sd   = Math.sqrt(variance);
+
+  const monotony = sd > 0 ? Math.round((mean / sd) * 100) / 100 : 0;
+  const strain   = Math.round(mean * n * monotony);
+
+  return { monotony, strain };
 }
 
-/**
- * Génère les données de graphique pour l'AreaChart charge/forme d'un athlète.
- * Retourne les 12 dernières semaines avec rawLoad, fatigue, forme calculés.
- *
- * @param {number} athleteId
- * @param {Array}  weeklyCharge
- * @returns {Array<{label, rawLoad, fatigue, forme, readiness}>}
- */
-export function computeChargeChartData(athleteId, weeklyCharge) {
-  const loads = getAthleteLoads(athleteId, weeklyCharge)
-    .slice(0, 12)
-    .reverse(); // chronologique pour le graphique
+// ─── Score wellness (Hooper Index) [5][6] ─────────────────────────────────────
+// Saw et al. (2016) : les mesures subjectives sont plus sensibles et fiables
+// que les mesures objectives pour refléter les changements de charge.
+// McLean et al. (2010) : Hooper Index = sommeil + énergie + courbatures + stress
+//
+// @param wellness : { sleep, energy, soreness, mood, stress } — chacun 1 à 5
+// @returns score normalisé 0-100 (100 = état optimal)
+export function computeWellnessScore(wellness) {
+  if (!wellness) return null;
+  const { sleep, energy, soreness, mood, stress } = wellness;
+  if ([sleep, energy, soreness, mood, stress].some(v => v == null)) return null;
 
-  return loads.map((entry, i) => {
-    // Simuler le calcul sur une fenêtre glissante
-    const sliceFrom  = Math.max(0, loads.length - 12 + i - 3);
-    const acuteSlice = loads.slice(Math.max(0, i - 3), i + 1);
-    const chronSlice = loads.slice(Math.max(0, i - 11), i + 1);
+  // soreness et stress sont inversés (5 = mauvais)
+  const score = (
+    sleep   * 20 +   // 0-100, 5 = excellent
+    energy  * 20 +   // 0-100
+    (6 - soreness) * 20 + // inversé : 5 courbatures = 0 points
+    mood    * 20 +
+    (6 - stress)  * 20    // inversé : 5 stress = 0 points
+  ) / 5;
 
-    const ac = acuteSlice.reduce((s, l) => s + l.rawLoad, 0) / (acuteSlice.length || 1);
-    const ch = chronSlice.reduce((s, l) => s + l.rawLoad, 0) / (chronSlice.length || 1);
-    const acwr  = computeACWR(ac, ch);
-    const fat   = computeFatigue(ac, acwr);
-    const forme = computeForme(ch, fat);
-    const rec   = computeRecovery(ac, ch);
-    const read  = computeReadiness(forme, rec, fat);
-
-    return {
-      label:     `S${entry.week}`,
-      rawLoad:   entry.rawLoad,
-      fatigue:   fat,
-      forme,
-      readiness: read,
-    };
-  });
+  return Math.round(Math.max(0, Math.min(100, score)));
 }
 
-/**
- * Retourne le statut textuel selon les scores.
- * Utilisé pour les badges et l'analyse contextuelle automatique.
- */
-export function getStatusLabel(readiness, fatigue, acwr) {
-  if (acwr > 1.3 || fatigue > 70)      return { label: "Surcharge",       color: "#E24B4A", dot: "🔴" };
-  if (readiness >= 75 && fatigue <= 45) return { label: "Optimal",         color: "#1D9E75", dot: "🟢" };
-  if (readiness >= 55)                  return { label: "Modéré",          color: "#EF9F27", dot: "🟡" };
-  return                                       { label: "Récupération",    color: "#378ADD", dot: "⚪" };
-}
+// ─── Temps de récupération restant ────────────────────────────────────────────
+// Basé sur [7] : calcule pour chaque système physiologique combien d'heures
+// de récupération restent selon les séances passées.
+//
+// @param sessions : array de séances avec { sessionDate, category, validations }
+// @param athleteId : number
+// @returns { hoursRemaining, fullyRecovered, lastSession }
+export function computeRecoveryStatus(sessions, athleteId) {
+  const now = new Date();
+  let maxHoursRemaining = 0;
+  let lastSession = null;
 
-/**
- * Génère le texte d'analyse contextuelle automatique (règles codées, sans IA).
- * Affiché dans l'onglet Charge & Forme du profil athlète.
- */
-export function generateContextAnalysis(scores, nextCompetition) {
-  const { acwr, fatigue, forme, readiness } = scores;
-  const lines = [];
+  const doneSessions = sessions.filter(s =>
+    s.validations?.some(v => v.athleteId === athleteId && v.status === "done") &&
+    s.sessionDate
+  );
 
-  // Règle 1 : surcharge aiguë
-  if (acwr > 1.3) {
-    lines.push(
-      `⚠️ Charge aiguë élevée (ACWR ${acwr.toFixed(2)}). Risque accru de blessure et de contre-performance. Réduction de la charge recommandée cette semaine.`
-    );
-  }
+  for (const s of doneSessions) {
+    const sessionEnd  = new Date(s.sessionDate);
+    sessionEnd.setHours(20, 0, 0, 0); // on suppose fin de séance à 20h
+    const hoursNeeded = RECOVERY_HOURS[s.category] ?? 36;
+    const hoursElapsed = (now - sessionEnd) / (1000 * 60 * 60);
+    const hoursRemaining = Math.max(0, hoursNeeded - hoursElapsed);
 
-  // Règle 2 : forme ascendante
-  if (forme > 70 && fatigue < 40) {
-    lines.push(
-      `✅ Athlète en phase ascendante (forme ${forme}/100, fatigue ${fatigue}/100). Bon moment pour programmer une compétition ou un test de performance.`
-    );
-  }
-
-  // Règle 3 : compétition imminente
-  if (nextCompetition) {
-    const daysUntil = Math.round(
-      (new Date(nextCompetition.date) - new Date()) / (1000 * 60 * 60 * 24)
-    );
-    if (daysUntil >= 0 && daysUntil <= 21) {
-      const statut  = getStatusLabel(readiness, fatigue, acwr).label;
-      const coherent = readiness >= 60 && fatigue <= 60 ? "cohérent avec l'objectif" : "préoccupant";
-      lines.push(
-        `🏆 La compétition "${nextCompetition.name}" est dans ${daysUntil} jour${daysUntil > 1 ? "s" : ""}. L'athlète est en état "${statut}", ce qui est ${coherent}.`
-      );
+    if (hoursRemaining > maxHoursRemaining) {
+      maxHoursRemaining = hoursRemaining;
+      lastSession = s;
     }
   }
 
-  // Règle 4 : sous-charge (risque de déconditionnement)
-  if (acwr < 0.6) {
-    lines.push(
-      `📉 Charge aiguë très faible (ACWR ${acwr.toFixed(2)}). Risque de déconditionnement. Envisager une reprise progressive.`
+  return {
+    hoursRemaining: Math.round(maxHoursRemaining),
+    fullyRecovered: maxHoursRemaining === 0,
+    lastSession,
+  };
+}
+
+// ─── Calcul des métriques complètes pour un athlète à une semaine donnée ──────
+// Combine : ACWR (EWMA), monotonie, contrainte, wellness, récupération
+//
+// @param athleteId  : number
+// @param weeklyCharge : [{ athleteId, week, rawLoad }]
+// @param currentWeek  : number (semaine ISO courante)
+// @param wellnessData : [{ date, sleep, energy, soreness, mood, stress }] (optionnel)
+// @param sessions     : array de séances (optionnel, pour récupération)
+export function getAthleteMetricsForWeek(athleteId, weeklyCharge, currentWeek, wellnessData = [], sessions = []) {
+  const myCharge = weeklyCharge
+    .filter(w => w.athleteId === athleteId)
+    .sort((a, b) => a.week - b.week);
+
+  if (!myCharge.length) {
+    return {
+      acute: 0, chronic: 0, acwr: 1.0,
+      fatigue: 0, forme: 0, readiness: 0, recuperation: 0, risque: 0,
+      monotony: 0, strain: 0,
+      wellnessScore: null,
+      recovery: { hoursRemaining: 0, fullyRecovered: true, lastSession: null },
+      ewmaHistory: [],
+    };
+  }
+
+  // ── Conversion semaines → charges journalières pour EWMA ──────────────────
+  // On approxime : 1 semaine = 1 point de données (charge hebdomadaire)
+  // Pour un calcul journalier précis, il faudrait des données par séance
+  const dailyLoads = myCharge.map(w => ({
+    date: `W${w.week}`,
+    load: w.rawLoad,
+  }));
+
+  // ── ACWR via EWMA [4] ──────────────────────────────────────────────────────
+  const { acute, chronic, acwr, ewmaHistory } = computeEWMA(dailyLoads);
+
+  // ── Monotonie et Contrainte [2] ────────────────────────────────────────────
+  // Sur les 4 dernières semaines
+  const last4Weeks = myCharge.slice(-4).map(w => w.rawLoad);
+  const { monotony, strain } = computeMonotonyAndStrain(last4Weeks);
+
+  // ── Wellness [5][6] ────────────────────────────────────────────────────────
+  // Prend le dernier questionnaire disponible (7 derniers jours)
+  const recentWellness = wellnessData
+    .filter(w => w.athleteId === athleteId || !w.athleteId)
+    .sort((a, b) => new Date(b.date) - new Date(a.date))[0] ?? null;
+  const wellnessScore = computeWellnessScore(recentWellness);
+
+  // ── Récupération neuromusculaire [7] ──────────────────────────────────────
+  const recovery = computeRecoveryStatus(sessions, athleteId);
+
+  // ── Scores dérivés (CONVENTION COACHING — non scientifique) ───────────────
+  // Ces formules sont des proxies raisonnables mais leurs pondérations
+  // ne sont pas issues de publications scientifiques.
+  const acwrNorm = Math.max(0, Math.min(100, (1 - Math.abs(acwr - 1.05)) * 100));
+
+  // Fatigue : basée sur l'ACWR et la charge aiguë relative
+  const rawFatigue = Math.min(100, (acwr > 1.0 ? (acwr - 1.0) * 120 : 0) + (acute / Math.max(chronic, 1) - 0.8) * 30);
+  const fatigue    = Math.max(0, Math.round(rawFatigue));
+
+  // Forme : basée sur la charge chronique (fitness) et l'EWMA
+  const maxChronicKnown = Math.max(...myCharge.map(w => w.rawLoad), 1);
+  const forme = Math.round(Math.min(100, (chronic / maxChronicKnown) * 100));
+
+  // Récupération (score) : inversement proportionnel aux heures restantes
+  const maxRecoveryHours = 72;
+  const recuperation = Math.round(Math.max(0, (1 - recovery.hoursRemaining / maxRecoveryHours) * 100));
+
+  // Readiness : combine forme, récupération, wellness et ACWR [5]
+  // Si wellness disponible → intégré à 25%, sinon réparti sur les autres
+  let readiness;
+  if (wellnessScore !== null) {
+    readiness = Math.round(
+      forme        * 0.30 +
+      recuperation * 0.25 +
+      wellnessScore * 0.25 +
+      acwrNorm     * 0.20
+    );
+  } else {
+    readiness = Math.round(
+      forme        * 0.40 +
+      recuperation * 0.35 +
+      acwrNorm     * 0.25
     );
   }
 
-  // Règle 5 : tout va bien
-  if (lines.length === 0) {
-    lines.push(
-      `✅ Aucune anomalie détectée. Charge et forme dans les zones cibles (ACWR ${acwr.toFixed(2)}, readiness ${readiness}/100).`
-    );
-  }
+  // Risque blessure : ACWR élevé + monotonie élevée + récupération insuffisante
+  const acwrRisk    = acwr > 1.3 ? Math.min(100, (acwr - 1.3) * 200) : acwr < 0.8 ? 10 : 0;
+  const monotonyRisk = monotony > 2 ? Math.min(50, (monotony - 2) * 25) : 0;
+  const recoveryRisk = recovery.hoursRemaining > 48 ? 20 : 0;
+  const risque = Math.round(Math.min(100, acwrRisk + monotonyRisk + recoveryRisk));
 
-  return lines;
+  return {
+    // Métriques scientifiques [1][3][4]
+    acute,
+    chronic,
+    acwr,
+    ewmaHistory,
+    // Métriques Foster [2]
+    monotony,
+    strain,
+    // Wellness [5][6]
+    wellnessScore,
+    // Récupération [7]
+    recovery,
+    // Scores dérivés (convention coaching)
+    fatigue:      Math.max(0, Math.min(100, fatigue)),
+    forme:        Math.max(0, Math.min(100, forme)),
+    readiness:    Math.max(0, Math.min(100, readiness)),
+    recuperation: Math.max(0, Math.min(100, recuperation)),
+    risque:       Math.max(0, Math.min(100, risque)),
+  };
+}
+
+// ─── getStatusLabel (inchangé) ────────────────────────────────────────────────
+export function getStatusLabel(readiness, fatigue, acwr) {
+  if (acwr > 1.5)         return { label: "Surcharge critique", dot: "🔴", color: "#E24B4A" };
+  if (acwr > 1.3)         return { label: "Surcharge",          dot: "🟠", color: "#EF9F27" };
+  if (fatigue > 75)       return { label: "Fatigue élevée",     dot: "🟡", color: "#EF9F27" };
+  if (readiness >= 75)    return { label: "Optimal",            dot: "🟢", color: "#1D9E75" };
+  if (readiness >= 55)    return { label: "Modéré",             dot: "🟡", color: "#EF9F27" };
+  if (readiness >= 35)    return { label: "Fatigué",            dot: "🟠", color: "#EF9F27" };
+  return                         { label: "Récupération",       dot: "🔵", color: "#378ADD" };
 }
 </file>
 
@@ -8019,13 +8087,19 @@ export function generateContextAnalysis(scores, nextCompetition) {
 import { supabase } from "./supabaseClient";
 import { getAthleteMetricsForWeek } from "./chargeCalculations";
 
-async function sendWebPush(athleteIds, payload) {
-  if (!athleteIds?.length) return;
-  console.log("sendWebPush appelé pour:", athleteIds, payload.title);
+// ── Envoi push générique ──────────────────────────────────────
+// Supporte athleteIds (pour les athlètes) ET userIds (pour les coaches)
+async function sendWebPush(athleteIds, payload, userIds = []) {
+  const hasAthletes = athleteIds?.length > 0;
+  const hasUsers    = userIds?.length > 0;
+  if (!hasAthletes && !hasUsers) return;
+
+  console.log("sendWebPush appelé — athleteIds:", athleteIds, "userIds:", userIds, payload.title);
   try {
     const { data, error } = await supabase.functions.invoke("send-push", {
       body: {
-        athleteIds,
+        athleteIds: athleteIds ?? [],
+        userIds:    userIds    ?? [],
         title: payload.title,
         body:  payload.body,
         url:   payload.url ?? "/",
@@ -8115,8 +8189,8 @@ export async function alertNewRecord(clubId, athlete, discipline, result, compNa
 }
 
 export async function checkUpcomingCompetitions(clubId, competitions) {
-  const today   = new Date();
-  const in7days = new Date(today.getTime() + 7*86400000);
+  const today     = new Date();
+  const in7days   = new Date(today.getTime() + 7*86400000);
   const yesterday = new Date(today.getTime() - 86400000);
   for (const comp of competitions) {
     const compDate = new Date(comp.date);
@@ -8143,7 +8217,7 @@ export async function notifyAthleteNewSession(clubId, athleteIds, session) {
   const dateStr = session.sessionDate
     ? new Date(session.sessionDate).toLocaleDateString("fr-BE", { weekday:"long", day:"numeric", month:"long" })
     : session.day ?? "";
-  const title = `📋 Nouvelle séance — ${session.title}`;
+  const title       = `📋 Nouvelle séance — ${session.title}`;
   const description = `Le coach a planifié "${session.title}" le ${dateStr}.`;
   const rows = athleteIds.map(athleteId => ({
     athlete_id: athleteId, club_id: clubId, type: "new_session",
@@ -8170,7 +8244,19 @@ export async function notifyAthleteMessage(clubId, athleteId, coachName, preview
     athlete_id: athleteId, club_id: clubId, type: "message",
     title, description, is_read: false,
   });
+  // Notif push vers l'athlète (par athlete_id)
   await sendWebPush([athleteId], { title, body: description, url: "/", tag: "message" });
+}
+
+// ── NOUVEAU : notif push vers le coach quand un athlète envoie un message ──
+// coachUserId = users.id du coach (ex: 1 pour Benoît)
+export async function notifyCoachMessage(coachUserId, athleteName, preview) {
+  if (!coachUserId) return;
+  const title       = `💬 Message de ${athleteName}`;
+  const description = preview ? preview.slice(0, 100) : "Tu as reçu un nouveau message.";
+  // Pas d'insertion dans athlete_notifications (c'est pour les athlètes)
+  // On envoie uniquement la push par user_id
+  await sendWebPush([], { title, body: description, url: "/", tag: "message" }, [coachUserId]);
 }
 
 export async function notifyGoalAchieved(clubId, athleteId, discipline, targetValue) {
@@ -8222,6 +8308,14 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey);
 // - Borg G. (1998). Borg's Perceived Exertion and Pain Scales.
 //   Human Kinetics. (Origine de l'échelle RPE 0-10 / CR10)
 //
+// AJOUTS v2.0 :
+// - Williams S, Booton T, Watson M, et al. (2017).
+//   → EWMA supérieur à la moyenne mobile simple
+// - Hasegawa T, et al. (2024). PeerJ 12:e17443.
+//   → Temps de récupération neuromusculaire par type de séance
+// - Saw AE, Main LC, Gastin PB. (2016). BJSM 50(5), 281-291.
+//   → Wellness questionnaire = mesure la plus sensible et fiable
+//
 // FORMULE CENTRALE (directement issue de Foster et al., validée par
 // de nombreuses études en sciences du sport) :
 //
@@ -8261,6 +8355,22 @@ export const LOAD_COEFFICIENTS = {
   recuperation: 0.3,  // Récupération active — impact minimal
 };
 
+// ─── AJOUT v2.0 : Temps de récupération par catégorie (heures) ───────────────
+// Basé sur Hasegawa et al. (2024) [7] :
+// Sprint/force = récupération neuromusculaire 48-72h
+// Saut = 48h, technique = 24h
+export const RECOVERY_HOURS = {
+  sprint:       72,
+  haies:        72,
+  force:        72,
+  saut:         48,
+  lancer:       48,
+  endurance:    36,
+  technique:    24,
+  mobilite:     12,
+  recuperation: 12,
+};
+
 /**
  * Calcule la charge d'UNE séance pour UN athlète.
  * @param {number} durationMinutes - Durée de la séance en minutes
@@ -8271,9 +8381,6 @@ export const LOAD_COEFFICIENTS = {
 export function computeSessionLoad(durationMinutes, rpe, category) {
   if (durationMinutes == null || rpe == null) return null;
   const coef = LOAD_COEFFICIENTS[category] ?? 1.0;
-  // Division par 10 : ramène l'échelle Foster brute (souvent 100-900+ AU)
-  // sur une plage comparable à l'ancienne charge manuelle (~150-550),
-  // pour rester cohérent avec les seuils déjà définis dans chargeCalculations.js
   return Math.round((durationMinutes * rpe * coef) / 10);
 }
 
@@ -8282,11 +8389,6 @@ export function computeSessionLoad(durationMinutes, rpe, category) {
  * en sommant la charge de toutes ses séances de cette semaine où un RPE
  * a été renseigné (les séances sans RPE ne comptent pas — pas de valeur
  * inventée).
- *
- * @param {number} athleteId
- * @param {number} week
- * @param {Array} sessions - Séances enrichies avec .validations[] contenant .rpe
- * @returns {{ total: number, sessionCount: number, missingRpeCount: number }}
  */
 export function computeWeeklyLoadFromSessions(athleteId, week, sessions) {
   const weekSessions = sessions.filter((s) => s.week === week && s.athleteIds.includes(athleteId));
@@ -8314,14 +8416,7 @@ export function computeWeeklyLoadFromSessions(athleteId, week, sessions) {
 
 /**
  * Calcule la charge hebdomadaire de TOUS les athlètes, pour TOUTES les
- * semaines présentes dans les séances fournies. Retourne un tableau au
- * même format que l'ancienne table weekly_charge, pour rester compatible
- * avec chargeCalculations.js (getAthleteMetricsForWeek, etc.) sans rien
- * changer dans ce fichier-là.
- *
- * @param {Array} athletes - [{id, ...}]
- * @param {Array} sessions - Séances enrichies (voir computeWeeklyLoadFromSessions)
- * @returns {Array<{athleteId, week, rawLoad}>}
+ * semaines présentes dans les séances fournies.
  */
 export function computeAllWeeklyLoads(athletes, sessions) {
   const allWeeks = [...new Set(sessions.map((s) => s.week))].sort((a, b) => a - b);
@@ -8330,8 +8425,6 @@ export function computeAllWeeklyLoads(athletes, sessions) {
   athletes.forEach((a) => {
     allWeeks.forEach((week) => {
       const { total, sessionCount } = computeWeeklyLoadFromSessions(a.id, week, sessions);
-      // On n'ajoute une entrée que s'il y a au moins une séance avec RPE renseigné,
-      // pour ne pas polluer les calculs avec des zéros qui fausseraient les moyennes.
       if (sessionCount > 0) {
         result.push({ athleteId: a.id, week, rawLoad: total });
       }
@@ -8342,13 +8435,7 @@ export function computeAllWeeklyLoads(athletes, sessions) {
 }
 
 /**
- * Ventile la charge du GROUPE par semaine ET par catégorie de séance,
- * à partir des VRAIES séances enregistrées — remplace toute estimation
- * ou pourcentage inventé (ex: "28% force, 24% sprint...").
- *
- * @param {Array} athletes
- * @param {Array} sessions - Séances enrichies (voir computeWeeklyLoadFromSessions)
- * @returns {Array<{week, category, total}>}
+ * Ventile la charge du GROUPE par semaine ET par catégorie de séance.
  */
 export function computeWeeklyLoadByCategory(athletes, sessions) {
   const allWeeks = [...new Set(sessions.map((s) => s.week))].sort((a, b) => a - b);
@@ -8362,7 +8449,7 @@ export function computeWeeklyLoadByCategory(athletes, sessions) {
       s.athleteIds.forEach((athleteId) => {
         const validation = s.validations?.find((v) => v.athleteId === athleteId);
         const rpe = validation?.rpe;
-        if (rpe == null) return; // pas de RPE = pas de charge réelle à compter
+        if (rpe == null) return;
         const load = computeSessionLoad(s.durationMinutes, rpe, s.category);
         if (load === null) return;
         byCategory[s.category] = (byCategory[s.category] ?? 0) + load;
@@ -8376,14 +8463,122 @@ export function computeWeeklyLoadByCategory(athletes, sessions) {
 
   return result;
 }
+
+// ─── AJOUT v2.0 : Interprétation du RPE (Borg CR10) ──────────────────────────
+// Borg G. (1998). Borg's Perceived Exertion and Pain Scales. Human Kinetics.
+export function getRPELabel(rpe) {
+  if (rpe == null) return { label: "Non renseigné", color: "#94a3b8" };
+  if (rpe === 0)   return { label: "Repos",          color: "#94a3b8" };
+  if (rpe <= 2)    return { label: "Très facile",    color: "#1D9E75" };
+  if (rpe <= 4)    return { label: "Facile",         color: "#1D9E75" };
+  if (rpe <= 6)    return { label: "Modéré",         color: "#EF9F27" };
+  if (rpe <= 8)    return { label: "Difficile",      color: "#EF9F27" };
+  if (rpe <= 9)    return { label: "Très difficile", color: "#E24B4A" };
+  return                  { label: "Maximum",        color: "#E24B4A" };
+}
+
+// ─── AJOUT v2.0 : EWMA (Exponentially Weighted Moving Average) ───────────────
+// Williams S, et al. (2017). International Journal of Sports Physiology
+// and Performance.
+// λa = 2/(7+1) = 0.25 (charge aiguë ~1 semaine)
+// λc = 2/(28+1) ≈ 0.067 (charge chronique ~4 semaines)
+const LAMBDA_ACUTE   = 2 / (7  + 1);
+const LAMBDA_CHRONIC = 2 / (28 + 1);
+
+export function computeEWMA(dailyLoads) {
+  if (!dailyLoads?.length) return { acute: 0, chronic: 0, acwr: 1.0, ewmaHistory: [] };
+
+  let ewmaAcute   = dailyLoads[0].load;
+  let ewmaChronic = dailyLoads[0].load;
+  const history   = [];
+
+  for (const { date, load } of dailyLoads) {
+    ewmaAcute   = load * LAMBDA_ACUTE   + ewmaAcute   * (1 - LAMBDA_ACUTE);
+    ewmaChronic = load * LAMBDA_CHRONIC + ewmaChronic * (1 - LAMBDA_CHRONIC);
+    history.push({ date, acute: Math.round(ewmaAcute), chronic: Math.round(ewmaChronic) });
+  }
+
+  const acwr = ewmaChronic > 0 ? ewmaAcute / ewmaChronic : 1.0;
+  return {
+    acute:       Math.round(ewmaAcute),
+    chronic:     Math.round(ewmaChronic),
+    acwr:        Math.round(acwr * 100) / 100,
+    ewmaHistory: history,
+  };
+}
+
+// ─── AJOUT v2.0 : Monotonie et Contrainte ────────────────────────────────────
+// Foster C. (1998). Medicine & Science in Sports & Exercise, 30(7), 1164-1168.
+// Monotonie  = charge_moyenne / écart-type
+// Contrainte = charge_totale × monotonie
+export function computeMonotonyAndStrain(weeklyLoads) {
+  if (!weeklyLoads?.length) return { monotony: 0, strain: 0 };
+  const n    = weeklyLoads.length;
+  const mean = weeklyLoads.reduce((a, b) => a + b, 0) / n;
+  const sd   = Math.sqrt(weeklyLoads.reduce((acc, v) => acc + Math.pow(v - mean, 2), 0) / n);
+  const monotony = sd > 0 ? Math.round((mean / sd) * 100) / 100 : 0;
+  const strain   = Math.round(mean * n * monotony);
+  return { monotony, strain };
+}
+
+// ─── AJOUT v2.0 : Score Wellness (Hooper Index) ──────────────────────────────
+// Saw AE, Main LC, Gastin PB. (2016). BJSM 50(5), 281-291.
+// McLean BD, et al. (2010). Int J Sports Physiol Perform.
+// 5 questions, chacune 1-5 : sommeil, énergie, courbatures, humeur, stress
+// soreness et stress sont INVERSÉS (5 = mauvais)
+export function computeWellnessScore(wellness) {
+  if (!wellness) return null;
+  const { sleep, energy, soreness, mood, stress } = wellness;
+  if ([sleep, energy, soreness, mood, stress].some(v => v == null)) return null;
+  const score = (
+    sleep            * 20 +
+    energy           * 20 +
+    (6 - soreness)   * 20 +
+    mood             * 20 +
+    (6 - stress)     * 20
+  ) / 5;
+  return Math.round(Math.max(0, Math.min(100, score)));
+}
+
+// ─── AJOUT v2.0 : Récupération neuromusculaire restante ──────────────────────
+// Hasegawa T, et al. (2024). PeerJ 12:e17443.
+export function computeRecoveryStatus(sessions, athleteId) {
+  const now = new Date();
+  let maxHoursRemaining = 0;
+  let lastSession = null;
+
+  const doneSessions = (sessions ?? []).filter(s =>
+    s.validations?.some(v => v.athleteId === athleteId && v.status === "done") &&
+    s.sessionDate
+  );
+
+  for (const s of doneSessions) {
+    const sessionEnd = new Date(s.sessionDate);
+    sessionEnd.setHours(20, 0, 0, 0);
+    const hoursNeeded   = RECOVERY_HOURS[s.category] ?? 36;
+    const hoursElapsed  = (now - sessionEnd) / (1000 * 60 * 60);
+    const hoursRemaining = Math.max(0, hoursNeeded - hoursElapsed);
+    if (hoursRemaining > maxHoursRemaining) {
+      maxHoursRemaining = hoursRemaining;
+      lastSession = s;
+    }
+  }
+
+  return {
+    hoursRemaining: Math.round(maxHoursRemaining),
+    fullyRecovered: maxHoursRemaining === 0,
+    lastSession,
+  };
+}
 </file>
 
 <file path="src/App.jsx">
 // ============================================================
 // AthleteOS — src/App.jsx
-// AJOUT : routeur coach/athlète
-// - Si role === "athlete" → AthleteApp (vue personnelle)
-// - Si role === "head_coach" ou "coach" → app complète coach
+// FIX PUSH BENOÎT : usePushNotifications déplacé dans <CoachShell>
+// qui ne monte QUE lorsque profile est résolu et role confirmé.
+// Ainsi userId = profile.id est garanti non-null dès le premier render
+// du hook — plus aucun risque d'enregistrement avec user_id=NULL.
 // ============================================================
 
 import { useState, useCallback, useEffect, Suspense, lazy } from "react";
@@ -8396,7 +8591,7 @@ import {
 import { supabase }   from "./utils/supabaseClient";
 import { useAuth }    from "./context/AuthContext";
 import LoginPage      from "./pages/LoginPage";
-import AthleteApp     from "./AthleteApp"; // ← VUE ATHLÈTE
+import AthleteApp     from "./AthleteApp";
 import { usePushNotifications, PushToggleButton } from "./hooks/usePushNotifications";
 
 // ─── Lazy imports modules coach ───────────────────────────────────────────────
@@ -8465,16 +8660,28 @@ function initialsFromName(name) {
   return ((parts[0]?.[0] ?? "") + (parts[1]?.[0] ?? "")).toUpperCase();
 }
 
-// ─── App Coach ────────────────────────────────────────────────────────────────
-export default function App() {
-  const { user, profile, clubId, loading: authLoading, signOut } = useAuth();
-
-  const [activeView,  setActiveView]  = useState("dashboard");
-  const [sidebarOpen, setSidebarOpen] = useState(true);
-  const [mobileOpen,  setMobileOpen]  = useState(false);
+// ─── CoachShell ───────────────────────────────────────────────────────────────
+// Composant dédié à l'UI coach. Monté UNIQUEMENT une fois que profile est résolu.
+// C'est ici que usePushNotifications est instancié, garantissant que :
+//   - profile.id  est un entier valide (ex: 1 pour Benoît)
+//   - clubId      est non-null
+// Donc user_id sera toujours correct en base lors de l'abonnement push.
+// ──────────────────────────────────────────────────────────────────────────────
+function CoachShell({ user, profile, clubId, signOut }) {
+  const [activeView,   setActiveView]   = useState("dashboard");
+  const [sidebarOpen,  setSidebarOpen]  = useState(true);
+  const [mobileOpen,   setMobileOpen]   = useState(false);
   const [unreadAlerts, setUnreadAlerts] = useState(0);
 
-  const { subscribed, subscribe, permissionState } = usePushNotifications(null, clubId, profile?.id);
+  // ── Push notifications coach ──────────────────────────────────────────────
+  // athleteId=null car Benoît est coach, pas athlète.
+  // userId=profile.id est GARANTI non-null ici (CoachShell monte après guard).
+  const { subscribed, subscribe, permissionState } = usePushNotifications(
+    null,        // athleteId
+    clubId,      // clubId
+    profile.id   // userId — ici c'est 1 (Benoît), jamais null
+  );
+
   // ── Badge alertes non lues ────────────────────────────────────────────────
   const fetchUnreadCount = useCallback(async () => {
     if (!clubId) return;
@@ -8494,25 +8701,17 @@ export default function App() {
     setMobileOpen(false);
   }, [activeView, fetchUnreadCount]);
 
-  // ── Guards auth ───────────────────────────────────────────────────────────
-  if (authLoading) return <AuthLoader />;
-  if (!user)       return <LoginPage />;
-
-  // ── Routeur rôle : athlète → vue dédiée ──────────────────────────────────
-  if (profile?.role === "athlete") return <AthleteApp />;
-
-  // ── App coach (head_coach ou coach) ───────────────────────────────────────
   const currentNav    = NAV_ITEMS.find((n) => n.id === activeView);
-  const coachName     = profile?.name ?? user.email ?? "Coach";
+  const coachName     = profile.name ?? user.email ?? "Coach";
   const coachInitials = initialsFromName(coachName);
-  const coachRole     = profile?.role === "head_coach" ? "Head coach" : "Coach";
+  const coachRole     = profile.role === "head_coach" ? "Head coach" : "Coach";
 
   return (
     <div
       className="flex h-screen overflow-hidden"
       style={{ background: "#F5F5F2", fontFamily: "'DM Sans', system-ui, sans-serif" }}
     >
-      {/* ── Overlay mobile ─────────────────────────────────────────────── */}
+      {/* ── Overlay mobile ───────────────────────────────────────────── */}
       {mobileOpen && (
         <div
           className="fixed inset-0 bg-black/30 z-20 md:hidden"
@@ -8520,9 +8719,9 @@ export default function App() {
         />
       )}
 
-      {/* ════════════════════════════════════════════════════════════════
+      {/* ══════════════════════════════════════════════════════════════
           SIDEBAR
-      ════════════════════════════════════════════════════════════════ */}
+      ══════════════════════════════════════════════════════════════ */}
       <aside
         className={[
           "flex flex-col bg-white border-r border-slate-100 z-30 transition-all duration-300 ease-in-out flex-shrink-0",
@@ -8638,9 +8837,9 @@ export default function App() {
         </div>
       </aside>
 
-      {/* ════════════════════════════════════════════════════════════════
+      {/* ══════════════════════════════════════════════════════════════
           ZONE PRINCIPALE
-      ════════════════════════════════════════════════════════════════ */}
+      ══════════════════════════════════════════════════════════════ */}
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
         <header className="h-16 bg-white border-b border-slate-100 flex items-center gap-4 px-6 flex-shrink-0">
           <button
@@ -8653,11 +8852,14 @@ export default function App() {
             {currentNav?.label ?? "AthleteOS"}
           </h1>
           <div className="flex-1" />
+
+          {/* Bouton push — profile.id est garanti ici */}
           <PushToggleButton
-  subscribed={subscribed}
-  onToggle={subscribe}
-  permissionState={permissionState}
-/>
+            subscribed={subscribed}
+            onToggle={subscribe}
+            permissionState={permissionState}
+          />
+
           <div className="hidden sm:flex items-center gap-1.5 text-[12px] text-slate-400 bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-100">
             <CalendarDays size={13} />
             <span>
@@ -8677,13 +8879,44 @@ export default function App() {
     </div>
   );
 }
+
+// ─── App (router racine) ──────────────────────────────────────────────────────
+// Rôle unique : vérifier auth, router vers le bon shell.
+// Aucun état UI, aucun hook métier ici.
+// ──────────────────────────────────────────────────────────────────────────────
+export default function App() {
+  const { user, profile, clubId, loading: authLoading, signOut } = useAuth();
+
+  if (authLoading) return <AuthLoader />;
+  if (!user)       return <LoginPage />;
+
+  // Athlète → vue dédiée
+  if (profile?.role === "athlete") return <AthleteApp />;
+
+  // Coach/head_coach → shell complet
+  // On attend que profile soit résolu (non-null) avant de monter CoachShell.
+  // Pendant ce bref instant (auth OK mais profil en cours de fetch),
+  // on affiche le loader plutôt que de monter avec profile=null.
+  if (!profile) return <AuthLoader />;
+
+  return (
+    <CoachShell
+      user={user}
+      profile={profile}
+      clubId={clubId}
+      signOut={signOut}
+    />
+  );
+}
 </file>
 
 <file path="src/AthleteApp.jsx">
 // ============================================================
-// AthleteOS — src/AthleteApp.jsx  (refonte complète)
-// Vue athlète : riche, visuelle, motivante
-// Navigation : Tableau de bord | Mon Planning | Mes Perfs | Messagerie
+// AthleteOS — src/AthleteApp.jsx
+// CORRECTIONS :
+// 1. usePushNotifications remonté AVANT les guards (règle des hooks React)
+//    athlete?.id est passé dynamiquement — null au départ, mis à jour après fetch
+// 2. PushToggleButton correctement placé dans header mobile + panneau notifs
 // ============================================================
 
 import { useState, useCallback, useEffect, useMemo, memo } from "react";
@@ -8705,8 +8938,8 @@ import {
   getAthleteMetricsForWeek,
   getStatusLabel,
 } from "./utils/chargeCalculations";
-import { notifyGoalAchieved } from "./utils/notifications";
 import { usePushNotifications, PushToggleButton } from "./hooks/usePushNotifications";
+import { notifyGoalAchieved, notifyCoachMessage } from "./utils/notifications";
 
 // ─── Nav ──────────────────────────────────────────────────────────────────────
 const NAV_ITEMS = [
@@ -8825,13 +9058,11 @@ function computeBadges({ athlete, weeklyCharge, sessions, competitions, myPerfor
   const myPerfs = myPerformances ?? [];
   const myRecords = Object.keys(athlete.records ?? {});
 
-  // ── Streak badges ──
   if (streak >= 1)  badges.push({ id:"streak1",  emoji:"🔥", label:"Premier feu",      desc:"1 semaine consécutive",      color:"#EF9F27", unlocked:true  });
   if (streak >= 3)  badges.push({ id:"streak3",  emoji:"🔥", label:"En feu",           desc:"3 semaines consécutives",    color:"#EF9F27", unlocked:true  });
   if (streak >= 5)  badges.push({ id:"streak5",  emoji:"⚡", label:"Inarrêtable",      desc:"5 semaines consécutives",    color:"#E24B4A", unlocked:true  });
   if (streak >= 10) badges.push({ id:"streak10", emoji:"💥", label:"Légende",          desc:"10 semaines consécutives",   color:"#7C3AED", unlocked:true  });
 
-  // ── Séances validées ──
   const totalDone = allSessions.reduce((acc,s) =>
     acc + (s.validations?.filter(v=>v.athleteId===athlete.id&&v.status==="done").length??0), 0);
   if (totalDone >= 1)   badges.push({ id:"s1",   emoji:"✅", label:"Premier pas",      desc:"1 séance réalisée",          color:"#1D9E75", unlocked:true  });
@@ -8840,11 +9071,9 @@ function computeBadges({ athlete, weeklyCharge, sessions, competitions, myPerfor
   if (totalDone >= 50)  badges.push({ id:"s50",  emoji:"🚀", label:"Acharné",          desc:"50 séances réalisées",       color:"#7C3AED", unlocked:true  });
   if (totalDone >= 100) badges.push({ id:"s100", emoji:"👑", label:"Élite",            desc:"100 séances réalisées",      color:"#EF9F27", unlocked:true  });
 
-  // ── Compétitions ──
   if (myComps.length >= 1) badges.push({ id:"c1",  emoji:"🏟️", label:"Compétiteur",   desc:"1ère compétition",           color:"#E24B4A", unlocked:true  });
   if (myComps.length >= 5) badges.push({ id:"c5",  emoji:"🎯", label:"Guerrier",       desc:"5 compétitions au compteur", color:"#E24B4A", unlocked:true  });
 
-  // ── Records battus ──
   const prBeat = myPerfs.filter(p => {
     const rec = athlete.records?.[p.discipline];
     if (!rec) return false;
@@ -8856,17 +9085,14 @@ function computeBadges({ athlete, weeklyCharge, sessions, competitions, myPerfor
   if (prBeat >= 1) badges.push({ id:"pr1", emoji:"🏆", label:"Record battu",          desc:"1 record personnel amélioré",color:"#EF9F27", unlocked:true  });
   if (prBeat >= 3) badges.push({ id:"pr3", emoji:"🌟", label:"Recordman",             desc:"3 records améliorés",        color:"#EF9F27", unlocked:true  });
 
-  // ── Disciplines ──
   const discCount = [...new Set([...myRecords,...myPerfs.map(p=>p.discipline)])].length;
   if (discCount >= 1) badges.push({ id:"d1",  emoji:"🎪", label:"Spécialiste",        desc:"1 discipline maîtrisée",     color:"#0284C7", unlocked:true  });
   if (discCount >= 3) badges.push({ id:"d3",  emoji:"🎭", label:"Polyvalent",         desc:"3 disciplines pratiquées",   color:"#7C3AED", unlocked:true  });
   if (discCount >= 5) badges.push({ id:"d5",  emoji:"🦁", label:"Décathlonien",       desc:"5+ disciplines pratiquées",  color:"#E24B4A", unlocked:true  });
 
-  // ── Performances ajoutées ──
   if (myPerfs.length >= 5)  badges.push({ id:"p5",  emoji:"📊", label:"Analytique",   desc:"5 performances enregistrées",color:"#1D9E75", unlocked:true  });
   if (myPerfs.length >= 20) badges.push({ id:"p20", emoji:"📈", label:"Data driven",  desc:"20 performances suivies",    color:"#378ADD", unlocked:true  });
 
-  // ── ACWR optimal ──
   const myCharge = weeklyCharge.filter(w=>w.athleteId===athlete.id);
   const optimalWeeks = myCharge.filter(w => {
     const m = getAthleteMetricsForWeek(athlete.id, weeklyCharge, w.week);
@@ -8875,7 +9101,6 @@ function computeBadges({ athlete, weeklyCharge, sessions, competitions, myPerfor
   if (optimalWeeks >= 3) badges.push({ id:"acwr3", emoji:"⚖️", label:"Équilibré",     desc:"3 semaines en zone optimale",color:"#1D9E75", unlocked:true  });
   if (optimalWeeks >= 8) badges.push({ id:"acwr8", emoji:"🎯", label:"Maestro",        desc:"8 semaines en zone optimale",color:"#7C3AED", unlocked:true  });
 
-  // ── Badges verrouillés (pour montrer la progression) ──
   if (streak < 3)    badges.push({ id:"l_s3",   emoji:"🔒", label:"En feu",           desc:`${3-streak} semaine${3-streak>1?"s":""} de plus`,  color:"#cbd5e1", unlocked:false });
   if (totalDone < 10) badges.push({ id:"l_s10",  emoji:"🔒", label:"Régulier",        desc:`${10-totalDone} séance${10-totalDone>1?"s":""} de plus`, color:"#cbd5e1", unlocked:false });
   if (myComps.length < 1) badges.push({ id:"l_c1", emoji:"🔒", label:"Compétiteur",   desc:"Participe à ta 1ère compét.", color:"#cbd5e1", unlocked:false });
@@ -8883,7 +9108,6 @@ function computeBadges({ athlete, weeklyCharge, sessions, competitions, myPerfor
   return badges;
 }
 
-// Composant badge individuel
 function BadgeItem({ badge }) {
   return (
     <div className={["flex flex-col items-center gap-1.5 p-3 rounded-2xl border text-center transition-all",
@@ -8902,7 +9126,7 @@ function BadgeItem({ badge }) {
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
-// VUE 1 — TABLEAU DE BORD (Bloc 2+3 — charge enrichie + badges dopamine)
+// VUE 1 — TABLEAU DE BORD
 // ══════════════════════════════════════════════════════════════════════════════
 function Dashboard({ athlete, weeklyCharge, sessions, competitions, lastMessages, coachName, myPerformances, onNavigate }) {
   const today = new Date();
@@ -8914,25 +9138,19 @@ function Dashboard({ athlete, weeklyCharge, sessions, competitions, lastMessages
 
   const status = getStatusLabel(metrics.readiness, metrics.fatigue, metrics.acwr);
 
-  // Prochaine compétition
   const nextComp = useMemo(() =>
     competitions
       .filter((c) => c.athleteIds.includes(athlete.id) && new Date(c.date) >= today)
       .sort((a,b) => new Date(a.date)-new Date(b.date))[0] ?? null,
   [competitions, athlete.id]);
 
-  // Séances de la semaine
   const weekSessions = useMemo(() =>
     sessions.filter((s) => s.week === currentWeek).sort((a,b) => a.time.localeCompare(b.time)),
   [sessions, currentWeek]);
 
-  // Records principaux
   const topRecords = Object.entries(athlete.records ?? {}).slice(0, 4);
-
-  // Blessures actives
   const activeInjuries = (athlete.injuries ?? []).filter((i) => i.status !== "résolu");
 
-  // Historique charge des 8 dernières semaines pour graphique
   const chargeHistory = useMemo(() => {
     const myCharge = weeklyCharge.filter(w => w.athleteId === athlete.id);
     if (!myCharge.length) return [];
@@ -8944,7 +9162,6 @@ function Dashboard({ athlete, weeklyCharge, sessions, competitions, lastMessages
     }));
   }, [weeklyCharge, athlete.id]);
 
-  // Tendance charge (cette semaine vs précédente)
   const chargeTrend = useMemo(() => {
     const myCharge = weeklyCharge.filter(w => w.athleteId === athlete.id);
     const curr = myCharge.find(w => w.week === currentWeek)?.rawLoad ?? 0;
@@ -8952,7 +9169,6 @@ function Dashboard({ athlete, weeklyCharge, sessions, competitions, lastMessages
     return prev > 0 ? Math.round(((curr - prev) / prev) * 100) : null;
   }, [weeklyCharge, athlete.id, currentWeek]);
 
-  // Streak entraînements (semaines consécutives avec au moins 1 séance validée)
   const streak = useMemo(() => {
     let s = 0;
     for (let w = currentWeek; w >= currentWeek - 20; w--) {
@@ -8965,7 +9181,6 @@ function Dashboard({ athlete, weeklyCharge, sessions, competitions, lastMessages
 
   const hasCharge = weeklyCharge.some(w => w.athleteId === athlete.id);
 
-  // Badges
   const badges = useMemo(() => computeBadges({
     athlete, weeklyCharge, sessions, competitions, myPerformances, streak, currentWeek,
   }), [athlete, weeklyCharge, sessions, competitions, myPerformances, streak, currentWeek]);
@@ -8973,7 +9188,6 @@ function Dashboard({ athlete, weeklyCharge, sessions, competitions, lastMessages
   const unlockedBadges = badges.filter(b => b.unlocked);
   const lockedBadges   = badges.filter(b => !b.unlocked);
 
-  // Notification nouveau PR (badge "pop" si perf récente = PR)
   const latestPR = useMemo(() => {
     const sevenDaysAgo = new Date(); sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
     return (myPerformances ?? []).find(p => {
@@ -9019,7 +9233,6 @@ function Dashboard({ athlete, weeklyCharge, sessions, competitions, lastMessages
           </div>
         </div>
 
-        {/* KPIs hero */}
         <div className="relative mt-5 grid grid-cols-4 gap-3">
           {[
             { label: "Readiness", value: metrics.readiness, hint: "/100" },
@@ -9040,7 +9253,6 @@ function Dashboard({ athlete, weeklyCharge, sessions, competitions, lastMessages
         {/* ── Colonne gauche ── */}
         <div className="lg:col-span-2 space-y-5">
 
-          {/* Charge hebdomadaire graphique */}
           {hasCharge && chargeHistory.length > 0 && (
             <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5">
               <div className="flex items-center justify-between mb-4">
@@ -9058,8 +9270,6 @@ function Dashboard({ athlete, weeklyCharge, sessions, competitions, lastMessages
                   </div>
                 )}
               </div>
-
-              {/* Barres manuelles pour plus de contrôle visuel */}
               <div className="flex items-end gap-1.5 h-[100px]">
                 {chargeHistory.map((w, i) => {
                   const maxCharge = Math.max(...chargeHistory.map(x => x.charge), 1);
@@ -9081,8 +9291,6 @@ function Dashboard({ athlete, weeklyCharge, sessions, competitions, lastMessages
                   );
                 })}
               </div>
-
-              {/* Légende ACWR + zone */}
               <div className="mt-4 grid grid-cols-3 gap-3">
                 {[
                   { label: "ACWR", value: metrics.acwr.toFixed(2), color: acwrColor(metrics.acwr), sub: "0.8–1.3 optimal" },
@@ -9096,8 +9304,6 @@ function Dashboard({ athlete, weeklyCharge, sessions, competitions, lastMessages
                   </div>
                 ))}
               </div>
-
-              {/* Jauge ACWR visuelle */}
               <div className="mt-4">
                 <div className="flex items-center justify-between text-[10px] text-slate-400 mb-1">
                   <span>Sous-charge</span>
@@ -9115,7 +9321,6 @@ function Dashboard({ athlete, weeklyCharge, sessions, competitions, lastMessages
             </div>
           )}
 
-          {/* Scores de forme détaillés */}
           {hasCharge && (
             <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5">
               <h3 className="text-[14px] font-bold text-slate-800 mb-4">État de forme détaillé</h3>
@@ -9145,7 +9350,6 @@ function Dashboard({ athlete, weeklyCharge, sessions, competitions, lastMessages
             </div>
           )}
 
-          {/* Séances de la semaine */}
           <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
             <div className="px-5 py-4 border-b border-slate-50 flex items-center justify-between">
               <div>
@@ -9190,7 +9394,6 @@ function Dashboard({ athlete, weeklyCharge, sessions, competitions, lastMessages
             )}
           </div>
 
-          {/* Notification PR récent */}
           {latestPR && (
             <div className="rounded-2xl p-4 text-white relative overflow-hidden"
               style={{background:"linear-gradient(135deg, #EF9F27 0%, #f59e0b 100%)"}}>
@@ -9209,7 +9412,6 @@ function Dashboard({ athlete, weeklyCharge, sessions, competitions, lastMessages
             </div>
           )}
 
-          {/* Records */}
           {topRecords.length > 0 && (
             <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
               <div className="px-5 py-4 border-b border-slate-50 flex items-center justify-between">
@@ -9236,7 +9438,6 @@ function Dashboard({ athlete, weeklyCharge, sessions, competitions, lastMessages
             </div>
           )}
 
-          {/* Badges & Achievements */}
           <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5">
             <div className="flex items-center justify-between mb-4">
               <div>
@@ -9250,7 +9451,6 @@ function Dashboard({ athlete, weeklyCharge, sessions, competitions, lastMessages
                 <span className="text-[13px] font-black text-amber-600">{unlockedBadges.length}</span>
               </div>
             </div>
-
             {unlockedBadges.length === 0 ? (
               <div className="text-center py-6 text-slate-300">
                 <p className="text-[12px]">Commence à t'entraîner pour débloquer tes premiers badges !</p>
@@ -9275,8 +9475,6 @@ function Dashboard({ athlete, weeklyCharge, sessions, competitions, lastMessages
 
         {/* ── Colonne droite ── */}
         <div className="space-y-5">
-
-          {/* Prochaine compétition */}
           {nextComp && (
             <div className="rounded-2xl p-5 text-white"
               style={{ background: "linear-gradient(135deg, #E24B4A 0%, #c73a39 100%)" }}>
@@ -9306,7 +9504,6 @@ function Dashboard({ athlete, weeklyCharge, sessions, competitions, lastMessages
             </div>
           )}
 
-          {/* Streak */}
           {streak > 0 && (
             <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5 text-center">
               <p className="text-[40px] font-black text-amber-500">🔥 {streak}</p>
@@ -9315,7 +9512,6 @@ function Dashboard({ athlete, weeklyCharge, sessions, competitions, lastMessages
             </div>
           )}
 
-          {/* Blessures actives */}
           {activeInjuries.length > 0 && (
             <div className="bg-amber-50 border border-amber-100 rounded-2xl p-5">
               <div className="flex items-center gap-2 mb-3">
@@ -9330,7 +9526,6 @@ function Dashboard({ athlete, weeklyCharge, sessions, competitions, lastMessages
                       <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700">{inj.intensity}/10</span>
                     </div>
                     <p className="text-[11px] text-slate-400">📍 {inj.location}</p>
-                    {/* Barre d'intensité */}
                     <div className="mt-1.5 h-1.5 bg-slate-100 rounded-full overflow-hidden">
                       <div className="h-full rounded-full" style={{
                         width:`${(inj.intensity/10)*100}%`,
@@ -9343,7 +9538,6 @@ function Dashboard({ athlete, weeklyCharge, sessions, competitions, lastMessages
             </div>
           )}
 
-          {/* Dernier message coach */}
           {lastMessages.length > 0 && (
             <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5">
               <div className="flex items-center justify-between mb-3">
@@ -9361,7 +9555,6 @@ function Dashboard({ athlete, weeklyCharge, sessions, competitions, lastMessages
             </div>
           )}
 
-          {/* Pas de données charge */}
           {!hasCharge && (
             <div className="bg-slate-50 rounded-2xl border border-dashed border-slate-200 p-6 text-center">
               <BarChart2 size={28} className="mx-auto mb-2 text-slate-300" strokeWidth={1.5}/>
@@ -9376,11 +9569,10 @@ function Dashboard({ athlete, weeklyCharge, sessions, competitions, lastMessages
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
-// VUE 2 — MON PLANNING (calendrier mensuel/semaine comme le coach)
+// VUE 2 — MON PLANNING
 // ══════════════════════════════════════════════════════════════════════════════
 
-// Modal création séance athlète
-const CreateSessionModal = memo(({ athlete, allAthletes, clubId, createdBy, onClose, onCreated }) => {
+ const CreateSessionModal = memo(({ athlete, allAthletes, clubId, createdBy, coachUserId, onClose, onCreated }) => {
   const inputCls = "w-full border border-slate-200 rounded-lg px-3 py-2 text-[13px] text-slate-700 focus:outline-none focus:ring-2 focus:ring-emerald-400 bg-white";
   const labelCls = "block text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1";
   const today = new Date().toISOString().split("T")[0];
@@ -9422,6 +9614,7 @@ const CreateSessionModal = memo(({ athlete, allAthletes, clubId, createdBy, onCl
         description:`${athlete.name} a planifié "${form.title}" (${catLabel}) le ${new Date(form.sessionDate).toLocaleDateString("fr-BE",{day:"numeric",month:"long"})}.`,
         severity:"légère", is_read:false,
       });
+      if (coachUserId) notifyCoachMessage(coachUserId, athlete.name, `${athlete.name} a planifié "${form.title}" le ${new Date(form.sessionDate).toLocaleDateString("fr-BE",{day:"numeric",month:"long"})}`).catch(console.warn);
       onCreated(); onClose();
     } catch(e) { setErr(e.message??"Erreur"); setSaving(false); }
   };
@@ -9477,7 +9670,6 @@ const CreateSessionModal = memo(({ athlete, allAthletes, clubId, createdBy, onCl
   );
 });
 
-// Modal détail séance (athlète)
 const SessionDetailModal = memo(({ session, athlete, onClose, onSetStatus, onSetRpe, onSetFeeling, onSetComment }) => {
   const c = colorsFor(session.category);
   const val = session.validations?.find(v=>v.athleteId===athlete.id);
@@ -9521,7 +9713,6 @@ const SessionDetailModal = memo(({ session, athlete, onClose, onSetStatus, onSet
             </a>
           )}
 
-          {/* Présence */}
           <div>
             <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2">Présence</p>
             <div className="flex gap-2">
@@ -9537,7 +9728,6 @@ const SessionDetailModal = memo(({ session, athlete, onClose, onSetStatus, onSet
             </div>
           </div>
 
-          {/* RPE */}
           {val?.status&&val.status!=="none"&&(
             <div>
               <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2">
@@ -9556,7 +9746,6 @@ const SessionDetailModal = memo(({ session, athlete, onClose, onSetStatus, onSet
             </div>
           )}
 
-          {/* Feeling */}
           {(val?.status==="done"||val?.status==="partial")&&(
             <div>
               <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2">
@@ -9572,7 +9761,6 @@ const SessionDetailModal = memo(({ session, athlete, onClose, onSetStatus, onSet
             </div>
           )}
 
-          {/* Commentaire */}
           {(val?.status==="done"||val?.status==="partial")&&(
             <div>
               <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2">Commentaire</p>
@@ -9593,7 +9781,7 @@ const SessionDetailModal = memo(({ session, athlete, onClose, onSetStatus, onSet
   );
 });
 
-function MonPlanning({ athlete, sessions, allAthletes, clubId, createdBy, onRpeChange, onStatusChange, onFeelingChange, onCommentChange, onRefresh }) {
+function MonPlanning({ athlete, sessions, allAthletes, clubId, createdBy, coachUserId, onRpeChange, onStatusChange, onFeelingChange, onCommentChange, onRefresh }) {
   const today    = new Date();
   const isMobile = typeof window !== "undefined" && window.innerWidth < 768;
 
@@ -9651,14 +9839,12 @@ function MonPlanning({ athlete, sessions, allAthletes, clubId, createdBy, onRpeC
     if (viewMode === "month") return `${MONTHS_FR[viewMonth]} ${viewYear}`;
     const mon = weekDays[0], sun = weekDays[6];
     if (mon.getMonth() === sun.getMonth())
-      return `${mon.getDate()} \u2013 ${sun.toLocaleDateString("fr-BE", { day: "numeric", month: "long" })}`;
-    return `${mon.toLocaleDateString("fr-BE", { day: "numeric", month: "short" })} \u2013 ${sun.toLocaleDateString("fr-BE", { day: "numeric", month: "short" })}`;
+      return `${mon.getDate()} – ${sun.toLocaleDateString("fr-BE", { day: "numeric", month: "long" })}`;
+    return `${mon.toLocaleDateString("fr-BE", { day: "numeric", month: "short" })} – ${sun.toLocaleDateString("fr-BE", { day: "numeric", month: "short" })}`;
   }, [viewMode, viewMonth, viewYear, weekDays]);
 
   return (
     <div className="flex flex-col h-full" style={{ background: "#F5F5F2" }}>
-
-      {/* Header */}
       <div className="bg-white border-b border-slate-100 px-3 py-2.5 flex items-center justify-between gap-2 flex-shrink-0">
         <div className="flex items-center gap-1">
           <button onClick={viewMode === "month" ? prevMonth : prevWeek}
@@ -9690,8 +9876,8 @@ function MonPlanning({ athlete, sessions, allAthletes, clubId, createdBy, onRpeC
           {groupedByDate.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-64 text-slate-300 gap-3 p-6">
               <CalendarDays size={36} strokeWidth={1.5}/>
-              <p className="text-[14px] font-semibold text-center">Aucune s\xe9ance planifi\xe9e</p>
-              <button onClick={() => setShowCreate(true)} className="px-4 py-2 rounded-xl text-white text-[12px] font-semibold" style={{ background: "#1D9E75" }}>Planifier une s\xe9ance</button>
+              <p className="text-[14px] font-semibold text-center">Aucune séance planifiée</p>
+              <button onClick={() => setShowCreate(true)} className="px-4 py-2 rounded-xl text-white text-[12px] font-semibold" style={{ background: "#1D9E75" }}>Planifier une séance</button>
             </div>
           ) : (
             <div className="p-3 space-y-4">
@@ -9709,9 +9895,9 @@ function MonPlanning({ athlete, sessions, allAthletes, clubId, createdBy, onRpeC
                       </div>
                       <div>
                         <p className={["text-[12px] font-bold", isToday?"text-emerald-600":isPast?"text-slate-400":"text-slate-700"].join(" ")}>
-                          {isToday ? "Aujourd\u2019hui" : dateObj.toLocaleDateString("fr-BE",{weekday:"long",day:"numeric",month:"long"})}
+                          {isToday ? "Aujourd'hui" : dateObj.toLocaleDateString("fr-BE",{weekday:"long",day:"numeric",month:"long"})}
                         </p>
-                        <p className="text-[10px] text-slate-400">{ds.length} s\xe9ance{ds.length>1?"s":""}</p>
+                        <p className="text-[10px] text-slate-400">{ds.length} séance{ds.length>1?"s":""}</p>
                       </div>
                     </div>
                     <div className="space-y-2 ml-3 pl-8 border-l-2 border-slate-100">
@@ -9730,11 +9916,11 @@ function MonPlanning({ athlete, sessions, allAthletes, clubId, createdBy, onRpeC
                                 <span className="text-[10px] font-black uppercase tracking-wider" style={{ color: c.text }}>
                                   {CATEGORIES.find(x => x.id === s.category)?.label ?? s.type}
                                 </span>
-                                {s.pdfUrl && <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-blue-100 text-blue-600">\ud83d\udcc4 PDF</span>}
+                                {s.pdfUrl && <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-blue-100 text-blue-600">📄 PDF</span>}
                               </div>
                               <span className={["text-[10px] font-bold px-2 py-0.5 rounded-full",
                                 st==="done"?"bg-emerald-100 text-emerald-700":st==="partial"?"bg-amber-100 text-amber-700":st==="none"?"bg-red-100 text-red-700":"bg-white/60 text-slate-500"].join(" ")}>
-                                {st==="done"?"\u2705 Faite":st==="partial"?"\ud83d\udfe1 Partielle":st==="none"?"\u274c Absent":"\ud83d\udd35 Pr\xe9vue"}
+                                {st==="done"?"✅ Faite":st==="partial"?"🟡 Partielle":st==="none"?"❌ Absent":"🔵 Prévue"}
                               </span>
                             </div>
                             <div className="px-4 py-3">
@@ -9745,9 +9931,9 @@ function MonPlanning({ athlete, sessions, allAthletes, clubId, createdBy, onRpeC
                                 {val?.rpe != null && <span className="font-semibold text-slate-600">RPE {val.rpe}/10</span>}
                               </div>
                               {s.instructions && (
-                                <p className="text-[11px] text-amber-700 bg-amber-50 rounded-lg px-2.5 py-1.5 mt-2 line-clamp-2">\ud83d\udcac {s.instructions}</p>
+                                <p className="text-[11px] text-amber-700 bg-amber-50 rounded-lg px-2.5 py-1.5 mt-2 line-clamp-2">💬 {s.instructions}</p>
                               )}
-                              {rpeNeeded && <p className="text-[11px] font-bold text-amber-600 mt-2">\u23f3 RPE en attente \u00b7 Valide ta s\xe9ance</p>}
+                              {rpeNeeded && <p className="text-[11px] font-bold text-amber-600 mt-2">⏳ RPE en attente · Valide ta séance</p>}
                             </div>
                           </div>
                         );
@@ -9825,13 +10011,13 @@ function MonPlanning({ athlete, sessions, allAthletes, clubId, createdBy, onRpeC
                         <span className="text-[10px] font-bold uppercase" style={{ color: c.text }}>{CATEGORIES.find(x=>x.id===s.category)?.label??s.type}</span>
                         <span className={["text-[9px] font-bold px-1.5 py-0.5 rounded-full",
                           st==="done"?"bg-emerald-100 text-emerald-700":st==="partial"?"bg-amber-100 text-amber-700":st==="none"?"bg-red-100 text-red-700":"bg-white/60 text-slate-400"].join(" ")}>
-                          {st==="done"?"\u2705":st==="partial"?"\ud83d\udfe1":st==="none"?"\u274c":"\ud83d\udd35"}
+                          {st==="done"?"✅":st==="partial"?"🟡":st==="none"?"❌":"🔵"}
                         </span>
                       </div>
                       <div className="px-4 py-3">
                         <p className="text-[13px] font-bold text-slate-800">{s.title}</p>
-                        <p className="text-[11px] text-slate-400 mt-0.5">{s.time}{s.durationMinutes?` \u00b7 ${s.durationMinutes} min`:""}{ val?.rpe!=null?` \u00b7 RPE ${val.rpe}`:""}</p>
-                        {s.pdfUrl && <p className="text-[10px] text-blue-500 mt-1">\ud83d\udcc4 PDF joint</p>}
+                        <p className="text-[11px] text-slate-400 mt-0.5">{s.time}{s.durationMinutes?` · ${s.durationMinutes} min`:""}{ val?.rpe!=null?` · RPE ${val.rpe}`:""}</p>
+                        {s.pdfUrl && <p className="text-[10px] text-blue-500 mt-1">📄 PDF joint</p>}
                       </div>
                     </div>
                   );
@@ -9845,7 +10031,6 @@ function MonPlanning({ athlete, sessions, allAthletes, clubId, createdBy, onRpeC
       {/* ===== VUE SEMAINE ===== */}
       {viewMode === "week" && (
         <div className="flex-1 overflow-y-auto">
-          {/* Mobile : strip horizontal */}
           <div className="md:hidden">
             <div className="flex overflow-x-auto gap-2 px-3 py-2.5 bg-white border-b border-slate-100 scrollbar-hide">
               {weekDays.map((date, i) => {
@@ -9885,7 +10070,7 @@ function MonPlanning({ athlete, sessions, allAthletes, clubId, createdBy, onRpeC
                         <span className="text-[10px] font-bold uppercase" style={{ color: c.text }}>{CATEGORIES.find(x=>x.id===s.category)?.label??s.type}</span>
                         <span className={["text-[9px] font-bold px-1.5 py-0.5 rounded-full",
                           st==="done"?"bg-emerald-100 text-emerald-700":st==="partial"?"bg-amber-100 text-amber-700":st==="none"?"bg-red-100 text-red-700":"bg-white/60 text-slate-400"].join(" ")}>
-                          {st==="done"?"\u2705 Faite":st==="partial"?"\ud83d\udfe1":st==="none"?"\u274c":"\ud83d\udd35 Pr\xe9vue"}
+                          {st==="done"?"✅ Faite":st==="partial"?"🟡":st==="none"?"❌":"🔵 Prévue"}
                         </span>
                       </div>
                       <div className="px-4 py-3">
@@ -9894,10 +10079,10 @@ function MonPlanning({ athlete, sessions, allAthletes, clubId, createdBy, onRpeC
                           <span className="flex items-center gap-1"><Clock size={11}/> {s.time}</span>
                           {s.durationMinutes && <span>{s.durationMinutes} min</span>}
                         </div>
-                        {s.instructions && <p className="text-[11px] text-amber-700 bg-amber-50 rounded-lg px-2.5 py-1.5 mt-2 line-clamp-2">\ud83d\udcac {s.instructions}</p>}
+                        {s.instructions && <p className="text-[11px] text-amber-700 bg-amber-50 rounded-lg px-2.5 py-1.5 mt-2 line-clamp-2">💬 {s.instructions}</p>}
                         {s.pdfUrl && (
                           <a href={s.pdfUrl} target="_blank" rel="noopener noreferrer" onClick={e=>e.stopPropagation()}
-                            className="text-[11px] text-blue-600 font-semibold mt-2 flex items-center gap-1 w-fit">\ud83d\udcc4 Voir le PDF</a>
+                            className="text-[11px] text-blue-600 font-semibold mt-2 flex items-center gap-1 w-fit">📄 Voir le PDF</a>
                         )}
                         {val?.rpe != null && <p className="text-[11px] font-semibold text-slate-500 mt-1">RPE {val.rpe}/10</p>}
                       </div>
@@ -9907,7 +10092,6 @@ function MonPlanning({ athlete, sessions, allAthletes, clubId, createdBy, onRpeC
               })()}
             </div>
           </div>
-          {/* Desktop : grille 7 colonnes */}
           <div className="hidden md:block p-4">
             <div className="grid grid-cols-7 gap-2">
               {weekDays.map((date, i) => {
@@ -9932,7 +10116,7 @@ function MonPlanning({ athlete, sessions, allAthletes, clubId, createdBy, onRpeC
                               <p className="text-[11px] font-semibold text-slate-800 truncate">{s.title}</p>
                               <p className="text-[10px] text-slate-400">{s.time}</p>
                               <span className={["text-[9px] font-bold px-1 py-0.5 rounded-full mt-1 inline-block",st==="done"?"bg-emerald-50 text-emerald-700":st==="partial"?"bg-amber-50 text-amber-700":st==="none"?"bg-red-50 text-red-700":"bg-slate-100 text-slate-400"].join(" ")}>
-                                {st==="done"?"\u2705":st==="partial"?"\ud83d\udfe1":st==="none"?"\u274c":"\ud83d\udd35"}
+                                {st==="done"?"✅":st==="partial"?"🟡":st==="none"?"❌":"🔵"}
                               </span>
                             </div>
                           </div>
@@ -9954,6 +10138,7 @@ function MonPlanning({ athlete, sessions, allAthletes, clubId, createdBy, onRpeC
       )}
       {showCreate && (
         <CreateSessionModal athlete={athlete} allAthletes={allAthletes} clubId={clubId} createdBy={createdBy}
+          coachUserId={coachUserId}
           onClose={() => setShowCreate(false)} onCreated={onRefresh}/>
       )}
     </div>
@@ -9961,30 +10146,29 @@ function MonPlanning({ athlete, sessions, allAthletes, clubId, createdBy, onRpeC
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
-// VUE 3 — MES PERFORMANCES (Bloc 1 — athlète autonome)
+// VUE 3 — MES PERFORMANCES
 // ══════════════════════════════════════════════════════════════════════════════
 
-// Disciplines prédéfinies + types
 const DISC_PRESETS = [
-  { name: "100m",        type: "sprint",  unit: "s",   hib: false },
-  { name: "200m",        type: "sprint",  unit: "s",   hib: false },
-  { name: "400m",        type: "sprint",  unit: "s",   hib: false },
+  { name: "100m",        type: "sprint",    unit: "s",     hib: false },
+  { name: "200m",        type: "sprint",    unit: "s",     hib: false },
+  { name: "400m",        type: "sprint",    unit: "s",     hib: false },
   { name: "800m",        type: "endurance", unit: "min:s", hib: false },
   { name: "1500m",       type: "endurance", unit: "min:s", hib: false },
-  { name: "60m haies",   type: "sprint",  unit: "s",   hib: false },
-  { name: "100m haies",  type: "sprint",  unit: "s",   hib: false },
-  { name: "110m haies",  type: "sprint",  unit: "s",   hib: false },
-  { name: "400m haies",  type: "sprint",  unit: "s",   hib: false },
-  { name: "Longueur",    type: "saut",    unit: "m",   hib: true  },
-  { name: "Triple saut", type: "saut",    unit: "m",   hib: true  },
-  { name: "Hauteur",     type: "saut",    unit: "m",   hib: true  },
-  { name: "Perche",      type: "saut",    unit: "m",   hib: true  },
-  { name: "Poids",       type: "lancer",  unit: "m",   hib: true  },
-  { name: "Disque",      type: "lancer",  unit: "m",   hib: true  },
-  { name: "Javelot",     type: "lancer",  unit: "m",   hib: true  },
-  { name: "Marteau",     type: "lancer",  unit: "m",   hib: true  },
-  { name: "Décathlon",   type: "combine", unit: "pts", hib: true  },
-  { name: "Heptathlon",  type: "combine", unit: "pts", hib: true  },
+  { name: "60m haies",   type: "sprint",    unit: "s",     hib: false },
+  { name: "100m haies",  type: "sprint",    unit: "s",     hib: false },
+  { name: "110m haies",  type: "sprint",    unit: "s",     hib: false },
+  { name: "400m haies",  type: "sprint",    unit: "s",     hib: false },
+  { name: "Longueur",    type: "saut",      unit: "m",     hib: true  },
+  { name: "Triple saut", type: "saut",      unit: "m",     hib: true  },
+  { name: "Hauteur",     type: "saut",      unit: "m",     hib: true  },
+  { name: "Perche",      type: "saut",      unit: "m",     hib: true  },
+  { name: "Poids",       type: "lancer",    unit: "m",     hib: true  },
+  { name: "Disque",      type: "lancer",    unit: "m",     hib: true  },
+  { name: "Javelot",     type: "lancer",    unit: "m",     hib: true  },
+  { name: "Marteau",     type: "lancer",    unit: "m",     hib: true  },
+  { name: "Décathlon",   type: "combine",   unit: "pts",   hib: true  },
+  { name: "Heptathlon",  type: "combine",   unit: "pts",   hib: true  },
 ];
 
 const DISC_TYPE_COLORS = {
@@ -10002,7 +10186,6 @@ function getDiscHib(discName) {
   return DISC_PRESETS.find(d => d.name === discName)?.hib ?? false;
 }
 
-// Modal ajout performance
 const AddPerfModal = memo(({ athlete, clubId, onClose, onAdded }) => {
   const inputCls = "w-full border border-slate-200 rounded-lg px-3 py-2 text-[13px] text-slate-700 focus:outline-none focus:ring-2 focus:ring-emerald-400 bg-white";
   const labelCls = "block text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1";
@@ -10015,15 +10198,15 @@ const AddPerfModal = memo(({ athlete, clubId, onClose, onAdded }) => {
     value: "",
     performanceDate: today,
     context: "",
-    source: "training", // "training" | "competition"
+    source: "training",
   });
   const [saving, setSaving] = useState(false);
   const [err,    setErr]    = useState(null);
   const set = (k,v) => setForm(f=>({...f,[k]:v}));
 
-  const finalDisc     = form.useCustom ? form.customDisc : form.discipline;
-  const discType      = getDiscType(finalDisc);
-  const discColors    = DISC_TYPE_COLORS[discType] ?? DISC_TYPE_COLORS.sprint;
+  const finalDisc  = form.useCustom ? form.customDisc : form.discipline;
+  const discType   = getDiscType(finalDisc);
+  const discColors = DISC_TYPE_COLORS[discType] ?? DISC_TYPE_COLORS.sprint;
 
   const handleSubmit = async () => {
     if (!finalDisc.trim() || !form.value.trim() || !form.performanceDate) return;
@@ -10041,7 +10224,6 @@ const AddPerfModal = memo(({ athlete, clubId, onClose, onAdded }) => {
       });
       if (e) throw e;
 
-      // Mise à jour auto du record si meilleur
       const hib = getDiscHib(finalDisc);
       const { data: existingRec } = await supabase.from("records")
         .select("*").eq("athlete_id", athlete.id).eq("discipline", finalDisc).single();
@@ -10082,11 +10264,8 @@ const AddPerfModal = memo(({ athlete, clubId, onClose, onAdded }) => {
           </div>
           <button onClick={onClose} disabled={saving} className="p-1.5 rounded-lg hover:bg-black/10"><X size={18} style={{color:discColors.text}}/></button>
         </div>
-
         <div className="flex-1 overflow-y-auto px-6 py-5 space-y-4">
           {err&&<div className="bg-red-50 border border-red-100 rounded-lg px-3 py-2.5 text-[12px] text-red-700">{err}</div>}
-
-          {/* Discipline */}
           <div>
             <label className={labelCls}>Discipline *</label>
             <div className="flex items-center gap-2 mb-2">
@@ -10108,8 +10287,6 @@ const AddPerfModal = memo(({ athlete, clubId, onClose, onAdded }) => {
               </select>
             )}
           </div>
-
-          {/* Type badge */}
           <div className="flex items-center gap-2">
             <span className="text-[11px] font-bold px-2.5 py-1 rounded-full" style={{background:discColors.bg,color:discColors.text}}>
               {discType === "sprint" ? "⚡ Sprint/Haies" :
@@ -10118,8 +10295,6 @@ const AddPerfModal = memo(({ athlete, clubId, onClose, onAdded }) => {
                discType === "lancer" ? "🎯 Lancer" : "🏆 Combiné"}
             </span>
           </div>
-
-          {/* Résultat */}
           <div>
             <label className={labelCls}>Résultat *</label>
             <input className={inputCls}
@@ -10131,15 +10306,11 @@ const AddPerfModal = memo(({ athlete, clubId, onClose, onAdded }) => {
               }
               value={form.value} onChange={e=>set("value",e.target.value)}/>
           </div>
-
-          {/* Date */}
           <div>
             <label className={labelCls}>Date *</label>
             <input type="date" className={inputCls} value={form.performanceDate}
               onChange={e=>set("performanceDate",e.target.value)}/>
           </div>
-
-          {/* Source */}
           <div>
             <label className={labelCls}>Contexte</label>
             <div className="flex gap-2">
@@ -10152,8 +10323,6 @@ const AddPerfModal = memo(({ athlete, clubId, onClose, onAdded }) => {
               ))}
             </div>
           </div>
-
-          {/* Notes */}
           <div>
             <label className={labelCls}>Notes (optionnel)</label>
             <textarea className={`${inputCls} resize-none`} rows={2}
@@ -10161,7 +10330,6 @@ const AddPerfModal = memo(({ athlete, clubId, onClose, onAdded }) => {
               value={form.context} onChange={e=>set("context",e.target.value)}/>
           </div>
         </div>
-
         <div className="px-6 py-4 border-t border-slate-100 flex items-center justify-between gap-3 flex-shrink-0">
           <button onClick={onClose} disabled={saving} className="px-4 py-2 rounded-lg bg-slate-100 text-slate-600 text-[13px] font-medium hover:bg-slate-200 disabled:opacity-40">Annuler</button>
           <button onClick={handleSubmit} disabled={!form.value.trim()||(form.useCustom?!form.customDisc.trim():false)||saving}
@@ -10175,7 +10343,6 @@ const AddPerfModal = memo(({ athlete, clubId, onClose, onAdded }) => {
   );
 });
 
-// Modal ajout objectif
 const AddGoalModal = memo(({ athlete, clubId, allDiscs, onClose, onAdded }) => {
   const inputCls = "w-full border border-slate-200 rounded-lg px-3 py-2 text-[13px] text-slate-700 focus:outline-none focus:ring-2 focus:ring-emerald-400 bg-white";
   const labelCls = "block text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1";
@@ -10252,7 +10419,6 @@ const AddGoalModal = memo(({ athlete, clubId, allDiscs, onClose, onAdded }) => {
 });
 
 function MesPerformances({ athlete, competitions, myPerformances, myGoals, clubId, onRefresh }) {
-  // Toutes les disciplines pratiquées (records + performances ajoutées)
   const allDiscs = useMemo(() => {
     const fromRecords = Object.keys(athlete.records ?? {});
     const fromPerfs   = [...new Set((myPerformances ?? []).map(p => p.discipline))];
@@ -10264,14 +10430,12 @@ function MesPerformances({ athlete, competitions, myPerformances, myGoals, clubI
   const [showGoalModal,setShowGoalModal]= useState(false);
   const [deleting,     setDeleting]     = useState(null);
 
-  // Init discipline sélectionnée
   useEffect(() => {
     if (!selectedDisc && allDiscs.length > 0) setSelectedDisc(allDiscs[0]);
   }, [allDiscs, selectedDisc]);
 
   const rec = selectedDisc ? athlete.records[selectedDisc] : null;
 
-  // Performances pour la discipline sélectionnée
   const discPerfs = useMemo(() => {
     if (!selectedDisc) return [];
     return (myPerformances ?? [])
@@ -10279,7 +10443,6 @@ function MesPerformances({ athlete, competitions, myPerformances, myGoals, clubI
       .sort((a,b) => new Date(a.performance_date)-new Date(b.performance_date));
   }, [selectedDisc, myPerformances]);
 
-  // + résultats compétition
   const compResults = useMemo(() => {
     if (!selectedDisc) return [];
     const results = [];
@@ -10290,14 +10453,11 @@ function MesPerformances({ athlete, competitions, myPerformances, myGoals, clubI
     return results;
   }, [selectedDisc, competitions, athlete.id]);
 
-  // Données unifiées pour le graphique
   const chartData = useMemo(() => {
-    const hib = getDiscHib(selectedDisc ?? "");
     const allPoints = [
       ...discPerfs.map(p => ({ date: p.performance_date, label: new Date(p.performance_date).toLocaleDateString("fr-BE",{day:"2-digit",month:"short"}), result: p.value, source: p.source, note: p.context })),
       ...compResults.map(r => ({ date: r.date, label: new Date(r.date).toLocaleDateString("fr-BE",{day:"2-digit",month:"short"}), result: r.value, source: "competition", note: r.label })),
     ].sort((a,b) => new Date(a.date)-new Date(b.date));
-
     return allPoints.map(p => {
       const { value } = parsePerf(p.result);
       return { ...p, numValue: value };
@@ -10307,7 +10467,6 @@ function MesPerformances({ athlete, competitions, myPerformances, myGoals, clubI
   const isTime = chartData.length > 0 && !getDiscHib(selectedDisc ?? "");
   const discColors = DISC_TYPE_COLORS[getDiscType(selectedDisc ?? "")] ?? DISC_TYPE_COLORS.sprint;
 
-  // Meilleure perf dans l'historique
   const bestPerf = useMemo(() => {
     if (!chartData.length) return null;
     const hib = getDiscHib(selectedDisc ?? "");
@@ -10326,8 +10485,6 @@ function MesPerformances({ athlete, competitions, myPerformances, myGoals, clubI
 
   return (
     <div className="p-4 space-y-4 max-w-4xl mx-auto">
-
-      {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
           <h2 className="text-[20px] font-bold text-slate-800">Mes performances</h2>
@@ -10346,7 +10503,6 @@ function MesPerformances({ athlete, competitions, myPerformances, myGoals, clubI
         </div>
       </div>
 
-      {/* Objectifs actifs */}
       {(myGoals??[]).length > 0 && (
         <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
           <div className="px-5 py-4 border-b border-slate-50 flex items-center justify-between">
@@ -10363,7 +10519,6 @@ function MesPerformances({ athlete, competitions, myPerformances, myGoals, clubI
               const pv = rec ? parsePerf(rec.pr) : null;
               const tv = parsePerf(g.target_value);
               const progress = pv?.value && tv?.value ? (hib ? Math.min(100,Math.round((pv.value/tv.value)*100)) : Math.min(100,Math.round((tv.value/pv.value)*100))) : null;
-
               return (
                 <div key={g.id} className="px-5 py-3.5">
                   <div className="flex items-center justify-between mb-2">
@@ -10409,7 +10564,6 @@ function MesPerformances({ athlete, competitions, myPerformances, myGoals, clubI
         </div>
       )}
 
-      {/* Sélection discipline */}
       <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5">
         <h3 className="text-[13px] font-bold text-slate-700 mb-3">Mes épreuves</h3>
         {allDiscs.length === 0 ? (
@@ -10440,7 +10594,6 @@ function MesPerformances({ athlete, competitions, myPerformances, myGoals, clubI
 
       {selectedDisc && (
         <>
-          {/* Records */}
           <div className="grid grid-cols-3 gap-4">
             {rec ? (
               <>
@@ -10466,7 +10619,6 @@ function MesPerformances({ athlete, competitions, myPerformances, myGoals, clubI
             </div>
           </div>
 
-          {/* % du PR */}
           {rec && (() => {
             const sb=parsePerf(rec.sb), pr=parsePerf(rec.pr);
             if (!sb.value||!pr.value) return null;
@@ -10489,7 +10641,6 @@ function MesPerformances({ athlete, competitions, myPerformances, myGoals, clubI
             );
           })()}
 
-          {/* Graphique */}
           {chartData.length >= 2 ? (
             <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5">
               <div className="flex items-start justify-between mb-4">
@@ -10551,7 +10702,6 @@ function MesPerformances({ athlete, competitions, myPerformances, myGoals, clubI
             </div>
           ) : null}
 
-          {/* Historique liste */}
           {(discPerfs.length > 0 || compResults.length > 0) && (
             <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
               <div className="px-5 py-4 border-b border-slate-50 flex items-center justify-between">
@@ -10583,7 +10733,6 @@ function MesPerformances({ athlete, competitions, myPerformances, myGoals, clubI
                       </p>
                     </div>
                     <p className="text-[16px] font-black flex-shrink-0" style={{color:discColors.border}}>{p.result}</p>
-                    {/* Supprimer uniquement les perfs ajoutées par l'athlète */}
                     {p.source !== "competition" && (() => {
                       const original = discPerfs.find(dp => dp.performance_date === p.date && dp.value === p.result);
                       if (!original) return null;
@@ -10603,20 +10752,10 @@ function MesPerformances({ athlete, competitions, myPerformances, myGoals, clubI
       )}
 
       {showAddModal && (
-        <AddPerfModal
-          athlete={athlete} clubId={clubId}
-          onClose={()=>setShowAddModal(false)}
-          onAdded={onRefresh}
-        />
+        <AddPerfModal athlete={athlete} clubId={clubId} onClose={()=>setShowAddModal(false)} onAdded={onRefresh}/>
       )}
-
       {showGoalModal && (
-        <AddGoalModal
-          athlete={athlete} clubId={clubId}
-          allDiscs={allDiscs}
-          onClose={()=>setShowGoalModal(false)}
-          onAdded={onRefresh}
-        />
+        <AddGoalModal athlete={athlete} clubId={clubId} allDiscs={allDiscs} onClose={()=>setShowGoalModal(false)} onAdded={onRefresh}/>
       )}
     </div>
   );
@@ -10630,7 +10769,6 @@ function MaMessagerie({ athlete, coachUserId, athleteUserId, coachName }) {
   const [input,    setInput]    = useState("");
   const [loading,  setLoading]  = useState(true);
   const [sending,  setSending]  = useState(false);
-  const bottomRef = { current: null };
 
   const fetchMessages = useCallback(async () => {
     if (!coachUserId||!athleteUserId) return;
@@ -10660,7 +10798,11 @@ function MaMessagerie({ athlete, coachUserId, athleteUserId, coachName }) {
     const {data,error}=await supabase.from("messages")
       .insert({sender_id:athleteUserId,receiver_id:coachUserId,content:text,is_read:false})
       .select().single();
-    if(!error&&data) setMessages(p=>[...p,data]);
+    if(!error&&data) {
+      setMessages(p=>[...p,data]);
+      // Notif push vers le coach (par user_id)
+      notifyCoachMessage(coachUserId, athlete.name, text).catch(console.warn);
+    }
     setSending(false);
   };
 
@@ -10675,7 +10817,6 @@ function MaMessagerie({ athlete, coachUserId, athleteUserId, coachName }) {
 
   return (
     <div className="flex flex-col max-w-2xl mx-auto" style={{height:"calc(100vh - 64px)"}}>
-      {/* Header */}
       <div className="bg-white border-b border-slate-100 px-5 py-4 flex items-center gap-3 flex-shrink-0">
         <div className="w-10 h-10 rounded-full bg-emerald-500 flex items-center justify-center text-white text-[12px] font-bold flex-shrink-0">
           {initialsFromName(coachName??"Coach")}
@@ -10685,8 +10826,6 @@ function MaMessagerie({ athlete, coachUserId, athleteUserId, coachName }) {
           <p className="text-[11px] text-slate-400">Head coach</p>
         </div>
       </div>
-
-      {/* Messages */}
       <div className="flex-1 overflow-y-auto px-5 py-4 space-y-3" style={{background:"#FAFAFA"}}>
         {loading ? <LoadingState message="Chargement…"/> : messages.length===0 ? (
           <div className="flex flex-col items-center justify-center h-full text-slate-300 gap-2">
@@ -10715,8 +10854,6 @@ function MaMessagerie({ athlete, coachUserId, athleteUserId, coachName }) {
           );
         })}
       </div>
-
-      {/* Input */}
       <div className="flex-shrink-0 px-4 py-3 bg-white border-t border-slate-100 flex items-end gap-2">
         <div className="flex-1 bg-slate-100 rounded-2xl px-4 py-2.5">
           <textarea className="w-full bg-transparent resize-none text-[13px] text-slate-700 placeholder-slate-400 focus:outline-none max-h-28 min-h-[20px]"
@@ -10735,13 +10872,11 @@ function MaMessagerie({ athlete, coachUserId, athleteUserId, coachName }) {
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
-// VUE 5 — MON CLUB (fil social BeReal — version complète)
-// Caméra directe mobile, commentaires, album photo, notifs in-app, 7j expiry
+// VUE 5 — MON CLUB
 // ══════════════════════════════════════════════════════════════════════════════
 
 const REACTION_EMOJIS = ["🔥","💪","👏","⚡","🎯","❤️"];
 
-// Notification in-app
 function SocialNotif({ notif, onDismiss }) {
   useEffect(() => { const t = setTimeout(onDismiss, 5000); return () => clearTimeout(t); }, [onDismiss]);
   return (
@@ -10762,7 +10897,6 @@ function SocialNotif({ notif, onDismiss }) {
   );
 }
 
-// Modal commentaires
 const CommentsModal = memo(({ post, postAthlete, athlete, allAthletes, onClose, onCommentAdded }) => {
   const [comments, setComments] = useState([]);
   const [input,    setInput]    = useState("");
@@ -10860,7 +10994,6 @@ const CommentsModal = memo(({ post, postAthlete, athlete, allAthletes, onClose, 
   );
 });
 
-// Modal album photo
 const PhotoAlbumModal = memo(({ posts, allAthletes, onClose }) => {
   const photos = posts.filter(p => p.image_url);
   const [selected, setSelected] = useState(null);
@@ -10962,7 +11095,6 @@ function MonClub({ athlete, allAthletes, clubId, sessions, profile }) {
 
   useEffect(() => { fetchPosts(); }, [fetchPosts]);
 
-  // Realtime — notif in-app
   useEffect(() => {
     if (!clubId) return;
     const ch = supabase.channel("social-realtime")
@@ -11033,10 +11165,7 @@ function MonClub({ athlete, allAthletes, clubId, sessions, profile }) {
 
   return (
     <div className="max-w-xl mx-auto" style={{ minHeight: "100%" }}>
-
       {notif && <SocialNotif notif={notif} onDismiss={() => setNotif(null)}/>}
-
-      {/* Header sticky */}
       <div className="sticky top-0 z-10 bg-white/95 backdrop-blur border-b border-slate-100 px-5 py-3 flex items-center justify-between">
         <div>
           <h2 className="text-[16px] font-bold text-slate-800">Mon club</h2>
@@ -11047,7 +11176,6 @@ function MonClub({ athlete, allAthletes, clubId, sessions, profile }) {
             className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-slate-200 text-slate-600 text-[12px] font-semibold hover:bg-slate-50">
             <Image size={13}/> Album
           </button>
-          {/* Caméra directe mobile */}
           <label className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-white text-[12px] font-semibold cursor-pointer"
             style={{ background: "#1D9E75" }}>
             <Camera size={13}/> Photo
@@ -11062,8 +11190,6 @@ function MonClub({ athlete, allAthletes, clubId, sessions, profile }) {
       </div>
 
       <div className="p-4 space-y-4">
-
-        {/* Formulaire */}
         {showCreate && (
           <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
             <div className="px-4 py-3 border-b border-slate-50 flex items-center gap-3">
@@ -11123,7 +11249,6 @@ function MonClub({ athlete, allAthletes, clubId, sessions, profile }) {
           </div>
         )}
 
-        {/* Fil */}
         {loading ? (
           <div className="text-center py-16 text-slate-300">
             <div className="w-8 h-8 border-2 border-slate-200 border-t-emerald-500 rounded-full animate-spin mx-auto mb-3"/>
@@ -11178,12 +11303,10 @@ function MonClub({ athlete, allAthletes, clubId, sessions, profile }) {
                   </button>
                 )}
               </div>
-
               {post.image_url && (
                 <img src={post.image_url} alt="post" className="w-full max-h-96 object-cover cursor-pointer"
                   onClick={() => setActiveComments(post)}/>
               )}
-
               <div className="px-4 py-3">
                 <p className="text-[13.5px] text-slate-700 leading-relaxed">{post.content}</p>
                 {linkedSess && (
@@ -11197,7 +11320,6 @@ function MonClub({ athlete, allAthletes, clubId, sessions, profile }) {
                   </div>
                 )}
               </div>
-
               <div className="px-4 pb-4">
                 {Object.keys(rxCounts).length > 0 && (
                   <div className="flex items-center gap-1.5 mb-3 flex-wrap">
@@ -11248,13 +11370,16 @@ function MonClub({ athlete, allAthletes, clubId, sessions, profile }) {
           onCommentAdded={() => fetchPosts()}
         />
       )}
-
       {showAlbum && (
         <PhotoAlbumModal posts={allPosts} allAthletes={allAthletes} onClose={() => setShowAlbum(false)}/>
       )}
     </div>
   );
 }
+
+// ══════════════════════════════════════════════════════════════════════════════
+// COMPOSANT PRINCIPAL — AthleteApp
+// ══════════════════════════════════════════════════════════════════════════════
 export default function AthleteApp() {
   const { profile, clubId, signOut } = useAuth();
 
@@ -11268,12 +11393,29 @@ export default function AthleteApp() {
   const [coachUserId,     setCoachUserId]     = useState(null);
   const [coachName,       setCoachName]       = useState(null);
   const [lastMessages,    setLastMessages]    = useState([]);
-  const [myPerformances,  setMyPerformances]  = useState([]); // athlete_performances
-  const [myGoals,         setMyGoals]         = useState([]); // athlete_goals
-  const [myNotifs,        setMyNotifs]        = useState([]); // athlete_notifications
+  const [myPerformances,  setMyPerformances]  = useState([]);
+  const [myGoals,         setMyGoals]         = useState([]);
+  const [myNotifs,        setMyNotifs]        = useState([]);
   const [showNotifs,      setShowNotifs]      = useState(false);
   const [loading,         setLoading]         = useState(true);
   const [error,           setError]           = useState(null);
+
+  // ── Push notifications ────────────────────────────────────────────────────
+  // IMPORTANT : appelé AVANT les guards (règle React : hooks toujours en tête).
+  // athlete?.id sera null au premier render puis mis à jour après fetchAll.
+  // Le hook tolère null et ne crée pas d'abonnement tant que l'id est absent.
+  const { subscribed, subscribe, permissionState, swReady } = usePushNotifications(
+    athlete?.id ?? null,
+    clubId
+  );
+
+  // Demande automatique de permission push dès que le SW est prêt
+  // (comme sur CoachShell côté Benoît)
+  useEffect(() => {
+    if (swReady && !subscribed && permissionState !== "denied") {
+      subscribe();
+    }
+  }, [swReady, subscribed, permissionState, subscribe]);
 
   // ═══ Chargement ═══════════════════════════════════════════════════════════
   const fetchAll = useCallback(async () => {
@@ -11282,7 +11424,11 @@ export default function AthleteApp() {
       setLoading(true); setError(null);
 
       const athleteRes = await supabase.from("athletes").select("*").eq("user_id", profile.id).single();
-      if (athleteRes.error || !athleteRes.data) { setError("Aucun profil athlète lié à ton compte. Contacte ton coach."); setLoading(false); return; }
+      if (athleteRes.error || !athleteRes.data) {
+        setError("Aucun profil athlète lié à ton compte. Contacte ton coach.");
+        setLoading(false);
+        return;
+      }
 
       const a = athleteRes.data;
       const athleteId = a.id;
@@ -11299,6 +11445,7 @@ export default function AthleteApp() {
         supabase.from("athlete_goals").select("*").eq("athlete_id",athleteId).order("created_at",{ascending:false}),
         supabase.from("athlete_notifications").select("*").eq("athlete_id",athleteId).order("created_at",{ascending:false}).limit(20),
       ]);
+
       setMyPerformances(myPerfsRes.data ?? []);
       setMyGoals(goalsRes.data ?? []);
       setMyNotifs(notifsRes?.data ?? []);
@@ -11307,7 +11454,6 @@ export default function AthleteApp() {
       setCoachUserId(coachId);
       setCoachName(coachRes.data?.name ?? null);
 
-      // Derniers messages du coach
       if (coachId) {
         const {data:msgs}=await supabase.from("messages").select("*")
           .or(`and(sender_id.eq.${coachId},receiver_id.eq.${profile.id}),and(sender_id.eq.${profile.id},receiver_id.eq.${coachId})`)
@@ -11372,21 +11518,12 @@ export default function AthleteApp() {
 
   useEffect(() => { fetchAll(); }, [fetchAll]);
 
-  // ═══ Realtime : sessions + notifications athlète ══════════════════════════
- useEffect(() => {
-  if (!clubId || !profile?.id) return;
-  const ch = supabase
-    .channel(`athlete-${profile.id}`)
-    .on("postgres_changes", { event: "*", schema: "public", table: "sessions" }, () => fetchAll())
-    .on("postgres_changes", { event: "*", schema: "public", table: "session_athletes" }, () => fetchAll())
-    .on("postgres_changes", { event: "INSERT", schema: "public", table: "athlete_notifications" }, (payload) => {
-      if (payload.new.athlete_id === athlete?.id) {
-        setMyNotifs(prev => [payload.new, ...prev]);
-      }
-    })
-    .subscribe();
-  return () => supabase.removeChannel(ch);
-}, [clubId, profile?.id, fetchAll]);
+  // ═══ Realtime ═════════════════════════════════════════════════════════════
+  // Section intentionnellement vide.
+  // Les handlers RPE/status/feeling/comment font uniquement une mise à jour
+  // locale + write Supabase sans fetchAll(), ce qui évite tout rechargement.
+  // Si un realtime est ajouté à l'avenir, filtrer sur athlete_id et
+  // utiliser setSessions (patch local) plutôt que fetchAll().
 
   // ═══ Handlers ═════════════════════════════════════════════════════════════
   const handleRpe = useCallback(async (sid,aid,rpe) => {
@@ -11410,7 +11547,8 @@ export default function AthleteApp() {
   }, []);
 
   const navigate = useCallback((view) => { setActiveView(view); setMobileOpen(false); }, []);
- const { subscribed, subscribe, permissionState } = usePushNotifications(athlete?.id ?? null, clubId);
+
+  // ── Guards (APRÈS tous les hooks) ─────────────────────────────────────────
   if (loading) return <LoadingState message="Chargement de ton espace…"/>;
   if (error || !athlete) return (
     <div className="min-h-screen flex items-center justify-center p-6" style={{background:"#F5F5F2"}}>
@@ -11428,10 +11566,8 @@ export default function AthleteApp() {
     <div className="flex h-screen overflow-hidden" style={{background:"#F5F5F2",fontFamily:"'DM Sans', system-ui, sans-serif"}}>
       {mobileOpen&&<div className="fixed inset-0 bg-black/30 z-20 md:hidden" onClick={()=>setMobileOpen(false)}/>}
 
-      {/* Sidebar — desktop seulement */}
-      <aside className={[
-        "hidden md:flex flex-col bg-white border-r border-slate-100 z-30 w-56 flex-shrink-0",
-      ].join(" ")}>
+      {/* Sidebar desktop */}
+      <aside className="hidden md:flex flex-col bg-white border-r border-slate-100 z-30 w-56 flex-shrink-0">
         <div className="flex items-center gap-2.5 px-4 h-16 border-b border-slate-100 flex-shrink-0">
           <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
             style={{background:"linear-gradient(135deg,#1D9E75 0%,#16826C 100%)"}}>
@@ -11462,7 +11598,6 @@ export default function AthleteApp() {
             <p className="text-[12.5px] font-semibold text-slate-700 truncate">{athlete.name}</p>
             <p className="text-[11px] text-slate-400">Athlète</p>
           </div>
-          {/* Badge notifs */}
           <button onClick={()=>setShowNotifs(v=>!v)}
             className="relative p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors flex-shrink-0">
             <Bell size={15}/>
@@ -11497,15 +11632,16 @@ export default function AthleteApp() {
               )}
             </div>
             <div className="max-h-80 overflow-y-auto divide-y divide-slate-50">
-             {myNotifs.length === 0 ? (
-  <div className="px-4 py-6 text-center text-[11px] text-slate-300 space-y-3">
-    <p>Aucune notification</p>
-    <PushToggleButton
-      subscribed={subscribed}
-      onToggle={subscribe}
-      permissionState={permissionState}
-    />
-  </div>
+              {myNotifs.length === 0 ? (
+                <div className="px-4 py-6 text-center space-y-3">
+                  <p className="text-[11px] text-slate-300">Aucune notification</p>
+                  {/* Bouton push dans le panneau notifs desktop */}
+                  <PushToggleButton
+                    subscribed={subscribed}
+                    onToggle={subscribe}
+                    permissionState={permissionState}
+                  />
+                </div>
               ) : myNotifs.map(n => {
                 const diff = (new Date()-new Date(n.created_at))/1000;
                 const ago = diff<60?"À l'instant":diff<3600?`${Math.floor(diff/60)}min`:diff<86400?`${Math.floor(diff/3600)}h`:`${Math.floor(diff/86400)}j`;
@@ -11534,7 +11670,6 @@ export default function AthleteApp() {
       {/* Zone principale */}
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
         <header className="h-14 md:h-16 bg-white border-b border-slate-100 flex items-center gap-3 px-4 flex-shrink-0">
-          {/* Logo mobile */}
           <div className="flex md:hidden items-center gap-2">
             <div className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0"
               style={{ background: "linear-gradient(135deg, #1D9E75, #16826C)" }}>
@@ -11544,7 +11679,14 @@ export default function AthleteApp() {
           </div>
           <h1 className="hidden md:block text-[16px] font-semibold text-slate-800 tracking-tight">{currentNav?.label??"Mon espace"}</h1>
           <div className="flex-1"/>
-          
+          {/* Bouton push dans le header — visible desktop */}
+          <div className="hidden md:block">
+            <PushToggleButton
+              subscribed={subscribed}
+              onToggle={subscribe}
+              permissionState={permissionState}
+            />
+          </div>
         </header>
 
         <main className="flex-1 overflow-y-auto pb-20 md:pb-0">
@@ -11554,9 +11696,10 @@ export default function AthleteApp() {
               myPerformances={myPerformances} onNavigate={navigate}/>
           )}
           {activeView==="planning"&&(
-            <MonPlanning
+           <MonPlanning
               athlete={athlete} sessions={sessions} allAthletes={allAthletes}
               clubId={clubId} createdBy={profile?.id}
+              coachUserId={coachUserId}
               onRpeChange={handleRpe} onStatusChange={handleStatus}
               onFeelingChange={handleFeeling} onCommentChange={handleComment}
               onRefresh={fetchAll}
@@ -11564,12 +11707,9 @@ export default function AthleteApp() {
           )}
           {activeView==="performances"&&(
             <MesPerformances
-              athlete={athlete}
-              competitions={competitions}
-              myPerformances={myPerformances}
-              myGoals={myGoals}
-              clubId={clubId}
-              onRefresh={fetchAll}
+              athlete={athlete} competitions={competitions}
+              myPerformances={myPerformances} myGoals={myGoals}
+              clubId={clubId} onRefresh={fetchAll}
             />
           )}
           {activeView==="messagerie"&&(
@@ -11594,7 +11734,6 @@ export default function AthleteApp() {
           {NAV_ITEMS.map(item => {
             const Icon = item.icon;
             const isActive = activeView === item.id;
-            const unread = item.id === "messagerie" ? 0 : 0;
             return (
               <button key={item.id} onClick={() => navigate(item.id)}
                 className={["flex-1 flex flex-col items-center justify-center gap-1 py-2.5 transition-all",
@@ -11611,7 +11750,7 @@ export default function AthleteApp() {
               </button>
             );
           })}
-          {/* Notifs */}
+          {/* Bouton push + notifs dans la bottom nav mobile */}
           <button onClick={() => setShowNotifs(v=>!v)}
             className={["flex-1 flex flex-col items-center justify-center gap-1 py-2.5 transition-all",
               showNotifs ? "text-emerald-600" : "text-slate-400"].join(" ")}>
@@ -11623,12 +11762,64 @@ export default function AthleteApp() {
                 </span>
               )}
             </div>
-            <button onClick={subscribe}
-  className="text-[9px] font-semibold text-emerald-500">
-  {subscribed ? "🔔 ON" : "🔔 OFF"}
-</button>
+            {/* Indicateur push intégré sous l'icône notifs */}
+            <span className="text-[9px] font-semibold text-center" style={{ color: subscribed ? "#1D9E75" : "inherit" }}>
+              {subscribed ? "🔔 ON" : "Notifs"}
+            </span>
           </button>
         </div>
+
+        {/* Panneau notifs mobile (slide du bas) */}
+        {showNotifs && (
+          <div className="fixed inset-0 z-40" onClick={() => setShowNotifs(false)}>
+            <div className="absolute bottom-16 left-0 right-0 bg-white rounded-t-2xl border-t border-slate-200 shadow-2xl max-h-[60vh] flex flex-col"
+              onClick={e => e.stopPropagation()}>
+              <div className="px-5 py-3 border-b border-slate-100 flex items-center justify-between flex-shrink-0">
+                <p className="text-[14px] font-bold text-slate-800">Notifications</p>
+                <div className="flex items-center gap-3">
+                  {/* Bouton push dans le panneau notifs mobile */}
+                  <PushToggleButton
+                    subscribed={subscribed}
+                    onToggle={subscribe}
+                    permissionState={permissionState}
+                  />
+                  {myNotifs.filter(n=>!n.is_read).length > 0 && (
+                    <button onClick={async()=>{
+                      await supabase.from("athlete_notifications").update({is_read:true}).eq("athlete_id",athlete.id).eq("is_read",false);
+                      fetchAll();
+                    }} className="text-[11px] font-semibold text-emerald-600">
+                      Tout lire
+                    </button>
+                  )}
+                </div>
+              </div>
+              <div className="flex-1 overflow-y-auto divide-y divide-slate-50">
+                {myNotifs.length === 0 ? (
+                  <div className="px-5 py-8 text-center text-[12px] text-slate-300">Aucune notification</div>
+                ) : myNotifs.map(n => {
+                  const diff = (new Date()-new Date(n.created_at))/1000;
+                  const ago = diff<60?"À l'instant":diff<3600?`${Math.floor(diff/60)}min`:diff<86400?`${Math.floor(diff/3600)}h`:`${Math.floor(diff/86400)}j`;
+                  return (
+                    <div key={n.id} className={["px-5 py-3.5 cursor-pointer hover:bg-slate-50",!n.is_read?"bg-blue-50/30":""].join(" ")}
+                      onClick={async()=>{
+                        if(!n.is_read) await supabase.from("athlete_notifications").update({is_read:true}).eq("id",n.id);
+                        fetchAll(); setShowNotifs(false);
+                      }}>
+                      <div className="flex items-start gap-2.5">
+                        {!n.is_read && <div className="w-2 h-2 rounded-full bg-blue-500 mt-1.5 flex-shrink-0"/>}
+                        <div className="flex-1 min-w-0">
+                          <p className="text-[12.5px] font-semibold text-slate-700 leading-tight">{n.title}</p>
+                          {n.description && <p className="text-[11px] text-slate-400 mt-0.5 line-clamp-2">{n.description}</p>}
+                          <p className="text-[10px] text-slate-300 mt-1">{ago}</p>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        )}
       </nav>
     </div>
   );
