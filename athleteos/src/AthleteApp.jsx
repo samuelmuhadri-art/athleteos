@@ -2491,11 +2491,18 @@ export default function AthleteApp() {
   // IMPORTANT : appelé AVANT les guards (règle React : hooks toujours en tête).
   // athlete?.id sera null au premier render puis mis à jour après fetchAll.
   // Le hook tolère null et ne crée pas d'abonnement tant que l'id est absent.
-  const { subscribed, subscribe, permissionState } = usePushNotifications(
+  const { subscribed, subscribe, permissionState, swReady } = usePushNotifications(
     athlete?.id ?? null,
     clubId
-    // userId omis intentionnellement : l'athlète s'abonne via athlete_id, pas user_id
   );
+
+  // Demande automatique de permission push dès que le SW est prêt
+  // (comme sur CoachShell côté Benoît)
+  useEffect(() => {
+    if (swReady && !subscribed && permissionState !== "denied") {
+      subscribe();
+    }
+  }, [swReady, subscribed, permissionState, subscribe]);
 
   // ═══ Chargement ═══════════════════════════════════════════════════════════
   const fetchAll = useCallback(async () => {
