@@ -219,15 +219,13 @@ function BadgeItem({ badge }) {
 // ══════════════════════════════════════════════════════════════════════════════
 // WELLNESS MODAL — questionnaire matinal (Hooper Index)
 // Saw AE, Main LC, Gastin PB. (2016). BJSM 50(5), 281-291.
-// 5 dimensions : sommeil, énergie, courbatures, humeur, stress — chacune 1-5
-// S'affiche automatiquement si l'athlète n'a pas encore répondu aujourd'hui.
 // ══════════════════════════════════════════════════════════════════════════════
 const WELLNESS_QUESTIONS = [
-  { key: "sleep",    label: "Qualité du sommeil",     icon: Moon,       color: "#7C3AED", desc: ["Très mauvais","Mauvais","Correct","Bon","Excellent"],         inverted: false },
-  { key: "energy",   label: "Niveau d'énergie",        icon: Battery,    color: "#0284C7", desc: ["Épuisé","Fatigué","Correct","Énergique","Très énergique"],   inverted: false },
-  { key: "soreness", label: "Courbatures / douleurs",  icon: HeartPulse, color: "#E24B4A", desc: ["Aucune","Légères","Modérées","Importantes","Très importantes"], inverted: true  },
-  { key: "mood",     label: "Humeur",                  icon: Smile,      color: "#EF9F27", desc: ["Très mauvaise","Mauvaise","Neutre","Bonne","Excellente"],     inverted: false },
-  { key: "stress",   label: "Niveau de stress",        icon: Activity,   color: "#E24B4A", desc: ["Aucun","Faible","Modéré","Élevé","Très élevé"],              inverted: true  },
+  { key: "sleep",    label: "Qualité du sommeil",    icon: Moon,       color: "#7C3AED", desc: ["Très mauvais","Mauvais","Correct","Bon","Excellent"],            inverted: false },
+  { key: "energy",   label: "Niveau d'énergie",       icon: Battery,    color: "#0284C7", desc: ["Épuisé","Fatigué","Correct","Énergique","Très énergique"],      inverted: false },
+  { key: "soreness", label: "Courbatures / douleurs", icon: HeartPulse, color: "#E24B4A", desc: ["Aucune","Légères","Modérées","Importantes","Très importantes"], inverted: true  },
+  { key: "mood",     label: "Humeur",                 icon: Smile,      color: "#EF9F27", desc: ["Très mauvaise","Mauvaise","Neutre","Bonne","Excellente"],        inverted: false },
+  { key: "stress",   label: "Niveau de stress",       icon: Activity,   color: "#E24B4A", desc: ["Aucun","Faible","Modéré","Élevé","Très élevé"],                 inverted: true  },
 ];
 
 const WellnessModal = memo(({ athlete, clubId, onClose, onSaved }) => {
@@ -256,17 +254,13 @@ const WellnessModal = memo(({ athlete, clubId, onClose, onSaved }) => {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4"
-      style={{ background: "rgba(15,23,42,0.6)" }}>
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4" style={{ background: "rgba(15,23,42,0.6)" }}>
       <div className="bg-white rounded-t-2xl sm:rounded-2xl shadow-2xl w-full sm:max-w-md max-h-[95vh] sm:max-h-[90vh] flex flex-col overflow-hidden">
-        <div className="px-6 py-5 border-b border-slate-100 flex-shrink-0"
-          style={{ background: "linear-gradient(135deg, #f0fdf4, #dcfce7)" }}>
+        <div className="px-6 py-5 border-b border-slate-100 flex-shrink-0" style={{ background: "linear-gradient(135deg, #f0fdf4, #dcfce7)" }}>
           <div className="flex items-center justify-between mb-1">
             <div>
               <h3 className="text-[16px] font-bold text-emerald-800">🌅 Comment tu vas ce matin ?</h3>
-              <p className="text-[12px] text-emerald-600 mt-0.5">
-                {new Date().toLocaleDateString("fr-BE", { weekday: "long", day: "numeric", month: "long" })}
-              </p>
+              <p className="text-[12px] text-emerald-600 mt-0.5">{new Date().toLocaleDateString("fr-BE", { weekday: "long", day: "numeric", month: "long" })}</p>
             </div>
             <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-emerald-100"><X size={18} className="text-emerald-600"/></button>
           </div>
@@ -287,9 +281,7 @@ const WellnessModal = memo(({ athlete, clubId, onClose, onSaved }) => {
             return (
               <div key={q.key}>
                 <div className="flex items-center gap-2 mb-3">
-                  <div className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0" style={{ background: q.color + "18" }}>
-                    <Icon size={14} color={q.color}/>
-                  </div>
+                  <div className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0" style={{ background: q.color + "18" }}><Icon size={14} color={q.color}/></div>
                   <span className="text-[13px] font-semibold text-slate-700">{q.label}</span>
                   {q.inverted && <span className="text-[9px] font-semibold text-slate-300 uppercase tracking-wider ml-1">(moins = mieux)</span>}
                 </div>
@@ -302,12 +294,10 @@ const WellnessModal = memo(({ athlete, clubId, onClose, onSaved }) => {
                     return (
                       <button key={v} onClick={() => setForm(f => ({ ...f, [q.key]: v }))}
                         className={["flex-1 flex flex-col items-center gap-1.5 py-3 rounded-xl border transition-all",
-                          selected ? "text-white shadow-sm scale-105" : "bg-white border-slate-200 text-slate-500 hover:border-slate-300 hover:bg-slate-50"
-                        ].join(" ")}
+                          selected ? "text-white shadow-sm scale-105" : "bg-white border-slate-200 text-slate-500 hover:border-slate-300"].join(" ")}
                         style={selected ? { background: btnColor, borderColor: btnColor } : {}}>
                         <span className="text-[16px] font-black">{v}</span>
-                        <span className="text-[8px] font-semibold text-center leading-tight px-1"
-                          style={selected ? { color: "rgba(255,255,255,0.85)" } : {}}>{q.desc[v-1]}</span>
+                        <span className="text-[8px] font-semibold text-center leading-tight px-1" style={selected ? { color: "rgba(255,255,255,0.85)" } : {}}>{q.desc[v-1]}</span>
                       </button>
                     );
                   })}
@@ -465,10 +455,7 @@ function Dashboard({ athlete, weeklyCharge, sessions, competitions, lastMessages
               <div className="flex items-center gap-2 px-4 py-2 rounded-xl"
                 style={{ background: (metrics.wellnessScore >= 75 ? "#1D9E75" : metrics.wellnessScore >= 50 ? "#EF9F27" : "#E24B4A") + "15" }}>
                 <span className="text-[22px] font-black" style={{ color: metrics.wellnessScore >= 75 ? "#1D9E75" : metrics.wellnessScore >= 50 ? "#EF9F27" : "#E24B4A" }}>{metrics.wellnessScore}</span>
-                <div>
-                  <p className="text-[9px] font-bold text-slate-500 uppercase tracking-wider">Score</p>
-                  <p className="text-[9px] text-slate-400">/100</p>
-                </div>
+                <div><p className="text-[9px] font-bold text-slate-500 uppercase tracking-wider">Score</p><p className="text-[9px] text-slate-400">/100</p></div>
               </div>
             )}
           </div>
@@ -488,9 +475,7 @@ function Dashboard({ athlete, weeklyCharge, sessions, competitions, lastMessages
               );
             })}
           </div>
-          {wellnessToday.notes && (
-            <p className="mt-3 text-[11.5px] text-slate-500 italic border-t border-slate-50 pt-3">"{wellnessToday.notes}"</p>
-          )}
+          {wellnessToday.notes && <p className="mt-3 text-[11.5px] text-slate-500 italic border-t border-slate-50 pt-3">"{wellnessToday.notes}"</p>}
           <button onClick={onOpenWellness} className="mt-3 text-[11px] font-semibold text-slate-400 hover:text-emerald-600 transition-colors">Modifier →</button>
         </div>
       ) : (
@@ -578,30 +563,73 @@ function Dashboard({ athlete, weeklyCharge, sessions, competitions, lastMessages
 
           {hasCharge && (
             <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5">
-              <h3 className="text-[14px] font-bold text-slate-800 mb-4">État de forme détaillé</h3>
-              <div className="space-y-3">
+              <div className="flex items-center justify-between mb-5">
+                <div>
+                  <h3 className="text-[14px] font-bold text-slate-800">État de forme détaillé</h3>
+                  <p className="text-[11px] text-slate-400 mt-0.5">Basé sur ta charge des dernières semaines</p>
+                </div>
+              </div>
+              <div className="space-y-4">
                 {[
-                  { label: "Readiness", value: metrics.readiness, color: scoreColor(metrics.readiness), desc: "Disponibilité globale à la performance", inv: false },
-                  { label: "Forme", value: metrics.forme, color: scoreColor(metrics.forme), desc: "Condition physique estimée", inv: false },
-                  { label: "Fatigue", value: metrics.fatigue, color: scoreColor(metrics.fatigue, true), desc: "Niveau de fatigue accumulée", inv: true },
-                  { label: "Récupération", value: metrics.recuperation, color: scoreColor(metrics.recuperation), desc: "Capacité de récupération", inv: false },
-                  { label: "Risque blessure", value: metrics.risque, color: scoreColor(metrics.risque, true), desc: "Risque estimé de blessure", inv: true },
+                  {
+                    label: "Readiness", value: metrics.readiness, color: scoreColor(metrics.readiness), inv: false,
+                    norm: metrics.readiness >= 75 ? { dot: "🟢", label: "Dans les normes", hint: "Tu es prêt pour une séance intense" }
+                        : metrics.readiness >= 55 ? { dot: "🟡", label: "Limite", hint: `Zone optimale à partir de 75 — ${75 - metrics.readiness} points manquants` }
+                        : { dot: "🔴", label: "En dessous", hint: "Privilégie une séance légère ou du repos" },
+                  },
+                  {
+                    label: "Forme", value: metrics.forme, color: scoreColor(metrics.forme), inv: false,
+                    norm: metrics.forme >= 75 ? { dot: "🟢", label: "Excellente", hint: "Condition physique au-dessus de la normale" }
+                        : metrics.forme >= 50 ? { dot: "🟡", label: "Correcte", hint: "En progression — continue à t'entraîner régulièrement" }
+                        : { dot: "🔴", label: "Faible", hint: "Charge chronique insuffisante — augmente progressivement le volume" },
+                  },
+                  {
+                    label: "Fatigue", value: metrics.fatigue, color: scoreColor(metrics.fatigue, true), inv: true,
+                    norm: metrics.fatigue <= 45 ? { dot: "🟢", label: "Normale", hint: "Pas de signe de suraccumulation" }
+                        : metrics.fatigue <= 70 ? { dot: "🟡", label: "Modérée", hint: "Surveille l'accumulation — limite les séances intenses" }
+                        : { dot: "🔴", label: "Élevée", hint: "Repos ou récupération active fortement conseillés" },
+                  },
+                  {
+                    label: "Récupération", value: metrics.recuperation, color: scoreColor(metrics.recuperation), inv: false,
+                    norm: metrics.recuperation >= 70 ? { dot: "🟢", label: "Complète", hint: "Tu es physiologiquement disponible" }
+                        : metrics.recuperation >= 45 ? { dot: "🟡", label: "Partielle", hint: "Encore quelques heures nécessaires avant effort intense" }
+                        : { dot: "🔴", label: "Insuffisante", hint: "Récupération neuromusculaire incomplète [Hasegawa 2024]" },
+                  },
+                  {
+                    label: "Risque blessure", value: metrics.risque, color: scoreColor(metrics.risque, true), inv: true,
+                    norm: metrics.risque <= 20 ? { dot: "🟢", label: "Faible", hint: "Pas d'alerte détectée" }
+                        : metrics.risque <= 50 ? { dot: "🟡", label: "Modéré", hint: "ACWR ou monotonie élevés — varie tes séances" }
+                        : { dot: "🔴", label: "Élevé", hint: "Réduis la charge immédiatement [Gabbett 2016]" },
+                  },
                 ].map(s => (
-                  <div key={s.label}>
-                    <div className="flex items-center justify-between mb-1">
-                      <div>
-                        <span className="text-[12px] font-semibold text-slate-700">{s.label}</span>
-                        <span className="text-[10px] text-slate-400 ml-2">{s.desc}</span>
+                  <div key={s.label} className="bg-slate-50 rounded-xl px-4 py-3.5">
+                    <div className="flex items-start justify-between gap-3 mb-2.5">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="text-[13px] font-bold text-slate-800">{s.label}</span>
+                          <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full"
+                            style={{ background: s.color + "18", color: s.color }}>
+                            {s.norm.dot} {s.norm.label}
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-slate-400 mt-0.5 leading-relaxed">{s.norm.hint}</p>
                       </div>
-                      <span className="text-[13px] font-black" style={{color:s.color}}>{s.value}</span>
+                      <span className="text-[22px] font-black flex-shrink-0" style={{color:s.color}}>{s.value}</span>
                     </div>
-                    <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
-                      <div className="h-full rounded-full transition-all duration-500"
-                        style={{width:`${s.value}%`, background:s.color}}/>
+                    <div className="h-1.5 bg-slate-200 rounded-full overflow-hidden">
+                      <div className="h-full rounded-full transition-all duration-700" style={{width:`${s.value}%`, background:s.color}}/>
+                    </div>
+                    <div className="flex justify-between text-[9px] text-slate-300 mt-1">
+                      <span>0</span>
+                      <span>{s.inv ? "Critique > 70" : "Optimal ≥ 75"}</span>
+                      <span>100</span>
                     </div>
                   </div>
                 ))}
               </div>
+              <p className="text-[10px] text-slate-300 mt-4 text-center">
+                Normes ACWR : Gabbett (2016) · Récupération : Hasegawa (2024) · Autres scores : convention coaching
+              </p>
             </div>
           )}
 
@@ -2782,11 +2810,9 @@ export default function AthleteApp() {
 
   useEffect(() => { fetchAll(); }, [fetchAll]);
 
-  // Ouvre la modale wellness automatiquement si pas encore répondu aujourd'hui
+  // Ouvre la modale wellness si pas encore répondu aujourd'hui
   useEffect(() => {
-    if (athlete && !wellnessToday && !loading) {
-      setShowWellness(true);
-    }
+    if (athlete && !wellnessToday && !loading) setShowWellness(true);
   }, [athlete, wellnessToday, loading]);
 
   // ═══ Realtime ═════════════════════════════════════════════════════════════
@@ -3094,11 +3120,10 @@ export default function AthleteApp() {
         )}
       </nav>
 
-      {/* Wellness Modal — s'affiche si pas encore répondu aujourd'hui */}
+      {/* Wellness Modal */}
       {showWellness && athlete && (
         <WellnessModal
-          athlete={athlete}
-          clubId={clubId}
+          athlete={athlete} clubId={clubId}
           onClose={() => setShowWellness(false)}
           onSaved={(data) => setWellnessToday(data)}
         />
