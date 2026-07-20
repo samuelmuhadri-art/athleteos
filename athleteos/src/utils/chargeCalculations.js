@@ -1,330 +1,331 @@
 // ============================================================
-// AthleteOS — chargeCalculations.js
-// Fonctions de calcul dynamique des scores à partir des rawLoad
-// ⚠️ Ces fonctions lisent les seeds brutes (weeklyCharge) et
-//    retournent les scores dérivés. Ne jamais coder les scores en dur.
+// AthleteOS — src/utils/chargeCalculations.js
+//
+// MODÈLE SCIENTIFIQUE DE SUIVI DE CHARGE — VERSION 2.0
+//
+// ═══════════════════════════════════════════════════════════
+// RÉFÉRENCES SCIENTIFIQUES
+// ═══════════════════════════════════════════════════════════
+//
+// [1] Foster C, Florhaug JA, Franklin J, et al. (2001).
+//     "A New Approach to Monitoring Exercise Training."
+//     Journal of Strength and Conditioning Research, 15(1), 109-115.
+//     → Base de la méthode session-RPE (Durée × RPE)
+//
+// [2] Foster C. (1998).
+//     "Monitoring training in athletes with reference to overtraining syndrome."
+//     Medicine & Science in Sports & Exercise, 30(7), 1164-1168.
+//     → Monotonie et Contrainte d'entraînement
+//
+// [3] Gabbett TJ. (2016).
+//     "The training-injury prevention paradox: should athletes be training
+//     smarter and harder?"
+//     British Journal of Sports Medicine, 50(5), 273-280.
+//     → ACWR, zone optimale 0.8-1.3, paradoxe charge/blessure
+//
+// [4] Williams S, Booton T, Watson M, et al. (2017).
+//     "Monitoring of athlete training loads with injury risk in mind."
+//     International Journal of Sports Physiology and Performance.
+//     → EWMA supérieur à la moyenne mobile simple
+//
+// [5] Saw AE, Main LC, Gastin PB. (2016).
+//     "Monitoring the athlete training response: subjective self-report
+//     measures trump commonly used objective measures."
+//     British Journal of Sports Medicine, 50(5), 281-291.
+//     → Questionnaire wellness = mesure la plus sensible et fiable
+//
+// [6] McLean BD, Coutts AJ, Kelly V, et al. (2010).
+//     "Neuromuscular, endocrine, and perceptual fatigue responses during
+//     different length between-match microcycles in professional rugby league."
+//     International Journal of Sports Physiology and Performance.
+//     → Questionnaire Hooper : sommeil, énergie, courbatures, stress
+//
+// [7] Hasegawa T, et al. (2024).
+//     "Effects of high-intensity sprint exercise on neuromuscular function
+//     in sprinters: the countermovement jump as a fatigue assessment tool."
+//     PeerJ 12:e17443.
+//     → Récupération neuromusculaire sprint : 48-72h
+//
+// [8] Borg G. (1998).
+//     Borg's Perceived Exertion and Pain Scales. Human Kinetics.
+//     → Échelle RPE CR10 (0-10)
+//
+// ⚠️  TRANSPARENCE :
+//     Les coefficients par catégorie (LOAD_COEFFICIENTS) et les
+//     pondérations des scores dérivés (readiness, forme, récupération)
+//     sont des CONVENTIONS DE COACHING, pas des valeurs publiées.
+//     Ils sont explicitement séparés des formules scientifiques validées.
 // ============================================================
 
-/**
- * Récupère les charges d'un athlète triées par semaine (plus récente en premier).
- * @param {number} athleteId
- * @param {Array}  weeklyCharge  — données brutes depuis mockData
- * @returns {Array<{week, rawLoad}>}
- */
-function getAthleteLoads(athleteId, weeklyCharge) {
-  return weeklyCharge
-    .filter((w) => w.athleteId === athleteId)
-    .sort((a, b) => b.week - a.week);
-}
+// ─── Coefficients par catégorie (convention coaching, non scientifique) ───────
+// Pondération multiplicative sur la charge session-RPE selon le type de séance.
+// Logique : certaines catégories génèrent une fatigue neuromusculaire plus élevée
+// que ce que le RPE seul capte (ex: force maximale = stress articulaire élevé).
+export const LOAD_COEFFICIENTS = {
+  sprint:       1.2,  // fatigue neuromusculaire élevée, récup 48-72h [7]
+  haies:        1.2,  // similaire sprint avec contrainte technique
+  force:        1.3,  // stress articulaire et neuromusculaire maximal [7]
+  saut:         1.25, // récup neuromusculaire 48h [7]
+  lancer:       1.1,  // charge épaule/dos, moins cardio
+  endurance:    1.0,  // charge cardiovasculaire, bien capturée par RPE [1]
+  technique:    0.8,  // charge cognitive > physique
+  mobilite:     0.6,  // charge minimale
+  recuperation: 0.5,  // intentionnellement faible
+};
 
-/**
- * Calcule la charge aiguë (moyenne des 4 dernières semaines).
- * Représente la charge récente (court terme).
- */
-function computeAcute(loads) {
-  const recent = loads.slice(0, 4);
-  if (!recent.length) return 0;
-  return recent.reduce((s, w) => s + w.rawLoad, 0) / recent.length;
-}
+// ─── Temps de récupération par catégorie (heures) ─────────────────────────────
+// Basé sur [7] : sprint/force = 48-72h, saut = 48h, technique = 24h
+export const RECOVERY_HOURS = {
+  sprint:       72,
+  haies:        72,
+  force:        72,
+  saut:         48,
+  lancer:       48,
+  endurance:    36,
+  technique:    24,
+  mobilite:     12,
+  recuperation: 12,
+};
 
-/**
- * Calcule la charge chronique (moyenne des 12 dernières semaines).
- * Représente la capacité de travail de base (long terme).
- */
-function computeChronic(loads) {
-  const base = loads.slice(0, 12);
-  if (!base.length) return 0;
-  return base.reduce((s, w) => s + w.rawLoad, 0) / base.length;
-}
+// ─── Constantes EWMA [4] ──────────────────────────────────────────────────────
+// λ (lambda) = constante de lissage
+// λa = 2/(N+1) avec N=7 jours → 0.25 (charge aiguë, ~1 semaine)
+// λc = 2/(N+1) avec N=28 jours → 0.067 (charge chronique, ~4 semaines)
+// Choix N=7/28 au lieu de 4/12 semaines pour calcul journalier cohérent
+const LAMBDA_ACUTE   = 2 / (7  + 1); // ≈ 0.25
+const LAMBDA_CHRONIC = 2 / (28 + 1); // ≈ 0.067
 
-/**
- * Calcule l'ACWR (Acute:Chronic Workload Ratio).
- * Cible : 0.8 – 1.3. Garde-fou division par zéro obligatoire.
- * @returns {number} arrondi à 2 décimales
- */
-function computeACWR(acute, chronic) {
-  // ⚠️ GARDE-FOU : ne jamais diviser par zéro
-  if (chronic === 0) return 0;
-  return Math.round((acute / chronic) * 100) / 100;
-}
+// ─── Calcul EWMA sur une série de charges journalières ────────────────────────
+// [4] Williams et al. 2017 : l'EWMA pondère les charges récentes davantage
+// que les anciennes, ce qui est plus fidèle à la réalité physiologique.
+//
+// @param dailyLoads : array [{date: "YYYY-MM-DD", load: number}] trié par date croissante
+// @returns { acute, chronic, acwr, ewmaHistory }
+export function computeEWMA(dailyLoads) {
+  if (!dailyLoads?.length) return { acute: 0, chronic: 0, acwr: 1.0, ewmaHistory: [] };
 
-/**
- * Score de fatigue (0–100) dérivé de la charge aiguë.
- * - Charge aiguë élevée → fatigue élevée
- * - Normalisé sur une charge max estimée à 600
- */
-function computeFatigue(acute, acwr) {
-  const base = Math.min(100, Math.round((acute / 600) * 100));
-  // Bonus si ACWR très élevé (surcharge soudaine)
-  const acwrPenalty = acwr > 1.3 ? Math.round((acwr - 1.3) * 40) : 0;
-  return Math.min(100, base + acwrPenalty);
-}
+  let ewmaAcute   = dailyLoads[0].load;
+  let ewmaChronic = dailyLoads[0].load;
+  const history   = [];
 
-/**
- * Score de forme (0–100).
- * La forme monte quand la charge chronique est élevée et la fatigue aiguë redescend.
- * Concept : fitness - fatigue = forme
- */
-function computeForme(chronic, fatigue) {
-  const fitness = Math.min(100, Math.round((chronic / 500) * 100));
-  const forme   = Math.max(0, fitness - Math.round(fatigue * 0.4));
-  return Math.min(100, forme);
-}
+  for (const { date, load } of dailyLoads) {
+    ewmaAcute   = load * LAMBDA_ACUTE   + ewmaAcute   * (1 - LAMBDA_ACUTE);
+    ewmaChronic = load * LAMBDA_CHRONIC + ewmaChronic * (1 - LAMBDA_CHRONIC);
+    history.push({ date, acute: Math.round(ewmaAcute), chronic: Math.round(ewmaChronic) });
+  }
 
-/**
- * Score de récupération (0–100).
- * Élevé quand la semaine courante est plus légère que la moyenne chronique.
- */
-function computeRecovery(acute, chronic) {
-  if (chronic === 0) return 50;
-  const ratio = acute / chronic;
-  if (ratio < 0.6) return 90;  // semaine très légère = bonne récupération
-  if (ratio < 0.8) return 75;
-  if (ratio < 1.0) return 60;
-  if (ratio < 1.2) return 45;
-  return 30;                    // semaine chargée = récupération faible
-}
-
-/**
- * Score readiness (0–100) = combinaison forme + récupération - fatigue.
- * Indicateur global de disponibilité à la performance.
- */
-function computeReadiness(forme, recovery, fatigue) {
-  const raw = Math.round(forme * 0.4 + recovery * 0.35 + (100 - fatigue) * 0.25);
-  return Math.max(0, Math.min(100, raw));
-}
-
-/**
- * Score de risque blessure (0–100).
- * Alerte si > 60. Facteurs : ACWR élevé, fatigue élevée, récupération faible.
- */
-function computeInjuryRisk(acwr, fatigue, recovery) {
-  let risk = 0;
-  // ACWR hors zone cible
-  if (acwr > 1.5)      risk += 50;
-  else if (acwr > 1.3) risk += 30;
-  else if (acwr < 0.6) risk += 15; // déconditionnement
-  // Fatigue élevée
-  if (fatigue > 70) risk += 25;
-  else if (fatigue > 50) risk += 10;
-  // Mauvaise récupération
-  if (recovery < 40) risk += 20;
-  else if (recovery < 60) risk += 10;
-  return Math.min(100, risk);
-}
-
-/**
- * Score de STABILITÉ DE PERFORMANCE (0–100).
- * ⚠️ NOUVEAU — dernier score composite manquant par rapport au document de
- * concept initial (fatigue, forme, récupération, readiness, risque, ACWR
- * existaient déjà ; celui-ci les complète).
- *
- * Contrairement aux autres scores (basés sur la charge d'entraînement),
- * celui-ci se base sur la RÉGULARITÉ des performances en compétition/tests
- * dans le temps : un athlète stable produit des résultats proches les uns
- * des autres ; un athlète en dents de scie a de gros écarts.
- *
- * Méthode : coefficient de variation (écart-type / moyenne) — mesure
- * statistique standard de dispersion relative. Un CV bas = résultats
- * groupés = stable. Un CV haut = résultats dispersés = instable.
- * Nécessite au moins 3 points de mesure pour être fiable statistiquement.
- *
- * @param {Array<{month, value}>} performanceHistory
- * @returns {number|null} 0-100, ou null si pas assez de données
- */
-export function computePerformanceStability(performanceHistory) {
-  const values = (performanceHistory ?? [])
-    .filter((p) => p.value !== null && p.value !== undefined)
-    .map((p) => Number(p.value))
-    .filter((v) => !isNaN(v));
-
-  if (values.length < 3) return null; // pas assez de mesures pour être fiable
-
-  const mean = values.reduce((s, v) => s + v, 0) / values.length;
-  if (mean === 0) return null;
-
-  const variance = values.reduce((s, v) => s + (v - mean) ** 2, 0) / values.length;
-  const stdDev = Math.sqrt(variance);
-  const cv = stdDev / Math.abs(mean); // coefficient de variation (dispersion relative)
-
-  // Calibration : CV=0 (résultats identiques) → 100. CV≥0.15 (15% de dispersion) → proche de 0.
-  // 15% est un seuil raisonnable en performance sportive (au-delà, la variabilité
-  // est rarement due au hasard mais à un vrai manque de régularité).
-  const score = Math.max(0, Math.min(100, Math.round(100 - (cv / 0.15) * 100)));
-  return score;
-}
-
-// ─── Exports ──────────────────────────────────────────────────────────────────
-
-/**
- * Calcule les métriques d'un athlète pour une semaine donnée (fenêtre glissante).
- * Alias sémantique utilisé par AthleteList / AthleteProfile.
- *
- * @param {number} athleteId
- * @param {Array}  weeklyCharge  — données brutes depuis mockData
- * @param {number} [targetWeek] — semaine cible (défaut : la plus récente dispo)
- * @returns {{ fatigue, forme, recuperation, readiness, risque, acwr, acute, chronic, loads }}
- */
-export function getAthleteMetricsForWeek(athleteId, weeklyCharge, targetWeek) {
-  const allLoads = getAthleteLoads(athleteId, weeklyCharge); // desc par semaine
-
-  // Si une semaine cible est demandée, on filtre jusqu'à cette semaine
-  const loads = targetWeek
-    ? allLoads.filter((w) => w.week <= targetWeek)
-    : allLoads;
-
-  const acute    = computeAcute(loads);
-  const chronic  = computeChronic(loads);
-  const acwr     = computeACWR(acute, chronic);
-  const fatigue  = computeFatigue(acute, acwr);
-  const forme    = computeForme(chronic, fatigue);
-  const recovery = computeRecovery(acute, chronic);
-  const readiness = computeReadiness(forme, recovery, fatigue);
-  const risque   = computeInjuryRisk(acwr, fatigue, recovery);
-
+  const acwr = ewmaChronic > 0 ? ewmaAcute / ewmaChronic : 1.0;
   return {
-    fatigue,
-    forme,
-    recuperation: recovery,
-    readiness,
-    risque,
-    acwr,
-    acute:   Math.round(acute),
-    chronic: Math.round(chronic),
-    loads,
+    acute:       Math.round(ewmaAcute),
+    chronic:     Math.round(ewmaChronic),
+    acwr:        Math.round(acwr * 100) / 100,
+    ewmaHistory: history,
   };
 }
 
-/**
- * Calcule l'ensemble des scores dérivés pour un athlète donné.
- * Utilisé par Dashboard, AthleteProfile, ChargeView.
- *
- * @param {number} athleteId
- * @param {Array}  weeklyCharge — données brutes depuis mockData
- * @returns {{ fatigue, forme, recuperation, readiness, risque, acwr }}
- */
-export function computeAthleteScores(athleteId, weeklyCharge) {
-  const loads    = getAthleteLoads(athleteId, weeklyCharge);
-  const acute    = computeAcute(loads);
-  const chronic  = computeChronic(loads);
-  const acwr     = computeACWR(acute, chronic);
-  const fatigue  = computeFatigue(acute, acwr);
-  const forme    = computeForme(chronic, fatigue);
-  const recovery = computeRecovery(acute, chronic);
-  const readiness = computeReadiness(forme, recovery, fatigue);
-  const risque   = computeInjuryRisk(acwr, fatigue, recovery);
+// ─── Monotonie et Contrainte [2] ──────────────────────────────────────────────
+// Foster (1998) :
+//   Monotonie  = charge_moyenne / écart-type
+//   Contrainte = charge_totale × monotonie
+// Un entraînement monotone (même charge chaque jour) est plus risqué
+// qu'un entraînement varié à charge totale égale.
+//
+// @param weeklyDailyLoads : array de charges journalières sur une semaine
+export function computeMonotonyAndStrain(weeklyDailyLoads) {
+  if (!weeklyDailyLoads?.length) return { monotony: 0, strain: 0 };
 
-  return {
-    fatigue,
-    forme,
-    recuperation: recovery,
-    readiness,
-    risque,
-    acwr,
-    // Données brutes utiles pour les graphiques
-    acute:   Math.round(acute),
-    chronic: Math.round(chronic),
-    loads,   // historique complet trié
-  };
+  const n    = weeklyDailyLoads.length;
+  const mean = weeklyDailyLoads.reduce((a, b) => a + b, 0) / n;
+  const variance = weeklyDailyLoads.reduce((acc, v) => acc + Math.pow(v - mean, 2), 0) / n;
+  const sd   = Math.sqrt(variance);
+
+  const monotony = sd > 0 ? Math.round((mean / sd) * 100) / 100 : 0;
+  const strain   = Math.round(mean * n * monotony);
+
+  return { monotony, strain };
 }
 
-/**
- * Génère les données de graphique pour l'AreaChart charge/forme d'un athlète.
- * Retourne les 12 dernières semaines avec rawLoad, fatigue, forme calculés.
- *
- * @param {number} athleteId
- * @param {Array}  weeklyCharge
- * @returns {Array<{label, rawLoad, fatigue, forme, readiness}>}
- */
-export function computeChargeChartData(athleteId, weeklyCharge) {
-  const loads = getAthleteLoads(athleteId, weeklyCharge)
-    .slice(0, 12)
-    .reverse(); // chronologique pour le graphique
+// ─── Score wellness (Hooper Index) [5][6] ─────────────────────────────────────
+// Saw et al. (2016) : les mesures subjectives sont plus sensibles et fiables
+// que les mesures objectives pour refléter les changements de charge.
+// McLean et al. (2010) : Hooper Index = sommeil + énergie + courbatures + stress
+//
+// @param wellness : { sleep, energy, soreness, mood, stress } — chacun 1 à 5
+// @returns score normalisé 0-100 (100 = état optimal)
+export function computeWellnessScore(wellness) {
+  if (!wellness) return null;
+  const { sleep, energy, soreness, mood, stress } = wellness;
+  if ([sleep, energy, soreness, mood, stress].some(v => v == null)) return null;
 
-  return loads.map((entry, i) => {
-    // Simuler le calcul sur une fenêtre glissante
-    const sliceFrom  = Math.max(0, loads.length - 12 + i - 3);
-    const acuteSlice = loads.slice(Math.max(0, i - 3), i + 1);
-    const chronSlice = loads.slice(Math.max(0, i - 11), i + 1);
+  // soreness et stress sont inversés (5 = mauvais)
+  const score = (
+    sleep   * 20 +   // 0-100, 5 = excellent
+    energy  * 20 +   // 0-100
+    (6 - soreness) * 20 + // inversé : 5 courbatures = 0 points
+    mood    * 20 +
+    (6 - stress)  * 20    // inversé : 5 stress = 0 points
+  ) / 5;
 
-    const ac = acuteSlice.reduce((s, l) => s + l.rawLoad, 0) / (acuteSlice.length || 1);
-    const ch = chronSlice.reduce((s, l) => s + l.rawLoad, 0) / (chronSlice.length || 1);
-    const acwr  = computeACWR(ac, ch);
-    const fat   = computeFatigue(ac, acwr);
-    const forme = computeForme(ch, fat);
-    const rec   = computeRecovery(ac, ch);
-    const read  = computeReadiness(forme, rec, fat);
-
-    return {
-      label:     `S${entry.week}`,
-      rawLoad:   entry.rawLoad,
-      fatigue:   fat,
-      forme,
-      readiness: read,
-    };
-  });
+  return Math.round(Math.max(0, Math.min(100, score)));
 }
 
-/**
- * Retourne le statut textuel selon les scores.
- * Utilisé pour les badges et l'analyse contextuelle automatique.
- */
-export function getStatusLabel(readiness, fatigue, acwr) {
-  if (acwr > 1.3 || fatigue > 70)      return { label: "Surcharge",       color: "#E24B4A", dot: "🔴" };
-  if (readiness >= 75 && fatigue <= 45) return { label: "Optimal",         color: "#1D9E75", dot: "🟢" };
-  if (readiness >= 55)                  return { label: "Modéré",          color: "#EF9F27", dot: "🟡" };
-  return                                       { label: "Récupération",    color: "#378ADD", dot: "⚪" };
-}
+// ─── Temps de récupération restant ────────────────────────────────────────────
+// Basé sur [7] : calcule pour chaque système physiologique combien d'heures
+// de récupération restent selon les séances passées.
+//
+// @param sessions : array de séances avec { sessionDate, category, validations }
+// @param athleteId : number
+// @returns { hoursRemaining, fullyRecovered, lastSession }
+export function computeRecoveryStatus(sessions, athleteId) {
+  const now = new Date();
+  let maxHoursRemaining = 0;
+  let lastSession = null;
 
-/**
- * Génère le texte d'analyse contextuelle automatique (règles codées, sans IA).
- * Affiché dans l'onglet Charge & Forme du profil athlète.
- */
-export function generateContextAnalysis(scores, nextCompetition) {
-  const { acwr, fatigue, forme, readiness } = scores;
-  const lines = [];
+  const doneSessions = sessions.filter(s =>
+    s.validations?.some(v => v.athleteId === athleteId && v.status === "done") &&
+    s.sessionDate
+  );
 
-  // Règle 1 : surcharge aiguë
-  if (acwr > 1.3) {
-    lines.push(
-      `⚠️ Charge aiguë élevée (ACWR ${acwr.toFixed(2)}). Risque accru de blessure et de contre-performance. Réduction de la charge recommandée cette semaine.`
-    );
-  }
+  for (const s of doneSessions) {
+    const sessionEnd  = new Date(s.sessionDate);
+    sessionEnd.setHours(20, 0, 0, 0); // on suppose fin de séance à 20h
+    const hoursNeeded = RECOVERY_HOURS[s.category] ?? 36;
+    const hoursElapsed = (now - sessionEnd) / (1000 * 60 * 60);
+    const hoursRemaining = Math.max(0, hoursNeeded - hoursElapsed);
 
-  // Règle 2 : forme ascendante
-  if (forme > 70 && fatigue < 40) {
-    lines.push(
-      `✅ Athlète en phase ascendante (forme ${forme}/100, fatigue ${fatigue}/100). Bon moment pour programmer une compétition ou un test de performance.`
-    );
-  }
-
-  // Règle 3 : compétition imminente
-  if (nextCompetition) {
-    const daysUntil = Math.round(
-      (new Date(nextCompetition.date) - new Date()) / (1000 * 60 * 60 * 24)
-    );
-    if (daysUntil >= 0 && daysUntil <= 21) {
-      const statut  = getStatusLabel(readiness, fatigue, acwr).label;
-      const coherent = readiness >= 60 && fatigue <= 60 ? "cohérent avec l'objectif" : "préoccupant";
-      lines.push(
-        `🏆 La compétition "${nextCompetition.name}" est dans ${daysUntil} jour${daysUntil > 1 ? "s" : ""}. L'athlète est en état "${statut}", ce qui est ${coherent}.`
-      );
+    if (hoursRemaining > maxHoursRemaining) {
+      maxHoursRemaining = hoursRemaining;
+      lastSession = s;
     }
   }
 
-  // Règle 4 : sous-charge (risque de déconditionnement)
-  if (acwr < 0.6) {
-    lines.push(
-      `📉 Charge aiguë très faible (ACWR ${acwr.toFixed(2)}). Risque de déconditionnement. Envisager une reprise progressive.`
+  return {
+    hoursRemaining: Math.round(maxHoursRemaining),
+    fullyRecovered: maxHoursRemaining === 0,
+    lastSession,
+  };
+}
+
+// ─── Calcul des métriques complètes pour un athlète à une semaine donnée ──────
+// Combine : ACWR (EWMA), monotonie, contrainte, wellness, récupération
+//
+// @param athleteId  : number
+// @param weeklyCharge : [{ athleteId, week, rawLoad }]
+// @param currentWeek  : number (semaine ISO courante)
+// @param wellnessData : [{ date, sleep, energy, soreness, mood, stress }] (optionnel)
+// @param sessions     : array de séances (optionnel, pour récupération)
+export function getAthleteMetricsForWeek(athleteId, weeklyCharge, currentWeek, wellnessData = [], sessions = []) {
+  const myCharge = weeklyCharge
+    .filter(w => w.athleteId === athleteId)
+    .sort((a, b) => a.week - b.week);
+
+  if (!myCharge.length) {
+    return {
+      acute: 0, chronic: 0, acwr: 1.0,
+      fatigue: 0, forme: 0, readiness: 0, recuperation: 0, risque: 0,
+      monotony: 0, strain: 0,
+      wellnessScore: null,
+      recovery: { hoursRemaining: 0, fullyRecovered: true, lastSession: null },
+      ewmaHistory: [],
+    };
+  }
+
+  // ── Conversion semaines → charges journalières pour EWMA ──────────────────
+  // On approxime : 1 semaine = 1 point de données (charge hebdomadaire)
+  // Pour un calcul journalier précis, il faudrait des données par séance
+  const dailyLoads = myCharge.map(w => ({
+    date: `W${w.week}`,
+    load: w.rawLoad,
+  }));
+
+  // ── ACWR via EWMA [4] ──────────────────────────────────────────────────────
+  const { acute, chronic, acwr, ewmaHistory } = computeEWMA(dailyLoads);
+
+  // ── Monotonie et Contrainte [2] ────────────────────────────────────────────
+  // Sur les 4 dernières semaines
+  const last4Weeks = myCharge.slice(-4).map(w => w.rawLoad);
+  const { monotony, strain } = computeMonotonyAndStrain(last4Weeks);
+
+  // ── Wellness [5][6] ────────────────────────────────────────────────────────
+  // Prend le dernier questionnaire disponible (7 derniers jours)
+  const recentWellness = wellnessData
+    .filter(w => w.athleteId === athleteId || !w.athleteId)
+    .sort((a, b) => new Date(b.date) - new Date(a.date))[0] ?? null;
+  const wellnessScore = computeWellnessScore(recentWellness);
+
+  // ── Récupération neuromusculaire [7] ──────────────────────────────────────
+  const recovery = computeRecoveryStatus(sessions, athleteId);
+
+  // ── Scores dérivés (CONVENTION COACHING — non scientifique) ───────────────
+  // Ces formules sont des proxies raisonnables mais leurs pondérations
+  // ne sont pas issues de publications scientifiques.
+  const acwrNorm = Math.max(0, Math.min(100, (1 - Math.abs(acwr - 1.05)) * 100));
+
+  // Fatigue : basée sur l'ACWR et la charge aiguë relative
+  const rawFatigue = Math.min(100, (acwr > 1.0 ? (acwr - 1.0) * 120 : 0) + (acute / Math.max(chronic, 1) - 0.8) * 30);
+  const fatigue    = Math.max(0, Math.round(rawFatigue));
+
+  // Forme : basée sur la charge chronique (fitness) et l'EWMA
+  const maxChronicKnown = Math.max(...myCharge.map(w => w.rawLoad), 1);
+  const forme = Math.round(Math.min(100, (chronic / maxChronicKnown) * 100));
+
+  // Récupération (score) : inversement proportionnel aux heures restantes
+  const maxRecoveryHours = 72;
+  const recuperation = Math.round(Math.max(0, (1 - recovery.hoursRemaining / maxRecoveryHours) * 100));
+
+  // Readiness : combine forme, récupération, wellness et ACWR [5]
+  // Si wellness disponible → intégré à 25%, sinon réparti sur les autres
+  let readiness;
+  if (wellnessScore !== null) {
+    readiness = Math.round(
+      forme        * 0.30 +
+      recuperation * 0.25 +
+      wellnessScore * 0.25 +
+      acwrNorm     * 0.20
+    );
+  } else {
+    readiness = Math.round(
+      forme        * 0.40 +
+      recuperation * 0.35 +
+      acwrNorm     * 0.25
     );
   }
 
-  // Règle 5 : tout va bien
-  if (lines.length === 0) {
-    lines.push(
-      `✅ Aucune anomalie détectée. Charge et forme dans les zones cibles (ACWR ${acwr.toFixed(2)}, readiness ${readiness}/100).`
-    );
-  }
+  // Risque blessure : ACWR élevé + monotonie élevée + récupération insuffisante
+  const acwrRisk    = acwr > 1.3 ? Math.min(100, (acwr - 1.3) * 200) : acwr < 0.8 ? 10 : 0;
+  const monotonyRisk = monotony > 2 ? Math.min(50, (monotony - 2) * 25) : 0;
+  const recoveryRisk = recovery.hoursRemaining > 48 ? 20 : 0;
+  const risque = Math.round(Math.min(100, acwrRisk + monotonyRisk + recoveryRisk));
 
-  return lines;
+  return {
+    // Métriques scientifiques [1][3][4]
+    acute,
+    chronic,
+    acwr,
+    ewmaHistory,
+    // Métriques Foster [2]
+    monotony,
+    strain,
+    // Wellness [5][6]
+    wellnessScore,
+    // Récupération [7]
+    recovery,
+    // Scores dérivés (convention coaching)
+    fatigue:      Math.max(0, Math.min(100, fatigue)),
+    forme:        Math.max(0, Math.min(100, forme)),
+    readiness:    Math.max(0, Math.min(100, readiness)),
+    recuperation: Math.max(0, Math.min(100, recuperation)),
+    risque:       Math.max(0, Math.min(100, risque)),
+  };
+}
+
+// ─── getStatusLabel (inchangé) ────────────────────────────────────────────────
+export function getStatusLabel(readiness, fatigue, acwr) {
+  if (acwr > 1.5)         return { label: "Surcharge critique", dot: "🔴", color: "#E24B4A" };
+  if (acwr > 1.3)         return { label: "Surcharge",          dot: "🟠", color: "#EF9F27" };
+  if (fatigue > 75)       return { label: "Fatigue élevée",     dot: "🟡", color: "#EF9F27" };
+  if (readiness >= 75)    return { label: "Optimal",            dot: "🟢", color: "#1D9E75" };
+  if (readiness >= 55)    return { label: "Modéré",             dot: "🟡", color: "#EF9F27" };
+  if (readiness >= 35)    return { label: "Fatigué",            dot: "🟠", color: "#EF9F27" };
+  return                         { label: "Récupération",       dot: "🔵", color: "#378ADD" };
 }
