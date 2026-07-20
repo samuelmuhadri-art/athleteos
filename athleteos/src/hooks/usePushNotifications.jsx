@@ -1,3 +1,7 @@
+// ============================================================
+// AthleteOS — src/hooks/usePushNotifications.jsx
+// ============================================================
+
 import { useState, useEffect, useCallback } from "react";
 import { supabase } from "../utils/supabaseClient";
 
@@ -16,6 +20,7 @@ export function usePushNotifications(athleteId, clubId, userId = null) {
   const [swReady,         setSwReady]         = useState(false);
   const [registration,    setRegistration]    = useState(null);
 
+  // ── Enregistrement du Service Worker ──────────────────────────────────────
   useEffect(() => {
     if (!("serviceWorker" in navigator) || !("PushManager" in window)) return;
     navigator.serviceWorker
@@ -30,6 +35,59 @@ export function usePushNotifications(athleteId, clubId, userId = null) {
       .catch(console.error);
   }, []);
 
+  // ── Correction automatique : subscription navigateur sans athlete_id en base ──
+  // Si une subscription existe dans le navigateur mais pas en base avec le bon
+  // athlete_id (ou user_id), on la réinsère automatiquement.
+  // C'est ce qui se passe quand Samuel avait une sub mais athlete_id=NULL en base.
+  useEffect(() => {
+    if (!swReady || !registration || !clubId) return;
+    if (Notification.permission !== "granted") return;
+
+    const fixSubscription = async () => {
+      const sub = await registration.pushManager.getSubscription();
+      if (!sub) return;
+
+      const subJson = sub.toJSON();
+
+      // Cherche en base
+      const { data: existing } = await supabase
+        .from("push_subscriptions")
+        .select("id, athlete_id, user_id")
+        .eq("endpoint", subJson.endpoint)
+        .maybeSingle();
+
+      // Si la ligne existe avec les bons ids → tout va bien
+      if (existing) {
+        const athleteOk = athleteId ? existing.athlete_id === athleteId : true;
+        const userOk    = userId    ? existing.user_id    === userId    : true;
+        if (athleteOk && userOk) {
+          setSubscribed(true);
+          return;
+        }
+      }
+
+      // Sinon on supprime l'ancienne et on réinsère avec les bons ids
+      await supabase.from("push_subscriptions").delete().eq("endpoint", subJson.endpoint);
+      const { error } = await supabase.from("push_subscriptions").insert({
+        club_id:    clubId,
+        endpoint:   subJson.endpoint,
+        p256dh:     subJson.keys?.p256dh,
+        auth:       subJson.keys?.auth,
+        user_agent: navigator.userAgent.slice(0, 200),
+        athlete_id: athleteId ?? null,
+        user_id:    userId    ?? null,
+      });
+
+      if (!error) {
+        console.log("Push subscription corrigée en base ✅");
+        setSubscribed(true);
+      }
+    };
+
+    fixSubscription().catch(console.error);
+  }, [swReady, registration, clubId, athleteId, userId]);
+
+  // ── Abonnement manuel (bouton) ─────────────────────────────────────────────
   const subscribe = useCallback(async () => {
     if (!swReady || !registration || !VAPID_PUBLIC_KEY) return;
     if (subscribed) return;
@@ -55,7 +113,7 @@ export function usePushNotifications(athleteId, clubId, userId = null) {
         auth:       subJson.keys?.auth,
         user_agent: navigator.userAgent.slice(0, 200),
         athlete_id: athleteId ?? null,
-        user_id:    userId ?? null,
+        user_id:    userId    ?? null,
       });
 
       if (error) throw error;
@@ -65,57 +123,10 @@ export function usePushNotifications(athleteId, clubId, userId = null) {
     }
   }, [swReady, registration, athleteId, clubId, userId, subscribed]);
 
-  // ── Ré-enregistrement automatique quand athleteId devient disponible ──────
-  // Sur mobile athlète, athlete?.id est null au premier render puis devient
-  // l'id réel après fetchAll. Si l'utilisateur a déjà accordé la permission
-  // et qu'une subscription existe dans le navigateur mais pas en base
-  // (athlete_id=null), on corrige automatiquement dès que l'id est connu.
-  useEffect(() => {
-    if (!athleteId || !swReady || !registration || !clubId) return;
-    if (Notification.permission !== "granted") return;
-
-    const fixSubscription = async () => {
-      const sub = await registration.pushManager.getSubscription();
-      if (!sub) return; // pas d'abonnement navigateur, rien à corriger
-
-      const subJson = sub.toJSON();
-
-      // Vérifie si cet endpoint existe déjà en base avec le bon athlete_id
-      const { data: existing } = await supabase
-        .from("push_subscriptions")
-        .select("id, athlete_id")
-        .eq("endpoint", subJson.endpoint)
-        .single();
-
-      if (existing && existing.athlete_id === athleteId) {
-        // Déjà correct
-        setSubscribed(true);
-        return;
-      }
-
-      // Supprime l'ancienne ligne (avec athlete_id=null ou mauvais id)
-      await supabase.from("push_subscriptions").delete().eq("endpoint", subJson.endpoint);
-
-      // Réinsère avec le bon athlete_id
-      const { error } = await supabase.from("push_subscriptions").insert({
-        club_id:    clubId,
-        endpoint:   subJson.endpoint,
-        p256dh:     subJson.keys?.p256dh,
-        auth:       subJson.keys?.auth,
-        user_agent: navigator.userAgent.slice(0, 200),
-        athlete_id: athleteId,
-        user_id:    userId ?? null,
-      });
-
-      if (!error) setSubscribed(true);
-    };
-
-    fixSubscription().catch(console.error);
-  }, [athleteId, swReady, registration, clubId, userId]);
-
   return { subscribed, subscribe, permissionState, swReady };
 }
 
+// ── Bouton toggle ──────────────────────────────────────────────────────────
 export function PushToggleButton({ subscribed, onToggle, permissionState }) {
   const noSupport = !("serviceWorker" in navigator) || !("PushManager" in window);
   if (noSupport) return null;
