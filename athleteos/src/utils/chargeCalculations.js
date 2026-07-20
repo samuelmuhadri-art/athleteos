@@ -329,3 +329,78 @@ export function getStatusLabel(readiness, fatigue, acwr) {
   if (readiness >= 35)    return { label: "Fatigué",            dot: "🟠", color: "#EF9F27" };
   return                         { label: "Récupération",       dot: "🔵", color: "#378ADD" };
 }
+// ─── computeChargeChartData ───────────────────────────────────────────────────
+// Prépare les données du graphique charge vs forme sur les 12 dernières semaines.
+export function computeChargeChartData(athleteId, weeklyCharge) {
+  const myCharge = weeklyCharge
+    .filter(w => w.athleteId === athleteId)
+    .sort((a, b) => a.week - b.week)
+    .slice(-12);
+
+  if (!myCharge.length) return [];
+
+  const dailyLoads = myCharge.map(w => ({ date: `W${w.week}`, load: w.rawLoad }));
+  const { ewmaHistory } = computeEWMA(dailyLoads);
+  const maxLoad = Math.max(...myCharge.map(w => w.rawLoad), 1);
+
+  return myCharge.map((w, i) => {
+    const ewma = ewmaHistory[i] ?? { acute: 0, chronic: 0 };
+    const acwr = ewma.chronic > 0 ? ewma.acute / ewma.chronic : 1.0;
+    const fatigue = Math.max(0, Math.round(Math.min(100, acwr > 1.0 ? (acwr - 1.0) * 120 : 0)));
+    const forme   = Math.round(Math.min(100, (ewma.chronic / maxLoad) * 100));
+    return { label: `S${w.week}`, rawLoad: w.rawLoad, forme, fatigue };
+  });
+}
+
+// ─── generateContextAnalysis ──────────────────────────────────────────────────
+// Génère des phrases d'analyse contextuelle à partir des métriques et de la prochaine compétition.
+export function generateContextAnalysis(metrics, nextComp) {
+  const { acwr, fatigue, readiness, monotony, recovery } = metrics;
+  const lines = [];
+
+  if (acwr > 1.5)       lines.push("⚠️ ACWR très élevé (" + acwr.toFixed(2) + ") : risque de blessure accru. Réduire la charge immédiatement.");
+  else if (acwr > 1.3)  lines.push("🟠 ACWR élevé (" + acwr.toFixed(2) + ") : zone de surcharge aiguë. Surveiller la récupération.");
+  else if (acwr < 0.8)  lines.push("🔵 ACWR faible (" + acwr.toFixed(2) + ") : sous-charge relative. Augmentation progressive possible.");
+  else                  lines.push("🟢 ACWR optimal (" + acwr.toFixed(2) + ") : balance charge aiguë/chronique dans la zone cible (0.8–1.3).");
+
+  if (fatigue > 75)       lines.push("🔴 Fatigue élevée (" + fatigue + "/100) : prévoir récupération ou repos.");
+  else if (fatigue > 50)  lines.push("🟡 Fatigue modérée (" + fatigue + "/100) : surveiller l'accumulation.");
+  else                    lines.push("✅ Fatigue bien gérée (" + fatigue + "/100).");
+
+  if (readiness >= 75)     lines.push("🌟 Readiness optimal (" + readiness + "/100) : prêt pour haute intensité.");
+  else if (readiness >= 50) lines.push("🟡 Readiness modéré (" + readiness + "/100) : privilégier technique ou intensité réduite.");
+  else                     lines.push("🔴 Readiness faible (" + readiness + "/100) : séance légère ou repos recommandé.");
+
+  if (monotony > 2.5) lines.push("⚠️ Monotonie élevée (" + monotony.toFixed(1) + ") : varier les types de séances.");
+
+  if (recovery?.hoursRemaining > 48) {
+    lines.push("⏱️ Récupération incomplète : " + recovery.hoursRemaining + "h restantes. Éviter haute intensité.");
+  } else if (recovery?.fullyRecovered) {
+    lines.push("✅ Récupération complète : athlète physiologiquement disponible.");
+  }
+
+  if (nextComp) {
+    const days = Math.round((new Date(nextComp.date) - new Date()) / (1000 * 60 * 60 * 24));
+    if (days <= 3)       lines.push("🏟️ Compétition dans " + days + "j (" + nextComp.name + ") : activation, réduire la charge.");
+    else if (days <= 7)  lines.push("🏟️ Compétition dans " + days + "j (" + nextComp.name + ") : semaine d'affûtage, baisser le volume.");
+    else if (days <= 14) lines.push("🏟️ Compétition dans " + days + "j (" + nextComp.name + ") : maintenir charge, soigner la qualité.");
+  }
+
+  return lines.length ? lines : ["Pas assez de données pour une analyse contextuelle."];
+}
+
+// ─── computePerformanceStability ──────────────────────────────────────────────
+// Mesure la régularité des performances via le coefficient de variation.
+// Score 0-100 (100 = très régulier). Minimum 3 points requis.
+export function computePerformanceStability(performanceHistory) {
+  const values = (performanceHistory ?? [])
+    .map(p => parseFloat(p.value))
+    .filter(v => !isNaN(v) && v > 0);
+
+  if (values.length < 3) return null;
+
+  const mean = values.reduce((a, b) => a + b, 0) / values.length;
+  const sd   = Math.sqrt(values.reduce((acc, v) => acc + Math.pow(v - mean, 2), 0) / values.length);
+  const cv   = mean > 0 ? (sd / mean) * 100 : 0;
+  return Math.round(Math.max(0, Math.min(100, 100 - cv * 5)));
+}
