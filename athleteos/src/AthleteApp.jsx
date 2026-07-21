@@ -3597,12 +3597,13 @@ export default function AthleteApp() {
               />
             )}
             {activeView === "messagerie" && (
-             <MaMessagerie
-  athlete={athlete} coachUserId={coachUserId}
-  athleteUserId={profile?.id} coachName={coachName}
-  clubId={clubId} allAthletes={allAthletes}
-/>
-            {activeView === "social" && (
+              <MaMessagerie
+                athlete={athlete} coachUserId={coachUserId}
+                athleteUserId={profile?.id} coachName={coachName}
+                clubId={clubId} allAthletes={allAthletes}
+              />
+            )}
+{activeView === "social" && (
               <MonClub
                 athlete={athlete} allAthletes={allAthletes}
                 clubId={clubId} sessions={sessions} profile={profile}
