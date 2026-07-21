@@ -1014,19 +1014,7 @@ function Dashboard({ athlete, weeklyCharge, sessions, competitions, lastMessages
             </div>
           )}
  
-         // ════════════════════════════════════════════════════════════════════════════
-// DANS function Dashboard({ ... }) — remplace uniquement le bloc
-// "État de forme" (la section avec les 5 métriques + progress bars)
-// Cherche : {/* ── État de forme détaillé ── */}
-// et remplace tout ce bloc par ce code
-// ════════════════════════════════════════════════════════════════════════════
-
-// 1. Ajoute ce state EN HAUT de function Dashboard({ ... }), avec les autres useState :
-//    const [activeMetric, setActiveMetric] = useState(null);
-
-// 2. Remplace le bloc "État de forme détaillé" par :
-
-          {/* ── État de forme détaillé — CLIQUABLE ── */}
+   {/* ── État de forme détaillé — CLIQUABLE ── */}
           {hasCharge && (
             <div className="card p-5">
               <div className="flex items-center justify-between mb-1">
