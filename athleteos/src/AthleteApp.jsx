@@ -4739,11 +4739,9 @@ useEffect(() => {
       {/* ══════════════════════════════════════════════════════════════
           BOTTOM NAV MOBILE — GLASSMORPHISM PREMIUM
       ══════════════════════════════════════════════════════════════ */}
-      <nav
-        className="md:hidden fixed bottom-0 left-0 right-0 z-30 bottom-nav"
-        style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
-      >
-        <div className="flex items-stretch h-[60px]">
+      {/* ══ BOTTOM NAV MOBILE ══════════════════════════════════════════ */}
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 z-30 bottom-nav">
+        <div className="flex items-stretch" style={{ height: "60px" }}>
           {NAV_ITEMS.map(item => {
             const Icon     = item.icon;
             const isActive = activeView === item.id;
@@ -4755,71 +4753,54 @@ useEffect(() => {
                 className={["bottom-nav-item tap-feedback", isActive ? "active" : ""].join(" ")}
               >
                 <div className="relative">
-                  <Icon
-                    size={isActive ? 21 : 20}
-                    strokeWidth={isActive ? 2.3 : 1.6}
-                    className="transition-all duration-200"
-                  />
+                  <Icon size={isActive ? 21 : 20} strokeWidth={isActive ? 2.2 : 1.6} />
                   {hasBadge && (
-                    <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-red-500 text-white text-[8px] font-bold flex items-center justify-center border-2 border-white animate-bounce-in">
+                    <span className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-red-500 text-white text-[8px] font-bold flex items-center justify-center border-2 border-white animate-bounce-in">
                       {msgUnread}
                     </span>
                   )}
                 </div>
-                <span
-                  className="text-[9.5px] font-semibold truncate max-w-[52px] text-center transition-all duration-200"
-                  style={{ letterSpacing: isActive ? "0.01em" : "0" }}
-                >
+                <span className="bottom-nav-label truncate max-w-[52px] text-center">
                   {item.label}
                 </span>
               </button>
             );
           })}
- 
+
           {/* Bouton notifications */}
           <button
             onClick={() => setShowNotifs(v => !v)}
             className={["bottom-nav-item tap-feedback", showNotifs ? "active" : ""].join(" ")}
           >
             <div className="relative">
-              <Bell
-                size={showNotifs ? 21 : 20}
-                strokeWidth={showNotifs ? 2.3 : 1.6}
-                className="transition-all duration-200"
-              />
+              <Bell size={showNotifs ? 21 : 20} strokeWidth={showNotifs ? 2.2 : 1.6} />
               {unreadCount > 0 && (
-                <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-red-500 text-white text-[8px] font-bold flex items-center justify-center border-2 border-white animate-bounce-in">
+                <span className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-red-500 text-white text-[8px] font-bold flex items-center justify-center border-2 border-white animate-bounce-in">
                   {unreadCount}
                 </span>
               )}
             </div>
-            <span
-              className="text-[9.5px] font-semibold text-center transition-all"
-              style={{ color: subscribed && !showNotifs ? "#1D9E75" : undefined }}
-            >
-              {subscribed ? "🔔" : "Notifs"}
+            <span className="bottom-nav-label">
+              {subscribed ? "Notifs ●" : "Notifs"}
             </span>
           </button>
         </div>
- 
-        {/* ── Panneau notifs mobile ─────────────────────────────────────── */}
+
+        {/* ── Panneau notifs — bottom sheet ────────────────────────────── */}
         {showNotifs && (
           <div
-            className="fixed inset-0 z-40 animate-fade-in"
+            className="fixed inset-0 z-40 bottom-sheet-backdrop"
             onClick={() => setShowNotifs(false)}
           >
-            {/* Sheet du bas */}
             <div
-              className="absolute bottom-[60px] left-0 right-0 bg-white rounded-t-3xl border-t border-slate-100 shadow-card-lg max-h-[65vh] flex flex-col animate-slide-up"
+              className="bottom-sheet"
+              style={{ bottom: "calc(60px + env(safe-area-inset-bottom))" }}
               onClick={e => e.stopPropagation()}
             >
-              {/* Handle */}
-              <div className="flex justify-center pt-3 pb-1 flex-shrink-0">
-                <div className="w-10 h-1 rounded-full bg-slate-200" />
-              </div>
- 
-              <div className="px-5 py-3 flex items-center justify-between flex-shrink-0">
-                <p className="text-[15px] font-bold text-slate-800">Notifications</p>
+              <div className="bottom-sheet-handle" />
+
+              <div className="px-5 py-4 flex items-center justify-between flex-shrink-0">
+                <p className="text-[15px] font-semibold text-slate-800">Notifications</p>
                 <div className="flex items-center gap-3">
                   <PushToggleButton subscribed={subscribed} onToggle={subscribe} permissionState={permissionState} />
                   {unreadCount > 0 && (
@@ -4828,45 +4809,40 @@ useEffect(() => {
                         await supabase.from("athlete_notifications").update({ is_read: true }).eq("athlete_id", athlete.id).eq("is_read", false);
                         fetchAll();
                       }}
-                      className="text-[11.5px] font-semibold text-emerald-600"
+                      className="text-[12px] font-semibold text-emerald-600"
                     >
                       Tout lire
                     </button>
                   )}
                 </div>
               </div>
- 
-              <div className="flex-1 overflow-y-auto divide-y divide-slate-50 pb-safe">
+
+              <div className="flex-1 overflow-y-auto divide-y divide-slate-50">
                 {myNotifs.length === 0 ? (
-                  <div className="px-5 py-10 text-center">
-                    <div className="text-[32px] mb-2">🔔</div>
+                  <div className="px-5 py-12 text-center">
+                    <div className="w-12 h-12 rounded-2xl bg-slate-100 flex items-center justify-center mx-auto mb-3">
+                      <Bell size={20} className="text-slate-300" />
+                    </div>
                     <p className="text-[13px] text-slate-400 font-medium">Aucune notification</p>
                   </div>
                 ) : myNotifs.map(n => {
                   const diff = (new Date() - new Date(n.created_at)) / 1000;
-                  const ago = diff < 60 ? "À l'instant" : diff < 3600 ? `${Math.floor(diff / 60)}min` : diff < 86400 ? `${Math.floor(diff / 3600)}h` : `${Math.floor(diff / 86400)}j`;
+                  const ago = diff < 60 ? "À l'instant" : diff < 3600 ? `${Math.floor(diff/60)}min` : diff < 86400 ? `${Math.floor(diff/3600)}h` : `${Math.floor(diff/86400)}j`;
                   return (
                     <div
                       key={n.id}
-                      className={[
-                        "px-5 py-4 cursor-pointer active:bg-slate-50 transition-colors",
-                        !n.is_read ? "bg-blue-50/40" : "",
-                      ].join(" ")}
+                      className={["px-5 py-4 cursor-pointer active:bg-slate-50 transition-colors", !n.is_read ? "bg-blue-50/40" : ""].join(" ")}
                       onClick={async () => {
                         if (!n.is_read) await supabase.from("athlete_notifications").update({ is_read: true }).eq("id", n.id);
                         fetchAll(); setShowNotifs(false);
                       }}
                     >
                       <div className="flex items-start gap-3">
-                        {!n.is_read && (
-                          <div className="w-2 h-2 rounded-full bg-blue-500 mt-1.5 flex-shrink-0 badge-pulse" />
-                        )}
+                        {!n.is_read && <div className="w-2 h-2 rounded-full bg-blue-500 mt-1.5 flex-shrink-0 status-dot-live" />}
                         <div className="flex-1 min-w-0">
                           <p className="text-[13px] font-semibold text-slate-700 leading-tight">{n.title}</p>
-                          {n.description && (
-                            <p className="text-[12px] text-slate-400 mt-0.5 line-clamp-2 leading-relaxed">{n.description}</p>
-                          )}
-                          <p className="text-[10.5px] text-slate-300 mt-1 font-medium">{ago}</p>
+                          {n.description && <p className="text-[12px] text-slate-400 mt-0.5 line-clamp-2">{n.description}</p>}
+                          <p className="text-[10.5px] text-slate-300 mt-1.5 font-medium">{ago}</p>
                         </div>
                       </div>
                     </div>
