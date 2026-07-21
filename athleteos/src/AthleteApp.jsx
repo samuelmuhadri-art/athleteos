@@ -14,9 +14,9 @@ import {
   CheckCircle, AlertTriangle, Clock, FileText, BarChart2,
   Users, Heart, Image, Camera, Bell, Moon, Battery, Smile, Search
 } from "lucide-react";
-import {
-  LineChart, Line, XAxis, YAxis, Tooltip,
+import { LineChart, Line, XAxis, YAxis, Tooltip,
   ResponsiveContainer, CartesianGrid, ReferenceLine,
+  AreaChart, Area,
 } from "recharts";
 import { supabase }  from "./utils/supabaseClient";
 import { useAuth }   from "./context/AuthContext";
