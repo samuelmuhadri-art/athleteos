@@ -2315,15 +2315,16 @@ function MesPerformances({ athlete, competitions, myPerformances, myGoals, clubI
     setSavingPerf(true);
     try {
       const { data, error } = await supabase
-        .from("athlete_performances")
-        .insert({
-          athlete_id:       athlete.id,
-          club_id:          clubId,
-          discipline:       perfForm.discipline,
-          value:            perfForm.value,
-          performance_date: perfForm.performance_date,
-          context:          perfForm.context || null,
-        })
+  .from("athlete_performances")
+  .insert({
+    athlete_id:       athlete.id,
+    club_id:          clubId,
+    discipline:       perfForm.discipline,
+    discipline_type:  perfForm.discipline, // même valeur, colonne obligatoire
+    value:            perfForm.value,
+    performance_date: perfForm.performance_date,
+    context:          perfForm.context || null,
+  })
         .select()
         .single();
 
