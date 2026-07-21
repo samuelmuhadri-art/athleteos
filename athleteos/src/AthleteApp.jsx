@@ -1986,7 +1986,7 @@ function getDiscHib(discName) {
   return DISC_PRESETS.find(d => d.name === discName)?.hib ?? false;
 }
 
-const AddPerfModal = memo(({ athlete, clubId, onClose, onAdded }) => {
+const AddPerfModal = memo(({ athlete, clubId, Close, onAdded }) => {
   const inputCls = "w-full border border-slate-200 rounded-lg px-3 py-2 text-[13px] text-slate-700 focus:outline-none focus:ring-2 focus:ring-emerald-400 bg-white";
   const labelCls = "block text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1";
   const today = new Date().toISOString().split("T")[0];
@@ -2218,344 +2218,654 @@ const AddGoalModal = memo(({ athlete, clubId, allDiscs, onClose, onAdded }) => {
   );
 });
 
+// ════════════════════════════════════════════════════════════════════════════
+// REMPLACE function MesPerformances({ ... }) dans AthleteApp.jsx
+// De "function MesPerformances({" jusqu'à "// ══ VUE 4 — MESSAGERIE"
+// ════════════════════════════════════════════════════════════════════════════
+
 function MesPerformances({ athlete, competitions, myPerformances, myGoals, clubId, onRefresh }) {
-  const allDiscs = useMemo(() => {
-    const fromRecords = Object.keys(athlete.records ?? {});
-    const fromPerfs   = [...new Set((myPerformances ?? []).map(p => p.discipline))];
-    return [...new Set([...fromRecords, ...fromPerfs])].sort();
-  }, [athlete.records, myPerformances]);
+  const today = new Date();
 
+  // ── State ──────────────────────────────────────────────────────────────────
+  const [activeTab,    setActiveTab]    = useState("records");    // records | evolution | objectifs | stats
   const [selectedDisc, setSelectedDisc] = useState(null);
-  const [showAddModal, setShowAddModal] = useState(false);
-  const [showGoalModal,setShowGoalModal]= useState(false);
-  const [deleting,     setDeleting]     = useState(null);
+  const [showAddPerf,  setShowAddPerf]  = useState(false);
+  const [showAddGoal,  setShowAddGoal]  = useState(false);
+  const [savingPerf,   setSavingPerf]   = useState(false);
+  const [savingGoal,   setSavingGoal]   = useState(false);
+  const [perfForm,     setPerfForm]     = useState({ discipline: "", value: "", performance_date: today.toISOString().slice(0,10), context: "" });
+  const [goalForm,     setGoalForm]     = useState({ discipline: "", target_value: "", deadline: "", notes: "" });
 
+  const disciplines = Object.keys(athlete.records ?? {});
+
+  // Initialise la discipline sélectionnée
   useEffect(() => {
-    if (!selectedDisc && allDiscs.length > 0) setSelectedDisc(allDiscs[0]);
-  }, [allDiscs, selectedDisc]);
+    if (!selectedDisc && disciplines.length > 0) setSelectedDisc(disciplines[0]);
+  }, [disciplines.length]);
 
-  const rec = selectedDisc ? athlete.records[selectedDisc] : null;
+  // ── Données dérivées ───────────────────────────────────────────────────────
 
-  const discPerfs = useMemo(() => {
-    if (!selectedDisc) return [];
-    return (myPerformances ?? [])
-      .filter(p => p.discipline === selectedDisc)
-      .sort((a,b) => new Date(a.performance_date)-new Date(b.performance_date));
-  }, [selectedDisc, myPerformances]);
-
-  const compResults = useMemo(() => {
-    if (!selectedDisc) return [];
-    const results = [];
-    competitions.forEach(c => {
-      const r = c.results?.find(r => r.athleteId===athlete.id && r.event===selectedDisc);
-      if (r) results.push({ date: c.date, label: c.name, value: r.result, source: "competition" });
-    });
-    return results;
-  }, [selectedDisc, competitions, athlete.id]);
-
+  // Performances triées par date pour le graphique
   const chartData = useMemo(() => {
-    const allPoints = [
-      ...discPerfs.map(p => ({ date: p.performance_date, label: new Date(p.performance_date).toLocaleDateString("fr-BE",{day:"2-digit",month:"short"}), result: p.value, source: p.source, note: p.context })),
-      ...compResults.map(r => ({ date: r.date, label: new Date(r.date).toLocaleDateString("fr-BE",{day:"2-digit",month:"short"}), result: r.value, source: "competition", note: r.label })),
-    ].sort((a,b) => new Date(a.date)-new Date(b.date));
-    return allPoints.map(p => {
-      const { value } = parsePerf(p.result);
-      return { ...p, numValue: value };
-    }).filter(p => p.numValue !== null);
-  }, [discPerfs, compResults, selectedDisc]);
+    const disc = selectedDisc ?? disciplines[0];
+    if (!disc) return [];
+    return (myPerformances ?? [])
+      .filter(p => p.discipline === disc && p.value != null)
+      .sort((a, b) => a.performance_date.localeCompare(b.performance_date))
+      .map(p => ({
+        date:  p.performance_date.slice(0, 10),
+        label: new Date(p.performance_date).toLocaleDateString("fr-BE", { day: "numeric", month: "short" }),
+        value: parseFloat(p.value) || 0,
+        raw:   p.value,
+        ctx:   p.context,
+      }));
+  }, [myPerformances, selectedDisc, disciplines]);
 
-  const isTime = chartData.length > 0 && !getDiscHib(selectedDisc ?? "");
-  const discColors = DISC_TYPE_COLORS[getDiscType(selectedDisc ?? "")] ?? DISC_TYPE_COLORS.sprint;
+  // Historique compétitions
+  const compHistory = useMemo(() => {
+    const all = [];
+    (competitions ?? []).forEach(c => {
+      if (!c.athleteIds?.includes(athlete.id)) return;
+      (c.results ?? []).filter(r => r.athleteId === athlete.id).forEach(r => {
+        all.push({ comp: c, result: r });
+      });
+    });
+    return all.sort((a, b) => new Date(b.comp.date) - new Date(a.comp.date));
+  }, [competitions, athlete.id]);
 
-  const bestPerf = useMemo(() => {
-    if (!chartData.length) return null;
-    const hib = getDiscHib(selectedDisc ?? "");
-    return chartData.reduce((best, p) => {
-      if (!best) return p;
-      return hib ? (p.numValue > best.numValue ? p : best) : (p.numValue < best.numValue ? p : best);
-    }, null);
-  }, [chartData, selectedDisc]);
+  // Stats par discipline (nombre séances par type)
+  const disciplineStats = useMemo(() => {
+    const map = {};
+    (myPerformances ?? []).forEach(p => {
+      if (!map[p.discipline]) map[p.discipline] = { count: 0, best: null, last: null };
+      map[p.discipline].count++;
+      const v = parseFloat(p.value);
+      if (!isNaN(v)) {
+        if (!map[p.discipline].best || v > map[p.discipline].best.v) map[p.discipline].best = { v, date: p.performance_date, raw: p.value };
+        map[p.discipline].last = { v, date: p.performance_date, raw: p.value };
+      }
+    });
+    return map;
+  }, [myPerformances]);
 
-  const handleDelete = async (id) => {
-    setDeleting(id);
-    await supabase.from("athlete_performances").delete().eq("id", id);
-    onRefresh();
-    setDeleting(null);
+  // Objectifs actifs vs atteints
+  const activeGoals   = (myGoals ?? []).filter(g => !g.achieved);
+  const achievedGoals = (myGoals ?? []).filter(g => g.achieved);
+
+  // ── Handlers ──────────────────────────────────────────────────────────────
+
+  const handleAddPerf = async () => {
+    if (!perfForm.discipline.trim() || !perfForm.value.trim()) return;
+    setSavingPerf(true);
+    try {
+      await supabase.from("athlete_performances").insert({
+        athlete_id:       athlete.id,
+        club_id:          clubId,
+        discipline:       perfForm.discipline,
+        value:            perfForm.value,
+        performance_date: perfForm.performance_date,
+        context:          perfForm.context || null,
+      });
+      setPerfForm({ discipline: selectedDisc ?? "", value: "", performance_date: today.toISOString().slice(0,10), context: "" });
+      setShowAddPerf(false);
+      onRefresh();
+    } catch(e) { console.error(e); }
+    finally { setSavingPerf(false); }
   };
 
+  const handleAddGoal = async () => {
+    if (!goalForm.discipline.trim() || !goalForm.target_value.trim()) return;
+    setSavingGoal(true);
+    try {
+      await supabase.from("athlete_goals").insert({
+        athlete_id:   athlete.id,
+        club_id:      clubId,
+        discipline:   goalForm.discipline,
+        target_value: goalForm.target_value,
+        deadline:     goalForm.deadline || null,
+        notes:        goalForm.notes || null,
+        achieved:     false,
+      });
+      setGoalForm({ discipline: "", target_value: "", deadline: "", notes: "" });
+      setShowAddGoal(false);
+      onRefresh();
+    } catch(e) { console.error(e); }
+    finally { setSavingGoal(false); }
+  };
+
+  const handleMarkGoalDone = async (goalId) => {
+    await supabase.from("athlete_goals").update({ achieved: true }).eq("id", goalId);
+    onRefresh();
+  };
+
+  const handleDeleteGoal = async (goalId) => {
+    await supabase.from("athlete_goals").delete().eq("id", goalId);
+    onRefresh();
+  };
+
+  // ── Render ────────────────────────────────────────────────────────────────
+
+  const PERF_TABS = [
+    { id: "records",   label: "Records"    },
+    { id: "evolution", label: "Évolution"  },
+    { id: "objectifs", label: `Objectifs ${activeGoals.length > 0 ? `(${activeGoals.length})` : ""}` },
+    { id: "comps",     label: "Compétitions" },
+  ];
+
   return (
-    <div className="p-4 space-y-4 max-w-4xl mx-auto">
+    <div className="p-4 space-y-4 max-w-4xl mx-auto animate-slide-up">
+
+      {/* ── Header ── */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <h2 className="text-[20px] font-bold text-slate-800">Mes performances</h2>
-          <p className="text-[12px] text-slate-400 mt-0.5">{allDiscs.length} épreuve{allDiscs.length!==1?"s":""} · {(myPerformances??[]).length} mesure{(myPerformances??[]).length!==1?"s":""} enregistrée{(myPerformances??[]).length!==1?"s":""}</p>
+          <h2 className="text-[20px] font-black text-slate-800">Mes performances</h2>
+          <p className="text-[12px] text-slate-400 mt-0.5">
+            {disciplines.length} épreuve{disciplines.length > 1 ? "s" : ""} · {(myPerformances ?? []).length} mesure{(myPerformances ?? []).length > 1 ? "s" : ""}
+          </p>
         </div>
-        <div className="flex items-center gap-2">
-          <button onClick={()=>setShowGoalModal(true)}
-            className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-emerald-700 text-[13px] font-semibold border border-emerald-200 bg-emerald-50 hover:bg-emerald-100 transition-all">
-            <Target size={15}/> Objectif
-          </button>
-          <button onClick={()=>setShowAddModal(true)}
-            className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-white text-[13px] font-semibold shadow-sm hover:shadow-md transition-all"
-            style={{background:"#1D9E75"}}>
-            <Plus size={15}/> Ajouter une performance
-          </button>
-        </div>
+        <button
+          onClick={() => setShowAddPerf(true)}
+          className="btn-primary"
+        >
+          <Plus size={14} /> Saisir une perf
+        </button>
       </div>
 
-      {(myGoals??[]).length > 0 && (
-        <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
-          <div className="px-5 py-4 border-b border-slate-50 flex items-center justify-between">
-            <h3 className="text-[13px] font-bold text-slate-800 flex items-center gap-2"><Target size={14} color="#1D9E75"/> Mes objectifs saison</h3>
-            <span className="text-[11px] text-slate-400">{(myGoals??[]).filter(g=>!g.achieved).length} actif{(myGoals??[]).filter(g=>!g.achieved).length>1?"s":""}</span>
-          </div>
-          <div className="divide-y divide-slate-50">
-            {(myGoals??[]).slice(0,4).map(g => {
-              const today = new Date();
-              const daysLeft = g.deadline ? Math.round((new Date(g.deadline)-today)/(1000*60*60*24)) : null;
-              const discColors = DISC_TYPE_COLORS[getDiscType(g.discipline)] ?? DISC_TYPE_COLORS.sprint;
-              const rec = athlete.records?.[g.discipline];
-              const hib = getDiscHib(g.discipline);
-              const pv = rec ? parsePerf(rec.pr) : null;
-              const tv = parsePerf(g.target_value);
-              const progress = pv?.value && tv?.value ? (hib ? Math.min(100,Math.round((pv.value/tv.value)*100)) : Math.min(100,Math.round((tv.value/pv.value)*100))) : null;
-              return (
-                <div key={g.id} className="px-5 py-3.5">
-                  <div className="flex items-center justify-between mb-2">
-                    <div className="flex items-center gap-2">
-                      <span className="w-2 h-2 rounded-full" style={{background:discColors.dot}}/>
-                      <span className="text-[12px] font-bold text-slate-700">{g.discipline}</span>
-                      <span className="text-[10px] text-slate-400">→</span>
-                      <span className="text-[14px] font-black" style={{color:discColors.border}}>{g.target_value}</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      {daysLeft !== null && (
-                        <span className="text-[10px] font-semibold text-slate-400">
-                          {daysLeft > 0 ? `J-${daysLeft}` : "Échu"}
-                        </span>
+      {/* ── Tabs ── */}
+      <div className="flex gap-1 bg-white rounded-2xl border border-slate-100 shadow-card p-1.5 overflow-x-auto">
+        {PERF_TABS.map(tab => (
+          <button key={tab.id} onClick={() => setActiveTab(tab.id)}
+            className={[
+              "flex-1 px-3 py-2 rounded-xl text-[12px] font-bold whitespace-nowrap transition-all text-center tap-feedback",
+              activeTab === tab.id ? "bg-emerald-600 text-white shadow-sm" : "text-slate-500 hover:bg-slate-50",
+            ].join(" ")}>
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
+      {/* ══ TAB : RECORDS ══════════════════════════════════════════════════ */}
+      {activeTab === "records" && (
+        <div className="space-y-4">
+          {disciplines.length === 0 ? (
+            <div className="card p-12 text-center">
+              <Trophy size={32} className="mx-auto mb-3 text-slate-200" strokeWidth={1.5} />
+              <p className="text-[14px] font-bold text-slate-400">Aucun record enregistré</p>
+              <p className="text-[12px] text-slate-300 mt-1">Ton coach les ajoutera après tes premières compétitions</p>
+            </div>
+          ) : (
+            <>
+              {/* Grid de records */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {disciplines.map(disc => {
+                  const rec   = athlete.records[disc];
+                  const stats = disciplineStats[disc];
+                  const DISC_COLORS = {
+                    "100m": "#3B82F6", "200m": "#8B5CF6", "400m": "#F59E0B",
+                    "110m haies": "#EF4444", "100m haies": "#EC4899",
+                    "Longueur": "#10B981", "Triple saut": "#14B8A6",
+                    "Hauteur": "#F97316", "Perche": "#6366F1",
+                  };
+                  const col = DISC_COLORS[disc] ?? "#1D9E75";
+
+                  return (
+                    <div key={disc} className="card p-5 shimmer-hover">
+                      {/* Header */}
+                      <div className="flex items-center justify-between mb-4">
+                        <div className="flex items-center gap-2.5">
+                          <div className="w-3 h-3 rounded-full" style={{ background: col }} />
+                          <p className="text-[13px] font-black text-slate-700">{disc}</p>
+                        </div>
+                        <button
+                          onClick={() => { setSelectedDisc(disc); setActiveTab("evolution"); }}
+                          className="text-[10.5px] font-bold text-emerald-600 hover:text-emerald-700 flex items-center gap-1"
+                        >
+                          Voir évolution →
+                        </button>
+                      </div>
+
+                      {/* PR & SB */}
+                      <div className="grid grid-cols-2 gap-3 mb-3">
+                        <div className="bg-slate-50 rounded-2xl p-3 text-center">
+                          <p className="text-[22px] font-black leading-none" style={{ color: col }}>{rec.pr}</p>
+                          <p className="text-[9px] font-black text-slate-400 uppercase tracking-wider mt-1">Record perso</p>
+                          {rec.prDate && (
+                            <p className="text-[9px] text-slate-300 mt-0.5">
+                              {new Date(rec.prDate).toLocaleDateString("fr-BE", { day: "numeric", month: "short", year: "numeric" })}
+                            </p>
+                          )}
+                        </div>
+                        <div className="bg-slate-50 rounded-2xl p-3 text-center">
+                          <p className="text-[22px] font-black leading-none text-slate-600">{rec.sb}</p>
+                          <p className="text-[9px] font-black text-slate-400 uppercase tracking-wider mt-1">Season Best</p>
+                        </div>
+                      </div>
+
+                      {/* Stats mesures */}
+                      {stats && (
+                        <div className="flex items-center gap-2 text-[11px] text-slate-400">
+                          <span className="font-semibold">{stats.count} mesure{stats.count > 1 ? "s" : ""}</span>
+                          {stats.last && (
+                            <>
+                              <span>·</span>
+                              <span>Dernière : <strong className="text-slate-600">{stats.last.raw}</strong></span>
+                            </>
+                          )}
+                        </div>
                       )}
-                      <button onClick={async()=>{
-                        await supabase.from("athlete_goals").update({achieved:true,achieved_at:new Date().toISOString().slice(0,10)}).eq("id",g.id);
-                        await notifyGoalAchieved(clubId, athlete.id, g.discipline, g.target_value);
-                        onRefresh();
-                      }}
-                        className="text-[10px] font-bold text-emerald-600 bg-emerald-50 hover:bg-emerald-100 px-2 py-0.5 rounded-full transition-colors">
-                        ✅ Atteint !
-                      </button>
                     </div>
+                  );
+                })}
+              </div>
+
+              {/* Historique compétitions compact */}
+              {compHistory.length > 0 && (
+                <div className="card overflow-hidden">
+                  <div className="px-5 py-4 border-b border-slate-50">
+                    <h3 className="text-[14px] font-bold text-slate-800">Dernières compétitions</h3>
                   </div>
-                  {progress !== null && (
-                    <div>
-                      <div className="flex justify-between text-[10px] text-slate-400 mb-1">
-                        <span>PR actuel : {rec?.pr}</span>
-                        <span>{progress}%</span>
+                  <div className="divide-y divide-slate-50">
+                    {compHistory.slice(0, 5).map(({ comp, result }, i) => (
+                      <div key={i} className="px-5 py-3.5 flex items-center gap-3">
+                        <div className="w-9 h-9 rounded-2xl bg-amber-50 flex items-center justify-center flex-shrink-0">
+                          <Trophy size={15} color="#EF9F27" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-[12.5px] font-bold text-slate-700 truncate">{comp.name}</p>
+                          <p className="text-[11px] text-slate-400">
+                            {result.event} · <strong className="text-emerald-600">{result.result}</strong>
+                          </p>
+                        </div>
+                        <span className="text-[10.5px] text-slate-400 flex-shrink-0">
+                          {new Date(comp.date).toLocaleDateString("fr-BE", { day: "numeric", month: "short" })}
+                        </span>
                       </div>
-                      <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
-                        <div className="h-full rounded-full transition-all duration-700"
-                          style={{width:`${progress}%`,background:progress>=90?"#1D9E75":progress>=70?"#EF9F27":"#378ADD"}}/>
-                      </div>
-                    </div>
-                  )}
-                  {g.description && <p className="text-[11px] text-slate-400 mt-1.5 italic">{g.description}</p>}
+                    ))}
+                  </div>
                 </div>
-              );
-            })}
-          </div>
+              )}
+            </>
+          )}
         </div>
       )}
 
-      <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5">
-        <h3 className="text-[13px] font-bold text-slate-700 mb-3">Mes épreuves</h3>
-        {allDiscs.length === 0 ? (
-          <div className="text-center py-6">
-            <p className="text-[13px] text-slate-400 mb-3">Aucune épreuve enregistrée</p>
-            <button onClick={()=>setShowAddModal(true)}
-              className="flex items-center gap-2 px-4 py-2 rounded-xl text-white text-[12px] font-semibold mx-auto" style={{background:"#1D9E75"}}>
-              <Plus size={13}/> Ajouter ma première performance
-            </button>
-          </div>
-        ) : (
-          <div className="flex flex-wrap gap-2">
-            {allDiscs.map(d => {
-              const c = DISC_TYPE_COLORS[getDiscType(d)] ?? DISC_TYPE_COLORS.sprint;
-              const isSelected = selectedDisc === d;
-              return (
-                <button key={d} onClick={()=>setSelectedDisc(d)}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-semibold border transition-all"
-                  style={isSelected ? {background:c.border,color:"white",borderColor:c.border} : {background:"white",color:c.text,borderColor:c.border+"60"}}>
-                  <span className="w-2 h-2 rounded-full" style={{background:isSelected?"white":c.dot}}/>
-                  {d}
+      {/* ══ TAB : ÉVOLUTION ════════════════════════════════════════════════ */}
+      {activeTab === "evolution" && (
+        <div className="space-y-4">
+          {/* Sélecteur discipline */}
+          {disciplines.length > 0 && (
+            <div className="flex flex-wrap gap-2">
+              {disciplines.map(disc => (
+                <button key={disc} onClick={() => setSelectedDisc(disc)}
+                  className={[
+                    "px-3 py-1.5 rounded-xl text-[12px] font-bold border-2 transition-all tap-feedback",
+                    selectedDisc === disc
+                      ? "bg-emerald-600 text-white border-emerald-600"
+                      : "bg-white text-slate-500 border-slate-200 hover:border-slate-300",
+                  ].join(" ")}>
+                  {disc}
                 </button>
-              );
-            })}
-          </div>
-        )}
-      </div>
-
-      {selectedDisc && (
-        <>
-          <div className="grid grid-cols-3 gap-4">
-            {rec ? (
-              <>
-                <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-4 text-center">
-                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">Season Best</p>
-                  <p className="text-[28px] font-black text-slate-700">{rec.sb}</p>
-                </div>
-                <div className="rounded-2xl p-4 text-center" style={{background:`linear-gradient(135deg,${discColors.bg},${discColors.bg})`}}>
-                  <p className="text-[10px] font-bold uppercase tracking-wider mb-1.5" style={{color:discColors.text}}>Record personnel</p>
-                  <p className="text-[28px] font-black" style={{color:discColors.border}}>{rec.pr}</p>
-                  {rec.prDate&&<p className="text-[10px] mt-0.5" style={{color:discColors.text+"aa"}}>{new Date(rec.prDate).toLocaleDateString("fr-BE",{day:"numeric",month:"short",year:"numeric"})}</p>}
-                </div>
-              </>
-            ) : (
-              <div className="col-span-2 bg-slate-50 rounded-2xl p-4 text-center">
-                <p className="text-[12px] text-slate-400">Pas encore de record — ta première performance deviendra ton PR !</p>
-              </div>
-            )}
-            <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-4 text-center">
-              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">Mesures</p>
-              <p className="text-[28px] font-black text-slate-700">{chartData.length}</p>
-              <p className="text-[10px] text-slate-400 mt-0.5">enregistrées</p>
+              ))}
             </div>
-          </div>
+          )}
 
-          {rec && (() => {
-            const sb=parsePerf(rec.sb), pr=parsePerf(rec.pr);
-            if (!sb.value||!pr.value) return null;
-            const hib = getDiscHib(selectedDisc);
-            const pct = hib ? Math.round((sb.value/pr.value)*100) : Math.round((pr.value/sb.value)*100);
-            const color = pct>=97?"#1D9E75":pct>=90?"#EF9F27":"#E24B4A";
-            return (
-              <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-4">
-                <div className="flex items-center justify-between mb-2">
-                  <p className="text-[12px] font-bold text-slate-700">Progression vers le PR</p>
-                  <span className="text-[18px] font-black" style={{color}}>{pct}%</span>
-                </div>
-                <div className="h-2.5 bg-slate-100 rounded-full overflow-hidden">
-                  <div className="h-full rounded-full transition-all duration-700" style={{width:`${pct}%`,background:color}}/>
-                </div>
-                <p className="text-[11px] text-slate-400 mt-1.5">
-                  {pct>=100?"🏆 Tu as égalé ou battu ton PR !":pct>=97?"🔥 Tout proche du record !":pct>=90?"💪 Bonne progression":"📈 Continue, tu progresses !"}
-                </p>
-              </div>
-            );
-          })()}
-
-          {chartData.length >= 2 ? (
-            <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5">
-              <div className="flex items-start justify-between mb-4">
-                <div>
-                  <h4 className="text-[14px] font-bold text-slate-700">Évolution — {selectedDisc}</h4>
-                  <p className="text-[11px] text-slate-400 mt-0.5">
-                    {chartData.filter(d=>d.source==="competition").length} compét. · {chartData.filter(d=>d.source!=="competition").length} entraînement{chartData.filter(d=>d.source!=="competition").length>1?"s":""}
-                  </p>
-                </div>
-                {bestPerf && (
-                  <div className="text-right">
-                    <p className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">Meilleure perf</p>
-                    <p className="text-[18px] font-black" style={{color:discColors.border}}>{bestPerf.result}</p>
-                  </div>
-                )}
-              </div>
-              <ResponsiveContainer width="100%" height={240}>
-                <LineChart data={chartData} margin={{top:10,right:10,bottom:10,left:0}}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9"/>
-                  <XAxis dataKey="label" tick={{fontSize:10,fill:"#94a3b8"}} axisLine={false} tickLine={false}/>
-                  <YAxis domain={["dataMin","dataMax"]} tick={{fontSize:10,fill:"#94a3b8"}} axisLine={false} tickLine={false} reversed={isTime}/>
-                  <Tooltip content={({active,payload})=>{
-                    if(!active||!payload?.length) return null;
-                    const d=payload[0].payload;
-                    return (
-                      <div className="bg-white border border-slate-100 rounded-xl shadow-lg px-3 py-2.5 text-[12px] min-w-[150px]">
-                        <div className="flex items-center gap-2 mb-1">
-                          <span className="w-2 h-2 rounded-full" style={{background:d.source==="competition"?"#EF9F27":discColors.border}}/>
-                          <p className="font-bold text-slate-700">{d.source==="competition"?"Compétition":d.source==="test"?"Test":"Entraînement"}</p>
-                        </div>
-                        {d.note&&<p className="text-slate-400 text-[10px] mb-1">{d.note}</p>}
-                        <p className="text-[16px] font-black" style={{color:discColors.border}}>{d.result}</p>
-                        <p className="text-slate-400 text-[10px] mt-0.5">{d.label}</p>
-                      </div>
-                    );
-                  }}/>
-                  <Line type="monotone" dataKey="numValue" stroke={discColors.border} strokeWidth={3}
-                    dot={(props)=>{
-                      const { cx, cy, payload } = props;
-                      const isComp = payload.source === "competition";
-                      return <circle key={cx} cx={cx} cy={cy} r={isComp?6:4}
-                        fill={isComp?"#EF9F27":discColors.border} stroke="white" strokeWidth={2}/>;
-                    }}
-                    activeDot={{r:7,strokeWidth:0}}/>
-                </LineChart>
-              </ResponsiveContainer>
-              <div className="flex items-center gap-4 mt-3 text-[10px]">
-                <div className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-full" style={{background:discColors.border}}/><span className="text-slate-500">Entraînement / Test</span></div>
-                <div className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-full bg-amber-400"/><span className="text-slate-500">Compétition</span></div>
-                {isTime&&<div className="flex items-center gap-1.5"><span className="text-slate-400">↓ = plus rapide (meilleur)</span></div>}
-              </div>
-            </div>
-          ) : chartData.length === 1 ? (
-            <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-8 text-center">
-              <p className="text-[13px] text-slate-400">Il faut au moins 2 performances pour voir le graphique</p>
-              <button onClick={()=>setShowAddModal(true)} className="mt-3 text-[12px] font-semibold text-emerald-600 hover:text-emerald-700">
-                + Ajouter une performance
+          {/* Graphique */}
+          <div className="card p-5">
+            <div className="flex items-center justify-between mb-1">
+              <h3 className="text-[14px] font-bold text-slate-800">
+                {selectedDisc ?? "Sélectionne une épreuve"}
+              </h3>
+              <button onClick={() => setShowAddPerf(true)}
+                className="text-[11px] font-bold text-emerald-600 hover:text-emerald-700">
+                + Saisir
               </button>
             </div>
-          ) : null}
+            <p className="text-[11px] text-slate-400 mb-4">{chartData.length} mesure{chartData.length > 1 ? "s" : ""}</p>
 
-          {(discPerfs.length > 0 || compResults.length > 0) && (
-            <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
-              <div className="px-5 py-4 border-b border-slate-50 flex items-center justify-between">
-                <h4 className="text-[13px] font-bold text-slate-700">Historique complet</h4>
-                <button onClick={()=>setShowAddModal(true)}
-                  className="flex items-center gap-1 text-[11px] font-semibold text-emerald-600 hover:text-emerald-700">
-                  <Plus size={12}/> Ajouter
+            {chartData.length < 2 ? (
+              <div className="h-[200px] flex flex-col items-center justify-center text-slate-300 gap-2">
+                <BarChart2 size={28} strokeWidth={1.5} />
+                <p className="text-[12px]">Minimum 2 mesures pour afficher le graphique</p>
+                <button onClick={() => setShowAddPerf(true)}
+                  className="text-[12px] font-bold text-emerald-600 hover:text-emerald-700 mt-1">
+                  + Saisir une performance
                 </button>
               </div>
-              <div className="divide-y divide-slate-50">
-                {[...chartData].reverse().map((p,i) => (
-                  <div key={i} className="px-5 py-3 flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0"
-                      style={{background:p.source==="competition"?"#FFF9C4":discColors.bg}}>
-                      {p.source==="competition"?<Trophy size={14} color="#EF9F27"/>:
-                       p.source==="test"?<Target size={14} color={discColors.border}/>:
-                       <Activity size={14} color={discColors.border}/>}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <span className={["text-[10px] font-bold px-1.5 py-0.5 rounded-full",
-                          p.source==="competition"?"bg-amber-100 text-amber-700":p.source==="test"?"bg-blue-50 text-blue-600":"bg-slate-100 text-slate-500"].join(" ")}>
-                          {p.source==="competition"?"🏟️ Compét.":p.source==="test"?"📏 Test":"🏋️ Entraîn."}
-                        </span>
-                        {p.note&&<span className="text-[11px] text-slate-400 truncate">{p.note}</span>}
-                      </div>
-                      <p className="text-[11px] text-slate-400 mt-0.5">
-                        {new Date(p.date).toLocaleDateString("fr-BE",{weekday:"long",day:"numeric",month:"long",year:"numeric"})}
-                      </p>
-                    </div>
-                    <p className="text-[16px] font-black flex-shrink-0" style={{color:discColors.border}}>{p.result}</p>
-                    {p.source !== "competition" && (() => {
-                      const original = discPerfs.find(dp => dp.performance_date === p.date && dp.value === p.result);
-                      if (!original) return null;
-                      return (
-                        <button onClick={()=>handleDelete(original.id)} disabled={deleting===original.id}
-                          className="text-slate-200 hover:text-red-400 transition-colors ml-1 flex-shrink-0">
-                          <X size={14}/>
-                        </button>
-                      );
+            ) : (
+              <>
+                <ResponsiveContainer width="100%" height={220}>
+                  <AreaChart data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+                    <defs>
+                      <linearGradient id="gradPerf" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#1D9E75" stopOpacity={0.2} />
+                        <stop offset="95%" stopColor="#1D9E75" stopOpacity={0} />
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                    <XAxis dataKey="label" tick={{ fontSize: 10, fill: "#94a3b8" }} axisLine={false} tickLine={false} />
+                    <YAxis tick={{ fontSize: 10, fill: "#94a3b8" }} axisLine={false} tickLine={false} width={45} />
+                    <Tooltip
+                      content={({ active, payload, label }) => {
+                        if (!active || !payload?.length) return null;
+                        const d = payload[0].payload;
+                        return (
+                          <div className="bg-white border border-slate-100 rounded-2xl shadow-lg px-3 py-2.5 text-[12px]">
+                            <p className="font-bold text-slate-600 mb-1">{label}</p>
+                            <p className="text-emerald-600 font-black text-[14px]">{d.raw}</p>
+                            {d.ctx && <p className="text-slate-400 italic mt-0.5">{d.ctx}</p>}
+                          </div>
+                        );
+                      }}
+                    />
+                    <Area dataKey="value" name={selectedDisc} stroke="#1D9E75" fill="url(#gradPerf)"
+                      strokeWidth={2.5} dot={{ r: 4, fill: "#1D9E75" }} activeDot={{ r: 6 }} />
+                  </AreaChart>
+                </ResponsiveContainer>
+
+                {/* Record & SB inline */}
+                {selectedDisc && athlete.records?.[selectedDisc] && (
+                  <div className="flex items-center gap-4 mt-3 pt-3 border-t border-slate-50 text-[12px]">
+                    <span className="text-slate-400">PR : <strong className="text-emerald-600 text-[14px]">{athlete.records[selectedDisc].pr}</strong></span>
+                    <span className="text-slate-400">SB : <strong className="text-slate-600">{athlete.records[selectedDisc].sb}</strong></span>
+                    {chartData.length >= 2 && (() => {
+                      const first = chartData[0].value, last = chartData[chartData.length-1].value;
+                      const diff  = last - first;
+                      const col   = diff >= 0 ? "#1D9E75" : "#E24B4A";
+                      return <span style={{ color: col }} className="font-bold ml-auto">{diff >= 0 ? "+" : ""}{diff.toFixed(2)}</span>;
                     })()}
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+
+          {/* Liste des mesures */}
+          {chartData.length > 0 && (
+            <div className="card overflow-hidden">
+              <div className="px-5 py-4 border-b border-slate-50">
+                <h3 className="text-[13px] font-bold text-slate-800">Toutes les mesures — {selectedDisc}</h3>
+              </div>
+              <div className="divide-y divide-slate-50 max-h-64 overflow-y-auto">
+                {[...chartData].reverse().map((d, i) => (
+                  <div key={i} className="px-5 py-3 flex items-center justify-between">
+                    <div>
+                      <p className="text-[14px] font-black text-emerald-600">{d.raw}</p>
+                      {d.ctx && <p className="text-[11px] text-slate-400 italic">{d.ctx}</p>}
+                    </div>
+                    <p className="text-[11px] text-slate-400">{d.label}</p>
                   </div>
                 ))}
               </div>
             </div>
           )}
-        </>
+        </div>
       )}
 
-      {showAddModal && (
-        <AddPerfModal athlete={athlete} clubId={clubId} onClose={()=>setShowAddModal(false)} onAdded={onRefresh}/>
+      {/* ══ TAB : OBJECTIFS ════════════════════════════════════════════════ */}
+      {activeTab === "objectifs" && (
+        <div className="space-y-4">
+          <div className="flex justify-end">
+            <button onClick={() => setShowAddGoal(true)} className="btn-primary">
+              <Plus size={14} /> Ajouter un objectif
+            </button>
+          </div>
+
+          {activeGoals.length === 0 && achievedGoals.length === 0 ? (
+            <div className="card p-12 text-center">
+              <Target size={32} className="mx-auto mb-3 text-slate-200" strokeWidth={1.5} />
+              <p className="text-[14px] font-bold text-slate-400">Aucun objectif défini</p>
+              <p className="text-[12px] text-slate-300 mt-1">Fixe-toi des objectifs pour rester motivé</p>
+              <button onClick={() => setShowAddGoal(true)}
+                className="mt-4 btn-primary mx-auto">
+                <Plus size={14} /> Définir un objectif
+              </button>
+            </div>
+          ) : (
+            <>
+              {/* Objectifs actifs */}
+              {activeGoals.length > 0 && (
+                <div className="space-y-3">
+                  <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+                    En cours ({activeGoals.length})
+                  </p>
+                  {activeGoals.map(g => {
+                    const daysLeft = g.deadline
+                      ? Math.round((new Date(g.deadline) - today) / (1000*60*60*24))
+                      : null;
+                    const isUrgent = daysLeft !== null && daysLeft <= 14;
+                    return (
+                      <div key={g.id}
+                        className={["card p-5 border-l-4", isUrgent ? "border-amber-400" : "border-emerald-400"].join(" ")}>
+                        <div className="flex items-start justify-between gap-3 mb-3">
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 flex-wrap mb-1">
+                              <p className="text-[13px] font-bold text-slate-700">{g.discipline}</p>
+                              {daysLeft !== null && (
+                                <span className={[
+                                  "text-[10px] font-bold px-2 py-0.5 rounded-full",
+                                  isUrgent ? "bg-amber-50 text-amber-700" : "bg-slate-100 text-slate-500",
+                                ].join(" ")}>
+                                  {daysLeft > 0 ? `J-${daysLeft}` : daysLeft === 0 ? "Aujourd'hui" : "Échu"}
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-[22px] font-black text-emerald-600 leading-tight">{g.target_value}</p>
+                            {g.notes && <p className="text-[11.5px] text-slate-400 italic mt-1">{g.notes}</p>}
+                            {g.deadline && (
+                              <p className="text-[11px] text-slate-400 mt-1">
+                                Échéance : {new Date(g.deadline).toLocaleDateString("fr-BE", { day: "numeric", month: "long", year: "numeric" })}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-3 pt-3 border-t border-slate-50">
+                          <button onClick={() => handleMarkGoalDone(g.id)}
+                            className="flex items-center gap-1.5 text-[11.5px] font-bold text-emerald-600 hover:text-emerald-700 transition-colors">
+                            <CheckCircle size={13} /> Marquer atteint
+                          </button>
+                          <button onClick={() => handleDeleteGoal(g.id)}
+                            className="text-[11.5px] font-semibold text-red-400 hover:text-red-600 transition-colors ml-auto">
+                            Supprimer
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+              {/* Objectifs atteints */}
+              {achievedGoals.length > 0 && (
+                <div className="space-y-2">
+                  <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+                    Atteints 🏆 ({achievedGoals.length})
+                  </p>
+                  {achievedGoals.map(g => (
+                    <div key={g.id} className="card p-4 flex items-center gap-3 opacity-60">
+                      <CheckCircle size={18} color="#1D9E75" />
+                      <div className="flex-1">
+                        <p className="text-[12.5px] font-bold text-slate-600">{g.discipline} — {g.target_value}</p>
+                        {g.notes && <p className="text-[11px] text-slate-400">{g.notes}</p>}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </>
+          )}
+        </div>
       )}
-      {showGoalModal && (
-        <AddGoalModal athlete={athlete} clubId={clubId} allDiscs={allDiscs} onClose={()=>setShowGoalModal(false)} onAdded={onRefresh}/>
+
+      {/* ══ TAB : COMPÉTITIONS ═════════════════════════════════════════════ */}
+      {activeTab === "comps" && (
+        <div className="space-y-3">
+          {compHistory.length === 0 ? (
+            <div className="card p-12 text-center">
+              <Trophy size={32} className="mx-auto mb-3 text-slate-200" strokeWidth={1.5} />
+              <p className="text-[14px] font-bold text-slate-400">Aucune compétition enregistrée</p>
+            </div>
+          ) : compHistory.map(({ comp, result }, i) => (
+            <div key={i} className="card p-5">
+              <div className="flex items-start gap-4">
+                <div className="w-12 h-12 rounded-2xl bg-amber-50 flex items-center justify-center flex-shrink-0">
+                  <Trophy size={20} color="#EF9F27" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap mb-1">
+                    <p className="text-[14px] font-black text-slate-800">{comp.name}</p>
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-500">
+                      {comp.type}
+                    </span>
+                  </div>
+                  <p className="text-[12px] text-slate-500 mb-2">
+                    📍 {comp.location} · {new Date(comp.date).toLocaleDateString("fr-BE", { day: "numeric", month: "long", year: "numeric" })}
+                  </p>
+                  <div className="bg-emerald-50 rounded-2xl px-4 py-3 inline-flex items-center gap-3">
+                    <div>
+                      <p className="text-[10px] font-bold text-emerald-600 uppercase tracking-wider">{result.event}</p>
+                      <p className="text-[22px] font-black text-emerald-700 leading-tight">{result.result}</p>
+                    </div>
+                  </div>
+                  {result.context && (
+                    <p className="text-[11.5px] text-slate-400 italic mt-2">{result.context}</p>
+                  )}
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* ══ MODAL : SAISIR UNE PERFORMANCE ════════════════════════════════ */}
+      {showAddPerf && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4 modal-backdrop"
+          onClick={e => e.target === e.currentTarget && setShowAddPerf(false)}>
+          <div className="bg-white rounded-t-3xl sm:rounded-3xl shadow-2xl w-full max-w-sm max-h-[90vh] flex flex-col overflow-hidden modal-content">
+            <div className="flex justify-center pt-3 pb-1 sm:hidden"><div className="w-10 h-1 rounded-full bg-slate-200" /></div>
+            <div className="px-6 py-5 border-b border-slate-100 flex items-center justify-between flex-shrink-0">
+              <div>
+                <h3 className="text-[16px] font-black text-slate-800">Saisir une performance</h3>
+                <p className="text-[11px] text-slate-400 mt-0.5">Chrono, distance, hauteur…</p>
+              </div>
+              <button onClick={() => setShowAddPerf(false)} className="p-2 rounded-xl hover:bg-slate-100">
+                <X size={18} className="text-slate-500" />
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto px-6 py-5 space-y-4">
+              <div>
+                <label className="block text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">Épreuve *</label>
+                <input className="input-premium" placeholder="Ex: 100m, Longueur…"
+                  value={perfForm.discipline}
+                  onChange={e => setPerfForm(f => ({ ...f, discipline: e.target.value }))} />
+                {disciplines.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5 mt-2">
+                    {disciplines.map(d => (
+                      <button key={d} onClick={() => setPerfForm(f => ({ ...f, discipline: d }))}
+                        className={[
+                          "px-2.5 py-1 rounded-xl text-[10.5px] font-semibold border transition-all",
+                          perfForm.discipline === d ? "bg-emerald-600 text-white border-emerald-600" : "bg-white text-slate-500 border-slate-200",
+                        ].join(" ")}>
+                        {d}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+              <div>
+                <label className="block text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">Résultat *</label>
+                <input className="input-premium" placeholder="Ex: 10.94 ou 7.45m"
+                  value={perfForm.value}
+                  onChange={e => setPerfForm(f => ({ ...f, value: e.target.value }))} />
+              </div>
+              <div>
+                <label className="block text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">Date</label>
+                <input type="date" className="input-premium"
+                  value={perfForm.performance_date}
+                  onChange={e => setPerfForm(f => ({ ...f, performance_date: e.target.value }))} />
+              </div>
+              <div>
+                <label className="block text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">Contexte (optionnel)</label>
+                <input className="input-premium" placeholder="Ex: Vent +1.2m/s, finale régionale…"
+                  value={perfForm.context}
+                  onChange={e => setPerfForm(f => ({ ...f, context: e.target.value }))} />
+              </div>
+            </div>
+            <div className="px-6 py-4 border-t border-slate-100 flex items-center justify-between gap-3 flex-shrink-0">
+              <button onClick={() => setShowAddPerf(false)}
+                className="px-4 py-2.5 rounded-xl bg-slate-100 text-slate-600 text-[13px] font-semibold">
+                Annuler
+              </button>
+              <button onClick={handleAddPerf}
+                disabled={!perfForm.discipline.trim() || !perfForm.value.trim() || savingPerf}
+                className="btn-primary">
+                {savingPerf
+                  ? <><div className="w-3.5 h-3.5 border-2 border-white/40 border-t-white rounded-full animate-spin" />Enregistrement…</>
+                  : <><Plus size={14} />Enregistrer</>
+                }
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ══ MODAL : AJOUTER UN OBJECTIF ════════════════════════════════════ */}
+      {showAddGoal && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4 modal-backdrop"
+          onClick={e => e.target === e.currentTarget && setShowAddGoal(false)}>
+          <div className="bg-white rounded-t-3xl sm:rounded-3xl shadow-2xl w-full max-w-sm max-h-[90vh] flex flex-col overflow-hidden modal-content">
+            <div className="flex justify-center pt-3 pb-1 sm:hidden"><div className="w-10 h-1 rounded-full bg-slate-200" /></div>
+            <div className="px-6 py-5 border-b border-slate-100 flex items-center justify-between flex-shrink-0">
+              <div>
+                <h3 className="text-[16px] font-black text-slate-800">Nouvel objectif</h3>
+                <p className="text-[11px] text-slate-400 mt-0.5">Fixe-toi un cap à atteindre</p>
+              </div>
+              <button onClick={() => setShowAddGoal(false)} className="p-2 rounded-xl hover:bg-slate-100">
+                <X size={18} className="text-slate-500" />
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto px-6 py-5 space-y-4">
+              <div>
+                <label className="block text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">Épreuve *</label>
+                <input className="input-premium" placeholder="Ex: 100m, Longueur…"
+                  value={goalForm.discipline}
+                  onChange={e => setGoalForm(f => ({ ...f, discipline: e.target.value }))} />
+              </div>
+              <div>
+                <label className="block text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">Objectif à atteindre *</label>
+                <input className="input-premium" placeholder="Ex: 10.80 ou 7.60m"
+                  value={goalForm.target_value}
+                  onChange={e => setGoalForm(f => ({ ...f, target_value: e.target.value }))} />
+              </div>
+              <div>
+                <label className="block text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">Échéance (optionnel)</label>
+                <input type="date" className="input-premium"
+                  value={goalForm.deadline}
+                  onChange={e => setGoalForm(f => ({ ...f, deadline: e.target.value }))} />
+              </div>
+              <div>
+                <label className="block text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">Notes</label>
+                <textarea className="input-premium resize-none" rows={2}
+                  placeholder="Motivation, contexte…"
+                  value={goalForm.notes}
+                  onChange={e => setGoalForm(f => ({ ...f, notes: e.target.value }))} />
+              </div>
+            </div>
+            <div className="px-6 py-4 border-t border-slate-100 flex items-center justify-between gap-3 flex-shrink-0">
+              <button onClick={() => setShowAddGoal(false)}
+                className="px-4 py-2.5 rounded-xl bg-slate-100 text-slate-600 text-[13px] font-semibold">
+                Annuler
+              </button>
+              <button onClick={handleAddGoal}
+                disabled={!goalForm.discipline.trim() || !goalForm.target_value.trim() || savingGoal}
+                className="btn-primary">
+                {savingGoal
+                  ? <><div className="w-3.5 h-3.5 border-2 border-white/40 border-t-white rounded-full animate-spin" />Enregistrement…</>
+                  : <><Plus size={14} />Créer l'objectif</>
+                }
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
