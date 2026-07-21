@@ -73,11 +73,12 @@ function getISOWeek(date) {
   return 1 + Math.round((d - jan4) / (7 * 24 * 60 * 60 * 1000));
 }
 
-function dateToISOWeek(s) { return getISOWeek(new Date(s)); }
-
-function dateToDayName(s) {
-  return DAYS_FR[(new Date(s).getDay() + 6) % 7];
+function parseLocalDate(s) {
+  const [y, m, d] = s.split("-").map(Number);
+  return new Date(y, m - 1, d);
 }
+function dateToISOWeek(s) { return getISOWeek(parseLocalDate(s)); }
+function dateToDayName(s) { return DAYS_FR[(parseLocalDate(s).getDay()+6)%7]; }
 
 function isSameDay(a, b) {
   return a.getFullYear() === b.getFullYear()
