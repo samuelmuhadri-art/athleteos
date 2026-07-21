@@ -1042,65 +1042,140 @@ function Dashboard({ athlete, weeklyCharge, sessions, competitions, lastMessages
     <div className="p-4 space-y-4 max-w-4xl mx-auto animate-slide-up">
 
       {/* ══ HERO ══════════════════════════════════════════════════════════════ */}
-      <div
-        className="rounded-3xl p-5 text-white relative overflow-hidden"
-        style={{ background: "linear-gradient(135deg, #1A3A2E 0%, #0f7a5a 50%, #1D9E75 100%)" }}
-      >
-        {/* Cercles déco */}
-        <div className="absolute -right-10 -top-10 w-52 h-52 rounded-full bg-white/5 pointer-events-none" />
-        <div className="absolute right-8 top-16 w-28 h-28 rounded-full bg-white/4 pointer-events-none" />
+      {/* ══ HERO ══════════════════════════════════════════════════════════════ */}
+<div
+  className="rounded-3xl overflow-hidden relative"
+  style={{ background: "linear-gradient(160deg, #0D1F18 0%, #0f2a1e 40%, #0D1F18 100%)" }}
+>
+  {/* Grille de fond déco — effet Linear/Vercel */}
+  <div
+    className="absolute inset-0 opacity-[0.06] pointer-events-none"
+    style={{
+      backgroundImage: "linear-gradient(rgba(29,158,117,0.6) 1px, transparent 1px), linear-gradient(90deg, rgba(29,158,117,0.6) 1px, transparent 1px)",
+      backgroundSize: "32px 32px",
+    }}
+  />
+  {/* Halo vert en haut à droite */}
+  <div
+    className="absolute -right-16 -top-16 w-64 h-64 rounded-full pointer-events-none"
+    style={{ background: "radial-gradient(circle, rgba(29,158,117,0.18) 0%, transparent 70%)" }}
+  />
 
-        <div className="relative flex items-start justify-between gap-4 flex-wrap mb-5">
-          <div className="flex items-center gap-4">
-            {/* Avatar */}
-            <div
-              className="w-14 h-14 rounded-2xl flex items-center justify-center flex-shrink-0 shadow-lg"
-              style={{ background: "rgba(255,255,255,0.15)", backdropFilter: "blur(8px)" }}
-            >
-              <span className="text-[20px] font-bold text-white">{initialsFromName(athlete.name)}</span>
-            </div>
-            <div>
-              <p className="text-white/50 text-[10px] font-bold uppercase tracking-widest mb-0.5">
-                Mon espace
-              </p>
-              <h1 className="text-[22px] font-bold leading-tight tracking-tight">
-                {athlete.name.split(" ")[0]}
-              </h1>
-              <p className="text-white/55 text-[12px] mt-0.5">
-                {athlete.mainDiscipline ?? "Athlète"}
-                {athlete.group ? ` · ${athlete.group}` : ""}
-              </p>
-            </div>
-          </div>
-
-          {/* Badge statut — dot vectoriel */}
-          <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-white/20"
-            style={{ background: "rgba(255,255,255,0.12)" }}>
-            <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: statusColor }} />
-            <span className="text-[11.5px] font-semibold">{status.label}</span>
-          </div>
+  <div className="relative p-5">
+    {/* Header identité */}
+    <div className="flex items-center justify-between gap-4 mb-6">
+      <div className="flex items-center gap-3.5">
+        {/* Avatar glassmorphism */}
+        <div
+          className="w-12 h-12 rounded-2xl flex items-center justify-center flex-shrink-0"
+          style={{
+            background: "rgba(29,158,117,0.20)",
+            border: "1.5px solid rgba(29,158,117,0.35)",
+            backdropFilter: "blur(8px)",
+          }}
+        >
+          <span className="text-[17px] font-bold text-white">{initialsFromName(athlete.name)}</span>
         </div>
-
-        {/* KPI hero — 4 métriques instrumentales */}
-        <div className="relative grid grid-cols-4 gap-2">
-          {[
-            { label: "Readiness", value: metrics.readiness,       unit: "/100"  },
-            { label: "Fatigue",   value: metrics.fatigue,         unit: "/100"  },
-            { label: "ACWR",      value: metrics.acwr.toFixed(2), unit: "ratio" },
-            { label: "Streak",    value: streak,                  unit: "sem."  },
-          ].map(s => (
-            <div key={s.label} className="rounded-2xl px-2 py-3 text-center"
-              style={{ background: "rgba(255,255,255,0.10)" }}>
-              <p className="text-[21px] font-bold text-white leading-none tracking-tight">
-                {s.value}
-              </p>
-              <p className="text-white/45 text-[8px] font-bold uppercase tracking-wider mt-1">
-                {s.label}
-              </p>
-            </div>
-          ))}
+        <div>
+          <p className="text-white/40 text-[9.5px] font-bold uppercase tracking-[0.15em] mb-0.5">
+            Mon espace · S{currentWeek}
+          </p>
+          <h1 className="text-[20px] font-bold leading-tight tracking-tight text-white">
+            {athlete.name.split(" ")[0]}
+          </h1>
+          <p className="text-white/40 text-[11px] mt-0.5">
+            {athlete.mainDiscipline ?? "Athlète"}
+            {athlete.group ? ` · ${athlete.group}` : ""}
+          </p>
         </div>
       </div>
+
+      {/* Status pill */}
+      <div
+        className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-full flex-shrink-0"
+        style={{
+          background: `${statusColor}18`,
+          border: `1px solid ${statusColor}35`,
+        }}
+      >
+        <div
+          className="w-1.5 h-1.5 rounded-full flex-shrink-0"
+          style={{ background: statusColor, boxShadow: `0 0 6px ${statusColor}` }}
+        />
+        <span className="text-[10.5px] font-semibold" style={{ color: statusColor }}>
+          {status.label}
+        </span>
+      </div>
+    </div>
+
+    {/* KPI — 4 métriques instrumentales */}
+    <div className="grid grid-cols-4 gap-2">
+      {[
+        {
+          label: "Readiness",
+          value: metrics.readiness,
+          unit: "/100",
+          color: metrics.readiness >= 75 ? "#1D9E75" : metrics.readiness >= 50 ? "#EF9F27" : "#E24B4A",
+        },
+        {
+          label: "Fatigue",
+          value: metrics.fatigue,
+          unit: "/100",
+          color: metrics.fatigue > 70 ? "#E24B4A" : metrics.fatigue > 45 ? "#EF9F27" : "#1D9E75",
+        },
+        {
+          label: "ACWR",
+          value: metrics.acwr.toFixed(2),
+          unit: "",
+          color: acwrColor(metrics.acwr),
+        },
+        {
+          label: "Streak",
+          value: streak,
+          unit: " sem",
+          color: streak >= 3 ? "#EF9F27" : "#64748b",
+        },
+      ].map(s => (
+        <div
+          key={s.label}
+          className="rounded-2xl px-2.5 py-3 text-center"
+          style={{
+            background: "rgba(255,255,255,0.04)",
+            border: "1px solid rgba(255,255,255,0.07)",
+          }}
+        >
+          <div className="flex items-end justify-center gap-0.5">
+            <p
+              className="text-[22px] font-bold leading-none tracking-tight"
+              style={{ color: s.color, fontVariantNumeric: "tabular-nums" }}
+            >
+              {s.value}
+            </p>
+            {s.unit && (
+              <p className="text-[9px] text-white/25 font-semibold mb-0.5">{s.unit}</p>
+            )}
+          </div>
+          <p className="text-[8.5px] font-bold uppercase tracking-[0.1em] mt-1.5" style={{ color: "rgba(255,255,255,0.28)" }}>
+            {s.label}
+          </p>
+          {/* Mini barre colorée en bas */}
+          <div className="mt-2 h-0.5 rounded-full overflow-hidden" style={{ background: "rgba(255,255,255,0.06)" }}>
+            <div
+              className="h-full rounded-full transition-all duration-700"
+              style={{
+                width: s.label === "ACWR"
+                  ? `${Math.min(100, (parseFloat(s.value) / 2) * 100)}%`
+                  : `${Math.min(100, Number(s.value) / (s.label === "Streak" ? Math.max(10, streak) : 1))}%`,
+                background: s.color,
+                opacity: 0.7,
+              }}
+            />
+          </div>
+        </div>
+      ))}
+    </div>
+  </div>
+</div>
 
       {/* ══ WELLNESS ══════════════════════════════════════════════════════════ */}
       {wellnessToday ? (
