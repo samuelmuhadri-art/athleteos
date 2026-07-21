@@ -324,300 +324,374 @@ const WellnessModal = memo(({ athlete, clubId, onClose, onSaved }) => {
 });
 
 function Dashboard({ athlete, weeklyCharge, sessions, competitions, lastMessages, coachName, myPerformances, onNavigate, wellnessToday, onOpenWellness }) {
-  const today = new Date();
+  const today       = new Date();
   const currentWeek = getISOWeek(today);
-
+ 
   const metrics = useMemo(() =>
     getAthleteMetricsForWeek(athlete.id, weeklyCharge, currentWeek, wellnessToday ? [wellnessToday] : [], sessions),
   [athlete.id, weeklyCharge, currentWeek, wellnessToday, sessions]);
-
+ 
   const status = getStatusLabel(metrics.readiness, metrics.fatigue, metrics.acwr);
-
+ 
   const nextComp = useMemo(() =>
     competitions
-      .filter((c) => c.athleteIds.includes(athlete.id) && new Date(c.date) >= today)
-      .sort((a,b) => new Date(a.date)-new Date(b.date))[0] ?? null,
+      .filter(c => c.athleteIds.includes(athlete.id) && new Date(c.date) >= today)
+      .sort((a, b) => new Date(a.date) - new Date(b.date))[0] ?? null,
   [competitions, athlete.id]);
-
+ 
   const weekSessions = useMemo(() =>
-    sessions.filter((s) => s.week === currentWeek).sort((a,b) => a.time.localeCompare(b.time)),
+    sessions.filter(s => s.week === currentWeek).sort((a, b) => a.time.localeCompare(b.time)),
   [sessions, currentWeek]);
-
-  const topRecords = Object.entries(athlete.records ?? {}).slice(0, 4);
-  const activeInjuries = (athlete.injuries ?? []).filter((i) => i.status !== "résolu");
-
+ 
+  const topRecords     = Object.entries(athlete.records ?? {}).slice(0, 4);
+  const activeInjuries = (athlete.injuries ?? []).filter(i => i.status !== "résolu");
+ 
   const chargeHistory = useMemo(() => {
     const myCharge = weeklyCharge.filter(w => w.athleteId === athlete.id);
     if (!myCharge.length) return [];
-    const sorted = [...myCharge].sort((a,b) => a.week - b.week).slice(-8);
-    return sorted.map(w => ({
-      label: `S${w.week}`,
+    return [...myCharge].sort((a, b) => a.week - b.week).slice(-8).map(w => ({
+      label:  `S${w.week}`,
       charge: w.rawLoad,
-      color: w.rawLoad >= 450 ? "#E24B4A" : w.rawLoad >= 320 ? "#EF9F27" : "#1D9E75",
+      color:  w.rawLoad >= 450 ? "#E24B4A" : w.rawLoad >= 320 ? "#EF9F27" : "#1D9E75",
     }));
   }, [weeklyCharge, athlete.id]);
-
+ 
   const chargeTrend = useMemo(() => {
     const myCharge = weeklyCharge.filter(w => w.athleteId === athlete.id);
     const curr = myCharge.find(w => w.week === currentWeek)?.rawLoad ?? 0;
     const prev = myCharge.find(w => w.week === currentWeek - 1)?.rawLoad ?? 0;
     return prev > 0 ? Math.round(((curr - prev) / prev) * 100) : null;
   }, [weeklyCharge, athlete.id, currentWeek]);
-
+ 
   const streak = useMemo(() => {
     let s = 0;
     for (let w = currentWeek; w >= currentWeek - 20; w--) {
-      const weekS = sessions.filter(se => se.week === w);
-      const hasValidated = weekS.some(se => se.validations?.some(v => v.athleteId === athlete.id && v.status === "done"));
+      const hasValidated = sessions
+        .filter(se => se.week === w)
+        .some(se => se.validations?.some(v => v.athleteId === athlete.id && v.status === "done"));
       if (hasValidated) s++; else break;
     }
     return s;
   }, [sessions, athlete.id, currentWeek]);
-
+ 
   const hasCharge = weeklyCharge.some(w => w.athleteId === athlete.id);
-
+ 
   const badges = useMemo(() => computeBadges({
     athlete, weeklyCharge, sessions, competitions, myPerformances, streak, currentWeek,
   }), [athlete, weeklyCharge, sessions, competitions, myPerformances, streak, currentWeek]);
-
+ 
   const unlockedBadges = badges.filter(b => b.unlocked);
   const lockedBadges   = badges.filter(b => !b.unlocked);
-
+ 
   const latestPR = useMemo(() => {
-    const sevenDaysAgo = new Date(); sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+    const sevenDaysAgo = new Date();
+    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
     return (myPerformances ?? []).find(p => {
       const rec = athlete.records?.[p.discipline];
       if (!rec || !p.performance_date) return false;
-      const perfDate = new Date(p.performance_date);
-      if (perfDate < sevenDaysAgo) return false;
+      if (new Date(p.performance_date) < sevenDaysAgo) return false;
       const hib = getDiscHib(p.discipline);
       const pv = parsePerf(p.value), prv = parsePerf(rec.pr);
       if (!pv.value || !prv.value) return false;
       return hib ? pv.value >= prv.value : pv.value <= prv.value;
     }) ?? null;
   }, [myPerformances, athlete.records]);
-
+ 
+  const doneThisWeek = weekSessions.filter(s =>
+    s.validations?.find(v => v.athleteId === athlete.id && v.status === "done")
+  ).length;
+ 
   return (
-    <div className="p-4 space-y-4 max-w-4xl mx-auto">
-
-      {/* ── Hero ── */}
-      <div className="rounded-2xl p-6 text-white relative overflow-hidden"
-        style={{ background: "linear-gradient(135deg, #1D9E75 0%, #0f7a5a 100%)" }}>
-        <div className="absolute inset-0 opacity-10"
-          style={{ backgroundImage: "radial-gradient(circle at 80% 20%, white 0%, transparent 60%)" }}/>
-        <div className="relative flex items-start justify-between gap-4 flex-wrap">
+    <div className="p-4 space-y-4 max-w-4xl mx-auto animate-slide-up">
+ 
+      {/* ── Hero premium ─────────────────────────────────────────────────── */}
+      <div
+        className="rounded-3xl p-5 text-white relative overflow-hidden"
+        style={{ background: "linear-gradient(135deg, #1D9E75 0%, #0f7a5a 60%, #0a6048 100%)" }}
+      >
+        {/* Déco */}
+        <div className="absolute -right-10 -top-10 w-48 h-48 rounded-full bg-white/5" />
+        <div className="absolute right-8 top-12 w-28 h-28 rounded-full bg-white/5" />
+ 
+        <div className="relative flex items-start justify-between gap-4 flex-wrap mb-5">
           <div className="flex items-center gap-4">
-            <div className="w-16 h-16 rounded-2xl bg-white/20 flex items-center justify-center text-[22px] font-bold flex-shrink-0">
+            {/* Avatar grand */}
+            <div className="w-14 h-14 rounded-2xl bg-white/20 flex items-center justify-center text-[20px] font-black flex-shrink-0 shadow-lg">
               {initialsFromName(athlete.name)}
             </div>
             <div>
-              <p className="text-white/70 text-[12px] font-semibold uppercase tracking-wider mb-0.5">Bienvenue 👋</p>
-              <h1 className="text-[22px] font-bold leading-tight">{athlete.name}</h1>
-              <p className="text-white/70 text-[13px] mt-0.5">
-                {athlete.mainDiscipline ?? "Athlète"}{athlete.group ? ` · ${athlete.group}` : ""}
+              <p className="text-white/60 text-[11px] font-bold uppercase tracking-widest mb-0.5">
+                Bienvenue 👋
+              </p>
+              <h1 className="text-[22px] font-black leading-tight tracking-tight">
+                {athlete.name.split(" ")[0]}
+              </h1>
+              <p className="text-white/60 text-[12px] mt-0.5">
+                {athlete.mainDiscipline ?? "Athlète"}
+                {athlete.group ? ` · ${athlete.group}` : ""}
               </p>
             </div>
           </div>
-          <div className="flex flex-col items-end gap-2">
-            <span className="px-3 py-1.5 rounded-full bg-white/20 text-[12px] font-bold">
-              {status.dot} {status.label}
-            </span>
-            <p className="text-white/60 text-[11px]">
-              {today.toLocaleDateString("fr-BE", { weekday:"long", day:"numeric", month:"long" })}
-            </p>
-          </div>
+          {/* Badge statut */}
+          <span className="px-3 py-1.5 rounded-full bg-white/15 border border-white/20 text-[12px] font-bold flex-shrink-0">
+            {status.dot} {status.label}
+          </span>
         </div>
-
-        <div className="relative mt-5 grid grid-cols-4 gap-3">
+ 
+        {/* Métriques hero */}
+        <div className="relative grid grid-cols-4 gap-2">
           {[
-            { label: "Readiness", value: metrics.readiness, hint: "/100" },
-            { label: "Fatigue",   value: metrics.fatigue,   hint: "/100" },
-            { label: "ACWR",      value: metrics.acwr.toFixed(2), hint: "ratio" },
-            { label: "Streak",    value: streak > 0 ? `${streak}🔥` : "0", hint: "semaines" },
-          ].map((s) => (
-            <div key={s.label} className="bg-white/15 rounded-xl px-3 py-3 text-center">
-              <p className="text-[20px] font-bold text-white leading-tight">{s.value}</p>
-              <p className="text-white/60 text-[9px] font-bold uppercase tracking-wider mt-0.5">{s.label}</p>
+            { label: "Readiness", value: metrics.readiness,        hint: "/100"     },
+            { label: "Fatigue",   value: metrics.fatigue,          hint: "/100"     },
+            { label: "ACWR",      value: metrics.acwr.toFixed(2),  hint: "ratio"    },
+            { label: "Streak",    value: streak > 0 ? `${streak}🔥` : "0", hint: "sem." },
+          ].map(s => (
+            <div key={s.label} className="bg-white/12 rounded-2xl px-2 py-3 text-center">
+              <p className="text-[20px] font-black text-white leading-none">{s.value}</p>
+              <p className="text-white/50 text-[8.5px] font-bold uppercase tracking-wider mt-1">{s.label}</p>
             </div>
           ))}
         </div>
       </div>
-
-      {/* ── Bloc Wellness ── */}
+ 
+      {/* ── Wellness ─────────────────────────────────────────────────────── */}
       {wellnessToday ? (
-        <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5">
+        <div className="card p-5">
           <div className="flex items-center justify-between mb-4">
             <div>
               <h3 className="text-[14px] font-bold text-slate-800">Wellness du jour ✅</h3>
               <p className="text-[11px] text-slate-400 mt-0.5">Questionnaire matinal complété</p>
             </div>
             {metrics.wellnessScore !== null && (
-              <div className="flex items-center gap-2 px-4 py-2 rounded-xl"
-                style={{ background: (metrics.wellnessScore >= 75 ? "#1D9E75" : metrics.wellnessScore >= 50 ? "#EF9F27" : "#E24B4A") + "15" }}>
-                <span className="text-[22px] font-black" style={{ color: metrics.wellnessScore >= 75 ? "#1D9E75" : metrics.wellnessScore >= 50 ? "#EF9F27" : "#E24B4A" }}>{metrics.wellnessScore}</span>
-                <div><p className="text-[9px] font-bold text-slate-500 uppercase tracking-wider">Score</p><p className="text-[9px] text-slate-400">/100</p></div>
+              <div
+                className="flex items-center gap-2 px-4 py-2 rounded-xl"
+                style={{ background: (metrics.wellnessScore >= 75 ? "#1D9E75" : metrics.wellnessScore >= 50 ? "#EF9F27" : "#E24B4A") + "15" }}
+              >
+                <span
+                  className="text-[24px] font-black"
+                  style={{ color: metrics.wellnessScore >= 75 ? "#1D9E75" : metrics.wellnessScore >= 50 ? "#EF9F27" : "#E24B4A" }}
+                >
+                  {metrics.wellnessScore}
+                </span>
+                <div>
+                  <p className="text-[9px] font-bold text-slate-500 uppercase tracking-wider">Score</p>
+                  <p className="text-[9px] text-slate-400">/100</p>
+                </div>
               </div>
             )}
           </div>
           <div className="grid grid-cols-5 gap-2">
-            {WELLNESS_QUESTIONS.map((q) => {
-              const val = wellnessToday[q.key];
+            {WELLNESS_QUESTIONS.map(q => {
+              const val  = wellnessToday[q.key];
               const Icon = q.icon;
-              const displayGood = q.inverted ? val <= 2 : val >= 4;
-              const displayBad  = q.inverted ? val >= 4 : val <= 2;
-              const dotColor = displayGood ? "#1D9E75" : displayBad ? "#E24B4A" : "#EF9F27";
+              const good = q.inverted ? val <= 2 : val >= 4;
+              const bad  = q.inverted ? val >= 4 : val <= 2;
+              const col  = good ? "#1D9E75" : bad ? "#E24B4A" : "#EF9F27";
               return (
-                <div key={q.key} className="flex flex-col items-center gap-1.5 bg-slate-50 rounded-xl py-3 px-2">
-                  <Icon size={14} color={q.color}/>
-                  <span className="text-[18px] font-black" style={{ color: dotColor }}>{val}</span>
-                  <span className="text-[8px] text-slate-400 text-center leading-tight">{q.label.split(" ")[0]}</span>
+                <div key={q.key} className="flex flex-col items-center gap-1.5 bg-slate-50 rounded-xl py-3 px-1">
+                  <Icon size={14} color={q.color} />
+                  <span className="text-[19px] font-black" style={{ color: col }}>{val}</span>
+                  <span className="text-[8px] text-slate-400 text-center leading-tight">
+                    {q.label.split(" ")[0]}
+                  </span>
                 </div>
               );
             })}
           </div>
-          {wellnessToday.notes && <p className="mt-3 text-[11.5px] text-slate-500 italic border-t border-slate-50 pt-3">"{wellnessToday.notes}"</p>}
-          <button onClick={onOpenWellness} className="mt-3 text-[11px] font-semibold text-slate-400 hover:text-emerald-600 transition-colors">Modifier →</button>
+          {wellnessToday.notes && (
+            <p className="mt-3 text-[11.5px] text-slate-500 italic border-t border-slate-50 pt-3">
+              "{wellnessToday.notes}"
+            </p>
+          )}
+          <button
+            onClick={onOpenWellness}
+            className="mt-3 text-[11px] font-semibold text-slate-400 hover:text-emerald-600 transition-colors"
+          >
+            Modifier →
+          </button>
         </div>
       ) : (
-        <div className="bg-gradient-to-br from-emerald-50 to-teal-50 rounded-2xl border border-emerald-100 p-5 flex items-center justify-between gap-4">
+        <div
+          className="rounded-3xl p-5 flex items-center justify-between gap-4 border border-emerald-100"
+          style={{ background: "linear-gradient(135deg, #f0fdf4, #dcfce7)" }}
+        >
           <div>
-            <p className="text-[14px] font-bold text-emerald-800">🌅 Questionnaire matinal</p>
-            <p className="text-[12px] text-emerald-600 mt-1">Prends 30 secondes pour indiquer comment tu te sens. Ça améliore ton score Readiness !</p>
+            <p className="text-[15px] font-bold text-emerald-800">🌅 Questionnaire matinal</p>
+            <p className="text-[12px] text-emerald-600 mt-1 leading-relaxed">
+              30 secondes pour indiquer comment tu te sens. Améliore ton Readiness !
+            </p>
           </div>
-          <button onClick={onOpenWellness} className="flex-shrink-0 px-4 py-2.5 rounded-xl text-white text-[12px] font-bold shadow-sm" style={{ background: "#1D9E75" }}>Remplir</button>
+          <button
+            onClick={onOpenWellness}
+            className="flex-shrink-0 px-4 py-2.5 rounded-2xl text-white text-[13px] font-bold shadow-sm tap-feedback"
+            style={{ background: "#1D9E75" }}
+          >
+            Remplir
+          </button>
         </div>
       )}
-
-      <div className="grid grid-cols-1 xl:grid-cols-3 gap-5">
-
-        {/* ── Colonne gauche ── */}
-        <div className="lg:col-span-2 space-y-5">
-
+ 
+      {/* ── Grille principale ────────────────────────────────────────────── */}
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
+        <div className="xl:col-span-2 space-y-4">
+ 
+          {/* ── Charge d'entraînement ── */}
           {hasCharge && chargeHistory.length > 0 && (
-            <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5">
+            <div className="card p-5">
               <div className="flex items-center justify-between mb-4">
                 <div>
-                  <h3 className="text-[14px] font-bold text-slate-800">Ma charge d'entraînement</h3>
+                  <h3 className="text-[14px] font-bold text-slate-800">Ma charge</h3>
                   <p className="text-[11px] text-slate-400 mt-0.5">8 dernières semaines</p>
                 </div>
                 {chargeTrend !== null && (
-                  <div className={["px-3 py-1.5 rounded-xl text-[12px] font-bold",
+                  <div className={[
+                    "px-3 py-1.5 rounded-xl text-[12px] font-bold",
                     chargeTrend > 15 ? "bg-red-50 text-red-600" :
                     chargeTrend > 0  ? "bg-amber-50 text-amber-600" :
-                    chargeTrend < 0  ? "bg-emerald-50 text-emerald-600" : "bg-slate-50 text-slate-500"
+                    chargeTrend < 0  ? "bg-emerald-50 text-emerald-600" : "bg-slate-50 text-slate-500",
                   ].join(" ")}>
                     {chargeTrend > 0 ? `+${chargeTrend}%` : `${chargeTrend}%`} vs S-1
                   </div>
                 )}
               </div>
-              <div className="flex items-end gap-1.5 h-[100px]">
+ 
+              {/* Barres */}
+              <div className="flex items-end gap-1.5 h-[90px] mb-3">
                 {chargeHistory.map((w, i) => {
-                  const maxCharge = Math.max(...chargeHistory.map(x => x.charge), 1);
-                  const heightPct = (w.charge / maxCharge) * 100;
+                  const max       = Math.max(...chargeHistory.map(x => x.charge), 1);
+                  const pct       = (w.charge / max) * 100;
                   const isCurrent = i === chargeHistory.length - 1;
                   return (
                     <div key={i} className="flex-1 flex flex-col items-center gap-1">
-                      <div className="w-full flex items-end justify-center" style={{height:"80px"}}>
-                        <div className="w-full rounded-t-lg transition-all"
+                      <div className="w-full flex items-end" style={{ height: "72px" }}>
+                        <div
+                          className="w-full rounded-t-xl transition-all"
                           style={{
-                            height:`${heightPct}%`,
-                            background: isCurrent ? w.color : w.color + "80",
-                            minHeight: "4px",
-                            outline: isCurrent ? `2px solid ${w.color}` : "none",
-                          }}/>
+                            height:     `${pct}%`,
+                            minHeight:  "4px",
+                            background: isCurrent ? w.color : w.color + "70",
+                            outline:    isCurrent ? `2px solid ${w.color}` : "none",
+                            outlineOffset: "1px",
+                          }}
+                        />
                       </div>
-                      <p className="text-[9px] text-slate-400 font-medium">{w.label}</p>
+                      <p className="text-[8.5px] text-slate-400 font-medium">{w.label}</p>
                     </div>
                   );
                 })}
               </div>
-              <div className="mt-4 grid grid-cols-3 gap-3">
+ 
+              {/* Stats ACWR */}
+              <div className="grid grid-cols-3 gap-2 mb-4">
                 {[
-                  { label: "ACWR", value: metrics.acwr.toFixed(2), color: acwrColor(metrics.acwr), sub: "0.8–1.3 optimal" },
-                  { label: "Charge aiguë", value: metrics.acute, color: "#378ADD", sub: "4 dernières sem." },
-                  { label: "Charge chronique", value: metrics.chronic, color: "#94a3b8", sub: "12 dernières sem." },
+                  { label: "ACWR",     value: metrics.acwr.toFixed(2), color: acwrColor(metrics.acwr),  sub: "0.8–1.3 optimal" },
+                  { label: "Aiguë",    value: metrics.acute,           color: "#378ADD",                sub: "4 dernières sem."  },
+                  { label: "Chronique",value: metrics.chronic,         color: "#94a3b8",                sub: "12 dernières sem." },
                 ].map(s => (
-                  <div key={s.label} className="bg-slate-50 rounded-xl px-3 py-2.5 text-center">
-                    <p className="text-[18px] font-black" style={{color:s.color}}>{s.value}</p>
-                    <p className="text-[9px] font-bold text-slate-500 uppercase tracking-wider">{s.label}</p>
-                    <p className="text-[9px] text-slate-400 mt-0.5">{s.sub}</p>
+                  <div key={s.label} className="bg-slate-50 rounded-2xl px-3 py-2.5 text-center">
+                    <p className="text-[19px] font-black leading-none" style={{ color: s.color }}>{s.value}</p>
+                    <p className="text-[8.5px] font-bold text-slate-500 uppercase tracking-wider mt-1">{s.label}</p>
+                    <p className="text-[8.5px] text-slate-400 mt-0.5">{s.sub}</p>
                   </div>
                 ))}
               </div>
-              <div className="mt-4">
-                <div className="flex items-center justify-between text-[10px] text-slate-400 mb-1">
+ 
+              {/* Gauge ACWR */}
+              <div>
+                <div className="flex items-center justify-between text-[10px] text-slate-400 mb-1.5">
                   <span>Sous-charge</span>
                   <span className="font-bold text-emerald-600">Zone optimale</span>
                   <span>Surcharge</span>
                 </div>
-                <div className="relative h-3 rounded-full overflow-hidden" style={{background:"linear-gradient(to right, #378ADD 0%, #1D9E75 40%, #1D9E75 65%, #EF9F27 80%, #E24B4A 100%)"}}>
-                  <div className="absolute top-0 h-full w-1 bg-white rounded-full shadow-md transition-all"
-                    style={{left:`${Math.min(95,Math.max(2,(metrics.acwr/2)*100))}%`}}/>
+                <div
+                  className="relative h-3 rounded-full overflow-hidden"
+                  style={{ background: "linear-gradient(to right, #378ADD 0%, #1D9E75 40%, #1D9E75 65%, #EF9F27 80%, #E24B4A 100%)" }}
+                >
+                  <div
+                    className="absolute top-0 h-full w-1.5 bg-white rounded-full shadow-md transition-all"
+                    style={{ left: `${Math.min(95, Math.max(2, (metrics.acwr / 2) * 100))}%` }}
+                  />
                 </div>
-                <div className="flex justify-between text-[9px] text-slate-400 mt-0.5">
+                <div className="flex justify-between text-[9px] text-slate-400 mt-1">
                   <span>0</span><span>0.8</span><span>1.3</span><span>2.0</span>
                 </div>
               </div>
             </div>
           )}
-
+ 
+          {/* ── État de forme détaillé ── */}
           {hasCharge && (
-            <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5">
-              <div className="flex items-center justify-between mb-5">
-                <div>
-                  <h3 className="text-[14px] font-bold text-slate-800">État de forme détaillé</h3>
-                  <p className="text-[11px] text-slate-400 mt-0.5">Basé sur ta charge des dernières semaines</p>
-                </div>
-              </div>
-              <div className="space-y-4">
+            <div className="card p-5">
+              <h3 className="text-[14px] font-bold text-slate-800 mb-1">État de forme</h3>
+              <p className="text-[11px] text-slate-400 mb-4">Basé sur ta charge réelle</p>
+              <div className="space-y-3">
                 {[
                   {
-                    label: "Readiness", value: metrics.readiness, color: scoreColor(metrics.readiness), inv: false,
-                    norm: metrics.readiness >= 75 ? { dot: "🟢", label: "Dans les normes", hint: "Tu es prêt pour une séance intense" }
-                        : metrics.readiness >= 55 ? { dot: "🟡", label: "Limite", hint: `Zone optimale à partir de 75 — ${75 - metrics.readiness} points manquants` }
-                        : { dot: "🔴", label: "En dessous", hint: "Privilégie une séance légère ou du repos" },
+                    label: "Readiness", value: metrics.readiness, inv: false,
+                    color: scoreColor(metrics.readiness),
+                    norm: metrics.readiness >= 75
+                      ? { dot: "🟢", label: "Dans les normes", hint: "Prêt pour une séance intense" }
+                      : metrics.readiness >= 55
+                      ? { dot: "🟡", label: "Limite", hint: `Optimal à partir de 75 — encore ${75 - metrics.readiness} pts` }
+                      : { dot: "🔴", label: "En dessous", hint: "Privilégie une séance légère ou du repos" },
                   },
                   {
-                    label: "Forme", value: metrics.forme, color: scoreColor(metrics.forme), inv: false,
-                    norm: metrics.forme >= 75 ? { dot: "🟢", label: "Excellente", hint: "Condition physique au-dessus de la normale" }
-                        : metrics.forme >= 50 ? { dot: "🟡", label: "Correcte", hint: "En progression — continue à t'entraîner régulièrement" }
-                        : { dot: "🔴", label: "Faible", hint: "Charge chronique insuffisante — augmente progressivement le volume" },
+                    label: "Forme", value: metrics.forme, inv: false,
+                    color: scoreColor(metrics.forme),
+                    norm: metrics.forme >= 75
+                      ? { dot: "🟢", label: "Excellente", hint: "Condition au-dessus de la normale" }
+                      : metrics.forme >= 50
+                      ? { dot: "🟡", label: "Correcte",  hint: "En progression — continue régulièrement" }
+                      : { dot: "🔴", label: "Faible",    hint: "Augmente progressivement le volume" },
                   },
                   {
-                    label: "Fatigue", value: metrics.fatigue, color: scoreColor(metrics.fatigue, true), inv: true,
-                    norm: metrics.fatigue <= 45 ? { dot: "🟢", label: "Normale", hint: "Pas de signe de suraccumulation" }
-                        : metrics.fatigue <= 70 ? { dot: "🟡", label: "Modérée", hint: "Surveille l'accumulation — limite les séances intenses" }
-                        : { dot: "🔴", label: "Élevée", hint: "Repos ou récupération active fortement conseillés" },
+                    label: "Fatigue", value: metrics.fatigue, inv: true,
+                    color: scoreColor(metrics.fatigue, true),
+                    norm: metrics.fatigue <= 45
+                      ? { dot: "🟢", label: "Normale",  hint: "Pas de signe de suraccumulation" }
+                      : metrics.fatigue <= 70
+                      ? { dot: "🟡", label: "Modérée",  hint: "Limite les séances très intenses" }
+                      : { dot: "🔴", label: "Élevée",   hint: "Repos ou récupération active conseillés" },
                   },
                   {
-                    label: "Récupération", value: metrics.recuperation, color: scoreColor(metrics.recuperation), inv: false,
-                    norm: metrics.recuperation >= 70 ? { dot: "🟢", label: "Complète", hint: "Tu es physiologiquement disponible" }
-                        : metrics.recuperation >= 45 ? { dot: "🟡", label: "Partielle", hint: "Encore quelques heures nécessaires avant effort intense" }
-                        : { dot: "🔴", label: "Insuffisante", hint: "Récupération neuromusculaire incomplète [Hasegawa 2024]" },
+                    label: "Récupération", value: metrics.recuperation, inv: false,
+                    color: scoreColor(metrics.recuperation),
+                    norm: metrics.recuperation >= 70
+                      ? { dot: "🟢", label: "Complète",    hint: "Physiologiquement disponible" }
+                      : metrics.recuperation >= 45
+                      ? { dot: "🟡", label: "Partielle",   hint: "Quelques heures encore nécessaires" }
+                      : { dot: "🔴", label: "Insuffisante",hint: "Récupération neuromusculaire incomplète" },
                   },
                   {
-                    label: "Risque blessure", value: metrics.risque, color: scoreColor(metrics.risque, true), inv: true,
-                    norm: metrics.risque <= 20 ? { dot: "🟢", label: "Faible", hint: "Pas d'alerte détectée" }
-                        : metrics.risque <= 50 ? { dot: "🟡", label: "Modéré", hint: "ACWR ou monotonie élevés — varie tes séances" }
-                        : { dot: "🔴", label: "Élevé", hint: "Réduis la charge immédiatement [Gabbett 2016]" },
+                    label: "Risque blessure", value: metrics.risque, inv: true,
+                    color: scoreColor(metrics.risque, true),
+                    norm: metrics.risque <= 20
+                      ? { dot: "🟢", label: "Faible",  hint: "Pas d'alerte détectée" }
+                      : metrics.risque <= 50
+                      ? { dot: "🟡", label: "Modéré",  hint: "ACWR ou monotonie élevés — varie tes séances" }
+                      : { dot: "🔴", label: "Élevé",   hint: "Réduis la charge immédiatement" },
                   },
                 ].map(s => (
-                  <div key={s.label} className="bg-slate-50 rounded-xl px-4 py-3.5">
+                  <div key={s.label} className="bg-slate-50 rounded-2xl px-4 py-3.5">
                     <div className="flex items-start justify-between gap-3 mb-2.5">
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 flex-wrap">
                           <span className="text-[13px] font-bold text-slate-800">{s.label}</span>
-                          <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full"
-                            style={{ background: s.color + "18", color: s.color }}>
+                          <span
+                            className="text-[10px] font-semibold px-2 py-0.5 rounded-full"
+                            style={{ background: s.color + "18", color: s.color }}
+                          >
                             {s.norm.dot} {s.norm.label}
                           </span>
                         </div>
                         <p className="text-[11px] text-slate-400 mt-0.5 leading-relaxed">{s.norm.hint}</p>
                       </div>
-                      <span className="text-[22px] font-black flex-shrink-0" style={{color:s.color}}>{s.value}</span>
+                      <span className="text-[24px] font-black flex-shrink-0" style={{ color: s.color }}>
+                        {s.value}
+                      </span>
                     </div>
-                    <div className="h-1.5 bg-slate-200 rounded-full overflow-hidden">
-                      <div className="h-full rounded-full transition-all duration-700" style={{width:`${s.value}%`, background:s.color}}/>
+                    <div className="progress-bar">
+                      <div className="progress-fill" style={{ width: `${s.value}%`, background: s.color }} />
                     </div>
                     <div className="flex justify-between text-[9px] text-slate-300 mt-1">
                       <span>0</span>
@@ -628,47 +702,71 @@ function Dashboard({ athlete, weeklyCharge, sessions, competitions, lastMessages
                 ))}
               </div>
               <p className="text-[10px] text-slate-300 mt-4 text-center">
-                Normes ACWR : Gabbett (2016) · Récupération : Hasegawa (2024) · Autres scores : convention coaching
+                ACWR : Gabbett (2016) · Récup. : Hasegawa (2024) · Autres : convention coaching
               </p>
             </div>
           )}
-
-          <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
+ 
+          {/* ── Séances de la semaine ── */}
+          <div className="card overflow-hidden">
             <div className="px-5 py-4 border-b border-slate-50 flex items-center justify-between">
               <div>
                 <h3 className="text-[14px] font-bold text-slate-800">Cette semaine</h3>
                 <p className="text-[11px] text-slate-400 mt-0.5">
-                  {weekSessions.filter(s=>s.validations?.find(v=>v.athleteId===athlete.id&&v.status==="done")).length}/{weekSessions.length} réalisées
+                  {doneThisWeek}/{weekSessions.length} réalisée{weekSessions.length > 1 ? "s" : ""}
                 </p>
               </div>
-              <button onClick={() => onNavigate("planning")} className="text-[11.5px] font-semibold text-emerald-600 hover:text-emerald-700">
+              <button
+                onClick={() => onNavigate("planning")}
+                className="text-[11.5px] font-semibold text-emerald-600 hover:text-emerald-700 transition-colors"
+              >
                 Voir tout →
               </button>
             </div>
             {weekSessions.length === 0 ? (
-              <div className="p-8 text-center text-slate-300">
-                <CalendarDays size={28} className="mx-auto mb-2" strokeWidth={1.5}/>
+              <div className="p-10 text-center text-slate-300">
+                <CalendarDays size={28} className="mx-auto mb-2" strokeWidth={1.5} />
                 <p className="text-[12px]">Aucune séance cette semaine</p>
               </div>
             ) : (
               <div className="divide-y divide-slate-50">
-                {weekSessions.map((s) => {
-                  const c = colorsFor(s.category);
-                  const val = s.validations?.find((v) => v.athleteId === athlete.id);
-                  const st = val?.status ?? "future";
+                {weekSessions.map(s => {
+                  const c   = colorsFor(s.category);
+                  const val = s.validations?.find(v => v.athleteId === athlete.id);
+                  const st  = val?.status ?? "future";
                   return (
-                    <div key={s.id} className="flex items-center gap-3 px-5 py-3">
-                      <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: c.border }}/>
+                    <div key={s.id} className="flex items-center gap-3 px-5 py-3.5 hover:bg-slate-50/50 transition-colors">
+                      <div
+                        className="w-3 h-3 rounded-full flex-shrink-0"
+                        style={{ background: c.border }}
+                      />
                       <div className="flex-1 min-w-0">
-                        <p className="text-[12.5px] font-semibold text-slate-700 truncate">{s.title}</p>
-                        <p className="text-[10.5px] text-slate-400">
-                          {s.sessionDate ? new Date(s.sessionDate).toLocaleDateString("fr-BE",{weekday:"short",day:"numeric",month:"short"}) : s.day} · {s.time}
+                        <p className="text-[13px] font-semibold text-slate-700 truncate">{s.title}</p>
+                        <p className="text-[10.5px] text-slate-400 mt-0.5">
+                          {s.sessionDate
+                            ? new Date(s.sessionDate).toLocaleDateString("fr-BE", { weekday: "short", day: "numeric", month: "short" })
+                            : s.day}
+                          {" · "}{s.time}
                         </p>
                       </div>
-                      {s.pdfUrl&&<a href={s.pdfUrl} target="_blank" rel="noopener noreferrer" className="text-[10px] font-bold text-blue-500 bg-blue-50 px-2 py-0.5 rounded-full flex-shrink-0">📄</a>}
-                      <span className={["text-[10px] font-bold px-2 py-0.5 rounded-full flex-shrink-0",
-                        st==="done"?"bg-emerald-50 text-emerald-700":st==="partial"?"bg-amber-50 text-amber-700":st==="none"?"bg-red-50 text-red-700":"bg-slate-100 text-slate-400"].join(" ")}>
-                        {st==="done"?"✅":st==="partial"?"🟡":st==="none"?"❌":"🔵"}
+                      {s.pdfUrl && (
+                        <a
+                          href={s.pdfUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-[10px] font-bold text-blue-500 bg-blue-50 px-2 py-0.5 rounded-full flex-shrink-0"
+                        >
+                          📄
+                        </a>
+                      )}
+                      <span className={[
+                        "text-[10.5px] font-bold px-2.5 py-1 rounded-full flex-shrink-0",
+                        st === "done"    ? "bg-emerald-50 text-emerald-700" :
+                        st === "partial" ? "bg-amber-50 text-amber-700"     :
+                        st === "none"    ? "bg-red-50 text-red-700"         :
+                        "bg-slate-100 text-slate-400",
+                      ].join(" ")}>
+                        {st === "done" ? "✅" : st === "partial" ? "🟡" : st === "none" ? "❌" : "🔵"}
                       </span>
                     </div>
                   );
@@ -676,30 +774,43 @@ function Dashboard({ athlete, weeklyCharge, sessions, competitions, lastMessages
               </div>
             )}
           </div>
-
+ 
+          {/* ── Nouveau record ── */}
           {latestPR && (
-            <div className="rounded-2xl p-4 text-white relative overflow-hidden"
-              style={{background:"linear-gradient(135deg, #EF9F27 0%, #f59e0b 100%)"}}>
-              <div className="absolute inset-0 opacity-20"
-                style={{backgroundImage:"radial-gradient(circle at 90% 10%, white 0%, transparent 50%)"}}/>
-              <div className="relative flex items-center gap-3">
-                <div className="text-[32px]">🏆</div>
+            <div
+              className="rounded-3xl p-5 text-white relative overflow-hidden tap-feedback"
+              style={{ background: "linear-gradient(135deg, #EF9F27 0%, #f59e0b 100%)" }}
+            >
+              <div
+                className="absolute inset-0 opacity-20"
+                style={{ backgroundImage: "radial-gradient(circle at 90% 10%, white 0%, transparent 50%)" }}
+              />
+              <div className="relative flex items-center gap-4">
+                <div className="text-[36px]">🏆</div>
                 <div>
-                  <p className="text-[11px] font-bold uppercase tracking-wider text-white/80">Nouveau record personnel !</p>
-                  <p className="text-[16px] font-black">{latestPR.discipline} — {latestPR.value}</p>
+                  <p className="text-[11px] font-bold uppercase tracking-wider text-white/80">
+                    Nouveau record personnel !
+                  </p>
+                  <p className="text-[18px] font-black leading-tight mt-0.5">
+                    {latestPR.discipline} — {latestPR.value}
+                  </p>
                   <p className="text-[11px] text-white/70 mt-0.5">
-                    {new Date(latestPR.performance_date).toLocaleDateString("fr-BE",{day:"numeric",month:"long"})}
+                    {new Date(latestPR.performance_date).toLocaleDateString("fr-BE", { day: "numeric", month: "long" })}
                   </p>
                 </div>
               </div>
             </div>
           )}
-
+ 
+          {/* ── Records ── */}
           {topRecords.length > 0 && (
-            <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
+            <div className="card overflow-hidden shimmer-hover">
               <div className="px-5 py-4 border-b border-slate-50 flex items-center justify-between">
                 <h3 className="text-[14px] font-bold text-slate-800">Mes records</h3>
-                <button onClick={() => onNavigate("performances")} className="text-[11.5px] font-semibold text-emerald-600 hover:text-emerald-700">
+                <button
+                  onClick={() => onNavigate("performances")}
+                  className="text-[11.5px] font-semibold text-emerald-600 hover:text-emerald-700 transition-colors"
+                >
                   Tout voir →
                 </button>
               </div>
@@ -707,47 +818,48 @@ function Dashboard({ athlete, weeklyCharge, sessions, competitions, lastMessages
                 {topRecords.map(([disc, r]) => {
                   const c = DISC_TYPE_COLORS[getDiscType(disc)] ?? DISC_TYPE_COLORS.sprint;
                   return (
-                    <div key={disc} className="bg-white px-4 py-3.5">
-                      <div className="flex items-center gap-1.5 mb-1">
-                        <span className="w-2 h-2 rounded-full" style={{background:c.dot}}/>
+                    <div key={disc} className="bg-white px-4 py-4">
+                      <div className="flex items-center gap-1.5 mb-1.5">
+                        <span className="w-2 h-2 rounded-full" style={{ background: c.dot }} />
                         <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{disc}</p>
                       </div>
-                      <p className="text-[20px] font-black" style={{color:c.border}}>{r.pr}</p>
-                      <p className="text-[10px] text-slate-400 mt-0.5">SB : {r.sb}</p>
+                      <p className="text-[22px] font-black leading-none" style={{ color: c.border }}>{r.pr}</p>
+                      <p className="text-[10.5px] text-slate-400 mt-1">SB : {r.sb}</p>
                     </div>
                   );
                 })}
               </div>
             </div>
           )}
-
-          <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5">
+ 
+          {/* ── Badges ── */}
+          <div className="card p-5">
             <div className="flex items-center justify-between mb-4">
               <div>
                 <h3 className="text-[14px] font-bold text-slate-800">Mes badges</h3>
                 <p className="text-[11px] text-slate-400 mt-0.5">
-                  {unlockedBadges.length} débloqué{unlockedBadges.length>1?"s":""} · {lockedBadges.length} à venir
+                  {unlockedBadges.length} débloqué{unlockedBadges.length > 1 ? "s" : ""} · {lockedBadges.length} à venir
                 </p>
               </div>
-              <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-50 border border-amber-100">
-                <span className="text-[14px]">🏆</span>
-                <span className="text-[13px] font-black text-amber-600">{unlockedBadges.length}</span>
+              <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-2xl bg-amber-50 border border-amber-100">
+                <span className="text-[16px]">🏆</span>
+                <span className="text-[14px] font-black text-amber-600">{unlockedBadges.length}</span>
               </div>
             </div>
             {unlockedBadges.length === 0 ? (
-              <div className="text-center py-6 text-slate-300">
+              <div className="text-center py-8 text-slate-300">
                 <p className="text-[12px]">Commence à t'entraîner pour débloquer tes premiers badges !</p>
               </div>
             ) : (
               <>
                 <div className="grid grid-cols-4 gap-2 mb-3">
-                  {unlockedBadges.slice(0, 8).map(b => <BadgeItem key={b.id} badge={b}/>)}
+                  {unlockedBadges.slice(0, 8).map(b => <BadgeItem key={b.id} badge={b} />)}
                 </div>
                 {lockedBadges.length > 0 && (
                   <div>
                     <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">À débloquer</p>
                     <div className="grid grid-cols-4 gap-2">
-                      {lockedBadges.slice(0, 4).map(b => <BadgeItem key={b.id} badge={b}/>)}
+                      {lockedBadges.slice(0, 4).map(b => <BadgeItem key={b.id} badge={b} />)}
                     </div>
                   </div>
                 )}
@@ -755,94 +867,125 @@ function Dashboard({ athlete, weeklyCharge, sessions, competitions, lastMessages
             )}
           </div>
         </div>
-
-        {/* ── Colonne droite ── */}
-        <div className="space-y-5">
+ 
+        {/* ── Colonne droite ────────────────────────────────────────────── */}
+        <div className="space-y-4">
+ 
+          {/* Prochaine compét */}
           {nextComp && (
-            <div className="rounded-2xl p-5 text-white"
-              style={{ background: "linear-gradient(135deg, #E24B4A 0%, #c73a39 100%)" }}>
-              <div className="flex items-center gap-2 mb-3">
-                <Trophy size={16}/>
-                <span className="text-[11px] font-bold uppercase tracking-wider">Prochaine compétition</span>
-              </div>
-              <p className="text-[16px] font-bold leading-tight mb-1">{nextComp.name}</p>
-              <p className="text-white/70 text-[12px] mb-3">
-                {new Date(nextComp.date).toLocaleDateString("fr-BE",{day:"numeric",month:"long",year:"numeric"})}
-              </p>
-              {(() => {
-                const days = Math.round((new Date(nextComp.date)-today)/(1000*60*60*24));
-                return (
-                  <div className="bg-white/20 rounded-xl px-4 py-3 text-center mb-3">
-                    <p className="text-[32px] font-black">{days}</p>
-                    <p className="text-white/70 text-[11px] font-bold uppercase tracking-wider">jours</p>
-                  </div>
-                );
-              })()}
-              {nextComp.plannedEvents?.[athlete.id] && (
-                <div className="bg-white/20 rounded-xl px-3 py-2">
-                  <p className="text-white/60 text-[10px] font-bold uppercase tracking-wider mb-0.5">Épreuve prévue</p>
-                  <p className="text-white font-bold text-[13px]">{nextComp.plannedEvents[athlete.id]}</p>
+            <div
+              className="rounded-3xl p-5 text-white relative overflow-hidden"
+              style={{ background: "linear-gradient(135deg, #E24B4A 0%, #c73a39 100%)" }}
+            >
+              <div className="absolute -right-6 -top-6 w-32 h-32 rounded-full bg-white/5" />
+              <div className="relative">
+                <div className="flex items-center gap-2 mb-3">
+                  <Trophy size={15} />
+                  <span className="text-[10px] font-bold uppercase tracking-widest">Prochaine compétition</span>
                 </div>
-              )}
+                <p className="text-[17px] font-black leading-tight mb-1">{nextComp.name}</p>
+                <p className="text-white/60 text-[12px] mb-4">
+                  {new Date(nextComp.date).toLocaleDateString("fr-BE", { day: "numeric", month: "long", year: "numeric" })}
+                </p>
+                {(() => {
+                  const days = Math.round((new Date(nextComp.date) - today) / (1000 * 60 * 60 * 24));
+                  return (
+                    <div className="bg-white/15 rounded-2xl px-4 py-3 text-center mb-3">
+                      <p className="text-[36px] font-black">{days}</p>
+                      <p className="text-white/60 text-[10px] font-bold uppercase tracking-wider">jours</p>
+                    </div>
+                  );
+                })()}
+                {nextComp.plannedEvents?.[athlete.id] && (
+                  <div className="bg-white/15 rounded-xl px-3 py-2.5">
+                    <p className="text-white/60 text-[10px] font-bold uppercase tracking-wider mb-0.5">Épreuve prévue</p>
+                    <p className="text-white font-bold text-[14px]">{nextComp.plannedEvents[athlete.id]}</p>
+                  </div>
+                )}
+              </div>
             </div>
           )}
-
+ 
+          {/* Streak */}
           {streak > 0 && (
-            <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5 text-center">
-              <p className="text-[40px] font-black text-amber-500">🔥 {streak}</p>
-              <p className="text-[13px] font-bold text-slate-700 mt-1">semaine{streak>1?"s":""} consécutive{streak>1?"s":""}</p>
+            <div className="card p-5 text-center">
+              <p className="text-[44px] font-black text-amber-500 leading-none">🔥</p>
+              <p className="text-[32px] font-black text-amber-500 leading-none mt-1">{streak}</p>
+              <p className="text-[13px] font-bold text-slate-700 mt-2">
+                semaine{streak > 1 ? "s" : ""} consécutive{streak > 1 ? "s" : ""}
+              </p>
               <p className="text-[11px] text-slate-400 mt-0.5">avec au moins 1 séance validée</p>
             </div>
           )}
-
+ 
+          {/* Blessures actives */}
           {activeInjuries.length > 0 && (
-            <div className="bg-amber-50 border border-amber-100 rounded-2xl p-5">
+            <div className="rounded-2xl p-5 border border-amber-100" style={{ background: "#FFFBF0" }}>
               <div className="flex items-center gap-2 mb-3">
-                <HeartPulse size={15} color="#EF9F27"/>
+                <HeartPulse size={15} color="#EF9F27" />
                 <h3 className="text-[13px] font-bold text-amber-800">Blessures en cours</h3>
               </div>
               <div className="space-y-2">
-                {activeInjuries.map((inj) => (
-                  <div key={inj.id} className="bg-white rounded-xl px-3 py-2.5">
+                {activeInjuries.map(inj => (
+                  <div key={inj.id} className="bg-white rounded-xl px-3 py-2.5 shadow-sm">
                     <div className="flex items-center justify-between mb-1">
-                      <p className="text-[12px] font-semibold text-slate-700">{inj.name}</p>
-                      <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700">{inj.intensity}/10</span>
+                      <p className="text-[12.5px] font-semibold text-slate-700">{inj.name}</p>
+                      <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700">
+                        {inj.intensity}/10
+                      </span>
                     </div>
                     <p className="text-[11px] text-slate-400">📍 {inj.location}</p>
-                    <div className="mt-1.5 h-1.5 bg-slate-100 rounded-full overflow-hidden">
-                      <div className="h-full rounded-full" style={{
-                        width:`${(inj.intensity/10)*100}%`,
-                        background: inj.intensity<=3?"#1D9E75":inj.intensity<=6?"#EF9F27":"#E24B4A"
-                      }}/>
+                    <div className="mt-2 progress-bar">
+                      <div
+                        className="progress-fill"
+                        style={{
+                          width: `${(inj.intensity / 10) * 100}%`,
+                          background: inj.intensity <= 3 ? "#1D9E75" : inj.intensity <= 6 ? "#EF9F27" : "#E24B4A",
+                        }}
+                      />
                     </div>
                   </div>
                 ))}
               </div>
             </div>
           )}
-
+ 
+          {/* Dernier message coach */}
           {lastMessages.length > 0 && (
-            <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5">
+            <div className="card p-5">
               <div className="flex items-center justify-between mb-3">
-                <h3 className="text-[13px] font-bold text-slate-800">📩 Coach</h3>
-                <button onClick={() => onNavigate("messagerie")} className="text-[11px] text-emerald-600 font-semibold">Répondre →</button>
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-full bg-emerald-500 flex items-center justify-center text-white text-[10px] font-bold">
+                    {initialsFromName(coachName ?? "C")}
+                  </div>
+                  <h3 className="text-[13px] font-bold text-slate-800">{coachName?.split(" ")[0] ?? "Coach"}</h3>
+                </div>
+                <button
+                  onClick={() => onNavigate("messagerie")}
+                  className="text-[11px] text-emerald-600 font-semibold hover:text-emerald-700 transition-colors"
+                >
+                  Répondre →
+                </button>
               </div>
-              {lastMessages.slice(0,2).map((m) => (
-                <div key={m.id} className="bg-slate-50 rounded-xl px-3 py-2.5 mb-2">
-                  <p className="text-[12px] text-slate-700 leading-relaxed line-clamp-2">{m.content}</p>
+              {lastMessages.slice(0, 2).map(m => (
+                <div key={m.id} className="bg-slate-50 rounded-2xl px-3.5 py-2.5 mb-2">
+                  <p className="text-[12.5px] text-slate-700 leading-relaxed line-clamp-2">{m.content}</p>
                   <p className="text-[10px] text-slate-400 mt-1">
-                    {new Date(m.created_at).toLocaleDateString("fr-BE",{day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"})}
+                    {new Date(m.created_at).toLocaleDateString("fr-BE", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}
                   </p>
                 </div>
               ))}
             </div>
           )}
-
+ 
+          {/* Pas de charge */}
           {!hasCharge && (
-            <div className="bg-slate-50 rounded-2xl border border-dashed border-slate-200 p-6 text-center">
-              <BarChart2 size={28} className="mx-auto mb-2 text-slate-300" strokeWidth={1.5}/>
+            <div className="rounded-2xl border-2 border-dashed border-slate-200 p-6 text-center">
+              <BarChart2 size={28} className="mx-auto mb-2 text-slate-300" strokeWidth={1.5} />
               <p className="text-[12px] font-semibold text-slate-400">Charge indisponible</p>
-              <p className="text-[11px] text-slate-300 mt-1">Tes scores de forme apparaîtront après tes premières séances avec RPE</p>
+              <p className="text-[11px] text-slate-300 mt-1 leading-relaxed">
+                Tes scores apparaîtront après tes premières séances avec RPE
+              </p>
             </div>
           )}
         </div>
@@ -850,7 +993,6 @@ function Dashboard({ athlete, weeklyCharge, sessions, competitions, lastMessages
     </div>
   );
 }
-
 // ══════════════════════════════════════════════════════════════════════════════
 // VUE 2 — MON PLANNING
 // ══════════════════════════════════════════════════════════════════════════════
