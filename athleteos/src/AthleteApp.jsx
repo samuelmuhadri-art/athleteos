@@ -2665,7 +2665,8 @@ function MonClub({ athlete, allAthletes, clubId, sessions, profile }) {
 // ══════════════════════════════════════════════════════════════════════════════
 export default function AthleteApp() {
   const { profile, clubId, signOut } = useAuth();
-
+ 
+  // ── State (identique) ──────────────────────────────────────────────────────
   const [activeView,   setActiveView]   = useState("dashboard");
   const [mobileOpen,   setMobileOpen]   = useState(false);
   const [athlete,      setAthlete]      = useState(null);
@@ -2673,54 +2674,49 @@ export default function AthleteApp() {
   const [weeklyCharge, setWeeklyCharge] = useState([]);
   const [sessions,     setSessions]     = useState([]);
   const [competitions, setCompetitions] = useState([]);
-  const [coachUserId,     setCoachUserId]     = useState(null);
-  const [coachName,       setCoachName]       = useState(null);
-  const [lastMessages,    setLastMessages]    = useState([]);
-  const [myPerformances,  setMyPerformances]  = useState([]);
-  const [myGoals,         setMyGoals]         = useState([]);
-  const [myNotifs,        setMyNotifs]        = useState([]);
-  const [showNotifs,      setShowNotifs]      = useState(false);
-  const [loading,         setLoading]         = useState(true);
-  const [error,           setError]           = useState(null);
-
-  // ── Wellness ─────────────────────────────────────────────────────────────
-  const [wellnessToday,   setWellnessToday]   = useState(null);
-  const [showWellness,    setShowWellness]     = useState(false);
-
-  // ── Push notifications ────────────────────────────────────────────────────
-  // IMPORTANT : appelé AVANT les guards (règle React : hooks toujours en tête).
-  // athlete?.id sera null au premier render puis mis à jour après fetchAll.
-  // Le hook tolère null et ne crée pas d'abonnement tant que l'id est absent.
+  const [coachUserId,    setCoachUserId]    = useState(null);
+  const [coachName,      setCoachName]      = useState(null);
+  const [lastMessages,   setLastMessages]   = useState([]);
+  const [myPerformances, setMyPerformances] = useState([]);
+  const [myGoals,        setMyGoals]        = useState([]);
+  const [myNotifs,       setMyNotifs]       = useState([]);
+  const [showNotifs,     setShowNotifs]     = useState(false);
+  const [loading,        setLoading]        = useState(true);
+  const [error,          setError]          = useState(null);
+  const [wellnessToday,  setWellnessToday]  = useState(null);
+  const [showWellness,   setShowWellness]   = useState(false);
+  // ★ NOUVEAU : clé pour animer les transitions de vue
+  const [viewKey, setViewKey] = useState(0);
+ 
+  // ── Push (identique) ───────────────────────────────────────────────────────
   const { subscribed, subscribe, permissionState, swReady } = usePushNotifications(
     athlete?.id ?? null,
     clubId
   );
-
-  // Demande automatique de permission push dès que le SW est prêt
-  // (comme sur CoachShell côté Benoît)
+ 
   useEffect(() => {
     if (swReady && !subscribed && permissionState !== "denied") {
       subscribe();
     }
   }, [swReady, subscribed, permissionState, subscribe]);
-
-  // ═══ Chargement ═══════════════════════════════════════════════════════════
+ 
+  // ── fetchAll (identique — ne pas modifier) ─────────────────────────────────
   const fetchAll = useCallback(async () => {
     if (!clubId || !profile?.id) return;
     try {
       setLoading(true); setError(null);
-
+ 
       const athleteRes = await supabase.from("athletes").select("*").eq("user_id", profile.id).single();
       if (athleteRes.error || !athleteRes.data) {
         setError("Aucun profil athlète lié à ton compte. Contacte ton coach.");
         setLoading(false);
         return;
       }
-
+ 
       const a = athleteRes.data;
       const athleteId = a.id;
       const todayStr = new Date().toISOString().split("T")[0];
-
+ 
       const [recordsRes,injuriesRes,perfHistRes,sessionsRes,compsRes,coachRes,allAthletesRes,myPerfsRes,goalsRes,notifsRes,wellnessRes] = await Promise.all([
         supabase.from("records").select("*").eq("athlete_id",athleteId),
         supabase.from("injuries").select("*").eq("athlete_id",athleteId),
@@ -2734,31 +2730,29 @@ export default function AthleteApp() {
         supabase.from("athlete_notifications").select("*").eq("athlete_id",athleteId).order("created_at",{ascending:false}).limit(20),
         supabase.from("athlete_wellness").select("*").eq("athlete_id",athleteId).eq("date",todayStr).maybeSingle(),
       ]);
-
+ 
       setMyPerformances(myPerfsRes.data ?? []);
       setMyGoals(goalsRes.data ?? []);
       setMyNotifs(notifsRes?.data ?? []);
-
-      // Wellness du jour
       setWellnessToday(wellnessRes.data ?? null);
-
+ 
       const coachId = coachRes.data?.id ?? null;
       setCoachUserId(coachId);
       setCoachName(coachRes.data?.name ?? null);
-
+ 
       if (coachId) {
         const {data:msgs}=await supabase.from("messages").select("*")
           .or(`and(sender_id.eq.${coachId},receiver_id.eq.${profile.id}),and(sender_id.eq.${profile.id},receiver_id.eq.${coachId})`)
           .order("created_at",{ascending:false}).limit(3);
         setLastMessages((msgs??[]).filter(m=>m.sender_id===coachId));
       }
-
+ 
       setAllAthletes((allAthletesRes.data??[]).map(a=>({id:a.id,name:a.name,avatar:a.profile_data?.avatar??initialsFromName(a.name)})));
-
+ 
       const pd = a.profile_data??{};
       const recs = {};
       (recordsRes.data??[]).forEach(r=>{ recs[r.discipline]={sb:r.sb,pr:r.pr,prDate:r.pr_date}; });
-
+ 
       setAthlete({
         id:a.id, name:a.name, age:a.age,
         avatar:pd.avatar??initialsFromName(a.name),
@@ -2770,7 +2764,7 @@ export default function AthleteApp() {
         performanceHistory:(perfHistRes.data??[]).sort((x,y)=>x.month.localeCompare(y.month)),
         profile:pd.profile??{},
       });
-
+ 
       const allSessions=(sessionsRes.data??[]).map(s=>{
         const rows=s.session_athletes??[];
         return {
@@ -2782,14 +2776,14 @@ export default function AthleteApp() {
           validations:rows.map(v=>({athleteId:v.athlete_id,status:v.status,feeling:v.feeling,fatigue:v.fatigue,comment:v.comment,rpe:v.rpe})),
         };
       }).filter(s=>s.athleteIds.includes(athleteId));
-
+ 
       const allComps=(compsRes.data??[]).map(c=>({
         id:c.id,name:c.name,date:c.date,location:c.location,type:c.type,
         athleteIds:(c.competition_athletes??[]).map(x=>x.athlete_id),
         plannedEvents:Object.fromEntries((c.competition_athletes??[]).map(x=>[x.athlete_id,x.planned_event])),
         results:(c.competition_results??[]).map(r=>({athleteId:r.athlete_id,event:r.event,result:r.result,context:r.context})),
       })).filter(c=>c.athleteIds.includes(athleteId));
-
+ 
       const saRes=await supabase.from("session_athletes").select("session_id,rpe").eq("athlete_id",athleteId);
       const byWeek={};
       allSessions.forEach(s=>{
@@ -2798,7 +2792,7 @@ export default function AthleteApp() {
         byWeek[s.week]=(byWeek[s.week]??0)+(s.durationMinutes??60)*sa.rpe;
       });
       const charge=Object.entries(byWeek).map(([week,rawLoad])=>({athleteId,week:Number(week),rawLoad}));
-
+ 
       setWeeklyCharge(charge);
       setSessions(allSessions);
       setCompetitions(allComps);
@@ -2807,153 +2801,258 @@ export default function AthleteApp() {
       setError(err.message??"Erreur inconnue");
     } finally { setLoading(false); }
   }, [clubId, profile?.id]);
-
+ 
   useEffect(() => { fetchAll(); }, [fetchAll]);
-
-  // Ouvre la modale wellness si pas encore répondu aujourd'hui
+ 
+  // Ouvre wellness si pas encore répondu aujourd'hui
   useEffect(() => {
     if (athlete && !wellnessToday && !loading) setShowWellness(true);
   }, [athlete, wellnessToday, loading]);
-
-  // ═══ Realtime ═════════════════════════════════════════════════════════════
-  // Section intentionnellement vide.
-  // Les handlers RPE/status/feeling/comment font uniquement une mise à jour
-  // locale + write Supabase sans fetchAll(), ce qui évite tout rechargement.
-  // Si un realtime est ajouté à l'avenir, filtrer sur athlete_id et
-  // utiliser setSessions (patch local) plutôt que fetchAll().
-
-  // ═══ Handlers ═════════════════════════════════════════════════════════════
+ 
+  // ── Handlers (identiques) ──────────────────────────────────────────────────
   const handleRpe = useCallback(async (sid,aid,rpe) => {
     setSessions(p=>p.map(s=>s.id!==sid?s:{...s,validations:s.validations.map(v=>v.athleteId===aid?{...v,rpe}:v)}));
     await supabase.from("session_athletes").update({rpe}).eq("session_id",sid).eq("athlete_id",aid);
   }, []);
-
+ 
   const handleStatus = useCallback(async (sid,aid,status) => {
     setSessions(p=>p.map(s=>s.id!==sid?s:{...s,validations:s.validations.map(v=>v.athleteId===aid?{...v,status}:v)}));
     await supabase.from("session_athletes").update({status}).eq("session_id",sid).eq("athlete_id",aid);
   }, []);
-
+ 
   const handleFeeling = useCallback(async (sid,aid,feeling) => {
     setSessions(p=>p.map(s=>s.id!==sid?s:{...s,validations:s.validations.map(v=>v.athleteId===aid?{...v,feeling}:v)}));
     await supabase.from("session_athletes").update({feeling}).eq("session_id",sid).eq("athlete_id",aid);
   }, []);
-
+ 
   const handleComment = useCallback(async (sid,aid,comment) => {
     setSessions(p=>p.map(s=>s.id!==sid?s:{...s,validations:s.validations.map(v=>v.athleteId===aid?{...v,comment}:v)}));
     await supabase.from("session_athletes").update({comment}).eq("session_id",sid).eq("athlete_id",aid);
   }, []);
-
-  const navigate = useCallback((view) => { setActiveView(view); setMobileOpen(false); }, []);
-
+ 
+  // ★ navigate enrichi : incrémente viewKey pour déclencher l'animation
+  const navigate = useCallback((view) => {
+    setActiveView(view);
+    setViewKey(k => k + 1);
+    setMobileOpen(false);
+  }, []);
+ 
   // ── Guards (APRÈS tous les hooks) ─────────────────────────────────────────
-  if (loading) return <LoadingState message="Chargement de ton espace…"/>;
-  if (error || !athlete) return (
-    <div className="min-h-screen flex items-center justify-center p-6" style={{background:"#F5F5F2"}}>
-      <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-8 max-w-sm text-center">
-        <p className="text-[14px] font-semibold text-slate-700 mb-2">Profil introuvable</p>
-        <p className="text-[12px] text-slate-400 mb-4">{error}</p>
-        <button onClick={signOut} className="text-[12px] text-red-500 hover:text-red-700">Se déconnecter</button>
+  if (loading) return (
+    <div className="min-h-screen flex flex-col items-center justify-center gap-5" style={{ background: "#F5F5F2" }}>
+      <div
+        className="w-14 h-14 rounded-2xl flex items-center justify-center shadow-lg"
+        style={{ background: "linear-gradient(135deg, #1D9E75 0%, #16826C 100%)" }}
+      >
+        <Zap size={24} color="white" strokeWidth={2.5} />
+      </div>
+      <div className="flex flex-col items-center gap-2">
+        <div className="loader-ring" />
+        <span className="text-[12px] font-semibold text-slate-400 tracking-wide">
+          Chargement de ton espace…
+        </span>
       </div>
     </div>
   );
-
-  const currentNav = NAV_ITEMS.find(n=>n.id===activeView);
-
+ 
+  if (error || !athlete) return (
+    <div className="min-h-screen flex items-center justify-center p-6 animate-fade-in" style={{background:"#F5F5F2"}}>
+      <div className="card p-8 max-w-sm w-full text-center">
+        <div
+          className="w-12 h-12 rounded-2xl mx-auto mb-4 flex items-center justify-center"
+          style={{ background: "rgba(226,75,74,0.10)" }}
+        >
+          <span className="text-[20px]">⚠️</span>
+        </div>
+        <p className="text-[15px] font-bold text-slate-700 mb-1">Profil introuvable</p>
+        <p className="text-[12.5px] text-slate-400 mb-6 leading-relaxed">{error}</p>
+        <button
+          onClick={signOut}
+          className="text-[12px] font-semibold text-red-500 hover:text-red-700 transition-colors"
+        >
+          Se déconnecter
+        </button>
+      </div>
+    </div>
+  );
+ 
+  const currentNav  = NAV_ITEMS.find(n => n.id === activeView);
+  const unreadCount = myNotifs.filter(n => !n.is_read).length;
+  const msgUnread   = myNotifs.filter(n => !n.is_read && n.type === "message").length;
+ 
   return (
-    <div className="flex h-screen overflow-hidden" style={{background:"#F5F5F2",fontFamily:"'DM Sans', system-ui, sans-serif"}}>
-      {mobileOpen&&<div className="fixed inset-0 bg-black/30 z-20 md:hidden" onClick={()=>setMobileOpen(false)}/>}
-
-      {/* Sidebar desktop */}
-      <aside className="hidden md:flex flex-col bg-white border-r border-slate-100 z-30 w-56 flex-shrink-0">
-        <div className="flex items-center gap-2.5 px-4 h-16 border-b border-slate-100 flex-shrink-0">
-          <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
-            style={{background:"linear-gradient(135deg,#1D9E75 0%,#16826C 100%)"}}>
-            <Zap size={16} color="white" strokeWidth={2.5}/>
+    <div
+      className="flex h-screen overflow-hidden"
+      style={{ background: "#F5F5F2", fontFamily: "'DM Sans', system-ui, sans-serif" }}
+    >
+      {/* ── Overlay mobile sidebar ───────────────────────────────────────── */}
+      {mobileOpen && (
+        <div
+          className="fixed inset-0 z-20 md:hidden modal-backdrop"
+          onClick={() => setMobileOpen(false)}
+        />
+      )}
+ 
+      {/* ══════════════════════════════════════════════════════════════
+          SIDEBAR DESKTOP PREMIUM
+      ══════════════════════════════════════════════════════════════ */}
+      <aside className="hidden md:flex flex-col sidebar-premium z-30 flex-shrink-0" style={{ width: "220px" }}>
+ 
+        {/* Logo */}
+        <div className="flex items-center gap-3 px-4 h-16 border-b border-slate-100/80 flex-shrink-0">
+          <div
+            className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 shadow-sm"
+            style={{ background: "linear-gradient(135deg, #1D9E75 0%, #16826C 100%)" }}
+          >
+            <Zap size={17} color="white" strokeWidth={2.5} />
           </div>
           <span className="font-bold text-slate-800 text-[15px] tracking-tight">AthleteOS</span>
         </div>
-        <nav className="flex-1 py-3">
-          {NAV_ITEMS.map(item=>{
-            const Icon=item.icon; const isActive=activeView===item.id;
+ 
+        {/* Navigation */}
+        <nav className="flex-1 py-3 overflow-y-auto">
+          {NAV_ITEMS.map((item, idx) => {
+            const Icon     = item.icon;
+            const isActive = activeView === item.id;
+            const hasBadge = item.id === "messagerie" && msgUnread > 0;
             return (
-              <button key={item.id} onClick={()=>navigate(item.id)}
-                className={["w-full flex items-center gap-3 px-4 py-2.5 text-[13.5px] font-medium transition-all relative hover:bg-slate-50",
-                  isActive?"text-emerald-700 bg-emerald-50":"text-slate-500 hover:text-slate-700"].join(" ")}>
-                {isActive&&<span className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-5 rounded-r-full bg-emerald-500"/>}
-                <Icon size={18} strokeWidth={isActive?2:1.5} className="flex-shrink-0"/>
-                <span className="flex-1 text-left truncate">{item.label}</span>
+              <button
+                key={item.id}
+                onClick={() => navigate(item.id)}
+                className={[
+                  "nav-item w-full animate-slide-right",
+                  isActive ? "active" : "",
+                ].join(" ")}
+                style={{ animationDelay: `${idx * 25}ms` }}
+              >
+                <div className="relative flex-shrink-0">
+                  <Icon size={18} strokeWidth={isActive ? 2.2 : 1.6} />
+                  {hasBadge && (
+                    <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-red-500 border-2 border-white animate-bounce-in" />
+                  )}
+                </div>
+                <span className="flex-1 text-left truncate text-[13.5px]">{item.label}</span>
+                {hasBadge && (
+                  <span className="ml-auto text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-red-500 min-w-[20px] text-center animate-bounce-in">
+                    {msgUnread}
+                  </span>
+                )}
               </button>
             );
           })}
         </nav>
-        <div className="border-t border-slate-100 flex-shrink-0 px-4 py-3 flex items-center gap-3">
-          <div className="w-8 h-8 rounded-full flex items-center justify-center text-white text-[11px] font-bold flex-shrink-0"
-            style={{background:"#1D9E75"}}>
-            {initialsFromName(athlete.name)}
+ 
+        {/* Profil athlète */}
+        <div className="border-t border-slate-100 flex-shrink-0 px-3 py-3.5">
+          <div className="flex items-center gap-3">
+            {/* Avatar */}
+            <div
+              className="w-9 h-9 rounded-full flex items-center justify-center text-white text-[11px] font-bold flex-shrink-0 shadow-sm"
+              style={{ background: "linear-gradient(135deg, #1D9E75 0%, #16826C 100%)" }}
+            >
+              {initialsFromName(athlete.name)}
+            </div>
+ 
+            <div className="min-w-0 flex-1">
+              <p className="text-[12.5px] font-semibold text-slate-700 truncate leading-tight">
+                {athlete.name}
+              </p>
+              <div className="flex items-center gap-1.5 mt-0.5">
+                <div className="status-dot-live" style={{ width: 6, height: 6 }} />
+                <p className="text-[10.5px] text-slate-400">Athlète</p>
+              </div>
+            </div>
+ 
+            {/* Notifs desktop */}
+            <button
+              onClick={() => setShowNotifs(v => !v)}
+              className="relative p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-all flex-shrink-0"
+            >
+              <Bell size={15} />
+              {unreadCount > 0 && (
+                <span className="absolute -top-0.5 -right-0.5 w-4 h-4 rounded-full bg-red-500 text-white text-[9px] font-bold flex items-center justify-center animate-bounce-in">
+                  {unreadCount}
+                </span>
+              )}
+            </button>
+ 
+            {/* Déconnexion */}
+            <button
+              onClick={signOut}
+              title="Se déconnecter"
+              className="p-1.5 rounded-lg text-slate-300 hover:text-red-500 hover:bg-red-50 transition-all flex-shrink-0"
+            >
+              <LogOut size={14} />
+            </button>
           </div>
-          <div className="min-w-0 flex-1">
-            <p className="text-[12.5px] font-semibold text-slate-700 truncate">{athlete.name}</p>
-            <p className="text-[11px] text-slate-400">Athlète</p>
-          </div>
-          <button onClick={()=>setShowNotifs(v=>!v)}
-            className="relative p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors flex-shrink-0">
-            <Bell size={15}/>
-            {myNotifs.filter(n=>!n.is_read).length > 0 && (
-              <span className="absolute -top-0.5 -right-0.5 w-4 h-4 rounded-full bg-red-500 text-white text-[9px] font-bold flex items-center justify-center">
-                {myNotifs.filter(n=>!n.is_read).length}
-              </span>
-            )}
-          </button>
-          <button onClick={signOut} title="Se déconnecter"
-            className="p-1.5 rounded-lg text-slate-300 hover:text-red-500 hover:bg-red-50 transition-colors flex-shrink-0">
-            <LogOut size={15}/>
-          </button>
+        </div>
+ 
+        {/* Push toggle (desktop) */}
+        <div className="px-3 pb-3 border-t border-slate-100 pt-2.5">
+          <PushToggleButton
+            subscribed={subscribed}
+            onToggle={subscribe}
+            permissionState={permissionState}
+          />
         </div>
       </aside>
-
-      {/* Panneau notifications */}
+ 
+      {/* ── Panneau notifications desktop ─────────────────────────────────── */}
       {showNotifs && (
-        <div className="fixed inset-0 z-40 flex" onClick={()=>setShowNotifs(false)}>
-          <div className="ml-56 flex-1" />
-          <div className="absolute left-0 bottom-20 w-56 bg-white rounded-2xl border border-slate-200 shadow-2xl overflow-hidden z-50"
-            onClick={e=>e.stopPropagation()}>
-            <div className="px-4 py-3 border-b border-slate-100 flex items-center justify-between">
-              <p className="text-[13px] font-bold text-slate-800">Notifications</p>
-              {myNotifs.filter(n=>!n.is_read).length > 0 && (
-                <button onClick={async()=>{
-                  await supabase.from("athlete_notifications").update({is_read:true}).eq("athlete_id",athlete.id).eq("is_read",false);
-                  fetchAll();
-                }} className="text-[10px] font-semibold text-emerald-600 hover:text-emerald-700">
+        <div
+          className="fixed inset-0 z-40 flex animate-fade-in"
+          onClick={() => setShowNotifs(false)}
+        >
+          <div
+            className="absolute left-[220px] bottom-20 w-72 bg-white rounded-2xl border border-slate-100 shadow-card-lg overflow-hidden animate-scale-in"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="px-4 py-3.5 border-b border-slate-100 flex items-center justify-between">
+              <p className="text-[13.5px] font-bold text-slate-800">Notifications</p>
+              {unreadCount > 0 && (
+                <button
+                  onClick={async () => {
+                    await supabase.from("athlete_notifications").update({ is_read: true }).eq("athlete_id", athlete.id).eq("is_read", false);
+                    fetchAll();
+                  }}
+                  className="text-[11px] font-semibold text-emerald-600 hover:text-emerald-700 transition-colors"
+                >
                   Tout lire
                 </button>
               )}
             </div>
             <div className="max-h-80 overflow-y-auto divide-y divide-slate-50">
               {myNotifs.length === 0 ? (
-                <div className="px-4 py-6 text-center space-y-3">
-                  <p className="text-[11px] text-slate-300">Aucune notification</p>
-                  {/* Bouton push dans le panneau notifs desktop */}
-                  <PushToggleButton
-                    subscribed={subscribed}
-                    onToggle={subscribe}
-                    permissionState={permissionState}
-                  />
+                <div className="px-4 py-8 text-center">
+                  <div className="text-[28px] mb-2">🔔</div>
+                  <p className="text-[12px] text-slate-400 font-medium">Aucune notification</p>
+                  <div className="mt-3">
+                    <PushToggleButton subscribed={subscribed} onToggle={subscribe} permissionState={permissionState} />
+                  </div>
                 </div>
               ) : myNotifs.map(n => {
-                const diff = (new Date()-new Date(n.created_at))/1000;
-                const ago = diff<60?"À l'instant":diff<3600?`${Math.floor(diff/60)}min`:diff<86400?`${Math.floor(diff/3600)}h`:`${Math.floor(diff/86400)}j`;
+                const diff = (new Date() - new Date(n.created_at)) / 1000;
+                const ago = diff < 60 ? "À l'instant" : diff < 3600 ? `${Math.floor(diff / 60)}min` : diff < 86400 ? `${Math.floor(diff / 3600)}h` : `${Math.floor(diff / 86400)}j`;
                 return (
-                  <div key={n.id} className={["px-4 py-3 cursor-pointer hover:bg-slate-50 transition-colors",!n.is_read?"bg-blue-50/30":""].join(" ")}
-                    onClick={async()=>{
-                      if(!n.is_read) await supabase.from("athlete_notifications").update({is_read:true}).eq("id",n.id);
+                  <div
+                    key={n.id}
+                    className={[
+                      "px-4 py-3.5 cursor-pointer hover:bg-slate-50 transition-colors",
+                      !n.is_read ? "bg-blue-50/40" : "",
+                    ].join(" ")}
+                    onClick={async () => {
+                      if (!n.is_read) await supabase.from("athlete_notifications").update({ is_read: true }).eq("id", n.id);
                       fetchAll();
-                    }}>
-                    <div className="flex items-start gap-2">
-                      {!n.is_read && <div className="w-1.5 h-1.5 rounded-full bg-blue-500 mt-1.5 flex-shrink-0"/>}
+                    }}
+                  >
+                    <div className="flex items-start gap-2.5">
+                      {!n.is_read && (
+                        <div className="w-2 h-2 rounded-full bg-blue-500 mt-1.5 flex-shrink-0 badge-pulse" />
+                      )}
                       <div className="flex-1 min-w-0">
-                        <p className="text-[11.5px] font-semibold text-slate-700 leading-tight">{n.title}</p>
-                        {n.description && <p className="text-[10.5px] text-slate-400 mt-0.5 leading-relaxed line-clamp-2">{n.description}</p>}
-                        <p className="text-[10px] text-slate-300 mt-1">{ago}</p>
+                        <p className="text-[12px] font-semibold text-slate-700 leading-tight">{n.title}</p>
+                        {n.description && <p className="text-[11px] text-slate-400 mt-0.5 line-clamp-2 leading-relaxed">{n.description}</p>}
+                        <p className="text-[10px] text-slate-300 mt-1 font-medium">{ago}</p>
                       </div>
                     </div>
                   </div>
@@ -2963,152 +3062,227 @@ export default function AthleteApp() {
           </div>
         </div>
       )}
-
-      {/* Zone principale */}
+ 
+      {/* ══════════════════════════════════════════════════════════════
+          ZONE PRINCIPALE
+      ══════════════════════════════════════════════════════════════ */}
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-        <header className="h-14 md:h-16 bg-white border-b border-slate-100 flex items-center gap-3 px-4 flex-shrink-0">
-          <div className="flex md:hidden items-center gap-2">
-            <div className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0"
-              style={{ background: "linear-gradient(135deg, #1D9E75, #16826C)" }}>
-              <Zap size={13} color="white" strokeWidth={2.5}/>
+ 
+        {/* ── Header premium ─────────────────────────────────────────────── */}
+        <header className="h-14 md:h-16 header-glass flex items-center gap-3 px-4 flex-shrink-0 z-10">
+          {/* Logo mobile */}
+          <div className="flex md:hidden items-center gap-2.5">
+            <div
+              className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0 shadow-sm"
+              style={{ background: "linear-gradient(135deg, #1D9E75, #16826C)" }}
+            >
+              <Zap size={14} color="white" strokeWidth={2.5} />
             </div>
-            <span className="font-bold text-slate-800 text-[14px]">AthleteOS</span>
+            <span className="font-bold text-slate-800 text-[14px] tracking-tight">AthleteOS</span>
           </div>
-          <h1 className="hidden md:block text-[16px] font-semibold text-slate-800 tracking-tight">{currentNav?.label??"Mon espace"}</h1>
-          <div className="flex-1"/>
-          {/* Bouton push dans le header — visible desktop */}
+ 
+          {/* Titre de la vue (desktop) */}
+          <div className="hidden md:flex items-center gap-3">
+            {(() => {
+              const Icon = currentNav?.icon;
+              return Icon ? (
+                <div
+                  className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
+                  style={{ background: "rgba(29,158,117,0.10)" }}
+                >
+                  <Icon size={15} color="#1D9E75" strokeWidth={2} />
+                </div>
+              ) : null;
+            })()}
+            <h1 className="text-[16px] font-bold text-slate-800 tracking-tight">
+              {currentNav?.label ?? "Mon espace"}
+            </h1>
+          </div>
+ 
+          <div className="flex-1" />
+ 
+          {/* Push toggle desktop */}
           <div className="hidden md:block">
-            <PushToggleButton
-              subscribed={subscribed}
-              onToggle={subscribe}
-              permissionState={permissionState}
-            />
+            <PushToggleButton subscribed={subscribed} onToggle={subscribe} permissionState={permissionState} />
           </div>
         </header>
-
+ 
+        {/* ── Contenu principal avec transition de vue ─────────────────── */}
         <main className="flex-1 overflow-y-auto pb-20 md:pb-0">
-          {activeView==="dashboard"&&(
-            <Dashboard athlete={athlete} weeklyCharge={weeklyCharge} sessions={sessions}
-              competitions={competitions} lastMessages={lastMessages} coachName={coachName}
-              myPerformances={myPerformances} onNavigate={navigate}
-              wellnessToday={wellnessToday} onOpenWellness={() => setShowWellness(true)}/>
-          )}
-          {activeView==="planning"&&(
-           <MonPlanning
-              athlete={athlete} sessions={sessions} allAthletes={allAthletes}
-              clubId={clubId} createdBy={profile?.id}
-              coachUserId={coachUserId}
-              onRpeChange={handleRpe} onStatusChange={handleStatus}
-              onFeelingChange={handleFeeling} onCommentChange={handleComment}
-              onRefresh={fetchAll}
-            />
-          )}
-          {activeView==="performances"&&(
-            <MesPerformances
-              athlete={athlete} competitions={competitions}
-              myPerformances={myPerformances} myGoals={myGoals}
-              clubId={clubId} onRefresh={fetchAll}
-            />
-          )}
-          {activeView==="messagerie"&&(
-            <MaMessagerie
-              athlete={athlete} coachUserId={coachUserId}
-              athleteUserId={profile?.id} coachName={coachName}
-            />
-          )}
-          {activeView==="social"&&(
-            <MonClub
-              athlete={athlete} allAthletes={allAthletes}
-              clubId={clubId} sessions={sessions} profile={profile}
-            />
-          )}
+          {/* viewKey change à chaque navigate → re-déclenche l'animation */}
+          <div key={viewKey} className="view-transition">
+            {activeView === "dashboard" && (
+              <Dashboard
+                athlete={athlete} weeklyCharge={weeklyCharge} sessions={sessions}
+                competitions={competitions} lastMessages={lastMessages} coachName={coachName}
+                myPerformances={myPerformances} onNavigate={navigate}
+                wellnessToday={wellnessToday} onOpenWellness={() => setShowWellness(true)}
+              />
+            )}
+            {activeView === "planning" && (
+              <MonPlanning
+                athlete={athlete} sessions={sessions} allAthletes={allAthletes}
+                clubId={clubId} createdBy={profile?.id}
+                coachUserId={coachUserId}
+                onRpeChange={handleRpe} onStatusChange={handleStatus}
+                onFeelingChange={handleFeeling} onCommentChange={handleComment}
+                onRefresh={fetchAll}
+              />
+            )}
+            {activeView === "performances" && (
+              <MesPerformances
+                athlete={athlete} competitions={competitions}
+                myPerformances={myPerformances} myGoals={myGoals}
+                clubId={clubId} onRefresh={fetchAll}
+              />
+            )}
+            {activeView === "messagerie" && (
+              <MaMessagerie
+                athlete={athlete} coachUserId={coachUserId}
+                athleteUserId={profile?.id} coachName={coachName}
+              />
+            )}
+            {activeView === "social" && (
+              <MonClub
+                athlete={athlete} allAthletes={allAthletes}
+                clubId={clubId} sessions={sessions} profile={profile}
+              />
+            )}
+          </div>
         </main>
       </div>
-
-      {/* Bottom nav mobile */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 z-30 bg-white border-t border-slate-100"
-        style={{ paddingBottom: "env(safe-area-inset-bottom)" }}>
-        <div className="flex items-stretch">
+ 
+      {/* ══════════════════════════════════════════════════════════════
+          BOTTOM NAV MOBILE — GLASSMORPHISM PREMIUM
+      ══════════════════════════════════════════════════════════════ */}
+      <nav
+        className="md:hidden fixed bottom-0 left-0 right-0 z-30 bottom-nav"
+        style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
+      >
+        <div className="flex items-stretch h-[60px]">
           {NAV_ITEMS.map(item => {
-            const Icon = item.icon;
+            const Icon     = item.icon;
             const isActive = activeView === item.id;
+            const hasBadge = item.id === "messagerie" && msgUnread > 0;
             return (
-              <button key={item.id} onClick={() => navigate(item.id)}
-                className={["flex-1 flex flex-col items-center justify-center gap-1 py-2.5 transition-all",
-                  isActive ? "text-emerald-600" : "text-slate-400"].join(" ")}>
+              <button
+                key={item.id}
+                onClick={() => navigate(item.id)}
+                className={["bottom-nav-item tap-feedback", isActive ? "active" : ""].join(" ")}
+              >
                 <div className="relative">
-                  <Icon size={20} strokeWidth={isActive ? 2.2 : 1.5}/>
-                  {item.id === "messagerie" && myNotifs.filter(n=>!n.is_read&&n.type==="message").length > 0 && (
-                    <span className="absolute -top-1 -right-1 w-3.5 h-3.5 rounded-full bg-red-500 text-white text-[8px] font-bold flex items-center justify-center">
-                      {myNotifs.filter(n=>!n.is_read&&n.type==="message").length}
+                  <Icon
+                    size={isActive ? 21 : 20}
+                    strokeWidth={isActive ? 2.3 : 1.6}
+                    className="transition-all duration-200"
+                  />
+                  {hasBadge && (
+                    <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-red-500 text-white text-[8px] font-bold flex items-center justify-center border-2 border-white animate-bounce-in">
+                      {msgUnread}
                     </span>
                   )}
                 </div>
-                <span className="text-[9px] font-semibold truncate max-w-[50px] text-center">{item.label}</span>
+                <span
+                  className="text-[9.5px] font-semibold truncate max-w-[52px] text-center transition-all duration-200"
+                  style={{ letterSpacing: isActive ? "0.01em" : "0" }}
+                >
+                  {item.label}
+                </span>
               </button>
             );
           })}
-          {/* Bouton push + notifs dans la bottom nav mobile */}
-          <button onClick={() => setShowNotifs(v=>!v)}
-            className={["flex-1 flex flex-col items-center justify-center gap-1 py-2.5 transition-all",
-              showNotifs ? "text-emerald-600" : "text-slate-400"].join(" ")}>
+ 
+          {/* Bouton notifications */}
+          <button
+            onClick={() => setShowNotifs(v => !v)}
+            className={["bottom-nav-item tap-feedback", showNotifs ? "active" : ""].join(" ")}
+          >
             <div className="relative">
-              <Bell size={20} strokeWidth={showNotifs ? 2.2 : 1.5}/>
-              {myNotifs.filter(n=>!n.is_read).length > 0 && (
-                <span className="absolute -top-1 -right-1 w-3.5 h-3.5 rounded-full bg-red-500 text-white text-[8px] font-bold flex items-center justify-center">
-                  {myNotifs.filter(n=>!n.is_read).length}
+              <Bell
+                size={showNotifs ? 21 : 20}
+                strokeWidth={showNotifs ? 2.3 : 1.6}
+                className="transition-all duration-200"
+              />
+              {unreadCount > 0 && (
+                <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-red-500 text-white text-[8px] font-bold flex items-center justify-center border-2 border-white animate-bounce-in">
+                  {unreadCount}
                 </span>
               )}
             </div>
-            {/* Indicateur push intégré sous l'icône notifs */}
-            <span className="text-[9px] font-semibold text-center" style={{ color: subscribed ? "#1D9E75" : "inherit" }}>
-              {subscribed ? "🔔 ON" : "Notifs"}
+            <span
+              className="text-[9.5px] font-semibold text-center transition-all"
+              style={{ color: subscribed && !showNotifs ? "#1D9E75" : undefined }}
+            >
+              {subscribed ? "🔔" : "Notifs"}
             </span>
           </button>
         </div>
-
-        {/* Panneau notifs mobile (slide du bas) */}
+ 
+        {/* ── Panneau notifs mobile ─────────────────────────────────────── */}
         {showNotifs && (
-          <div className="fixed inset-0 z-40" onClick={() => setShowNotifs(false)}>
-            <div className="absolute bottom-16 left-0 right-0 bg-white rounded-t-2xl border-t border-slate-200 shadow-2xl max-h-[60vh] flex flex-col"
-              onClick={e => e.stopPropagation()}>
-              <div className="px-5 py-3 border-b border-slate-100 flex items-center justify-between flex-shrink-0">
-                <p className="text-[14px] font-bold text-slate-800">Notifications</p>
+          <div
+            className="fixed inset-0 z-40 animate-fade-in"
+            onClick={() => setShowNotifs(false)}
+          >
+            {/* Sheet du bas */}
+            <div
+              className="absolute bottom-[60px] left-0 right-0 bg-white rounded-t-3xl border-t border-slate-100 shadow-card-lg max-h-[65vh] flex flex-col animate-slide-up"
+              onClick={e => e.stopPropagation()}
+            >
+              {/* Handle */}
+              <div className="flex justify-center pt-3 pb-1 flex-shrink-0">
+                <div className="w-10 h-1 rounded-full bg-slate-200" />
+              </div>
+ 
+              <div className="px-5 py-3 flex items-center justify-between flex-shrink-0">
+                <p className="text-[15px] font-bold text-slate-800">Notifications</p>
                 <div className="flex items-center gap-3">
-                  {/* Bouton push dans le panneau notifs mobile */}
-                  <PushToggleButton
-                    subscribed={subscribed}
-                    onToggle={subscribe}
-                    permissionState={permissionState}
-                  />
-                  {myNotifs.filter(n=>!n.is_read).length > 0 && (
-                    <button onClick={async()=>{
-                      await supabase.from("athlete_notifications").update({is_read:true}).eq("athlete_id",athlete.id).eq("is_read",false);
-                      fetchAll();
-                    }} className="text-[11px] font-semibold text-emerald-600">
+                  <PushToggleButton subscribed={subscribed} onToggle={subscribe} permissionState={permissionState} />
+                  {unreadCount > 0 && (
+                    <button
+                      onClick={async () => {
+                        await supabase.from("athlete_notifications").update({ is_read: true }).eq("athlete_id", athlete.id).eq("is_read", false);
+                        fetchAll();
+                      }}
+                      className="text-[11.5px] font-semibold text-emerald-600"
+                    >
                       Tout lire
                     </button>
                   )}
                 </div>
               </div>
-              <div className="flex-1 overflow-y-auto divide-y divide-slate-50">
+ 
+              <div className="flex-1 overflow-y-auto divide-y divide-slate-50 pb-safe">
                 {myNotifs.length === 0 ? (
-                  <div className="px-5 py-8 text-center text-[12px] text-slate-300">Aucune notification</div>
+                  <div className="px-5 py-10 text-center">
+                    <div className="text-[32px] mb-2">🔔</div>
+                    <p className="text-[13px] text-slate-400 font-medium">Aucune notification</p>
+                  </div>
                 ) : myNotifs.map(n => {
-                  const diff = (new Date()-new Date(n.created_at))/1000;
-                  const ago = diff<60?"À l'instant":diff<3600?`${Math.floor(diff/60)}min`:diff<86400?`${Math.floor(diff/3600)}h`:`${Math.floor(diff/86400)}j`;
+                  const diff = (new Date() - new Date(n.created_at)) / 1000;
+                  const ago = diff < 60 ? "À l'instant" : diff < 3600 ? `${Math.floor(diff / 60)}min` : diff < 86400 ? `${Math.floor(diff / 3600)}h` : `${Math.floor(diff / 86400)}j`;
                   return (
-                    <div key={n.id} className={["px-5 py-3.5 cursor-pointer hover:bg-slate-50",!n.is_read?"bg-blue-50/30":""].join(" ")}
-                      onClick={async()=>{
-                        if(!n.is_read) await supabase.from("athlete_notifications").update({is_read:true}).eq("id",n.id);
+                    <div
+                      key={n.id}
+                      className={[
+                        "px-5 py-4 cursor-pointer active:bg-slate-50 transition-colors",
+                        !n.is_read ? "bg-blue-50/40" : "",
+                      ].join(" ")}
+                      onClick={async () => {
+                        if (!n.is_read) await supabase.from("athlete_notifications").update({ is_read: true }).eq("id", n.id);
                         fetchAll(); setShowNotifs(false);
-                      }}>
-                      <div className="flex items-start gap-2.5">
-                        {!n.is_read && <div className="w-2 h-2 rounded-full bg-blue-500 mt-1.5 flex-shrink-0"/>}
+                      }}
+                    >
+                      <div className="flex items-start gap-3">
+                        {!n.is_read && (
+                          <div className="w-2 h-2 rounded-full bg-blue-500 mt-1.5 flex-shrink-0 badge-pulse" />
+                        )}
                         <div className="flex-1 min-w-0">
-                          <p className="text-[12.5px] font-semibold text-slate-700 leading-tight">{n.title}</p>
-                          {n.description && <p className="text-[11px] text-slate-400 mt-0.5 line-clamp-2">{n.description}</p>}
-                          <p className="text-[10px] text-slate-300 mt-1">{ago}</p>
+                          <p className="text-[13px] font-semibold text-slate-700 leading-tight">{n.title}</p>
+                          {n.description && (
+                            <p className="text-[12px] text-slate-400 mt-0.5 line-clamp-2 leading-relaxed">{n.description}</p>
+                          )}
+                          <p className="text-[10.5px] text-slate-300 mt-1 font-medium">{ago}</p>
                         </div>
                       </div>
                     </div>
@@ -3119,8 +3293,8 @@ export default function AthleteApp() {
           </div>
         )}
       </nav>
-
-      {/* Wellness Modal */}
+ 
+      {/* ── WellnessModal (identique) ─────────────────────────────────────── */}
       {showWellness && athlete && (
         <WellnessModal
           athlete={athlete} clubId={clubId}

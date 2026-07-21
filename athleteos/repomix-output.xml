@@ -8077,6 +8077,81 @@ export function getStatusLabel(readiness, fatigue, acwr) {
   if (readiness >= 35)    return { label: "Fatigué",            dot: "🟠", color: "#EF9F27" };
   return                         { label: "Récupération",       dot: "🔵", color: "#378ADD" };
 }
+// ─── computeChargeChartData ───────────────────────────────────────────────────
+// Prépare les données du graphique charge vs forme sur les 12 dernières semaines.
+export function computeChargeChartData(athleteId, weeklyCharge) {
+  const myCharge = weeklyCharge
+    .filter(w => w.athleteId === athleteId)
+    .sort((a, b) => a.week - b.week)
+    .slice(-12);
+
+  if (!myCharge.length) return [];
+
+  const dailyLoads = myCharge.map(w => ({ date: `W${w.week}`, load: w.rawLoad }));
+  const { ewmaHistory } = computeEWMA(dailyLoads);
+  const maxLoad = Math.max(...myCharge.map(w => w.rawLoad), 1);
+
+  return myCharge.map((w, i) => {
+    const ewma = ewmaHistory[i] ?? { acute: 0, chronic: 0 };
+    const acwr = ewma.chronic > 0 ? ewma.acute / ewma.chronic : 1.0;
+    const fatigue = Math.max(0, Math.round(Math.min(100, acwr > 1.0 ? (acwr - 1.0) * 120 : 0)));
+    const forme   = Math.round(Math.min(100, (ewma.chronic / maxLoad) * 100));
+    return { label: `S${w.week}`, rawLoad: w.rawLoad, forme, fatigue };
+  });
+}
+
+// ─── generateContextAnalysis ──────────────────────────────────────────────────
+// Génère des phrases d'analyse contextuelle à partir des métriques et de la prochaine compétition.
+export function generateContextAnalysis(metrics, nextComp) {
+  const { acwr, fatigue, readiness, monotony, recovery } = metrics;
+  const lines = [];
+
+  if (acwr > 1.5)       lines.push("⚠️ ACWR très élevé (" + acwr.toFixed(2) + ") : risque de blessure accru. Réduire la charge immédiatement.");
+  else if (acwr > 1.3)  lines.push("🟠 ACWR élevé (" + acwr.toFixed(2) + ") : zone de surcharge aiguë. Surveiller la récupération.");
+  else if (acwr < 0.8)  lines.push("🔵 ACWR faible (" + acwr.toFixed(2) + ") : sous-charge relative. Augmentation progressive possible.");
+  else                  lines.push("🟢 ACWR optimal (" + acwr.toFixed(2) + ") : balance charge aiguë/chronique dans la zone cible (0.8–1.3).");
+
+  if (fatigue > 75)       lines.push("🔴 Fatigue élevée (" + fatigue + "/100) : prévoir récupération ou repos.");
+  else if (fatigue > 50)  lines.push("🟡 Fatigue modérée (" + fatigue + "/100) : surveiller l'accumulation.");
+  else                    lines.push("✅ Fatigue bien gérée (" + fatigue + "/100).");
+
+  if (readiness >= 75)     lines.push("🌟 Readiness optimal (" + readiness + "/100) : prêt pour haute intensité.");
+  else if (readiness >= 50) lines.push("🟡 Readiness modéré (" + readiness + "/100) : privilégier technique ou intensité réduite.");
+  else                     lines.push("🔴 Readiness faible (" + readiness + "/100) : séance légère ou repos recommandé.");
+
+  if (monotony > 2.5) lines.push("⚠️ Monotonie élevée (" + monotony.toFixed(1) + ") : varier les types de séances.");
+
+  if (recovery?.hoursRemaining > 48) {
+    lines.push("⏱️ Récupération incomplète : " + recovery.hoursRemaining + "h restantes. Éviter haute intensité.");
+  } else if (recovery?.fullyRecovered) {
+    lines.push("✅ Récupération complète : athlète physiologiquement disponible.");
+  }
+
+  if (nextComp) {
+    const days = Math.round((new Date(nextComp.date) - new Date()) / (1000 * 60 * 60 * 24));
+    if (days <= 3)       lines.push("🏟️ Compétition dans " + days + "j (" + nextComp.name + ") : activation, réduire la charge.");
+    else if (days <= 7)  lines.push("🏟️ Compétition dans " + days + "j (" + nextComp.name + ") : semaine d'affûtage, baisser le volume.");
+    else if (days <= 14) lines.push("🏟️ Compétition dans " + days + "j (" + nextComp.name + ") : maintenir charge, soigner la qualité.");
+  }
+
+  return lines.length ? lines : ["Pas assez de données pour une analyse contextuelle."];
+}
+
+// ─── computePerformanceStability ──────────────────────────────────────────────
+// Mesure la régularité des performances via le coefficient de variation.
+// Score 0-100 (100 = très régulier). Minimum 3 points requis.
+export function computePerformanceStability(performanceHistory) {
+  const values = (performanceHistory ?? [])
+    .map(p => parseFloat(p.value))
+    .filter(v => !isNaN(v) && v > 0);
+
+  if (values.length < 3) return null;
+
+  const mean = values.reduce((a, b) => a + b, 0) / values.length;
+  const sd   = Math.sqrt(values.reduce((acc, v) => acc + Math.pow(v - mean, 2), 0) / values.length);
+  const cv   = mean > 0 ? (sd / mean) * 100 : 0;
+  return Math.round(Math.max(0, Math.min(100, 100 - cv * 5)));
+}
 </file>
 
 <file path="src/utils/notifications.js">
@@ -8925,7 +9000,7 @@ import {
   Zap, LogOut, Menu, X, Plus, ChevronLeft, ChevronRight,
   Star, Activity, HeartPulse, Trophy, Target, Send,
   CheckCircle, AlertTriangle, Clock, FileText, BarChart2,
-  Users, Heart, Image, Camera, Bell,
+  Users, Heart, Image, Camera, Bell, Moon, Battery, Smile,
 } from "lucide-react";
 import {
   LineChart, Line, XAxis, YAxis, Tooltip,
@@ -8937,6 +9012,7 @@ import LoadingState  from "./components/ui/LoadingState";
 import {
   getAthleteMetricsForWeek,
   getStatusLabel,
+  computeWellnessScore,
 } from "./utils/chargeCalculations";
 import { usePushNotifications, PushToggleButton } from "./hooks/usePushNotifications";
 import { notifyGoalAchieved, notifyCoachMessage } from "./utils/notifications";
@@ -9128,13 +9204,120 @@ function BadgeItem({ badge }) {
 // ══════════════════════════════════════════════════════════════════════════════
 // VUE 1 — TABLEAU DE BORD
 // ══════════════════════════════════════════════════════════════════════════════
-function Dashboard({ athlete, weeklyCharge, sessions, competitions, lastMessages, coachName, myPerformances, onNavigate }) {
+// ══════════════════════════════════════════════════════════════════════════════
+// WELLNESS MODAL — questionnaire matinal (Hooper Index)
+// Saw AE, Main LC, Gastin PB. (2016). BJSM 50(5), 281-291.
+// ══════════════════════════════════════════════════════════════════════════════
+const WELLNESS_QUESTIONS = [
+  { key: "sleep",    label: "Qualité du sommeil",    icon: Moon,       color: "#7C3AED", desc: ["Très mauvais","Mauvais","Correct","Bon","Excellent"],            inverted: false },
+  { key: "energy",   label: "Niveau d'énergie",       icon: Battery,    color: "#0284C7", desc: ["Épuisé","Fatigué","Correct","Énergique","Très énergique"],      inverted: false },
+  { key: "soreness", label: "Courbatures / douleurs", icon: HeartPulse, color: "#E24B4A", desc: ["Aucune","Légères","Modérées","Importantes","Très importantes"], inverted: true  },
+  { key: "mood",     label: "Humeur",                 icon: Smile,      color: "#EF9F27", desc: ["Très mauvaise","Mauvaise","Neutre","Bonne","Excellente"],        inverted: false },
+  { key: "stress",   label: "Niveau de stress",       icon: Activity,   color: "#E24B4A", desc: ["Aucun","Faible","Modéré","Élevé","Très élevé"],                 inverted: true  },
+];
+
+const WellnessModal = memo(({ athlete, clubId, onClose, onSaved }) => {
+  const [form, setForm] = useState({ sleep: null, energy: null, soreness: null, mood: null, stress: null });
+  const [notes, setNotes] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [err, setErr] = useState(null);
+
+  const allAnswered = Object.values(form).every(v => v !== null);
+  const previewScore = useMemo(() => computeWellnessScore(form), [form]);
+
+  const handleSubmit = async () => {
+    if (!allAnswered) return;
+    setSaving(true); setErr(null);
+    try {
+      const today = new Date().toISOString().split("T")[0];
+      const { error } = await supabase.from("athlete_wellness").upsert({
+        athlete_id: athlete.id, club_id: clubId, date: today,
+        sleep: form.sleep, energy: form.energy, soreness: form.soreness,
+        mood: form.mood, stress: form.stress, notes: notes.trim() || null,
+      }, { onConflict: "athlete_id,date" });
+      if (error) throw error;
+      onSaved({ ...form, notes: notes.trim() || null, date: today });
+      onClose();
+    } catch(e) { setErr(e.message ?? "Erreur"); setSaving(false); }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4" style={{ background: "rgba(15,23,42,0.6)" }}>
+      <div className="bg-white rounded-t-2xl sm:rounded-2xl shadow-2xl w-full sm:max-w-md max-h-[95vh] sm:max-h-[90vh] flex flex-col overflow-hidden">
+        <div className="px-6 py-5 border-b border-slate-100 flex-shrink-0" style={{ background: "linear-gradient(135deg, #f0fdf4, #dcfce7)" }}>
+          <div className="flex items-center justify-between mb-1">
+            <div>
+              <h3 className="text-[16px] font-bold text-emerald-800">🌅 Comment tu vas ce matin ?</h3>
+              <p className="text-[12px] text-emerald-600 mt-0.5">{new Date().toLocaleDateString("fr-BE", { weekday: "long", day: "numeric", month: "long" })}</p>
+            </div>
+            <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-emerald-100"><X size={18} className="text-emerald-600"/></button>
+          </div>
+          {previewScore !== null && (
+            <div className="mt-3 flex items-center gap-2 bg-white/60 rounded-xl px-4 py-2.5">
+              <div className="text-[22px] font-black" style={{ color: previewScore >= 75 ? "#1D9E75" : previewScore >= 50 ? "#EF9F27" : "#E24B4A" }}>{previewScore}</div>
+              <div>
+                <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Score wellness</p>
+                <p className="text-[10px] text-slate-400">{previewScore >= 75 ? "Forme optimale 🟢" : previewScore >= 50 ? "Correct 🟡" : "Attention 🔴"}</p>
+              </div>
+            </div>
+          )}
+        </div>
+        <div className="flex-1 overflow-y-auto px-6 py-5 space-y-5">
+          {err && <div className="bg-red-50 border border-red-100 rounded-lg px-3 py-2.5 text-[12px] text-red-700">{err}</div>}
+          {WELLNESS_QUESTIONS.map((q) => {
+            const Icon = q.icon;
+            return (
+              <div key={q.key}>
+                <div className="flex items-center gap-2 mb-3">
+                  <div className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0" style={{ background: q.color + "18" }}><Icon size={14} color={q.color}/></div>
+                  <span className="text-[13px] font-semibold text-slate-700">{q.label}</span>
+                  {q.inverted && <span className="text-[9px] font-semibold text-slate-300 uppercase tracking-wider ml-1">(moins = mieux)</span>}
+                </div>
+                <div className="flex gap-2">
+                  {[1,2,3,4,5].map((v) => {
+                    const selected = form[q.key] === v;
+                    const visualGood = q.inverted ? v <= 2 : v >= 4;
+                    const visualBad  = q.inverted ? v >= 4 : v <= 2;
+                    const btnColor = selected ? (visualGood ? "#1D9E75" : visualBad ? "#E24B4A" : "#EF9F27") : undefined;
+                    return (
+                      <button key={v} onClick={() => setForm(f => ({ ...f, [q.key]: v }))}
+                        className={["flex-1 flex flex-col items-center gap-1.5 py-3 rounded-xl border transition-all",
+                          selected ? "text-white shadow-sm scale-105" : "bg-white border-slate-200 text-slate-500 hover:border-slate-300"].join(" ")}
+                        style={selected ? { background: btnColor, borderColor: btnColor } : {}}>
+                        <span className="text-[16px] font-black">{v}</span>
+                        <span className="text-[8px] font-semibold text-center leading-tight px-1" style={selected ? { color: "rgba(255,255,255,0.85)" } : {}}>{q.desc[v-1]}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })}
+          <div>
+            <label className="block text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-2">Note (optionnel)</label>
+            <textarea className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-[13px] text-slate-700 focus:outline-none focus:ring-2 focus:ring-emerald-400 bg-white resize-none"
+              rows={2} placeholder="Contexte, ressenti particulier…" value={notes} onChange={e => setNotes(e.target.value)}/>
+          </div>
+        </div>
+        <div className="px-6 py-4 border-t border-slate-100 flex items-center justify-between gap-3 flex-shrink-0">
+          <button onClick={onClose} disabled={saving} className="px-4 py-2.5 rounded-xl bg-slate-100 text-slate-600 text-[13px] font-medium hover:bg-slate-200 disabled:opacity-40">Plus tard</button>
+          <button onClick={handleSubmit} disabled={!allAnswered || saving}
+            className="flex items-center gap-2 px-6 py-2.5 rounded-xl text-white text-[13px] font-semibold disabled:opacity-40" style={{ background: "#1D9E75" }}>
+            {saving ? <><div className="w-3.5 h-3.5 border-2 border-white/40 border-t-white rounded-full animate-spin"/>Enregistrement…</> : <>✅ Valider</>}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+});
+
+function Dashboard({ athlete, weeklyCharge, sessions, competitions, lastMessages, coachName, myPerformances, onNavigate, wellnessToday, onOpenWellness }) {
   const today = new Date();
   const currentWeek = getISOWeek(today);
 
   const metrics = useMemo(() =>
-    getAthleteMetricsForWeek(athlete.id, weeklyCharge, currentWeek),
-  [athlete.id, weeklyCharge, currentWeek]);
+    getAthleteMetricsForWeek(athlete.id, weeklyCharge, currentWeek, wellnessToday ? [wellnessToday] : [], sessions),
+  [athlete.id, weeklyCharge, currentWeek, wellnessToday, sessions]);
 
   const status = getStatusLabel(metrics.readiness, metrics.fatigue, metrics.acwr);
 
@@ -9248,6 +9431,51 @@ function Dashboard({ athlete, weeklyCharge, sessions, competitions, lastMessages
         </div>
       </div>
 
+      {/* ── Bloc Wellness ── */}
+      {wellnessToday ? (
+        <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h3 className="text-[14px] font-bold text-slate-800">Wellness du jour ✅</h3>
+              <p className="text-[11px] text-slate-400 mt-0.5">Questionnaire matinal complété</p>
+            </div>
+            {metrics.wellnessScore !== null && (
+              <div className="flex items-center gap-2 px-4 py-2 rounded-xl"
+                style={{ background: (metrics.wellnessScore >= 75 ? "#1D9E75" : metrics.wellnessScore >= 50 ? "#EF9F27" : "#E24B4A") + "15" }}>
+                <span className="text-[22px] font-black" style={{ color: metrics.wellnessScore >= 75 ? "#1D9E75" : metrics.wellnessScore >= 50 ? "#EF9F27" : "#E24B4A" }}>{metrics.wellnessScore}</span>
+                <div><p className="text-[9px] font-bold text-slate-500 uppercase tracking-wider">Score</p><p className="text-[9px] text-slate-400">/100</p></div>
+              </div>
+            )}
+          </div>
+          <div className="grid grid-cols-5 gap-2">
+            {WELLNESS_QUESTIONS.map((q) => {
+              const val = wellnessToday[q.key];
+              const Icon = q.icon;
+              const displayGood = q.inverted ? val <= 2 : val >= 4;
+              const displayBad  = q.inverted ? val >= 4 : val <= 2;
+              const dotColor = displayGood ? "#1D9E75" : displayBad ? "#E24B4A" : "#EF9F27";
+              return (
+                <div key={q.key} className="flex flex-col items-center gap-1.5 bg-slate-50 rounded-xl py-3 px-2">
+                  <Icon size={14} color={q.color}/>
+                  <span className="text-[18px] font-black" style={{ color: dotColor }}>{val}</span>
+                  <span className="text-[8px] text-slate-400 text-center leading-tight">{q.label.split(" ")[0]}</span>
+                </div>
+              );
+            })}
+          </div>
+          {wellnessToday.notes && <p className="mt-3 text-[11.5px] text-slate-500 italic border-t border-slate-50 pt-3">"{wellnessToday.notes}"</p>}
+          <button onClick={onOpenWellness} className="mt-3 text-[11px] font-semibold text-slate-400 hover:text-emerald-600 transition-colors">Modifier →</button>
+        </div>
+      ) : (
+        <div className="bg-gradient-to-br from-emerald-50 to-teal-50 rounded-2xl border border-emerald-100 p-5 flex items-center justify-between gap-4">
+          <div>
+            <p className="text-[14px] font-bold text-emerald-800">🌅 Questionnaire matinal</p>
+            <p className="text-[12px] text-emerald-600 mt-1">Prends 30 secondes pour indiquer comment tu te sens. Ça améliore ton score Readiness !</p>
+          </div>
+          <button onClick={onOpenWellness} className="flex-shrink-0 px-4 py-2.5 rounded-xl text-white text-[12px] font-bold shadow-sm" style={{ background: "#1D9E75" }}>Remplir</button>
+        </div>
+      )}
+
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-5">
 
         {/* ── Colonne gauche ── */}
@@ -9323,30 +9551,73 @@ function Dashboard({ athlete, weeklyCharge, sessions, competitions, lastMessages
 
           {hasCharge && (
             <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5">
-              <h3 className="text-[14px] font-bold text-slate-800 mb-4">État de forme détaillé</h3>
-              <div className="space-y-3">
+              <div className="flex items-center justify-between mb-5">
+                <div>
+                  <h3 className="text-[14px] font-bold text-slate-800">État de forme détaillé</h3>
+                  <p className="text-[11px] text-slate-400 mt-0.5">Basé sur ta charge des dernières semaines</p>
+                </div>
+              </div>
+              <div className="space-y-4">
                 {[
-                  { label: "Readiness", value: metrics.readiness, color: scoreColor(metrics.readiness), desc: "Disponibilité globale à la performance", inv: false },
-                  { label: "Forme", value: metrics.forme, color: scoreColor(metrics.forme), desc: "Condition physique estimée", inv: false },
-                  { label: "Fatigue", value: metrics.fatigue, color: scoreColor(metrics.fatigue, true), desc: "Niveau de fatigue accumulée", inv: true },
-                  { label: "Récupération", value: metrics.recuperation, color: scoreColor(metrics.recuperation), desc: "Capacité de récupération", inv: false },
-                  { label: "Risque blessure", value: metrics.risque, color: scoreColor(metrics.risque, true), desc: "Risque estimé de blessure", inv: true },
+                  {
+                    label: "Readiness", value: metrics.readiness, color: scoreColor(metrics.readiness), inv: false,
+                    norm: metrics.readiness >= 75 ? { dot: "🟢", label: "Dans les normes", hint: "Tu es prêt pour une séance intense" }
+                        : metrics.readiness >= 55 ? { dot: "🟡", label: "Limite", hint: `Zone optimale à partir de 75 — ${75 - metrics.readiness} points manquants` }
+                        : { dot: "🔴", label: "En dessous", hint: "Privilégie une séance légère ou du repos" },
+                  },
+                  {
+                    label: "Forme", value: metrics.forme, color: scoreColor(metrics.forme), inv: false,
+                    norm: metrics.forme >= 75 ? { dot: "🟢", label: "Excellente", hint: "Condition physique au-dessus de la normale" }
+                        : metrics.forme >= 50 ? { dot: "🟡", label: "Correcte", hint: "En progression — continue à t'entraîner régulièrement" }
+                        : { dot: "🔴", label: "Faible", hint: "Charge chronique insuffisante — augmente progressivement le volume" },
+                  },
+                  {
+                    label: "Fatigue", value: metrics.fatigue, color: scoreColor(metrics.fatigue, true), inv: true,
+                    norm: metrics.fatigue <= 45 ? { dot: "🟢", label: "Normale", hint: "Pas de signe de suraccumulation" }
+                        : metrics.fatigue <= 70 ? { dot: "🟡", label: "Modérée", hint: "Surveille l'accumulation — limite les séances intenses" }
+                        : { dot: "🔴", label: "Élevée", hint: "Repos ou récupération active fortement conseillés" },
+                  },
+                  {
+                    label: "Récupération", value: metrics.recuperation, color: scoreColor(metrics.recuperation), inv: false,
+                    norm: metrics.recuperation >= 70 ? { dot: "🟢", label: "Complète", hint: "Tu es physiologiquement disponible" }
+                        : metrics.recuperation >= 45 ? { dot: "🟡", label: "Partielle", hint: "Encore quelques heures nécessaires avant effort intense" }
+                        : { dot: "🔴", label: "Insuffisante", hint: "Récupération neuromusculaire incomplète [Hasegawa 2024]" },
+                  },
+                  {
+                    label: "Risque blessure", value: metrics.risque, color: scoreColor(metrics.risque, true), inv: true,
+                    norm: metrics.risque <= 20 ? { dot: "🟢", label: "Faible", hint: "Pas d'alerte détectée" }
+                        : metrics.risque <= 50 ? { dot: "🟡", label: "Modéré", hint: "ACWR ou monotonie élevés — varie tes séances" }
+                        : { dot: "🔴", label: "Élevé", hint: "Réduis la charge immédiatement [Gabbett 2016]" },
+                  },
                 ].map(s => (
-                  <div key={s.label}>
-                    <div className="flex items-center justify-between mb-1">
-                      <div>
-                        <span className="text-[12px] font-semibold text-slate-700">{s.label}</span>
-                        <span className="text-[10px] text-slate-400 ml-2">{s.desc}</span>
+                  <div key={s.label} className="bg-slate-50 rounded-xl px-4 py-3.5">
+                    <div className="flex items-start justify-between gap-3 mb-2.5">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="text-[13px] font-bold text-slate-800">{s.label}</span>
+                          <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full"
+                            style={{ background: s.color + "18", color: s.color }}>
+                            {s.norm.dot} {s.norm.label}
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-slate-400 mt-0.5 leading-relaxed">{s.norm.hint}</p>
                       </div>
-                      <span className="text-[13px] font-black" style={{color:s.color}}>{s.value}</span>
+                      <span className="text-[22px] font-black flex-shrink-0" style={{color:s.color}}>{s.value}</span>
                     </div>
-                    <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
-                      <div className="h-full rounded-full transition-all duration-500"
-                        style={{width:`${s.value}%`, background:s.color}}/>
+                    <div className="h-1.5 bg-slate-200 rounded-full overflow-hidden">
+                      <div className="h-full rounded-full transition-all duration-700" style={{width:`${s.value}%`, background:s.color}}/>
+                    </div>
+                    <div className="flex justify-between text-[9px] text-slate-300 mt-1">
+                      <span>0</span>
+                      <span>{s.inv ? "Critique > 70" : "Optimal ≥ 75"}</span>
+                      <span>100</span>
                     </div>
                   </div>
                 ))}
               </div>
+              <p className="text-[10px] text-slate-300 mt-4 text-center">
+                Normes ACWR : Gabbett (2016) · Récupération : Hasegawa (2024) · Autres scores : convention coaching
+              </p>
             </div>
           )}
 
@@ -11400,6 +11671,10 @@ export default function AthleteApp() {
   const [loading,         setLoading]         = useState(true);
   const [error,           setError]           = useState(null);
 
+  // ── Wellness ─────────────────────────────────────────────────────────────
+  const [wellnessToday,   setWellnessToday]   = useState(null);
+  const [showWellness,    setShowWellness]     = useState(false);
+
   // ── Push notifications ────────────────────────────────────────────────────
   // IMPORTANT : appelé AVANT les guards (règle React : hooks toujours en tête).
   // athlete?.id sera null au premier render puis mis à jour après fetchAll.
@@ -11432,8 +11707,9 @@ export default function AthleteApp() {
 
       const a = athleteRes.data;
       const athleteId = a.id;
+      const todayStr = new Date().toISOString().split("T")[0];
 
-      const [recordsRes,injuriesRes,perfHistRes,sessionsRes,compsRes,coachRes,allAthletesRes,myPerfsRes,goalsRes,notifsRes] = await Promise.all([
+      const [recordsRes,injuriesRes,perfHistRes,sessionsRes,compsRes,coachRes,allAthletesRes,myPerfsRes,goalsRes,notifsRes,wellnessRes] = await Promise.all([
         supabase.from("records").select("*").eq("athlete_id",athleteId),
         supabase.from("injuries").select("*").eq("athlete_id",athleteId),
         supabase.from("performance_history").select("*").eq("athlete_id",athleteId),
@@ -11444,11 +11720,15 @@ export default function AthleteApp() {
         supabase.from("athlete_performances").select("*").eq("athlete_id",athleteId).order("performance_date",{ascending:true}),
         supabase.from("athlete_goals").select("*").eq("athlete_id",athleteId).order("created_at",{ascending:false}),
         supabase.from("athlete_notifications").select("*").eq("athlete_id",athleteId).order("created_at",{ascending:false}).limit(20),
+        supabase.from("athlete_wellness").select("*").eq("athlete_id",athleteId).eq("date",todayStr).maybeSingle(),
       ]);
 
       setMyPerformances(myPerfsRes.data ?? []);
       setMyGoals(goalsRes.data ?? []);
       setMyNotifs(notifsRes?.data ?? []);
+
+      // Wellness du jour
+      setWellnessToday(wellnessRes.data ?? null);
 
       const coachId = coachRes.data?.id ?? null;
       setCoachUserId(coachId);
@@ -11517,6 +11797,11 @@ export default function AthleteApp() {
   }, [clubId, profile?.id]);
 
   useEffect(() => { fetchAll(); }, [fetchAll]);
+
+  // Ouvre la modale wellness si pas encore répondu aujourd'hui
+  useEffect(() => {
+    if (athlete && !wellnessToday && !loading) setShowWellness(true);
+  }, [athlete, wellnessToday, loading]);
 
   // ═══ Realtime ═════════════════════════════════════════════════════════════
   // Section intentionnellement vide.
@@ -11693,7 +11978,8 @@ export default function AthleteApp() {
           {activeView==="dashboard"&&(
             <Dashboard athlete={athlete} weeklyCharge={weeklyCharge} sessions={sessions}
               competitions={competitions} lastMessages={lastMessages} coachName={coachName}
-              myPerformances={myPerformances} onNavigate={navigate}/>
+              myPerformances={myPerformances} onNavigate={navigate}
+              wellnessToday={wellnessToday} onOpenWellness={() => setShowWellness(true)}/>
           )}
           {activeView==="planning"&&(
            <MonPlanning
@@ -11821,6 +12107,15 @@ export default function AthleteApp() {
           </div>
         )}
       </nav>
+
+      {/* Wellness Modal */}
+      {showWellness && athlete && (
+        <WellnessModal
+          athlete={athlete} clubId={clubId}
+          onClose={() => setShowWellness(false)}
+          onSaved={(data) => setWellnessToday(data)}
+        />
+      )}
     </div>
   );
 }
