@@ -1,25 +1,27 @@
 // ============================================================
 // AthleteOS — src/modules/Messaging.jsx
-// Version nettoyée Phase 2 :
-// - useAuth() remplace COACH_USER_ID = 1 hardcodé
-// - club_id dynamique via clubId depuis useAuth()
-// - <LoadingState> et <ErrorState> remplacent les blocs dupliqués
-// Fonctionnalités identiques : split-screen, bulles, envoi, marquage lu.
+// ★ MESSAGERIE UNIVERSELLE :
+//   Le coach peut écrire à TOUS les membres du club :
+//   - Athlètes (via athletes.user_id)
+//   - Autres coachs / staff (users avec role != athlete)
+//   Les contacts sont unifiés sous une liste "contacts"
+//   chacun avec { id, name, avatar, userId, type, subtitle }
 // ============================================================
 
 import {
   memo, useState, useMemo, useCallback,
   useEffect, useRef,
 } from "react";
-import { Send, Search, MessageSquare, Check, CheckCheck } from "lucide-react";
-import { supabase }   from "../utils/supabaseClient";
-import { notifyAthleteMessage } from "../utils/notifications";
-import { useAuth }    from "../context/AuthContext";
-import LoadingState   from "../components/ui/LoadingState";
-import ErrorState     from "../components/ui/ErrorState";
+import { Send, Search, MessageSquare, Check, CheckCheck, Users, User } from "lucide-react";
+import { supabase }              from "../utils/supabaseClient";
+import { notifyAthleteMessage }  from "../utils/notifications";
+import { useAuth }               from "../context/AuthContext";
+import LoadingState              from "../components/ui/LoadingState";
+import ErrorState                from "../components/ui/ErrorState";
+
 // ─── Constantes ───────────────────────────────────────────────────────────────
 
-const ATHLETE_COLORS = [
+const CONTACT_COLORS = [
   "#1D9E75", "#378ADD", "#A855F7", "#EF9F27",
   "#E24B4A", "#14B8A6", "#F97316", "#EC4899",
   "#0EA5E9", "#84CC16",
@@ -33,10 +35,10 @@ function initialsFromName(name) {
   return ((parts[0]?.[0] ?? "") + (parts[1]?.[0] ?? "")).toUpperCase();
 }
 
-function athleteColor(athlete, athletes) {
-  if (!athlete) return "#94a3b8";
-  const idx = athletes.findIndex((a) => a.id === athlete.id);
-  return ATHLETE_COLORS[idx % ATHLETE_COLORS.length] ?? "#94a3b8";
+function contactColor(contact, contacts) {
+  if (!contact) return "#94a3b8";
+  const idx = contacts.findIndex((c) => c.id === contact.id);
+  return CONTACT_COLORS[idx % CONTACT_COLORS.length] ?? "#94a3b8";
 }
 
 function formatTime(dateStr) {
@@ -67,26 +69,30 @@ function groupByDate(msgs) {
   return groups;
 }
 
-// Construit les conversations depuis les messages + athlètes
-// coachUserId = l'id entier (int4) du coach dans la table users
-function buildConversations(msgs, athletes, coachUserId) {
+// Construit les conversations depuis messages + contacts
+// Un "contact" a : { id (unique), userId (int dans users), name, avatar, type, subtitle }
+function buildConversations(msgs, contacts, coachUserId) {
   const convMap = new Map();
-  athletes.forEach((a) => {
-    if (a.userId == null) return;
-    convMap.set(a.id, { athleteId: a.id, userId: a.userId, messages: [], unread: 0 });
+
+  contacts.forEach((c) => {
+    if (c.userId == null) return;
+    convMap.set(c.id, { contactId: c.id, userId: c.userId, messages: [], unread: 0 });
   });
+
   msgs.forEach((m) => {
     const otherUserId = m.senderId === coachUserId ? m.receiverId : m.senderId;
-    const athlete     = athletes.find((a) => a.userId === otherUserId);
-    if (!athlete) return;
-    const conv = convMap.get(athlete.id);
+    const contact     = contacts.find((c) => c.userId === otherUserId);
+    if (!contact) return;
+    const conv = convMap.get(contact.id);
     if (!conv) return;
     conv.messages.push(m);
     if (!m.isRead && m.senderId !== coachUserId) conv.unread++;
   });
+
   convMap.forEach((conv) => {
     conv.messages.sort((a, b) => new Date(a.date) - new Date(b.date));
   });
+
   return [...convMap.values()].sort((a, b) => {
     const la = a.messages[a.messages.length - 1]?.date ?? "";
     const lb = b.messages[b.messages.length - 1]?.date ?? "";
@@ -99,27 +105,36 @@ function buildConversations(msgs, athletes, coachUserId) {
 
 // ─── Sous-composants ──────────────────────────────────────────────────────────
 
-const MessageBubble = memo(({ msg, isOwn, athlete, athletes }) => {
-  const color = isOwn ? "#1D9E75" : athleteColor(athlete, athletes);
+const MessageBubble = memo(({ msg, isOwn, contact, contacts }) => {
+  const color = isOwn ? "#1D9E75" : contactColor(contact, contacts);
   return (
     <div className={`flex items-end gap-2 ${isOwn ? "flex-row-reverse" : "flex-row"}`}>
       {!isOwn && (
-        <div className="w-7 h-7 rounded-full flex items-center justify-center text-white text-[9px] font-bold flex-shrink-0 mb-0.5" style={{ background: color }}>
-          {athlete?.avatar ?? "?"}
+        <div
+          className="w-7 h-7 rounded-full flex items-center justify-center text-white text-[9px] font-bold flex-shrink-0 mb-0.5"
+          style={{ background: color }}
+        >
+          {initialsFromName(contact?.name ?? "?")}
         </div>
       )}
       <div className={`flex flex-col gap-0.5 max-w-[72%] ${isOwn ? "items-end" : "items-start"}`}>
         <div
           className="px-4 py-2.5 rounded-2xl text-[13px] leading-relaxed shadow-sm"
-          style={isOwn
-            ? { background: "#1D9E75", color: "white",   borderBottomRightRadius: "4px" }
-            : { background: "#F1F5F9", color: "#334155", borderBottomLeftRadius: "4px" }}
+          style={
+            isOwn
+              ? { background: "#1D9E75", color: "white",   borderBottomRightRadius: "4px" }
+              : { background: "#F1F5F9", color: "#334155", borderBottomLeftRadius: "4px"  }
+          }
         >
           {msg.content}
         </div>
         <div className="flex items-center gap-1 text-[10px] text-slate-400 px-1">
           <span>{formatTime(msg.date)}</span>
-          {isOwn && (msg.isRead ? <CheckCheck size={11} color="#1D9E75" /> : <Check size={11} color="#94a3b8" />)}
+          {isOwn && (
+            msg.isRead
+              ? <CheckCheck size={11} color="#1D9E75" />
+              : <Check      size={11} color="#94a3b8" />
+          )}
         </div>
       </div>
     </div>
@@ -136,52 +151,85 @@ const DateSeparator = ({ date }) => (
   </div>
 );
 
-const ConvItem = memo(({ conv, athlete, athletes, isActive, onClick, coachUserId }) => {
+const ConvItem = memo(({ conv, contact, contacts, isActive, onClick, coachUserId }) => {
   const lastMsg         = conv.messages[conv.messages.length - 1];
-  const color           = athleteColor(athlete, athletes);
+  const color           = contactColor(contact, contacts);
   const isLastFromCoach = lastMsg?.senderId === coachUserId;
+
   return (
     <button
-      onClick={() => onClick(conv.athleteId)}
-      className={["w-full text-left px-4 py-3.5 flex items-center gap-3 transition-all hover:bg-slate-50 focus:outline-none", isActive ? "bg-emerald-50 border-r-2 border-emerald-500" : ""].join(" ")}
+      onClick={() => onClick(conv.contactId)}
+      className={[
+        "w-full text-left px-4 py-3.5 flex items-center gap-3 transition-all hover:bg-slate-50 focus:outline-none",
+        isActive ? "bg-emerald-50 border-r-2 border-emerald-500" : "",
+      ].join(" ")}
     >
+      {/* Avatar */}
       <div className="relative flex-shrink-0">
-        <div className="w-10 h-10 rounded-full flex items-center justify-center text-white text-[11px] font-bold" style={{ background: color }}>
-          {athlete?.avatar ?? "?"}
+        <div
+          className="w-10 h-10 rounded-full flex items-center justify-center text-white text-[11px] font-bold"
+          style={{ background: color }}
+        >
+          {initialsFromName(contact?.name ?? "?")}
         </div>
+        {/* Badge type coach */}
+        {contact?.type === "coach" && (
+          <div className="absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full bg-blue-500 border-2 border-white flex items-center justify-center">
+            <User size={8} color="white" />
+          </div>
+        )}
         {conv.unread > 0 && (
-          <div className="absolute -top-0.5 -right-0.5 w-4 h-4 rounded-full flex items-center justify-center text-white text-[8px] font-bold" style={{ background: "#E24B4A" }}>
+          <div
+            className="absolute -top-0.5 -right-0.5 w-4 h-4 rounded-full flex items-center justify-center text-white text-[8px] font-bold"
+            style={{ background: "#E24B4A" }}
+          >
             {conv.unread}
           </div>
         )}
       </div>
+
+      {/* Infos */}
       <div className="flex-1 min-w-0">
         <div className="flex items-center justify-between gap-1 mb-0.5">
-          <p className={`text-[13px] truncate ${conv.unread > 0 ? "font-bold text-slate-800" : "font-semibold text-slate-700"}`}>
-            {athlete?.name ?? `Athlète ${conv.athleteId}`}
-          </p>
-          {lastMsg && <span className="text-[10px] text-slate-400 flex-shrink-0">{formatTime(lastMsg.date)}</span>}
+          <div className="flex items-center gap-1.5 min-w-0">
+            <p className={`text-[13px] truncate ${conv.unread > 0 ? "font-bold text-slate-800" : "font-semibold text-slate-700"}`}>
+              {contact?.name ?? "Contact"}
+            </p>
+            {/* Badge rôle */}
+            {contact?.type === "coach" && (
+              <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-blue-50 text-blue-600 flex-shrink-0">
+                Coach
+              </span>
+            )}
+          </div>
+          {lastMsg && (
+            <span className="text-[10px] text-slate-400 flex-shrink-0">
+              {formatTime(lastMsg.date)}
+            </span>
+          )}
         </div>
         {lastMsg ? (
           <p className={`text-[11.5px] truncate ${conv.unread > 0 ? "text-slate-600 font-medium" : "text-slate-400"}`}>
             {isLastFromCoach ? "Vous : " : ""}{lastMsg.content}
           </p>
         ) : (
-          <p className="text-[11.5px] text-slate-300 italic">Aucun message échangé</p>
+          <p className="text-[11.5px] text-slate-300 italic">{contact?.subtitle ?? "Aucun message"}</p>
         )}
       </div>
     </button>
   );
 });
 
-const ChatThread = memo(({ conv, athlete, athletes, onSend, coachUserId }) => {
+const ChatThread = memo(({ conv, contact, contacts, onSend, coachUserId }) => {
   const [input,   setInput]   = useState("");
   const [sending, setSending] = useState(false);
   const bottomRef = useRef(null);
-  const color   = athleteColor(athlete, athletes);
-  const grouped = useMemo(() => groupByDate(conv.messages), [conv.messages]);
+  const color     = contactColor(contact, contacts);
+  const grouped   = useMemo(() => groupByDate(conv.messages), [conv.messages]);
 
-  useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [conv.messages.length]);
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [conv.messages.length]);
 
   const handleSend = useCallback(async () => {
     const text = input.trim();
@@ -197,16 +245,28 @@ const ChatThread = memo(({ conv, athlete, athletes, onSend, coachUserId }) => {
 
   return (
     <div className="flex flex-col h-full">
+      {/* Header thread */}
       <div className="flex-shrink-0 px-5 py-4 border-b border-slate-100 bg-white flex items-center gap-3">
-        <div className="w-10 h-10 rounded-full flex items-center justify-center text-white text-[11px] font-bold flex-shrink-0" style={{ background: color }}>
-          {athlete?.avatar ?? "?"}
+        <div
+          className="w-10 h-10 rounded-full flex items-center justify-center text-white text-[11px] font-bold flex-shrink-0"
+          style={{ background: color }}
+        >
+          {initialsFromName(contact?.name ?? "?")}
         </div>
         <div>
-          <p className="text-[14px] font-bold text-slate-800">{athlete?.name ?? "Athlète"}</p>
-          <p className="text-[11px] text-slate-400">{athlete?.mainDiscipline ?? ""}{athlete?.level ? ` · ${athlete.level}` : ""}</p>
+          <div className="flex items-center gap-2">
+            <p className="text-[14px] font-bold text-slate-800">{contact?.name ?? "Contact"}</p>
+            {contact?.type === "coach" && (
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-50 text-blue-600">
+                Coach
+              </span>
+            )}
+          </div>
+          <p className="text-[11px] text-slate-400">{contact?.subtitle ?? ""}</p>
         </div>
       </div>
 
+      {/* Messages */}
       <div className="flex-1 overflow-y-auto px-5 py-4 space-y-3" style={{ background: "#FAFAFA" }}>
         {grouped.length === 0 ? (
           <div className="h-full flex flex-col items-center justify-center text-slate-300 gap-2">
@@ -217,18 +277,25 @@ const ChatThread = memo(({ conv, athlete, athletes, onSend, coachUserId }) => {
           grouped.map((item) =>
             item.type === "separator"
               ? <DateSeparator key={item.key} date={item.date} />
-              : <MessageBubble key={item.key} msg={item.data} isOwn={item.data.senderId === coachUserId} athlete={athlete} athletes={athletes} />
+              : <MessageBubble
+                  key={item.key}
+                  msg={item.data}
+                  isOwn={item.data.senderId === coachUserId}
+                  contact={contact}
+                  contacts={contacts}
+                />
           )
         )}
         <div ref={bottomRef} />
       </div>
 
+      {/* Input */}
       <div className="flex-shrink-0 px-4 py-3 border-t border-slate-100 bg-white flex items-end gap-2">
-        <div className="flex-1 bg-slate-100 rounded-2xl px-4 py-2.5 flex items-end gap-2">
+        <div className="flex-1 bg-slate-100 rounded-2xl px-4 py-2.5">
           <textarea
-            className="flex-1 bg-transparent resize-none text-[13px] text-slate-700 placeholder-slate-400 focus:outline-none max-h-28 min-h-[20px]"
+            className="w-full bg-transparent resize-none text-[13px] text-slate-700 placeholder-slate-400 focus:outline-none max-h-28 min-h-[20px]"
             rows={1}
-            placeholder={`Message à ${athlete?.name?.split(" ")[0] ?? "l'athlète"}…`}
+            placeholder={`Message à ${contact?.name?.split(" ")[0] ?? "…"}…`}
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
@@ -252,23 +319,25 @@ const EmptyConvState = () => (
   <div className="flex-1 flex flex-col items-center justify-center gap-3 text-slate-400 bg-slate-50">
     <MessageSquare size={40} strokeWidth={1.5} />
     <p className="text-[14px] font-semibold">Sélectionnez une conversation</p>
-    <p className="text-[12px] text-slate-300">Cliquez sur un athlète pour voir le fil de discussion</p>
+    <p className="text-[12px] text-slate-300 text-center max-w-[200px]">
+      Cliquez sur un athlète ou un coach pour démarrer
+    </p>
   </div>
 );
 
 // ─── Composant principal ──────────────────────────────────────────────────────
 function Messaging() {
-  // profile.id = l'id entier (int4) du coach dans la table users
-  // C'est lui qu'on utilise comme sender_id / receiver_id dans messages
   const { profile, clubId } = useAuth();
   const coachUserId = profile?.id ?? null;
 
-  const [athletes,    setAthletes]    = useState([]);
+  // "contacts" = liste unifiée athlètes + autres users du club
+  const [contacts,    setContacts]    = useState([]);
   const [allMessages, setAllMessages] = useState([]);
   const [loading,     setLoading]     = useState(true);
   const [error,       setError]       = useState(null);
-  const [activeAthleteId, setActiveAthleteId] = useState(null);
+  const [activeContactId, setActiveContactId] = useState(null);
   const [search,      setSearch]      = useState("");
+  const [activeTab,   setActiveTab]   = useState("tous"); // "tous" | "athletes" | "coachs"
 
   // ═══ Chargement ═══════════════════════════════════════════════════════════
   const fetchAll = useCallback(async () => {
@@ -277,35 +346,65 @@ function Messaging() {
       setLoading(true);
       setError(null);
 
+      // 1. Athlètes du club
       const athletesRes = await supabase
         .from("athletes")
         .select("id, name, main_discipline, user_id, profile_data")
         .eq("club_id", clubId);
       if (athletesRes.error) throw athletesRes.error;
 
-      const remappedAthletes = athletesRes.data.map((a) => ({
-        id:             a.id,
-        name:           a.name,
-        mainDiscipline: a.main_discipline,
-        userId:         a.user_id,
-        avatar:         a.profile_data?.avatar ?? initialsFromName(a.name),
-        level:          a.profile_data?.level ?? null,
+      // 2. Autres users du club (coachs, staff) — exclut le coach connecté
+      const usersRes = await supabase
+        .from("users")
+        .select("id, name, role")
+        .eq("club_id", clubId)
+        .neq("id", coachUserId); // on s'exclut soi-même
+      if (usersRes.error) throw usersRes.error;
+
+      // Construire la liste unifiée de contacts
+      // Chaque contact a un id unique (préfixé pour éviter collision)
+      const athleteContacts = (athletesRes.data ?? []).map((a) => ({
+        id:       `athlete-${a.id}`,       // id unique dans la liste
+        athleteId: a.id,
+        userId:   a.user_id,               // peut être null si non lié
+        name:     a.name,
+        avatar:   a.profile_data?.avatar ?? initialsFromName(a.name),
+        type:     "athlete",
+        subtitle: a.main_discipline ?? "Athlète",
+        linked:   a.user_id != null,
       }));
 
-      const linkedUserIds = remappedAthletes.map((a) => a.userId).filter((id) => id != null);
+      const coachContacts = (usersRes.data ?? [])
+        .filter((u) => u.role !== "athlete") // on ne met pas les users-athlètes ici (déjà dans athleteContacts)
+        .map((u) => ({
+          id:       `user-${u.id}`,
+          userId:   u.id,
+          name:     u.name,
+          avatar:   initialsFromName(u.name),
+          type:     "coach",
+          subtitle: u.role === "head_coach" ? "Head coach" : "Coach",
+          linked:   true, // les users ont forcément un compte
+        }));
 
-      const messagesRes = linkedUserIds.length
+      const allContacts = [...athleteContacts, ...coachContacts];
+
+      // 3. Messages avec tous ces users
+      const allUserIds = allContacts
+        .map((c) => c.userId)
+        .filter((id) => id != null);
+
+      const messagesRes = allUserIds.length
         ? await supabase
             .from("messages")
             .select("*")
             .or(
-              `and(sender_id.eq.${coachUserId},receiver_id.in.(${linkedUserIds.join(",")})),` +
-              `and(receiver_id.eq.${coachUserId},sender_id.in.(${linkedUserIds.join(",")}))`
+              `and(sender_id.eq.${coachUserId},receiver_id.in.(${allUserIds.join(",")})),` +
+              `and(receiver_id.eq.${coachUserId},sender_id.in.(${allUserIds.join(",")}))`
             )
         : { data: [], error: null };
       if (messagesRes.error) throw messagesRes.error;
 
-      setAthletes(remappedAthletes);
+      setContacts(allContacts);
       setAllMessages((messagesRes.data ?? []).map((m) => ({
         id:         m.id,
         senderId:   m.sender_id,
@@ -324,65 +423,129 @@ function Messaging() {
 
   useEffect(() => { fetchAll(); }, [fetchAll]);
 
-  // ═══ Conversations dérivées ════════════════════════════════════════════════
-  const conversations    = useMemo(() => buildConversations(allMessages, athletes, coachUserId), [allMessages, athletes, coachUserId]);
-  const unlinkedAthletes = useMemo(() => athletes.filter((a) => a.userId == null), [athletes]);
+  // ═══ Conversations dérivées ═══════════════════════════════════════════════
+  const conversations = useMemo(
+    () => buildConversations(allMessages, contacts, coachUserId),
+    [allMessages, contacts, coachUserId]
+  );
 
+  const unlinkedAthletes = useMemo(
+    () => contacts.filter((c) => c.type === "athlete" && !c.linked),
+    [contacts]
+  );
+
+  const totalUnread = useMemo(
+    () => conversations.reduce((s, c) => s + c.unread, 0),
+    [conversations]
+  );
+
+  // Filtre recherche + onglet
   const filteredConvs = useMemo(() => {
-    if (!search.trim()) return conversations;
-    const q = search.toLowerCase();
-    return conversations.filter((conv) => {
-      const athlete = athletes.find((a) => a.id === conv.athleteId);
-      return athlete?.name.toLowerCase().includes(q) || conv.messages.some((m) => m.content.toLowerCase().includes(q));
-    });
-  }, [conversations, search, athletes]);
+    let list = conversations;
 
-  const activeConv    = useMemo(() => conversations.find((c) => c.athleteId === activeAthleteId) ?? null, [conversations, activeAthleteId]);
-  const activeAthlete = useMemo(() => athletes.find((a) => a.id === activeAthleteId) ?? null, [athletes, activeAthleteId]);
-  const totalUnread   = useMemo(() => conversations.reduce((s, c) => s + c.unread, 0), [conversations]);
+    // Filtre par onglet
+    if (activeTab === "athletes") {
+      list = list.filter((conv) => {
+        const c = contacts.find((x) => x.id === conv.contactId);
+        return c?.type === "athlete";
+      });
+    } else if (activeTab === "coachs") {
+      list = list.filter((conv) => {
+        const c = contacts.find((x) => x.id === conv.contactId);
+        return c?.type === "coach";
+      });
+    }
+
+    // Filtre recherche
+    if (search.trim()) {
+      const q = search.toLowerCase();
+      list = list.filter((conv) => {
+        const c = contacts.find((x) => x.id === conv.contactId);
+        return c?.name.toLowerCase().includes(q) ||
+          conv.messages.some((m) => m.content.toLowerCase().includes(q));
+      });
+    }
+
+    return list;
+  }, [conversations, search, contacts, activeTab]);
+
+  const activeConv    = useMemo(() => conversations.find((c) => c.contactId === activeContactId) ?? null, [conversations, activeContactId]);
+  const activeContact = useMemo(() => contacts.find((c) => c.id === activeContactId) ?? null, [contacts, activeContactId]);
 
   // ═══ Actions ══════════════════════════════════════════════════════════════
 
-  const selectConv = useCallback(async (athleteId) => {
-    setActiveAthleteId(athleteId);
-    const athlete = athletes.find((a) => a.id === athleteId);
-    if (!athlete?.userId) return;
-    const hasUnread = allMessages.some((m) => m.senderId === athlete.userId && m.receiverId === coachUserId && !m.isRead);
+  const selectConv = useCallback(async (contactId) => {
+    setActiveContactId(contactId);
+    const contact = contacts.find((c) => c.id === contactId);
+    if (!contact?.userId) return;
+
+    // Marquer comme lu
+    const hasUnread = allMessages.some(
+      (m) => m.senderId === contact.userId && m.receiverId === coachUserId && !m.isRead
+    );
     if (!hasUnread) return;
-    // Mise à jour optimiste
+
     setAllMessages((prev) => prev.map((m) =>
-      m.senderId === athlete.userId && m.receiverId === coachUserId && !m.isRead ? { ...m, isRead: true } : m
+      m.senderId === contact.userId && m.receiverId === coachUserId && !m.isRead
+        ? { ...m, isRead: true }
+        : m
     ));
+
     const { error: err } = await supabase
-      .from("messages").update({ is_read: true })
-      .eq("sender_id", athlete.userId).eq("receiver_id", coachUserId).eq("is_read", false);
+      .from("messages")
+      .update({ is_read: true })
+      .eq("sender_id", contact.userId)
+      .eq("receiver_id", coachUserId)
+      .eq("is_read", false);
+
     if (err) { console.error("Messaging — markRead :", err); fetchAll(); }
-  }, [athletes, allMessages, coachUserId, fetchAll]);
+  }, [contacts, allMessages, coachUserId, fetchAll]);
 
   const handleSend = useCallback(async (text) => {
-  if (!activeAthleteId || !coachUserId) return;
-  const athlete = athletes.find((a) => a.id === activeAthleteId);
-  if (!athlete?.userId) return;
-  const { data, error: err } = await supabase
-    .from("messages")
-    .insert({ sender_id: coachUserId, receiver_id: athlete.userId, content: text, is_read: false })
-    .select().single();
-  if (err) { console.error("Messaging — send :", err); return; }
-  setAllMessages((prev) => [...prev, { id: data.id, senderId: data.sender_id, receiverId: data.receiver_id, content: data.content, date: data.created_at, isRead: data.is_read }]);
+    if (!activeContactId || !coachUserId) return;
+    const contact = contacts.find((c) => c.id === activeContactId);
+    if (!contact?.userId) return;
 
-  // Notif athlète
- if (data && activeAthleteId) {
-    await notifyAthleteMessage(
-      clubId,
-      activeAthleteId,
-      profile?.name ?? "Coach",
-      text
-    );
-  }
-}, [activeAthleteId, athletes, coachUserId, clubId, profile]);
+    const { data, error: err } = await supabase
+      .from("messages")
+      .insert({
+        sender_id:   coachUserId,
+        receiver_id: contact.userId,
+        content:     text,
+        is_read:     false,
+      })
+      .select()
+      .single();
+
+    if (err) { console.error("Messaging — send :", err); return; }
+
+    // Ajout optimiste
+    setAllMessages((prev) => [...prev, {
+      id:         data.id,
+      senderId:   data.sender_id,
+      receiverId: data.receiver_id,
+      content:    data.content,
+      date:       data.created_at,
+      isRead:     data.is_read,
+    }]);
+
+    // Push notif si c'est un athlète
+    if (contact.type === "athlete" && contact.athleteId) {
+      await notifyAthleteMessage(
+        clubId,
+        contact.athleteId,
+        profile?.name ?? "Coach",
+        text
+      ).catch(console.warn);
+    }
+  }, [activeContactId, contacts, coachUserId, clubId, profile]);
+
   // ═══ Render ═══════════════════════════════════════════════════════════════
   if (loading) return <LoadingState message="Chargement de la messagerie…" />;
   if (error)   return <ErrorState  message={error} onRetry={fetchAll} />;
+
+  const coachCount   = contacts.filter((c) => c.type === "coach").length;
+  const athleteCount = contacts.filter((c) => c.type === "athlete" && c.linked).length;
 
   return (
     <div className="flex h-full overflow-hidden" style={{ height: "calc(100vh - 64px)" }}>
@@ -390,16 +553,22 @@ function Messaging() {
       {/* ── Panneau gauche ─────────────────────────────────────────────── */}
       <div className="w-72 flex-shrink-0 bg-white border-r border-slate-100 flex flex-col">
 
+        {/* Header */}
         <div className="px-4 py-4 border-b border-slate-100 flex-shrink-0">
           <div className="flex items-center justify-between mb-3">
             <h2 className="text-[15px] font-bold text-slate-800">Messagerie</h2>
             {totalUnread > 0 && (
-              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full text-white" style={{ background: "#E24B4A" }}>
+              <span
+                className="text-[10px] font-bold px-2 py-0.5 rounded-full text-white"
+                style={{ background: "#E24B4A" }}
+              >
                 {totalUnread} non lu{totalUnread > 1 ? "s" : ""}
               </span>
             )}
           </div>
-          <div className="flex items-center gap-2 bg-slate-100 rounded-xl px-3 py-2">
+
+          {/* Recherche */}
+          <div className="flex items-center gap-2 bg-slate-100 rounded-xl px-3 py-2 mb-3">
             <Search size={13} className="text-slate-400 flex-shrink-0" />
             <input
               type="text"
@@ -409,46 +578,74 @@ function Messaging() {
               className="flex-1 bg-transparent text-[12.5px] text-slate-700 placeholder-slate-400 focus:outline-none"
             />
           </div>
+
+          {/* Onglets filtre */}
+          <div className="flex rounded-xl border border-slate-200 overflow-hidden text-[11px] font-semibold">
+            {[
+              { id: "tous",     label: `Tous (${athleteCount + coachCount})` },
+              { id: "athletes", label: `Athlètes (${athleteCount})`          },
+              { id: "coachs",   label: `Coachs (${coachCount})`              },
+            ].map((tab) => (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                className={[
+                  "flex-1 py-1.5 transition-colors text-center",
+                  activeTab === tab.id
+                    ? "bg-slate-800 text-white"
+                    : "bg-white text-slate-500 hover:bg-slate-50",
+                ].join(" ")}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
         </div>
 
         {/* Coach connecté */}
         <div className="px-4 py-3 border-b border-slate-50 flex items-center gap-2.5 flex-shrink-0 bg-slate-50">
-          <div className="w-7 h-7 rounded-full flex items-center justify-center text-white text-[9px] font-bold flex-shrink-0" style={{ background: "#378ADD" }}>
+          <div
+            className="w-7 h-7 rounded-full flex items-center justify-center text-white text-[9px] font-bold flex-shrink-0"
+            style={{ background: "#378ADD" }}
+          >
             {initialsFromName(profile?.name ?? "")}
           </div>
           <div>
             <p className="text-[11.5px] font-semibold text-slate-700">{profile?.name ?? "Coach"}</p>
-            <p className="text-[10px] text-slate-400">Connecté</p>
+            <p className="text-[10px] text-slate-400">Connecté · Head coach</p>
           </div>
           <div className="ml-auto w-2 h-2 rounded-full bg-emerald-400 flex-shrink-0" />
         </div>
 
+        {/* Avertissement athlètes sans compte */}
         {unlinkedAthletes.length > 0 && (
           <div className="px-4 py-2 bg-amber-50 border-b border-amber-100 flex-shrink-0">
             <p className="text-[10.5px] text-amber-700 leading-relaxed">
-              ⚠️ {unlinkedAthletes.length} athlète{unlinkedAthletes.length > 1 ? "s" : ""} sans compte lié —
-              messagerie indisponible pour {unlinkedAthletes.map((a) => a.name.split(" ")[0]).join(", ")}.
+              ⚠️ {unlinkedAthletes.length} athlète{unlinkedAthletes.length > 1 ? "s" : ""} sans compte —
+              {" "}{unlinkedAthletes.map((a) => a.name.split(" ")[0]).join(", ")}
             </p>
           </div>
         )}
 
+        {/* Liste conversations */}
         <div className="flex-1 overflow-y-auto divide-y divide-slate-50">
           {filteredConvs.length === 0 ? (
-            <div className="px-4 py-8 text-center text-[12px] text-slate-300">
-              {athletes.filter((a) => a.userId).length === 0
-                ? "Aucun athlète lié à un compte pour l'instant"
-                : "Aucune conversation trouvée"}
+            <div className="px-4 py-8 text-center">
+              <Users size={24} className="mx-auto mb-2 text-slate-200" />
+              <p className="text-[12px] text-slate-300">
+                {search ? "Aucun résultat" : "Aucune conversation"}
+              </p>
             </div>
           ) : (
             filteredConvs.map((conv) => {
-              const athlete = athletes.find((a) => a.id === conv.athleteId);
+              const contact = contacts.find((c) => c.id === conv.contactId);
               return (
                 <ConvItem
-                  key={conv.athleteId}
+                  key={conv.contactId}
                   conv={conv}
-                  athlete={athlete}
-                  athletes={athletes}
-                  isActive={conv.athleteId === activeAthleteId}
+                  contact={contact}
+                  contacts={contacts}
+                  isActive={conv.contactId === activeContactId}
                   onClick={selectConv}
                   coachUserId={coachUserId}
                 />
@@ -460,12 +657,12 @@ function Messaging() {
 
       {/* ── Panneau droit ──────────────────────────────────────────────── */}
       <div className="flex-1 flex flex-col overflow-hidden">
-        {activeConv && activeAthlete ? (
+        {activeConv && activeContact ? (
           <ChatThread
-            key={activeAthleteId}
+            key={activeContactId}
             conv={activeConv}
-            athlete={activeAthlete}
-            athletes={athletes}
+            contact={activeContact}
+            contacts={contacts}
             onSend={handleSend}
             coachUserId={coachUserId}
           />
