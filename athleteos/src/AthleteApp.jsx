@@ -12,7 +12,7 @@ import {
   Zap, LogOut, Menu, X, Plus, ChevronLeft, ChevronRight,
   Star, Activity, HeartPulse, Trophy, Target, Send,
   CheckCircle, AlertTriangle, Clock, FileText, BarChart2,
-  Users, Heart, Image, Camera, Bell, Moon, Battery, Smile,
+  Users, Heart, Image, Camera, Bell, Moon, Battery, Smile, Search
 } from "lucide-react";
 import {
   LineChart, Line, XAxis, YAxis, Tooltip,
