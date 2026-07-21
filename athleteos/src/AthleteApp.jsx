@@ -328,6 +328,395 @@ const WellnessModal = memo(({ athlete, clubId, onClose, onSaved }) => {
   );
 });
 
+// ════════════════════════════════════════════════════════════════════════════
+// FormeDetailPanel — panneau latéral "État de forme" cliquable
+// À insérer dans AthleteApp.jsx AVANT function Dashboard({
+// Puis appeler depuis le bloc "État de forme" dans Dashboard
+// ════════════════════════════════════════════════════════════════════════════
+
+// ─── Données scientifiques par métrique ───────────────────────────────────────
+const METRIC_SCIENCE = {
+  readiness: {
+    label:    "Readiness",
+    icon:     "⚡",
+    color:    (v) => v >= 75 ? "#1D9E75" : v >= 50 ? "#EF9F27" : "#E24B4A",
+    unit:     "/100",
+    optimal:  "≥ 75",
+    formula:  "Moyenne pondérée : Forme (40%) + Récupération (35%) + Wellness (25%)",
+    what:     "Le Readiness mesure ta capacité globale à performer aujourd'hui. Un score élevé signifie que ton corps est physiologiquement prêt à absorber une charge d'entraînement intense.",
+    sources: [
+      { ref: "Gabbett (2016)", detail: "Training-injury prevention paradox — BJSM", url: null },
+      { ref: "Halson (2014)",  detail: "Monitoring training load — Sports Med", url: null },
+    ],
+    thresholds: [
+      { min: 75, max: 100, label: "Optimal",    color: "#1D9E75", advice: "Séance intense possible. Profites-en pour travailler vitesse ou force maximale." },
+      { min: 55, max: 74,  label: "Acceptable", color: "#EF9F27", advice: "Séance modérée recommandée. Évite les blocs à haute intensité répétée." },
+      { min: 0,  max: 54,  label: "Faible",     color: "#E24B4A", advice: "Récupération active, mobilité ou repos complet. Ne force pas." },
+    ],
+  },
+  forme: {
+    label:    "Forme",
+    icon:     "📈",
+    color:    (v) => v >= 75 ? "#1D9E75" : v >= 50 ? "#EF9F27" : "#E24B4A",
+    unit:     "/100",
+    optimal:  "≥ 65",
+    formula:  "Charge chronique (moyenne 4 semaines) normalisée sur 100. Représente ton niveau de condition physique actuel.",
+    what:     "La Forme (fitness) représente les adaptations positives accumulées sur les 4 dernières semaines. C'est le bénéfice physiologique de ton entraînement régulier : VO2max, force, efficience neuromusculaire.",
+    sources: [
+      { ref: "Banister et al. (1975)", detail: "Modèle Fitness-Fatigue — Research Quarterly", url: null },
+      { ref: "Morton et al. (1990)",   detail: "Modelling human performance — EJP", url: null },
+    ],
+    thresholds: [
+      { min: 75, max: 100, label: "Excellente", color: "#1D9E75", advice: "Condition physique au-dessus de ta normale. Idéal pour compétitions ou blocs intenses." },
+      { min: 50, max: 74,  label: "Correcte",   color: "#EF9F27", advice: "En progression. Continue la régularité, évite les coupures." },
+      { min: 0,  max: 49,  label: "Faible",     color: "#E24B4A", advice: "Augmente progressivement le volume. La régularité prime sur l'intensité." },
+    ],
+  },
+  fatigue: {
+    label:    "Fatigue",
+    icon:     "🔋",
+    color:    (v) => v > 70 ? "#E24B4A" : v > 45 ? "#EF9F27" : "#1D9E75",
+    unit:     "/100",
+    optimal:  "≤ 45",
+    inverted: true,
+    formula:  "Charge aiguë (moyenne 7 derniers jours) normalisée. Plus la charge récente est élevée, plus la fatigue est haute.",
+    what:     "La fatigue représente l'accumulation de stress physiologique récent. Elle est normale et nécessaire pour progresser, mais au-delà d'un certain seuil elle devient contre-productive et augmente le risque de blessure.",
+    sources: [
+      { ref: "Banister et al. (1975)", detail: "Modèle Fitness-Fatigue — Research Quarterly", url: null },
+      { ref: "Meeusen et al. (2013)",  detail: "Overreaching/overtraining — MSSE", url: null },
+    ],
+    thresholds: [
+      { min: 0,  max: 45,  label: "Normale",   color: "#1D9E75", advice: "Pas de signe de suraccumulation. Tu peux maintenir ou augmenter la charge." },
+      { min: 46, max: 70,  label: "Modérée",   color: "#EF9F27", advice: "Attention aux séances très intenses consécutives. Planifie une journée légère." },
+      { min: 71, max: 100, label: "Élevée",    color: "#E24B4A", advice: "Réduction de charge recommandée. Le corps ne peut plus absorber correctement le stress." },
+    ],
+  },
+  recuperation: {
+    label:    "Récupération",
+    icon:     "🌙",
+    color:    (v) => v >= 70 ? "#1D9E75" : v >= 45 ? "#EF9F27" : "#E24B4A",
+    unit:     "/100",
+    optimal:  "≥ 70",
+    formula:  "Basée sur le ratio Forme/Fatigue et les données wellness (qualité du sommeil, douleurs musculaires). Convention coaching AthleteOS.",
+    what:     "La récupération estime la capacité neuromusculaire et métabolique à absorber une nouvelle séance. Elle dépend du temps écoulé depuis la dernière charge intense et de tes indicateurs de bien-être.",
+    sources: [
+      { ref: "Hasegawa et al. (2024)", detail: "Recovery monitoring — IJSPP", url: null },
+      { ref: "Kellmann et al. (2018)", detail: "Recovery and Stress in Sport — Routledge", url: null },
+    ],
+    thresholds: [
+      { min: 70, max: 100, label: "Complète",     color: "#1D9E75", advice: "Physiologiquement disponible pour une nouvelle charge." },
+      { min: 45, max: 69,  label: "Partielle",    color: "#EF9F27", advice: "Récupération en cours. Séance technique ou légère recommandée." },
+      { min: 0,  max: 44,  label: "Insuffisante", color: "#E24B4A", advice: "Récupération neuromusculaire incomplète. Priorité au repos." },
+    ],
+  },
+  risque: {
+    label:    "Risque blessure",
+    icon:     "⚠️",
+    color:    (v) => v > 60 ? "#E24B4A" : v > 30 ? "#EF9F27" : "#1D9E75",
+    unit:     "/100",
+    optimal:  "≤ 30",
+    inverted: true,
+    formula:  "Composé de l'ACWR (60%), de la monotonie d'entraînement (20%) et de la fatigue accumulée (20%). Basé sur le modèle de Gabbett.",
+    what:     "Le risque de blessure est un indicateur composite qui détecte les patterns dangereux : surcharge aiguë (ACWR > 1.3), entraînements trop monotones, et accumulation de fatigue sans récupération suffisante.",
+    sources: [
+      { ref: "Gabbett (2016)",       detail: "Training-injury prevention paradox — BJSM", url: null },
+      { ref: "Hulin et al. (2016)",  detail: "Spikes in acute workload — BJSM", url: null },
+      { ref: "Foster (1998)",        detail: "Monotony of training — J Strength Cond", url: null },
+    ],
+    thresholds: [
+      { min: 0,  max: 30,  label: "Faible",  color: "#1D9E75", advice: "Aucun signal d'alarme. Continue ton programme normalement." },
+      { min: 31, max: 60,  label: "Modéré",  color: "#EF9F27", advice: "ACWR ou monotonie élevés. Varie les intensités et les types de séances." },
+      { min: 61, max: 100, label: "Élevé",   color: "#E24B4A", advice: "Réduis immédiatement la charge. Consulte ton coach." },
+    ],
+  },
+};
+
+// ─── FormeDetailPanel ─────────────────────────────────────────────────────────
+const FormeDetailPanel = memo(({ metricKey, metrics, sessions, weeklyCharge, athlete, onClose }) => {
+  const science    = METRIC_SCIENCE[metricKey];
+  const value      = metrics[metricKey] ?? 0;
+  const color      = science.color(value);
+  const currentWeek = getISOWeek(new Date());
+
+  // Trouver le seuil actuel
+  const threshold = science.thresholds.find(t => value >= t.min && value <= t.max)
+    ?? science.thresholds[science.thresholds.length - 1];
+
+  // Séances de la semaine qui ont contribué
+  const weekSessions = useMemo(() => {
+    return sessions
+      .filter(s => s.week === currentWeek || s.week === currentWeek - 1)
+      .filter(s => s.athleteIds?.includes(athlete.id))
+      .map(s => {
+        const val = s.validations?.find(v => v.athleteId === athlete.id);
+        return { ...s, validation: val };
+      })
+      .filter(s => s.validation?.rpe != null)
+      .sort((a, b) => b.week - a.week || a.day?.localeCompare(b.day ?? "") );
+  }, [sessions, athlete.id, currentWeek]);
+
+  // Charge des 4 dernières semaines
+  const recentCharge = useMemo(() => {
+    return weeklyCharge
+      .filter(w => w.athleteId === athlete.id && w.week >= currentWeek - 3 && w.week <= currentWeek)
+      .sort((a, b) => a.week - b.week)
+      .map(w => ({
+        week:  w.week,
+        label: `S${w.week}`,
+        load:  w.rawLoad,
+        color: w.rawLoad > 500 ? "#E24B4A" : w.rawLoad > 350 ? "#EF9F27" : "#1D9E75",
+      }));
+  }, [weeklyCharge, athlete.id, currentWeek]);
+
+  const maxLoad = Math.max(...recentCharge.map(w => w.load), 1);
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4 modal-backdrop"
+      onClick={e => e.target === e.currentTarget && onClose()}
+    >
+      <div className="bg-white rounded-t-3xl sm:rounded-3xl shadow-2xl w-full max-w-lg max-h-[92vh] flex flex-col overflow-hidden modal-content">
+
+        {/* Handle mobile */}
+        <div className="flex justify-center pt-3 pb-1 sm:hidden flex-shrink-0">
+          <div className="w-10 h-1 rounded-full bg-slate-200" />
+        </div>
+
+        {/* Header coloré */}
+        <div
+          className="px-6 py-5 flex items-start justify-between gap-4 flex-shrink-0"
+          style={{ background: `linear-gradient(135deg, ${color}18, ${color}08)`, borderBottom: `2px solid ${color}30` }}
+        >
+          <div className="flex items-center gap-4">
+            <div
+              className="w-16 h-16 rounded-2xl flex items-center justify-center flex-shrink-0 shadow-sm"
+              style={{ background: `${color}15` }}
+            >
+              <span className="text-[28px]">{science.icon}</span>
+            </div>
+            <div>
+              <p className="text-[11px] font-bold uppercase tracking-widest mb-1" style={{ color }}>
+                État de forme
+              </p>
+              <h2 className="text-[20px] font-black text-slate-800 leading-tight">{science.label}</h2>
+              <div className="flex items-center gap-2 mt-1">
+                <span className="text-[32px] font-black leading-none" style={{ color }}>{value}</span>
+                <div>
+                  <p className="text-[10px] text-slate-400 font-medium">{science.unit}</p>
+                  <span
+                    className="text-[10px] font-bold px-2 py-0.5 rounded-full"
+                    style={{ background: `${threshold.color}15`, color: threshold.color }}
+                  >
+                    {threshold.label}
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+          <button onClick={onClose} className="p-2 rounded-xl hover:bg-slate-100 flex-shrink-0 transition-colors">
+            <X size={18} className="text-slate-500" />
+          </button>
+        </div>
+
+        {/* Contenu scrollable */}
+        <div className="flex-1 overflow-y-auto px-6 py-5 space-y-5">
+
+          {/* Jauge visuelle */}
+          <div>
+            <div className="flex items-center justify-between text-[10px] text-slate-400 mb-2">
+              <span>{science.inverted ? "Optimal" : "Faible"}</span>
+              <span className="font-bold" style={{ color }}>Optimal : {science.optimal}</span>
+              <span>{science.inverted ? "Critique" : "Optimal"}</span>
+            </div>
+            <div className="relative h-4 rounded-full overflow-hidden bg-slate-100">
+              <div
+                className="h-full rounded-full transition-all duration-700"
+                style={{
+                  width: `${value}%`,
+                  background: `linear-gradient(90deg, ${color}80, ${color})`,
+                }}
+              />
+              {/* Marqueur optimal */}
+              <div
+                className="absolute top-0 h-full w-0.5 bg-white/80"
+                style={{ left: science.inverted ? "30%" : "75%" }}
+              />
+            </div>
+            <div className="flex justify-between text-[9px] text-slate-300 mt-1">
+              <span>0</span><span>25</span><span>50</span><span>75</span><span>100</span>
+            </div>
+          </div>
+
+          {/* Conseil du jour */}
+          <div
+            className="rounded-2xl p-4"
+            style={{ background: `${threshold.color}10`, border: `1.5px solid ${threshold.color}25` }}
+          >
+            <div className="flex items-center gap-2 mb-2">
+              <div className="w-6 h-6 rounded-lg flex items-center justify-center" style={{ background: threshold.color }}>
+                <Zap size={12} color="white" />
+              </div>
+              <p className="text-[11px] font-bold uppercase tracking-wider" style={{ color: threshold.color }}>
+                Conseil du jour
+              </p>
+            </div>
+            <p className="text-[13px] text-slate-700 leading-relaxed font-medium">
+              {threshold.advice}
+            </p>
+          </div>
+
+          {/* Ce que ça mesure */}
+          <div className="card p-4">
+            <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2">
+              Ce que mesure ce score
+            </p>
+            <p className="text-[13px] text-slate-600 leading-relaxed">{science.what}</p>
+          </div>
+
+          {/* Formule de calcul */}
+          <div className="rounded-2xl border border-slate-200 overflow-hidden">
+            <div className="px-4 py-3 bg-slate-50 border-b border-slate-100">
+              <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+                🔢 Formule de calcul
+              </p>
+            </div>
+            <div className="px-4 py-3">
+              <p className="text-[12.5px] text-slate-600 leading-relaxed font-mono bg-slate-50 rounded-xl px-3 py-2">
+                {science.formula}
+              </p>
+            </div>
+          </div>
+
+          {/* Séances qui ont contribué */}
+          {weekSessions.length > 0 && (
+            <div className="card overflow-hidden">
+              <div className="px-4 py-3.5 border-b border-slate-50">
+                <p className="text-[13px] font-bold text-slate-800">Séances ayant contribué</p>
+                <p className="text-[11px] text-slate-400 mt-0.5">2 dernières semaines · RPE validé</p>
+              </div>
+              <div className="divide-y divide-slate-50">
+                {weekSessions.slice(0, 6).map(s => {
+                  const rpe    = s.validation?.rpe ?? 0;
+                  const load   = (s.durationMinutes ?? 60) * rpe;
+                  const rpeCol = rpe <= 3 ? "#1D9E75" : rpe <= 6 ? "#EF9F27" : "#E24B4A";
+                  return (
+                    <div key={s.id} className="px-4 py-3.5 flex items-center gap-3">
+                      <div
+                        className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 text-[11px] font-black text-white"
+                        style={{ background: rpeCol }}
+                      >
+                        {rpe}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-[12.5px] font-bold text-slate-700 truncate">{s.title}</p>
+                        <p className="text-[11px] text-slate-400">
+                          {s.day} · S{s.week} · {s.durationMinutes ?? 60} min
+                        </p>
+                      </div>
+                      <div className="text-right flex-shrink-0">
+                        <p className="text-[13px] font-black" style={{ color: rpeCol }}>{load}</p>
+                        <p className="text-[9px] text-slate-300 font-medium">charge</p>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Charge par semaine */}
+          {recentCharge.length > 0 && (
+            <div className="card p-4">
+              <p className="text-[13px] font-bold text-slate-800 mb-1">Charge hebdomadaire</p>
+              <p className="text-[11px] text-slate-400 mb-4">4 dernières semaines (méthode session-RPE · Foster 2001)</p>
+              <div className="flex items-end gap-2 h-20">
+                {recentCharge.map((w, i) => {
+                  const pct       = (w.load / maxLoad) * 100;
+                  const isCurrent = w.week === currentWeek;
+                  return (
+                    <div key={i} className="flex-1 flex flex-col items-center gap-1">
+                      <div className="w-full flex items-end" style={{ height: "64px" }}>
+                        <div
+                          className="w-full rounded-t-xl transition-all"
+                          style={{
+                            height: `${Math.max(pct, 5)}%`,
+                            background: isCurrent ? w.color : w.color + "60",
+                            outline: isCurrent ? `2px solid ${w.color}` : "none",
+                            outlineOffset: "1px",
+                          }}
+                        />
+                      </div>
+                      <p className="text-[9px] text-slate-400 font-medium">{w.label}</p>
+                      <p className="text-[9px] font-black" style={{ color: w.color }}>{w.load}</p>
+                    </div>
+                  );
+                })}
+              </div>
+              <p className="text-[10px] text-slate-300 mt-3">
+                Charge = durée (min) × RPE · Foster et al. (2001) · Journal of Strength & Conditioning Research
+              </p>
+            </div>
+          )}
+
+          {/* Sources scientifiques */}
+          <div className="rounded-2xl border border-slate-100 overflow-hidden">
+            <div className="px-4 py-3 bg-slate-50 border-b border-slate-100">
+              <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+                📚 Sources scientifiques
+              </p>
+            </div>
+            <div className="divide-y divide-slate-50">
+              {science.sources.map((src, i) => (
+                <div key={i} className="px-4 py-3">
+                  <p className="text-[12px] font-bold text-slate-700">{src.ref}</p>
+                  <p className="text-[11px] text-slate-400 mt-0.5 italic">{src.detail}</p>
+                </div>
+              ))}
+              <div className="px-4 py-3 bg-amber-50/50">
+                <p className="text-[10.5px] text-amber-700 leading-relaxed">
+                  ⚠️ Les coefficients de pondération sont des conventions de coaching AthleteOS, 
+                  pas des standards publiés. Les formules sous-jacentes sont issues de la littérature scientifique.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Tous les seuils */}
+          <div className="space-y-2">
+            <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Grille d'interprétation</p>
+            {science.thresholds.map((t, i) => (
+              <div
+                key={i}
+                className={[
+                  "rounded-2xl px-4 py-3.5 flex items-center gap-3 border",
+                  value >= t.min && value <= t.max ? "border-2" : "border-slate-100",
+                ].join(" ")}
+                style={value >= t.min && value <= t.max
+                  ? { background: `${t.color}10`, borderColor: t.color }
+                  : { background: "white" }
+                }
+              >
+                <div className="w-3 h-3 rounded-full flex-shrink-0" style={{ background: t.color }} />
+                <div className="flex-1">
+                  <div className="flex items-center gap-2">
+                    <p className="text-[12.5px] font-bold" style={{ color: t.color }}>{t.label}</p>
+                    <span className="text-[10px] text-slate-400">{t.min}–{t.max}</span>
+                    {value >= t.min && value <= t.max && (
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full text-white" style={{ background: t.color }}>
+                        Tu es ici
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-[11.5px] text-slate-500 mt-0.5 leading-relaxed">{t.advice}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+});
 function Dashboard({ athlete, weeklyCharge, sessions, competitions, lastMessages, coachName, myPerformances, onNavigate, wellnessToday, onOpenWellness }) {
   const today       = new Date();
   const currentWeek = getISOWeek(today);
@@ -405,6 +794,7 @@ function Dashboard({ athlete, weeklyCharge, sessions, competitions, lastMessages
   const doneThisWeek = weekSessions.filter(s =>
     s.validations?.find(v => v.athleteId === athlete.id && v.status === "done")
   ).length;
+  const [activeMetric, setActiveMetric] = useState(null);
  
   return (
     <div className="p-4 space-y-4 max-w-4xl mx-auto animate-slide-up">
@@ -624,92 +1014,85 @@ function Dashboard({ athlete, weeklyCharge, sessions, competitions, lastMessages
             </div>
           )}
  
-          {/* ── État de forme détaillé ── */}
+         // ════════════════════════════════════════════════════════════════════════════
+// DANS function Dashboard({ ... }) — remplace uniquement le bloc
+// "État de forme" (la section avec les 5 métriques + progress bars)
+// Cherche : {/* ── État de forme détaillé ── */}
+// et remplace tout ce bloc par ce code
+// ════════════════════════════════════════════════════════════════════════════
+
+// 1. Ajoute ce state EN HAUT de function Dashboard({ ... }), avec les autres useState :
+//    const [activeMetric, setActiveMetric] = useState(null);
+
+// 2. Remplace le bloc "État de forme détaillé" par :
+
+          {/* ── État de forme détaillé — CLIQUABLE ── */}
           {hasCharge && (
             <div className="card p-5">
-              <h3 className="text-[14px] font-bold text-slate-800 mb-1">État de forme</h3>
-              <p className="text-[11px] text-slate-400 mb-4">Basé sur ta charge réelle</p>
+              <div className="flex items-center justify-between mb-1">
+                <h3 className="text-[14px] font-bold text-slate-800">État de forme</h3>
+                <span className="text-[10px] text-slate-300 font-medium">Appuie pour comprendre</span>
+              </div>
+              <p className="text-[11px] text-slate-400 mb-4">Basé sur ta charge réelle · Clique pour le détail scientifique</p>
               <div className="space-y-3">
                 {[
-                  {
-                    label: "Readiness", value: metrics.readiness, inv: false,
-                    color: scoreColor(metrics.readiness),
-                    norm: metrics.readiness >= 75
-                      ? { dot: "🟢", label: "Dans les normes", hint: "Prêt pour une séance intense" }
-                      : metrics.readiness >= 55
-                      ? { dot: "🟡", label: "Limite", hint: `Optimal à partir de 75 — encore ${75 - metrics.readiness} pts` }
-                      : { dot: "🔴", label: "En dessous", hint: "Privilégie une séance légère ou du repos" },
-                  },
-                  {
-                    label: "Forme", value: metrics.forme, inv: false,
-                    color: scoreColor(metrics.forme),
-                    norm: metrics.forme >= 75
-                      ? { dot: "🟢", label: "Excellente", hint: "Condition au-dessus de la normale" }
-                      : metrics.forme >= 50
-                      ? { dot: "🟡", label: "Correcte",  hint: "En progression — continue régulièrement" }
-                      : { dot: "🔴", label: "Faible",    hint: "Augmente progressivement le volume" },
-                  },
-                  {
-                    label: "Fatigue", value: metrics.fatigue, inv: true,
-                    color: scoreColor(metrics.fatigue, true),
-                    norm: metrics.fatigue <= 45
-                      ? { dot: "🟢", label: "Normale",  hint: "Pas de signe de suraccumulation" }
-                      : metrics.fatigue <= 70
-                      ? { dot: "🟡", label: "Modérée",  hint: "Limite les séances très intenses" }
-                      : { dot: "🔴", label: "Élevée",   hint: "Repos ou récupération active conseillés" },
-                  },
-                  {
-                    label: "Récupération", value: metrics.recuperation, inv: false,
-                    color: scoreColor(metrics.recuperation),
-                    norm: metrics.recuperation >= 70
-                      ? { dot: "🟢", label: "Complète",    hint: "Physiologiquement disponible" }
-                      : metrics.recuperation >= 45
-                      ? { dot: "🟡", label: "Partielle",   hint: "Quelques heures encore nécessaires" }
-                      : { dot: "🔴", label: "Insuffisante",hint: "Récupération neuromusculaire incomplète" },
-                  },
-                  {
-                    label: "Risque blessure", value: metrics.risque, inv: true,
-                    color: scoreColor(metrics.risque, true),
-                    norm: metrics.risque <= 20
-                      ? { dot: "🟢", label: "Faible",  hint: "Pas d'alerte détectée" }
-                      : metrics.risque <= 50
-                      ? { dot: "🟡", label: "Modéré",  hint: "ACWR ou monotonie élevés — varie tes séances" }
-                      : { dot: "🔴", label: "Élevé",   hint: "Réduis la charge immédiatement" },
-                  },
-                ].map(s => (
-                  <div key={s.label} className="bg-slate-50 rounded-2xl px-4 py-3.5">
-                    <div className="flex items-start justify-between gap-3 mb-2.5">
-                      <div className="flex-1 min-w-0">
+                  { key: "readiness",    label: "Readiness",       value: metrics.readiness,    inv: false },
+                  { key: "forme",        label: "Forme",           value: metrics.forme,        inv: false },
+                  { key: "fatigue",      label: "Fatigue",         value: metrics.fatigue,      inv: true  },
+                  { key: "recuperation", label: "Récupération",    value: metrics.recuperation, inv: false },
+                  { key: "risque",       label: "Risque blessure", value: metrics.risque,       inv: true  },
+                ].map(s => {
+                  const col    = s.inv
+                    ? (s.value > 70 ? "#E24B4A" : s.value > 45 ? "#EF9F27" : "#1D9E75")
+                    : (s.value >= 75 ? "#1D9E75" : s.value >= 55 ? "#EF9F27" : "#E24B4A");
+                  const sci    = METRIC_SCIENCE[s.key];
+                  const thresh = sci?.thresholds.find(t => s.value >= t.min && s.value <= t.max);
+                  return (
+                    <button
+                      key={s.key}
+                      onClick={() => setActiveMetric(s.key)}
+                      className="w-full bg-slate-50 rounded-2xl px-4 py-3.5 text-left hover:bg-slate-100 transition-all tap-feedback active:scale-[0.99]"
+                    >
+                      <div className="flex items-center justify-between gap-3 mb-2">
                         <div className="flex items-center gap-2 flex-wrap">
                           <span className="text-[13px] font-bold text-slate-800">{s.label}</span>
-                          <span
-                            className="text-[10px] font-semibold px-2 py-0.5 rounded-full"
-                            style={{ background: s.color + "18", color: s.color }}
-                          >
-                            {s.norm.dot} {s.norm.label}
-                          </span>
+                          {thresh && (
+                            <span
+                              className="text-[10px] font-semibold px-2 py-0.5 rounded-full"
+                              style={{ background: thresh.color + "18", color: thresh.color }}
+                            >
+                              {thresh.label}
+                            </span>
+                          )}
                         </div>
-                        <p className="text-[11px] text-slate-400 mt-0.5 leading-relaxed">{s.norm.hint}</p>
+                        <div className="flex items-center gap-2 flex-shrink-0">
+                          <span className="text-[22px] font-black" style={{ color: col }}>{s.value}</span>
+                          <ChevronRight size={14} className="text-slate-300" />
+                        </div>
                       </div>
-                      <span className="text-[24px] font-black flex-shrink-0" style={{ color: s.color }}>
-                        {s.value}
-                      </span>
-                    </div>
-                    <div className="progress-bar">
-                      <div className="progress-fill" style={{ width: `${s.value}%`, background: s.color }} />
-                    </div>
-                    <div className="flex justify-between text-[9px] text-slate-300 mt-1">
-                      <span>0</span>
-                      <span>{s.inv ? "Critique > 70" : "Optimal ≥ 75"}</span>
-                      <span>100</span>
-                    </div>
-                  </div>
-                ))}
+                      <div className="progress-bar">
+                        <div className="progress-fill" style={{ width: `${s.value}%`, background: col }} />
+                      </div>
+                    </button>
+                  );
+                })}
               </div>
               <p className="text-[10px] text-slate-300 mt-4 text-center">
-                ACWR : Gabbett (2016) · Récup. : Hasegawa (2024) · Autres : convention coaching
+                ACWR : Gabbett (2016) · Récup. : Hasegawa (2024) · Modèle Fitness-Fatigue : Banister (1975)
               </p>
             </div>
+          )}
+
+          {/* ── FormeDetailPanel ── */}
+          {activeMetric && (
+            <FormeDetailPanel
+              metricKey={activeMetric}
+              metrics={metrics}
+              sessions={sessions}
+              weeklyCharge={weeklyCharge}
+              athlete={athlete}
+              onClose={() => setActiveMetric(null)}
+            />
           )}
  
           {/* ── Séances de la semaine ── */}
