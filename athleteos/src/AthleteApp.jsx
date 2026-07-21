@@ -4010,7 +4010,7 @@ export default function AthleteApp() {
     } finally { setLoading(false); }
   }, [clubId, profile?.id]);
  
-  useEffect(() => { fetchAll(); }, [fetchAll]);
+ useEffect(() => { fetchAll(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
  
   // Ouvre wellness si pas encore répondu aujourd'hui
  const wellnessShownRef = useRef(false);
