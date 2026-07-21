@@ -2223,6 +2223,14 @@ const AddGoalModal = memo(({ athlete, clubId, allDiscs, onClose, onAdded }) => {
 // De "function MesPerformances({" jusqu'à "// ══ VUE 4 — MESSAGERIE"
 // ════════════════════════════════════════════════════════════════════════════
 
+// ════════════════════════════════════════════════════════════════════════════
+// REMPLACE function MesPerformances({ ... }) dans AthleteApp.jsx
+// FIXES :
+//   1. "Voir évolution" cliquable → setActiveTab remonté au bon niveau
+//   2. Saisir perf/objectif → onRefresh ne reset plus la vue
+//   3. imports AreaChart ajoutés en haut si manquants
+// ════════════════════════════════════════════════════════════════════════════
+
 function MesPerformances({ athlete, competitions, myPerformances, myGoals, clubId, onRefresh, onNavigate }) {
   const today = new Date();
 
@@ -2232,18 +2240,19 @@ function MesPerformances({ athlete, competitions, myPerformances, myGoals, clubI
   const [showAddGoal,  setShowAddGoal]  = useState(false);
   const [savingPerf,   setSavingPerf]   = useState(false);
   const [savingGoal,   setSavingGoal]   = useState(false);
-  const [localPerfs,   setLocalPerfs]   = useState(myPerformances ?? []);
-  const [localGoals,   setLocalGoals]   = useState(myGoals ?? []);
   const [perfForm,     setPerfForm]     = useState({
     discipline: "", value: "",
-    performance_date: today.toISOString().slice(0, 10),
-    context: "",
+    performance_date: today.toISOString().slice(0,10), context: ""
   });
   const [goalForm, setGoalForm] = useState({
-    discipline: "", target_value: "", deadline: "", notes: "",
+    discipline: "", target_value: "", deadline: "", notes: ""
   });
 
-  // Sync local state quand les props changent (sans reset de vue)
+  // Performances locales — mise à jour optimiste sans refetch
+  const [localPerfs, setLocalPerfs] = useState(myPerformances ?? []);
+  const [localGoals, setLocalGoals] = useState(myGoals ?? []);
+
+  // Sync si props changent
   useEffect(() => { setLocalPerfs(myPerformances ?? []); }, [myPerformances]);
   useEffect(() => { setLocalGoals(myGoals ?? []); }, [myGoals]);
 
@@ -2258,7 +2267,7 @@ function MesPerformances({ athlete, competitions, myPerformances, myGoals, clubI
   const chartData = useMemo(() => {
     const disc = selectedDisc ?? disciplines[0];
     if (!disc) return [];
-    return localPerfs
+    return (localPerfs)
       .filter(p => p.discipline === disc && p.value != null)
       .sort((a, b) => a.performance_date.localeCompare(b.performance_date))
       .map(p => ({
@@ -2297,33 +2306,42 @@ function MesPerformances({ athlete, competitions, myPerformances, myGoals, clubI
   }, [localPerfs]);
 
   const activeGoals   = localGoals.filter(g => !g.achieved);
-  const achievedGoals = localGoals.filter(g => g.achieved);
+  const achievedGoals = localGoals.filter(g =>  g.achieved);
 
-  // ── Handlers ──────────────────────────────────────────────────────────────
+  // ── Handlers — mise à jour optimiste, pas de refetch ─────────────────────
 
   const handleAddPerf = async () => {
     if (!perfForm.discipline.trim() || !perfForm.value.trim()) return;
     setSavingPerf(true);
     try {
-      const { data, error } = await supabase.from("athlete_performances").insert({
-        athlete_id:       athlete.id,
-        club_id:          clubId,
-        discipline:       perfForm.discipline,
-        value:            perfForm.value,
-        performance_date: perfForm.performance_date,
-        context:          perfForm.context || null,
-      }).select().single();
+      const { data, error } = await supabase
+        .from("athlete_performances")
+        .insert({
+          athlete_id:       athlete.id,
+          club_id:          clubId,
+          discipline:       perfForm.discipline,
+          value:            perfForm.value,
+          performance_date: perfForm.performance_date,
+          context:          perfForm.context || null,
+        })
+        .select()
+        .single();
 
       if (error) throw error;
 
-      // Mise à jour locale sans reset de vue
+      // Mise à jour optimiste locale — pas de refetch qui reset la vue
       setLocalPerfs(prev => [...prev, data]);
-      setPerfForm({ discipline: selectedDisc ?? "", value: "", performance_date: today.toISOString().slice(0, 10), context: "" });
+      setPerfForm({
+        discipline: perfForm.discipline, // garde la discipline sélectionnée
+        value: "",
+        performance_date: today.toISOString().slice(0,10),
+        context: ""
+      });
       setShowAddPerf(false);
-      // onRefresh en arrière-plan sans bloquer
+      // Refresh en arrière-plan sans reset de vue
       onRefresh?.();
     } catch(e) {
-      console.error("addPerf:", e);
+      console.error("Erreur ajout perf:", e);
     } finally {
       setSavingPerf(false);
     }
@@ -2333,25 +2351,29 @@ function MesPerformances({ athlete, competitions, myPerformances, myGoals, clubI
     if (!goalForm.discipline.trim() || !goalForm.target_value.trim()) return;
     setSavingGoal(true);
     try {
-      const { data, error } = await supabase.from("athlete_goals").insert({
-        athlete_id:   athlete.id,
-        club_id:      clubId,
-        discipline:   goalForm.discipline,
-        target_value: goalForm.target_value,
-        deadline:     goalForm.deadline || null,
-        notes:        goalForm.notes || null,
-        achieved:     false,
-      }).select().single();
+      const { data, error } = await supabase
+        .from("athlete_goals")
+        .insert({
+          athlete_id:   athlete.id,
+          club_id:      clubId,
+          discipline:   goalForm.discipline,
+          target_value: goalForm.target_value,
+          deadline:     goalForm.deadline || null,
+          notes:        goalForm.notes || null,
+          achieved:     false,
+        })
+        .select()
+        .single();
 
       if (error) throw error;
 
-      // Mise à jour locale
+      // Mise à jour optimiste locale
       setLocalGoals(prev => [data, ...prev]);
       setGoalForm({ discipline: "", target_value: "", deadline: "", notes: "" });
       setShowAddGoal(false);
       onRefresh?.();
     } catch(e) {
-      console.error("addGoal:", e);
+      console.error("Erreur ajout objectif:", e);
     } finally {
       setSavingGoal(false);
     }
@@ -2369,17 +2391,12 @@ function MesPerformances({ athlete, competitions, myPerformances, myGoals, clubI
     onRefresh?.();
   };
 
-  // ── Navigation vers évolution depuis Records ───────────────────────────────
-  const goToEvolution = (disc) => {
-    setSelectedDisc(disc);
-    setActiveTab("evolution");
-  };
-
   // ── Tabs ──────────────────────────────────────────────────────────────────
+
   const PERF_TABS = [
-    { id: "records",   label: "Records"   },
-    { id: "evolution", label: "Évolution" },
-    { id: "objectifs", label: `Objectifs${activeGoals.length > 0 ? ` (${activeGoals.length})` : ""}` },
+    { id: "records",   label: "Records"      },
+    { id: "evolution", label: "Évolution"    },
+    { id: "objectifs", label: activeGoals.length > 0 ? `Objectifs (${activeGoals.length})` : "Objectifs" },
     { id: "comps",     label: "Compétitions" },
   ];
 
@@ -2391,7 +2408,7 @@ function MesPerformances({ athlete, competitions, myPerformances, myGoals, clubI
         <div>
           <h2 className="text-[20px] font-black text-slate-800">Mes performances</h2>
           <p className="text-[12px] text-slate-400 mt-0.5">
-            {disciplines.length} épreuve{disciplines.length > 1 ? "s" : ""} · {localPerfs.length} mesure{localPerfs.length > 1 ? "s" : ""}
+            {disciplines.length} épreuve{disciplines.length !== 1 ? "s" : ""} · {localPerfs.length} mesure{localPerfs.length !== 1 ? "s" : ""}
           </p>
         </div>
         <button onClick={() => setShowAddPerf(true)} className="btn-primary">
@@ -2412,7 +2429,7 @@ function MesPerformances({ athlete, competitions, myPerformances, myGoals, clubI
         ))}
       </div>
 
-      {/* ══ RECORDS ══════════════════════════════════════════════════════ */}
+      {/* ══ RECORDS ══════════════════════════════════════════════════════════ */}
       {activeTab === "records" && (
         <div className="space-y-4">
           {disciplines.length === 0 ? (
@@ -2427,12 +2444,13 @@ function MesPerformances({ athlete, competitions, myPerformances, myGoals, clubI
                 const rec   = athlete.records[disc];
                 const stats = disciplineStats[disc];
                 const DISC_COLORS = {
-                  "100m": "#3B82F6", "200m": "#8B5CF6", "400m": "#F59E0B",
-                  "110m haies": "#EF4444", "100m haies": "#EC4899",
-                  "Longueur": "#10B981", "Triple saut": "#14B8A6",
-                  "Hauteur": "#F97316", "Perche": "#6366F1",
+                  "100m":"#3B82F6","200m":"#8B5CF6","400m":"#F59E0B",
+                  "110m haies":"#EF4444","100m haies":"#EC4899",
+                  "Longueur":"#10B981","Triple saut":"#14B8A6",
+                  "Hauteur":"#F97316","Perche":"#6366F1",
                 };
                 const col = DISC_COLORS[disc] ?? "#1D9E75";
+
                 return (
                   <div key={disc} className="card p-5 shimmer-hover">
                     <div className="flex items-center justify-between mb-4">
@@ -2440,21 +2458,22 @@ function MesPerformances({ athlete, competitions, myPerformances, myGoals, clubI
                         <div className="w-3 h-3 rounded-full" style={{ background: col }} />
                         <p className="text-[13px] font-black text-slate-700">{disc}</p>
                       </div>
-                      {/* ← FIX : bouton cliquable qui change d'onglet */}
+                      {/* ★ FIX 1 : "Voir évolution" cliquable */}
                       <button
-                        onClick={() => goToEvolution(disc)}
-                        className="text-[10.5px] font-bold text-emerald-600 hover:text-emerald-700 flex items-center gap-1 px-2.5 py-1 rounded-xl bg-emerald-50 hover:bg-emerald-100 transition-colors tap-feedback"
+                        onClick={() => { setSelectedDisc(disc); setActiveTab("evolution"); }}
+                        className="text-[10.5px] font-bold text-emerald-600 hover:text-emerald-700 transition-colors flex items-center gap-0.5"
                       >
-                        Évolution →
+                        Voir évolution →
                       </button>
                     </div>
+
                     <div className="grid grid-cols-2 gap-3 mb-3">
                       <div className="bg-slate-50 rounded-2xl p-3 text-center">
                         <p className="text-[22px] font-black leading-none" style={{ color: col }}>{rec.pr}</p>
                         <p className="text-[9px] font-black text-slate-400 uppercase tracking-wider mt-1">Record perso</p>
                         {rec.prDate && (
                           <p className="text-[9px] text-slate-300 mt-0.5">
-                            {new Date(rec.prDate).toLocaleDateString("fr-BE", { day: "numeric", month: "short", year: "numeric" })}
+                            {new Date(rec.prDate).toLocaleDateString("fr-BE",{day:"numeric",month:"short",year:"numeric"})}
                           </p>
                         )}
                       </div>
@@ -2463,6 +2482,7 @@ function MesPerformances({ athlete, competitions, myPerformances, myGoals, clubI
                         <p className="text-[9px] font-black text-slate-400 uppercase tracking-wider mt-1">Season Best</p>
                       </div>
                     </div>
+
                     {stats && (
                       <div className="flex items-center gap-2 text-[11px] text-slate-400">
                         <span className="font-semibold">{stats.count} mesure{stats.count > 1 ? "s" : ""}</span>
@@ -2477,13 +2497,16 @@ function MesPerformances({ athlete, competitions, myPerformances, myGoals, clubI
             </div>
           )}
 
+          {/* Compétitions récentes */}
           {compHistory.length > 0 && (
             <div className="card overflow-hidden">
-              <div className="px-5 py-4 border-b border-slate-50">
+              <div className="px-5 py-4 border-b border-slate-50 flex items-center justify-between">
                 <h3 className="text-[14px] font-bold text-slate-800">Dernières compétitions</h3>
+                <button onClick={() => setActiveTab("comps")}
+                  className="text-[11px] font-bold text-emerald-600">Tout voir →</button>
               </div>
               <div className="divide-y divide-slate-50">
-                {compHistory.slice(0, 5).map(({ comp, result }, i) => (
+                {compHistory.slice(0, 3).map(({ comp, result }, i) => (
                   <div key={i} className="px-5 py-3.5 flex items-center gap-3">
                     <div className="w-9 h-9 rounded-2xl bg-amber-50 flex items-center justify-center flex-shrink-0">
                       <Trophy size={15} color="#EF9F27" />
@@ -2495,7 +2518,7 @@ function MesPerformances({ athlete, competitions, myPerformances, myGoals, clubI
                       </p>
                     </div>
                     <span className="text-[10.5px] text-slate-400 flex-shrink-0">
-                      {new Date(comp.date).toLocaleDateString("fr-BE", { day: "numeric", month: "short" })}
+                      {new Date(comp.date).toLocaleDateString("fr-BE",{day:"numeric",month:"short"})}
                     </span>
                   </div>
                 ))}
@@ -2505,7 +2528,7 @@ function MesPerformances({ athlete, competitions, myPerformances, myGoals, clubI
         </div>
       )}
 
-      {/* ══ ÉVOLUTION ════════════════════════════════════════════════════ */}
+      {/* ══ ÉVOLUTION ════════════════════════════════════════════════════════ */}
       {activeTab === "evolution" && (
         <div className="space-y-4">
           {disciplines.length > 0 && (
@@ -2530,16 +2553,18 @@ function MesPerformances({ athlete, competitions, myPerformances, myGoals, clubI
                 {selectedDisc ?? "Sélectionne une épreuve"}
               </h3>
               <button onClick={() => setShowAddPerf(true)}
-                className="text-[11px] font-bold text-emerald-600 hover:text-emerald-700 px-2.5 py-1 rounded-xl bg-emerald-50 hover:bg-emerald-100 transition-colors">
+                className="text-[11px] font-bold text-emerald-600 hover:text-emerald-700">
                 + Saisir
               </button>
             </div>
-            <p className="text-[11px] text-slate-400 mb-4">{chartData.length} mesure{chartData.length !== 1 ? "s" : ""}</p>
+            <p className="text-[11px] text-slate-400 mb-4">
+              {chartData.length} mesure{chartData.length !== 1 ? "s" : ""}
+            </p>
 
             {chartData.length < 2 ? (
               <div className="h-[180px] flex flex-col items-center justify-center text-slate-300 gap-2">
                 <BarChart2 size={28} strokeWidth={1.5} />
-                <p className="text-[12px]">Minimum 2 mesures pour le graphique</p>
+                <p className="text-[12px] text-center">Minimum 2 mesures pour afficher le graphique</p>
                 <button onClick={() => setShowAddPerf(true)}
                   className="text-[12px] font-bold text-emerald-600 mt-1">
                   + Saisir une performance
@@ -2547,32 +2572,32 @@ function MesPerformances({ athlete, competitions, myPerformances, myGoals, clubI
               </div>
             ) : (
               <>
-                <ResponsiveContainer width="100%" height={200}>
+                <ResponsiveContainer width="100%" height={220}>
                   <AreaChart data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
                     <defs>
                       <linearGradient id="gradPerf" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#1D9E75" stopOpacity={0.2} />
-                        <stop offset="95%" stopColor="#1D9E75" stopOpacity={0} />
+                        <stop offset="5%" stopColor="#1D9E75" stopOpacity={0.2}/>
+                        <stop offset="95%" stopColor="#1D9E75" stopOpacity={0}/>
                       </linearGradient>
                     </defs>
                     <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-                    <XAxis dataKey="label" tick={{ fontSize: 10, fill: "#94a3b8" }} axisLine={false} tickLine={false} />
-                    <YAxis tick={{ fontSize: 10, fill: "#94a3b8" }} axisLine={false} tickLine={false} width={45} />
+                    <XAxis dataKey="label" tick={{ fontSize:10, fill:"#94a3b8" }} axisLine={false} tickLine={false} />
+                    <YAxis tick={{ fontSize:10, fill:"#94a3b8" }} axisLine={false} tickLine={false} width={45} />
                     <Tooltip
-                      content={({ active, payload }) => {
+                      content={({ active, payload, label }) => {
                         if (!active || !payload?.length) return null;
                         const d = payload[0].payload;
                         return (
                           <div className="bg-white border border-slate-100 rounded-2xl shadow-lg px-3 py-2.5 text-[12px]">
-                            <p className="font-bold text-slate-600 mb-0.5">{d.label}</p>
-                            <p className="text-emerald-600 font-black text-[16px]">{d.raw}</p>
+                            <p className="font-bold text-slate-600 mb-1">{label}</p>
+                            <p className="text-emerald-600 font-black text-[14px]">{d.raw}</p>
                             {d.ctx && <p className="text-slate-400 italic mt-0.5">{d.ctx}</p>}
                           </div>
                         );
                       }}
                     />
                     <Area dataKey="value" name={selectedDisc} stroke="#1D9E75" fill="url(#gradPerf)"
-                      strokeWidth={2.5} dot={{ r: 4, fill: "#1D9E75" }} activeDot={{ r: 6 }} />
+                      strokeWidth={2.5} dot={{ r:4, fill:"#1D9E75" }} activeDot={{ r:6 }} />
                   </AreaChart>
                 </ResponsiveContainer>
 
@@ -2594,13 +2619,15 @@ function MesPerformances({ athlete, competitions, myPerformances, myGoals, clubI
           {chartData.length > 0 && (
             <div className="card overflow-hidden">
               <div className="px-5 py-4 border-b border-slate-50">
-                <h3 className="text-[13px] font-bold text-slate-800">Toutes les mesures — {selectedDisc}</h3>
+                <h3 className="text-[13px] font-bold text-slate-800">
+                  Toutes les mesures — {selectedDisc}
+                </h3>
               </div>
               <div className="divide-y divide-slate-50 max-h-64 overflow-y-auto">
                 {[...chartData].reverse().map((d, i) => (
                   <div key={i} className="px-5 py-3 flex items-center justify-between">
                     <div>
-                      <p className="text-[15px] font-black text-emerald-600">{d.raw}</p>
+                      <p className="text-[14px] font-black text-emerald-600">{d.raw}</p>
                       {d.ctx && <p className="text-[11px] text-slate-400 italic">{d.ctx}</p>}
                     </div>
                     <p className="text-[11px] text-slate-400">{d.label}</p>
@@ -2612,7 +2639,7 @@ function MesPerformances({ athlete, competitions, myPerformances, myGoals, clubI
         </div>
       )}
 
-      {/* ══ OBJECTIFS ════════════════════════════════════════════════════ */}
+      {/* ══ OBJECTIFS ════════════════════════════════════════════════════════ */}
       {activeTab === "objectifs" && (
         <div className="space-y-4">
           <div className="flex justify-end">
@@ -2634,25 +2661,23 @@ function MesPerformances({ athlete, competitions, myPerformances, myGoals, clubI
             <>
               {activeGoals.length > 0 && (
                 <div className="space-y-3">
-                  <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">En cours ({activeGoals.length})</p>
+                  <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+                    En cours ({activeGoals.length})
+                  </p>
                   {activeGoals.map(g => {
                     const daysLeft = g.deadline
                       ? Math.round((new Date(g.deadline) - today) / (1000*60*60*24))
                       : null;
                     const isUrgent = daysLeft !== null && daysLeft <= 14;
                     return (
-                      <div key={g.id}
-                        className={["card p-5 border-l-4", isUrgent ? "border-amber-400" : "border-emerald-400"].join(" ")}>
-                        <div className="flex items-start justify-between gap-3 mb-3">
+                      <div key={g.id} className={["card p-5 border-l-4", isUrgent ? "border-amber-400" : "border-emerald-400"].join(" ")}>
+                        <div className="flex items-start justify-between gap-3 mb-2">
                           <div className="flex-1">
                             <div className="flex items-center gap-2 flex-wrap mb-1">
                               <p className="text-[13px] font-bold text-slate-700">{g.discipline}</p>
                               {daysLeft !== null && (
-                                <span className={[
-                                  "text-[10px] font-bold px-2 py-0.5 rounded-full",
-                                  isUrgent ? "bg-amber-50 text-amber-700" : "bg-slate-100 text-slate-500",
-                                ].join(" ")}>
-                                  {daysLeft > 0 ? `J-${daysLeft}` : daysLeft === 0 ? "Aujourd'hui !" : "Échu"}
+                                <span className={["text-[10px] font-bold px-2 py-0.5 rounded-full", isUrgent ? "bg-amber-50 text-amber-700" : "bg-slate-100 text-slate-500"].join(" ")}>
+                                  {daysLeft > 0 ? `J-${daysLeft}` : daysLeft === 0 ? "Aujourd'hui" : "Échu"}
                                 </span>
                               )}
                             </div>
@@ -2660,18 +2685,18 @@ function MesPerformances({ athlete, competitions, myPerformances, myGoals, clubI
                             {g.notes && <p className="text-[11.5px] text-slate-400 italic mt-1">{g.notes}</p>}
                             {g.deadline && (
                               <p className="text-[11px] text-slate-400 mt-1">
-                                Échéance : {new Date(g.deadline).toLocaleDateString("fr-BE", { day: "numeric", month: "long", year: "numeric" })}
+                                Échéance : {new Date(g.deadline).toLocaleDateString("fr-BE",{day:"numeric",month:"long",year:"numeric"})}
                               </p>
                             )}
                           </div>
                         </div>
                         <div className="flex items-center gap-3 pt-3 border-t border-slate-50">
                           <button onClick={() => handleMarkGoalDone(g.id)}
-                            className="flex items-center gap-1.5 text-[11.5px] font-bold text-emerald-600 hover:text-emerald-700 transition-colors">
+                            className="flex items-center gap-1.5 text-[11.5px] font-bold text-emerald-600 hover:text-emerald-700">
                             <CheckCircle size={13} /> Marquer atteint
                           </button>
                           <button onClick={() => handleDeleteGoal(g.id)}
-                            className="text-[11.5px] font-semibold text-red-400 hover:text-red-600 transition-colors ml-auto">
+                            className="text-[11.5px] font-semibold text-red-400 hover:text-red-600 ml-auto">
                             Supprimer
                           </button>
                         </div>
@@ -2683,7 +2708,9 @@ function MesPerformances({ athlete, competitions, myPerformances, myGoals, clubI
 
               {achievedGoals.length > 0 && (
                 <div className="space-y-2">
-                  <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Atteints 🏆 ({achievedGoals.length})</p>
+                  <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+                    Atteints 🏆 ({achievedGoals.length})
+                  </p>
                   {achievedGoals.map(g => (
                     <div key={g.id} className="card p-4 flex items-center gap-3 opacity-60">
                       <CheckCircle size={18} color="#1D9E75" />
@@ -2700,7 +2727,7 @@ function MesPerformances({ athlete, competitions, myPerformances, myGoals, clubI
         </div>
       )}
 
-      {/* ══ COMPÉTITIONS ═════════════════════════════════════════════════ */}
+      {/* ══ COMPÉTITIONS ═════════════════════════════════════════════════════ */}
       {activeTab === "comps" && (
         <div className="space-y-3">
           {compHistory.length === 0 ? (
@@ -2717,18 +2744,21 @@ function MesPerformances({ athlete, competitions, myPerformances, myGoals, clubI
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap mb-1">
                     <p className="text-[14px] font-black text-slate-800">{comp.name}</p>
-                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-500">{comp.type}</span>
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-500">
+                      {comp.type}
+                    </span>
                   </div>
                   <p className="text-[12px] text-slate-500 mb-3">
-                    📍 {comp.location} · {new Date(comp.date).toLocaleDateString("fr-BE", { day: "numeric", month: "long", year: "numeric" })}
+                    {comp.location && `📍 ${comp.location} · `}
+                    {new Date(comp.date).toLocaleDateString("fr-BE",{day:"numeric",month:"long",year:"numeric"})}
                   </p>
-                  <div className="bg-emerald-50 rounded-2xl px-4 py-3 inline-flex items-center gap-3">
-                    <div>
-                      <p className="text-[10px] font-bold text-emerald-600 uppercase tracking-wider">{result.event}</p>
-                      <p className="text-[22px] font-black text-emerald-700 leading-tight">{result.result}</p>
-                    </div>
+                  <div className="bg-emerald-50 rounded-2xl px-4 py-3 inline-block">
+                    <p className="text-[10px] font-bold text-emerald-600 uppercase tracking-wider">{result.event}</p>
+                    <p className="text-[22px] font-black text-emerald-700 leading-tight">{result.result}</p>
                   </div>
-                  {result.context && <p className="text-[11.5px] text-slate-400 italic mt-2">{result.context}</p>}
+                  {result.context && (
+                    <p className="text-[11.5px] text-slate-400 italic mt-2">{result.context}</p>
+                  )}
                 </div>
               </div>
             </div>
@@ -2736,10 +2766,10 @@ function MesPerformances({ athlete, competitions, myPerformances, myGoals, clubI
         </div>
       )}
 
-      {/* ══ MODAL SAISIR PERF ════════════════════════════════════════════ */}
+      {/* ══ MODAL : SAISIR UNE PERFORMANCE ══════════════════════════════════ */}
       {showAddPerf && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4 modal-backdrop"
-          onClick={e => e.target === e.currentTarget && !savingPerf && setShowAddPerf(false)}>
+          onClick={e => e.target === e.currentTarget && setShowAddPerf(false)}>
           <div className="bg-white rounded-t-3xl sm:rounded-3xl shadow-2xl w-full max-w-sm max-h-[90vh] flex flex-col overflow-hidden modal-content">
             <div className="flex justify-center pt-3 pb-1 sm:hidden"><div className="w-10 h-1 rounded-full bg-slate-200" /></div>
             <div className="px-6 py-5 border-b border-slate-100 flex items-center justify-between flex-shrink-0">
@@ -2747,8 +2777,7 @@ function MesPerformances({ athlete, competitions, myPerformances, myGoals, clubI
                 <h3 className="text-[16px] font-black text-slate-800">Saisir une performance</h3>
                 <p className="text-[11px] text-slate-400 mt-0.5">Chrono, distance, hauteur…</p>
               </div>
-              <button onClick={() => setShowAddPerf(false)} disabled={savingPerf}
-                className="p-2 rounded-xl hover:bg-slate-100 disabled:opacity-40">
+              <button onClick={() => setShowAddPerf(false)} className="p-2 rounded-xl hover:bg-slate-100">
                 <X size={18} className="text-slate-500" />
               </button>
             </div>
@@ -2764,7 +2793,9 @@ function MesPerformances({ athlete, competitions, myPerformances, myGoals, clubI
                       <button key={d} onClick={() => setPerfForm(f => ({ ...f, discipline: d }))}
                         className={[
                           "px-2.5 py-1 rounded-xl text-[10.5px] font-semibold border transition-all tap-feedback",
-                          perfForm.discipline === d ? "bg-emerald-600 text-white border-emerald-600" : "bg-white text-slate-500 border-slate-200",
+                          perfForm.discipline === d
+                            ? "bg-emerald-600 text-white border-emerald-600"
+                            : "bg-white text-slate-500 border-slate-200",
                         ].join(" ")}>
                         {d}
                       </button>
@@ -2792,8 +2823,8 @@ function MesPerformances({ athlete, competitions, myPerformances, myGoals, clubI
               </div>
             </div>
             <div className="px-6 py-4 border-t border-slate-100 flex items-center justify-between gap-3 flex-shrink-0">
-              <button onClick={() => setShowAddPerf(false)} disabled={savingPerf}
-                className="px-4 py-2.5 rounded-xl bg-slate-100 text-slate-600 text-[13px] font-semibold disabled:opacity-40">
+              <button onClick={() => setShowAddPerf(false)}
+                className="px-4 py-2.5 rounded-xl bg-slate-100 text-slate-600 text-[13px] font-semibold">
                 Annuler
               </button>
               <button onClick={handleAddPerf}
@@ -2809,10 +2840,10 @@ function MesPerformances({ athlete, competitions, myPerformances, myGoals, clubI
         </div>
       )}
 
-      {/* ══ MODAL OBJECTIF ═══════════════════════════════════════════════ */}
+      {/* ══ MODAL : AJOUTER UN OBJECTIF ══════════════════════════════════════ */}
       {showAddGoal && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4 modal-backdrop"
-          onClick={e => e.target === e.currentTarget && !savingGoal && setShowAddGoal(false)}>
+          onClick={e => e.target === e.currentTarget && setShowAddGoal(false)}>
           <div className="bg-white rounded-t-3xl sm:rounded-3xl shadow-2xl w-full max-w-sm max-h-[90vh] flex flex-col overflow-hidden modal-content">
             <div className="flex justify-center pt-3 pb-1 sm:hidden"><div className="w-10 h-1 rounded-full bg-slate-200" /></div>
             <div className="px-6 py-5 border-b border-slate-100 flex items-center justify-between flex-shrink-0">
@@ -2820,8 +2851,7 @@ function MesPerformances({ athlete, competitions, myPerformances, myGoals, clubI
                 <h3 className="text-[16px] font-black text-slate-800">Nouvel objectif</h3>
                 <p className="text-[11px] text-slate-400 mt-0.5">Fixe-toi un cap à atteindre</p>
               </div>
-              <button onClick={() => setShowAddGoal(false)} disabled={savingGoal}
-                className="p-2 rounded-xl hover:bg-slate-100 disabled:opacity-40">
+              <button onClick={() => setShowAddGoal(false)} className="p-2 rounded-xl hover:bg-slate-100">
                 <X size={18} className="text-slate-500" />
               </button>
             </div>
@@ -2831,15 +2861,30 @@ function MesPerformances({ athlete, competitions, myPerformances, myGoals, clubI
                 <input className="input-premium" placeholder="Ex: 100m, Longueur…"
                   value={goalForm.discipline}
                   onChange={e => setGoalForm(f => ({ ...f, discipline: e.target.value }))} />
+                {disciplines.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5 mt-2">
+                    {disciplines.map(d => (
+                      <button key={d} onClick={() => setGoalForm(f => ({ ...f, discipline: d }))}
+                        className={[
+                          "px-2.5 py-1 rounded-xl text-[10.5px] font-semibold border transition-all tap-feedback",
+                          goalForm.discipline === d
+                            ? "bg-emerald-600 text-white border-emerald-600"
+                            : "bg-white text-slate-500 border-slate-200",
+                        ].join(" ")}>
+                        {d}
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
               <div>
-                <label className="block text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">Objectif *</label>
+                <label className="block text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">Objectif à atteindre *</label>
                 <input className="input-premium" placeholder="Ex: 10.80 ou 7.60m"
                   value={goalForm.target_value}
                   onChange={e => setGoalForm(f => ({ ...f, target_value: e.target.value }))} />
               </div>
               <div>
-                <label className="block text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">Échéance</label>
+                <label className="block text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">Échéance (optionnel)</label>
                 <input type="date" className="input-premium"
                   value={goalForm.deadline}
                   onChange={e => setGoalForm(f => ({ ...f, deadline: e.target.value }))} />
@@ -2853,8 +2898,8 @@ function MesPerformances({ athlete, competitions, myPerformances, myGoals, clubI
               </div>
             </div>
             <div className="px-6 py-4 border-t border-slate-100 flex items-center justify-between gap-3 flex-shrink-0">
-              <button onClick={() => setShowAddGoal(false)} disabled={savingGoal}
-                className="px-4 py-2.5 rounded-xl bg-slate-100 text-slate-600 text-[13px] font-semibold disabled:opacity-40">
+              <button onClick={() => setShowAddGoal(false)}
+                className="px-4 py-2.5 rounded-xl bg-slate-100 text-slate-600 text-[13px] font-semibold">
                 Annuler
               </button>
               <button onClick={handleAddGoal}
