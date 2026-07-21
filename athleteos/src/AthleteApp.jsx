@@ -81,8 +81,13 @@ function getISOWeek(date) {
   const jan4 = new Date(Date.UTC(d.getUTCFullYear(),0,4));
   return 1 + Math.round((d-jan4)/(7*24*60*60*1000));
 }
-function dateToISOWeek(s) { return getISOWeek(new Date(s)); }
-function dateToDayName(s) { return DAYS_FR[(new Date(s).getDay()+6)%7]; }
+// APRÈS
+function parseLocalDate(s) {
+  const [y, m, d] = s.split("-").map(Number);
+  return new Date(y, m - 1, d); // date locale, pas UTC
+}
+function dateToISOWeek(s) { return getISOWeek(parseLocalDate(s)); }
+function dateToDayName(s) { return DAYS_FR[(parseLocalDate(s).getDay()+6)%7]; }
 function getCalendarDays(year, month) {
   const first = new Date(year, month, 1);
   const last  = new Date(year, month+1, 0);
@@ -2642,16 +2647,18 @@ function MaMessagerie({ athlete, coachUserId, athleteUserId, coachName, clubId, 
       })));
 
       // Ouvrir le coach par défaut si aucun contact actif
-      if (!activeId && coachUserId) {
-        const coach = allContacts.find(c => c.userId === coachUserId);
-        if (coach) setActiveId(coach.id);
-      }
+      // Ouvrir le coach par défaut si aucun contact actif
+if (!initializedRef.current && coachUserId) {
+  const coach = allContacts.find(c => c.userId === coachUserId);
+  if (coach) setActiveId(coach.id);
+  initializedRef.current = true;
+}
     } catch(e) {
       console.error("MaMessagerie:", e);
     } finally {
       setLoading(false);
     }
-  }, [athleteUserId, clubId, athlete.id, coachUserId, activeId]);
+  }, [athleteUserId, clubId, athlete.id, coachUserId]);
 
   useEffect(() => { fetchAll(); }, [fetchAll]);
 
@@ -3013,6 +3020,7 @@ const CommentsModal = memo(({ post, postAthlete, athlete, allAthletes, onClose, 
   const [comments, setComments] = useState([]);
   const [input,    setInput]    = useState("");
   const [loading,  setLoading]  = useState(true);
+  const initializedRef = useRef(false);
   const [sending,  setSending]  = useState(false);
 
   const fetchComments = useCallback(async () => {
@@ -3634,9 +3642,13 @@ export default function AthleteApp() {
   useEffect(() => { fetchAll(); }, [fetchAll]);
  
   // Ouvre wellness si pas encore répondu aujourd'hui
-  useEffect(() => {
-    if (athlete && !wellnessToday && !loading) setShowWellness(true);
-  }, [athlete, wellnessToday, loading]);
+ const wellnessShownRef = useRef(false);
+useEffect(() => {
+  if (athlete && !wellnessToday && !loading && !wellnessShownRef.current) {
+    wellnessShownRef.current = true;
+    setShowWellness(true);
+  }
+}, [athlete, wellnessToday, loading]);
  
   // ── Handlers (identiques) ──────────────────────────────────────────────────
   const handleRpe = useCallback(async (sid,aid,rpe) => {
