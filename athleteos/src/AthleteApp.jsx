@@ -2360,7 +2360,7 @@ function MesPerformances({ athlete, competitions, myPerformances, myGoals, clubI
           discipline:   goalForm.discipline,
           target_value: goalForm.target_value,
           deadline:     goalForm.deadline || null,
-         description: goalForm.notes
+          description: goalForm.notes || null,
           achieved:     false,
         })
         .select()
