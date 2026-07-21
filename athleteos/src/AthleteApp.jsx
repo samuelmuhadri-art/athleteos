@@ -2360,7 +2360,7 @@ function MesPerformances({ athlete, competitions, myPerformances, myGoals, clubI
           discipline:   goalForm.discipline,
           target_value: goalForm.target_value,
           deadline:     goalForm.deadline || null,
-          notes:        goalForm.notes || null,
+         description: goalForm.notes
           achieved:     false,
         })
         .select()
@@ -2583,7 +2583,20 @@ function MesPerformances({ athlete, competitions, myPerformances, myGoals, clubI
                     </defs>
                     <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
                     <XAxis dataKey="label" tick={{ fontSize:10, fill:"#94a3b8" }} axisLine={false} tickLine={false} />
-                    <YAxis tick={{ fontSize:10, fill:"#94a3b8" }} axisLine={false} tickLine={false} width={45} />
+                   <YAxis
+  tick={{ fontSize:10, fill:"#94a3b8" }}
+  axisLine={false}
+  tickLine={false}
+  width={45}
+  domain={([min, max]) => {
+    const padding = (max - min) * 0.1 || 0.5;
+    return [
+      Math.floor((min - padding) * 100) / 100,
+      Math.ceil((max + padding) * 100) / 100,
+    ];
+  }}
+  tickCount={6}
+/>
                     <Tooltip
                       content={({ active, payload, label }) => {
                         if (!active || !payload?.length) return null;
