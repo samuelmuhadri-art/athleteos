@@ -349,7 +349,7 @@ body {
   /* Safe area iOS — barre de home */
   padding-bottom: var(--safe-bottom);
   /* Hauteur fixe 60px + safe area */
-  height: calc(60px + var(--safe-bottom));
+  height: calc(64px + var(--safe-bottom));
   display: flex;
   align-items: flex-start;
   /* NE PAS mettre position:relative ici — Tailwind 'fixed' gère le positionnement */
@@ -357,7 +357,7 @@ body {
   bottom: 0;
   left: 0;
   right: 0;
-  z-index: 50;
+  z-index: 40;
 }
 
 .bottom-nav-item {
@@ -370,7 +370,7 @@ body {
   /* Touch target min 44×44 */
   min-height: 60px;
   min-width: var(--touch-target);
-  padding: 8px 4px 0;
+  padding: 6px 4px 6px;
   color: var(--c-text-tertiary);
   transition: color var(--dur-fast) var(--spring), transform var(--dur-fast) var(--spring);
   border: none;

@@ -5021,46 +5021,28 @@ useEffect(() => {
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
  
         {/* ── Header premium ─────────────────────────────────────────────── */}
-        <header className="h-14 md:h-16 header-glass flex items-center gap-3 px-4 flex-shrink-0 z-10">
-          {/* Logo mobile */}
-          <div className="flex md:hidden items-center gap-2.5">
-            <div
-              className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0 shadow-sm"
-              style={{ background: "linear-gradient(135deg, #1D9E75, #16826C)" }}
-            >
-              <Zap size={14} color="white" strokeWidth={2.5} />
-            </div>
-            <span className="font-bold text-slate-800 text-[14px] tracking-tight">AthleteOS</span>
+        <header className="h-14 header-glass flex items-center gap-3 px-4 flex-shrink-0 z-10">
+          {/* Logo toujours visible */}
+          <div
+            className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0 shadow-sm"
+            style={{ background: "linear-gradient(135deg, #1D9E75, #16826C)" }}
+          >
+            <Zap size={14} color="white" strokeWidth={2.5} />
           </div>
- 
-          {/* Titre de la vue (desktop) */}
-          <div className="hidden md:flex items-center gap-3">
-            {(() => {
-              const Icon = currentNav?.icon;
-              return Icon ? (
-                <div
-                  className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
-                  style={{ background: "rgba(29,158,117,0.10)" }}
-                >
-                  <Icon size={15} color="#1D9E75" strokeWidth={2} />
-                </div>
-              ) : null;
-            })()}
-            <h1 className="text-[16px] font-bold text-slate-800 tracking-tight">
-              {currentNav?.label ?? "Mon espace"}
-            </h1>
-          </div>
- 
-          <div className="flex-1" />
- 
-          {/* Push toggle desktop */}
+
+          {/* Titre de la vue — visible partout */}
+          <h1 className="text-[15px] font-bold text-slate-800 tracking-tight flex-1 truncate">
+            {currentNav?.label ?? "Mon espace"}
+          </h1>
+
+          {/* Push toggle desktop uniquement */}
           <div className="hidden md:block">
             <PushToggleButton subscribed={subscribed} onToggle={subscribe} permissionState={permissionState} />
           </div>
         </header>
  
         {/* ── Contenu principal avec transition de vue ─────────────────── */}
-        <main className="flex-1 overflow-y-auto pb-20 md:pb-0">
+        <main className="flex-1 overflow-y-auto pb-[72px] md:pb-0">
           {/* viewKey change à chaque navigate → re-déclenche l'animation */}
           <div key={viewKey} className="view-transition">
             {activeView === "dashboard" && (
@@ -5158,12 +5140,12 @@ useEffect(() => {
         {/* ── Panneau notifs — bottom sheet ────────────────────────────── */}
         {showNotifs && (
           <div
-            className="fixed inset-0 z-40 bottom-sheet-backdrop"
+            className="fixed inset-0 z-[60] bottom-sheet-backdrop"
             onClick={() => setShowNotifs(false)}
           >
             <div
               className="bottom-sheet"
-              style={{ bottom: "calc(60px + env(safe-area-inset-bottom))" }}
+              style={{ bottom: "calc(64px + env(safe-area-inset-bottom))" }}
               onClick={e => e.stopPropagation()}
             >
               <div className="bottom-sheet-handle" />
