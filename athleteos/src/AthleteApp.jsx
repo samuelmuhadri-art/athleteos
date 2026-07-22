@@ -5084,7 +5084,7 @@ useEffect(() => {
       ══════════════════════════════════════════════════════════════ */}
       {/* ══ BOTTOM NAV MOBILE ══════════════════════════════════════════ */}
       <nav className="md:hidden fixed bottom-0 left-0 right-0 z-30 bottom-nav">
-        <div className="flex items-stretch" style={{ height: "60px" }}>
+  <div className="flex items-stretch w-full" style={{ height: "60px" }}>
           {NAV_ITEMS.map(item => {
             const Icon     = item.icon;
             const isActive = activeView === item.id;
