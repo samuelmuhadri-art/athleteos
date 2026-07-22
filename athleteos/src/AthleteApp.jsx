@@ -31,11 +31,11 @@ import { notifyGoalAchieved, notifyCoachMessage } from "./utils/notifications";
 
 // ─── Nav ──────────────────────────────────────────────────────────────────────
 const NAV_ITEMS = [
-  { id: "dashboard",    label: "Tableau de bord", icon: LayoutDashboard },
-  { id: "planning",     label: "Mon planning",    icon: CalendarDays    },
-  { id: "performances", label: "Mes perfs",       icon: TrendingUp      },
-  { id: "social",       label: "Mon club",        icon: Users           },
-  { id: "messagerie",   label: "Messagerie",      icon: MessageSquare   },
+  { id: "dashboard",    label: "Tableau de bord", shortLabel: "Accueil",  icon: LayoutDashboard },
+  { id: "planning",     label: "Mon planning",    shortLabel: "Planning", icon: CalendarDays    },
+  { id: "performances", label: "Mes perfs",       shortLabel: "Perfs",    icon: TrendingUp      },
+  { id: "social",       label: "Mon club",        shortLabel: "Club",     icon: Users           },
+  { id: "messagerie",   label: "Messagerie",      shortLabel: "Messages", icon: MessageSquare   },
 ];
 
 // ─── Constantes calendrier ────────────────────────────────────────────────────
@@ -5103,9 +5103,9 @@ useEffect(() => {
                     </span>
                   )}
                 </div>
-                <span className="bottom-nav-label truncate max-w-[52px] text-center">
-                  {item.label}
-                </span>
+                <span className="bottom-nav-label whitespace-nowrap text-center">
+            {item.shortLabel}
+          </span>
               </button>
             );
           })}
