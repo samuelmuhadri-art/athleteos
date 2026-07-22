@@ -369,7 +369,10 @@ body {
   display: flex;
   align-items: flex-start;
   /* S'assure que c'est toujours au-dessus */
-  position: relative;
+  /* NOTE: pas de "position" ici — le positionnement "fixed" vient
+     de la classe Tailwind mise sur le <nav> dans le JSX.
+     Le redéfinir ici (ex: position: relative) écraserait le fixed
+     et cassait tout le layout (colonnes poussées, barre plus en bas). */
   z-index: 50;
 }
 
