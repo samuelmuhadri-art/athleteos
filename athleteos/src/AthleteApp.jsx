@@ -1426,7 +1426,7 @@ function Dashboard({ athlete, weeklyCharge, sessions, competitions, lastMessages
                   return (
                     <button
                       key={s.key}
-                      onClick={() => onOpenMetric?.(s.key, metrics)}
+                     onClick={() => setActiveMetric(s.key)}
                       className="w-full bg-slate-50 rounded-2xl px-4 py-3.5 text-left hover:bg-slate-100 transition-all tap-feedback"
                     >
                       <div className="flex items-center justify-between gap-3 mb-2">
@@ -1770,6 +1770,16 @@ function Dashboard({ athlete, weeklyCharge, sessions, competitions, lastMessages
 
         </div>
       </div>
+      {activeMetric && (
+  <FormeDetailPanel
+    metricKey={activeMetric}
+    metrics={metrics}
+    sessions={sessions}
+    weeklyCharge={weeklyCharge}
+    athlete={athlete}
+    onClose={() => setActiveMetric(null)}
+  />
+)}
     </div>
   );
 }
