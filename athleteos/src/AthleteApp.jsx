@@ -67,11 +67,47 @@ function initialsFromName(name) {
   const parts = name.trim().split(" ").filter(Boolean);
   return ((parts[0]?.[0] ?? "") + (parts[1]?.[0] ?? "")).toUpperCase();
 }
+// Système sémantique : couleur = dimension mesurée, pas le statut.
+// Vert=#1D9E75 → forme/récup | Bleu=#378ADD → charge/ACWR/streak
+// Violet=#A78BFA → wellness/mental | Ambre=#EF9F27 → fatigue/alerte
+// Rouge=#E24B4A → danger réel
+function dimColor(metric, val) {
+  switch (metric) {
+    case "readiness":
+    case "recuperation":
+    case "forme":
+      if (val >= 75) return "#1D9E75";
+      if (val >= 50) return "#EF9F27";
+      return "#E24B4A";
+    case "fatigue":
+      if (val > 70) return "#E24B4A";
+      if (val > 45) return "#EF9F27";
+      return "rgba(239,159,39,0.45)";
+    case "risque":
+      if (val > 60) return "#E24B4A";
+      if (val > 30) return "#EF9F27";
+      return "#1D9E75";
+    case "acwr":
+      if (val > 1.5) return "#E24B4A";
+      if (val > 1.3) return "#EF9F27";
+      return "#378ADD";
+    case "streak":
+      return val >= 3 ? "#378ADD" : "rgba(55,138,221,0.45)";
+    case "wellness":
+      return "#A78BFA";
+    default:
+      return "#94A3B8";
+  }
+}
+function acwrColor(v) {
+  if (v > 1.5) return "#E24B4A";
+  if (v > 1.3) return "#EF9F27";
+  return "#378ADD";
+}
 function scoreColor(val, inv = false) {
   if (inv) { if (val > 70) return "#E24B4A"; if (val > 45) return "#EF9F27"; return "#1D9E75"; }
   if (val >= 75) return "#1D9E75"; if (val >= 50) return "#EF9F27"; return "#E24B4A";
 }
-function acwrColor(v) { return v > 1.3 ? "#E24B4A" : v < 0.8 ? "#378ADD" : "#1D9E75"; }
 function isSameDay(a, b) {
   return a.getFullYear()===b.getFullYear() && a.getMonth()===b.getMonth() && a.getDate()===b.getDate();
 }
@@ -953,7 +989,7 @@ const FormeDetailPanel = memo(({ metricKey, metrics, sessions, weeklyCharge, ath
 //   - Logique métier 100% identique
 // ════════════════════════════════════════════════════════════════════════════
 
-function Dashboard({ athlete, weeklyCharge, sessions, competitions, lastMessages, coachName, myPerformances, onNavigate, wellnessToday, onOpenWellness, onOpenMetric }) {
+function Dashboard({ athlete, weeklyCharge, sessions, competitions, lastMessages, coachName, myPerformances, onNavigate, wellnessToday, onOpenWellness }) {
   const today       = new Date();
   const currentWeek = getISOWeek(today);
 
@@ -1031,11 +1067,14 @@ function Dashboard({ athlete, weeklyCharge, sessions, competitions, lastMessages
     s.validations?.find(v => v.athleteId === athlete.id && v.status === "done")
   ).length;
 
+  const [activeMetric, setActiveMetric] = useState(null);
 
-  // Couleur statut ACWR pour le dot du hero
-  const statusColor = metrics.acwr > 1.3 ? "#E24B4A"
-    : metrics.acwr < 0.8 ? "#378ADD"
-    : "#1D9E75";
+  // statusColor — couleur du dot de statut
+  // Encode le risque réel (ACWR + readiness combinés)
+  const statusColor =
+    metrics.acwr > 1.3 || metrics.readiness < 50 ? "#E24B4A" :
+    metrics.acwr > 1.15 || metrics.fatigue > 60   ? "#EF9F27" :
+    "#1D9E75";
 
   return (
     <div className="p-4 space-y-4 max-w-4xl mx-auto animate-slide-up">
@@ -1107,71 +1146,82 @@ function Dashboard({ athlete, weeklyCharge, sessions, competitions, lastMessages
       </div>
     </div>
 
-    {/* KPI — 4 métriques instrumentales */}
+    {/* KPI — 4 métriques avec système sémantique :
+        couleur = dimension (vert=forme, bleu=charge, ambre=alerte) */}
     <div className="grid grid-cols-4 gap-2">
       {[
         {
-          label: "Readiness",
-          value: metrics.readiness,
-          unit: "/100",
-          color: metrics.readiness >= 75 ? "#1D9E75" : metrics.readiness >= 50 ? "#EF9F27" : "#E24B4A",
+          metric: "readiness",
+          label:  "Readiness",
+          value:  metrics.readiness,
+          unit:   "/100",
+          pct:    metrics.readiness,
         },
         {
-          label: "Fatigue",
-          value: metrics.fatigue,
-          unit: "/100",
-          color: metrics.fatigue > 70 ? "#E24B4A" : metrics.fatigue > 45 ? "#EF9F27" : "#1D9E75",
+          metric: "fatigue",
+          label:  "Fatigue",
+          value:  metrics.fatigue,
+          unit:   "/100",
+          pct:    metrics.fatigue,
         },
         {
-          label: "ACWR",
-          value: metrics.acwr.toFixed(2),
-          unit: "",
-          color: acwrColor(metrics.acwr),
+          metric: "acwr",
+          label:  "ACWR",
+          value:  metrics.acwr.toFixed(2),
+          unit:   "",
+          pct:    Math.min(100, (metrics.acwr / 2) * 100),
         },
         {
-          label: "Streak",
-          value: streak,
-          unit: " sem",
-          color: streak >= 3 ? "#EF9F27" : "#64748b",
+          metric: "streak",
+          label:  "Streak",
+          value:  streak,
+          unit:   " sem",
+          pct:    Math.min(100, (streak / 10) * 100),
         },
-      ].map(s => (
-        <div
-          key={s.label}
-          className="rounded-2xl px-2.5 py-3 text-center"
-          style={{
-            background: "rgba(255,255,255,0.04)",
-            border: "1px solid rgba(255,255,255,0.07)",
-          }}
-        >
-          <div className="flex items-end justify-center gap-0.5">
+      ].map(s => {
+        const color = dimColor(s.metric, s.metric === "acwr" ? metrics.acwr : Number(s.value));
+        return (
+          <div
+            key={s.label}
+            className="rounded-2xl px-2.5 py-3 text-center"
+            style={{
+              background: "rgba(255,255,255,0.04)",
+              border: "1px solid rgba(255,255,255,0.07)",
+            }}
+          >
+            <div className="flex items-end justify-center gap-0.5">
+              <p
+                className="text-[22px] font-bold leading-none tracking-tight"
+                style={{ color, fontVariantNumeric: "tabular-nums" }}
+              >
+                {s.value}
+              </p>
+              {s.unit && (
+                <p className="text-[9px] text-white/25 font-semibold mb-0.5">{s.unit}</p>
+              )}
+            </div>
             <p
-              className="text-[22px] font-bold leading-none tracking-tight"
-              style={{ color: s.color, fontVariantNumeric: "tabular-nums" }}
+              className="text-[8.5px] font-bold uppercase tracking-[0.1em] mt-1.5"
+              style={{ color: "rgba(255,255,255,0.28)" }}
             >
-              {s.value}
+              {s.label}
             </p>
-            {s.unit && (
-              <p className="text-[9px] text-white/25 font-semibold mb-0.5">{s.unit}</p>
-            )}
-          </div>
-          <p className="text-[8.5px] font-bold uppercase tracking-[0.1em] mt-1.5" style={{ color: "rgba(255,255,255,0.28)" }}>
-            {s.label}
-          </p>
-          {/* Mini barre colorée en bas */}
-          <div className="mt-2 h-0.5 rounded-full overflow-hidden" style={{ background: "rgba(255,255,255,0.06)" }}>
             <div
-              className="h-full rounded-full transition-all duration-700"
-              style={{
-                width: s.label === "ACWR"
-                  ? `${Math.min(100, (parseFloat(s.value) / 2) * 100)}%`
-                  : `${Math.min(100, Number(s.value) / (s.label === "Streak" ? Math.max(10, streak) : 1))}%`,
-                background: s.color,
-                opacity: 0.7,
-              }}
-            />
+              className="mt-2 h-0.5 rounded-full overflow-hidden"
+              style={{ background: "rgba(255,255,255,0.06)" }}
+            >
+              <div
+                className="h-full rounded-full transition-all duration-700"
+                style={{
+                  width:   `${Math.max(3, s.pct)}%`,
+                  background: color,
+                  opacity: 0.65,
+                }}
+              />
+            </div>
           </div>
-        </div>
-      ))}
+        );
+      })}
     </div>
   </div>
 </div>
@@ -1193,9 +1243,9 @@ function Dashboard({ athlete, weeklyCharge, sessions, competitions, lastMessages
             </div>
             {metrics.wellnessScore !== null && (
               <div className="flex items-center gap-2 px-3 py-2 rounded-xl"
-                style={{ background: (metrics.wellnessScore >= 75 ? "#1D9E75" : metrics.wellnessScore >= 50 ? "#EF9F27" : "#E24B4A") + "12" }}>
+                style={{ background: "rgba(167,139,250,0.12)" }}>
                 <span className="metric-value-sm"
-                  style={{ color: metrics.wellnessScore >= 75 ? "#1D9E75" : metrics.wellnessScore >= 50 ? "#EF9F27" : "#E24B4A" }}>
+                  style={{ color: "#A78BFA" }}>
                   {metrics.wellnessScore}
                 </span>
                 <div>
@@ -1370,15 +1420,13 @@ function Dashboard({ athlete, weeklyCharge, sessions, competitions, lastMessages
                   { key: "recuperation", label: "Récupération",    value: metrics.recuperation, inv: false },
                   { key: "risque",       label: "Risque blessure", value: metrics.risque,       inv: true  },
                 ].map(s => {
-                  const col    = s.inv
-                    ? (s.value > 70 ? "#E24B4A" : s.value > 45 ? "#EF9F27" : "#1D9E75")
-                    : (s.value >= 75 ? "#1D9E75" : s.value >= 55 ? "#EF9F27" : "#E24B4A");
+                  const col = dimColor(s.key, s.value);
                   const sci    = METRIC_SCIENCE[s.key];
                   const thresh = sci?.thresholds.find(t => s.value >= t.min && s.value <= t.max);
                   return (
                     <button
                       key={s.key}
-                      onClick={() => onOpenMetric(s.key, metrics)}
+                      onClick={() => onOpenMetric?.(s.key, metrics)}
                       className="w-full bg-slate-50 rounded-2xl px-4 py-3.5 text-left hover:bg-slate-100 transition-all tap-feedback"
                     >
                       <div className="flex items-center justify-between gap-3 mb-2">
@@ -1410,8 +1458,6 @@ function Dashboard({ athlete, weeklyCharge, sessions, competitions, lastMessages
               </p>
             </div>
           )}
-
-
 
           {/* ── Séances de la semaine ─────────────────────────────────────── */}
           <div className="card overflow-hidden">
@@ -4622,8 +4668,6 @@ export default function AthleteApp() {
   const [error,          setError]          = useState(null);
   const [wellnessToday,  setWellnessToday]  = useState(null);
   const [showWellness,   setShowWellness]   = useState(false);
-  const [activeMetric,   setActiveMetric]   = useState(null);
-  const [activeMetricData, setActiveMetricData] = useState(null);
   // ★ NOUVEAU : clé pour animer les transitions de vue
   const [viewKey, setViewKey] = useState(0);
  
@@ -4825,8 +4869,9 @@ useEffect(() => {
  
   return (
     <div
-      className="flex h-screen overflow-hidden w-full"
-      style={{ background: "#F5F5F2", fontFamily: "'DM Sans', system-ui, sans-serif" }}
+  className="h-screen overflow-hidden"
+  style={{ background: "#F5F5F2", fontFamily: "'DM Sans', system-ui, sans-serif", display: "flex" }}
+>
     >
       {/* ── Overlay mobile sidebar ───────────────────────────────────────── */}
       {mobileOpen && (
@@ -5012,28 +5057,46 @@ useEffect(() => {
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
  
         {/* ── Header premium ─────────────────────────────────────────────── */}
-        <header className="h-14 header-glass flex items-center gap-3 px-4 flex-shrink-0 z-10">
-          {/* Logo toujours visible */}
-          <div
-            className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0 shadow-sm"
-            style={{ background: "linear-gradient(135deg, #1D9E75, #16826C)" }}
-          >
-            <Zap size={14} color="white" strokeWidth={2.5} />
+        <header className="h-14 md:h-16 header-glass flex items-center gap-3 px-4 flex-shrink-0 z-10">
+          {/* Logo mobile */}
+          <div className="flex md:hidden items-center gap-2.5">
+            <div
+              className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0 shadow-sm"
+              style={{ background: "linear-gradient(135deg, #1D9E75, #16826C)" }}
+            >
+              <Zap size={14} color="white" strokeWidth={2.5} />
+            </div>
+            <span className="font-bold text-slate-800 text-[14px] tracking-tight">AthleteOS</span>
           </div>
-
-          {/* Titre de la vue — visible partout */}
-          <h1 className="text-[15px] font-bold text-slate-800 tracking-tight flex-1 truncate">
-            {currentNav?.label ?? "Mon espace"}
-          </h1>
-
-          {/* Push toggle desktop uniquement */}
+ 
+          {/* Titre de la vue (desktop) */}
+          <div className="hidden md:flex items-center gap-3">
+            {(() => {
+              const Icon = currentNav?.icon;
+              return Icon ? (
+                <div
+                  className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
+                  style={{ background: "rgba(29,158,117,0.10)" }}
+                >
+                  <Icon size={15} color="#1D9E75" strokeWidth={2} />
+                </div>
+              ) : null;
+            })()}
+            <h1 className="text-[16px] font-bold text-slate-800 tracking-tight">
+              {currentNav?.label ?? "Mon espace"}
+            </h1>
+          </div>
+ 
+          <div className="flex-1" />
+ 
+          {/* Push toggle desktop */}
           <div className="hidden md:block">
             <PushToggleButton subscribed={subscribed} onToggle={subscribe} permissionState={permissionState} />
           </div>
         </header>
  
         {/* ── Contenu principal avec transition de vue ─────────────────── */}
-        <main className="flex-1 overflow-y-auto pb-[72px] md:pb-0">
+        <main className="flex-1 overflow-y-auto pb-20 md:pb-0">
           {/* viewKey change à chaque navigate → re-déclenche l'animation */}
           <div key={viewKey} className="view-transition">
             {activeView === "dashboard" && (
@@ -5042,7 +5105,6 @@ useEffect(() => {
                 competitions={competitions} lastMessages={lastMessages} coachName={coachName}
                 myPerformances={myPerformances} onNavigate={navigate}
                 wellnessToday={wellnessToday} onOpenWellness={() => setShowWellness(true)}
-                onOpenMetric={(key, metricsData) => { setActiveMetric(key); setActiveMetricData(metricsData); }}
               />
             )}
             {activeView === "planning" && (
@@ -5084,7 +5146,7 @@ useEffect(() => {
       ══════════════════════════════════════════════════════════════ */}
       {/* ══ BOTTOM NAV MOBILE ══════════════════════════════════════════ */}
       <nav className="md:hidden fixed bottom-0 left-0 right-0 z-30 bottom-nav">
-  <div className="flex items-stretch w-full" style={{ height: "60px" }}>
+        <div className="flex items-stretch" style={{ height: "60px" }}>
           {NAV_ITEMS.map(item => {
             const Icon     = item.icon;
             const isActive = activeView === item.id;
@@ -5103,9 +5165,9 @@ useEffect(() => {
                     </span>
                   )}
                 </div>
-                <span className="bottom-nav-label whitespace-nowrap text-center">
-            {item.shortLabel}
-          </span>
+                <span className="bottom-nav-label truncate max-w-[52px] text-center">
+                  {item.label}
+                </span>
               </button>
             );
           })}
@@ -5132,12 +5194,12 @@ useEffect(() => {
         {/* ── Panneau notifs — bottom sheet ────────────────────────────── */}
         {showNotifs && (
           <div
-            className="fixed inset-0 z-[60] bottom-sheet-backdrop"
+            className="fixed inset-0 z-40 bottom-sheet-backdrop"
             onClick={() => setShowNotifs(false)}
           >
             <div
               className="bottom-sheet"
-              style={{ bottom: "calc(64px + env(safe-area-inset-bottom))" }}
+              style={{ bottom: "calc(60px + env(safe-area-inset-bottom))" }}
               onClick={e => e.stopPropagation()}
             >
               <div className="bottom-sheet-handle" />
@@ -5197,18 +5259,6 @@ useEffect(() => {
         )}
       </nav>
  
-      {/* ── FormeDetailPanel — niveau AthleteApp pour éviter bug iOS fixed/overflow ── */}
-      {activeMetric && athlete && activeMetricData && (
-        <FormeDetailPanel
-          metricKey={activeMetric}
-          metrics={activeMetricData}
-          sessions={sessions}
-          weeklyCharge={weeklyCharge}
-          athlete={athlete}
-          onClose={() => { setActiveMetric(null); setActiveMetricData(null); }}
-        />
-      )}
-
       {/* ── WellnessModal (identique) ─────────────────────────────────────── */}
       {showWellness && athlete && (
         <WellnessModal
