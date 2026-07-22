@@ -1,3 +1,6 @@
+/* ─── Google Fonts ───────────────────────────────────────────────────────────── */
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;0,9..40,800;1,9..40,400&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -7,9 +10,6 @@
    Philosophie : médical-sportif haut de gamme. Épuré, précis, sans gadget.
    Stack : DM Sans · Tailwind CSS · glassmorphism subtil · spring animations
    ═══════════════════════════════════════════════════════════════════════════════ */
-
-/* ─── Google Fonts ───────────────────────────────────────────────────────────── */
-@import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;0,9..40,800;1,9..40,400&display=swap');
 
 /* ─── CSS Custom Properties — tokens centralisés ────────────────────────────── */
 :root {

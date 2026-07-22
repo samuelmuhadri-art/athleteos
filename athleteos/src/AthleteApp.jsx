@@ -4869,9 +4869,8 @@ useEffect(() => {
  
   return (
     <div
-  className="h-screen overflow-hidden"
-  style={{ background: "#F5F5F2", fontFamily: "'DM Sans', system-ui, sans-serif", display: "flex" }}
->
+      className="flex h-screen overflow-hidden w-full"
+      style={{ background: "#F5F5F2", fontFamily: "'DM Sans', system-ui, sans-serif" }}
     >
       {/* ── Overlay mobile sidebar ───────────────────────────────────────── */}
       {mobileOpen && (
