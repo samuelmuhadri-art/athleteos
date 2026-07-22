@@ -4848,7 +4848,7 @@ useEffect(() => {
       {/* ══════════════════════════════════════════════════════════════
           SIDEBAR DESKTOP PREMIUM
       ══════════════════════════════════════════════════════════════ */}
-      <aside className="hidden md:flex flex-col sidebar-premium z-30 flex-shrink-0" style={{ width: "220px" }}>
+      <aside className="sidebar-premium z-30 flex-shrink-0" style={{ width: "220px", display: "none" }} id="athlete-sidebar">
  
         {/* Logo */}
         <div className="flex items-center gap-3 px-4 h-16 border-b border-slate-100/80 flex-shrink-0">
