@@ -953,7 +953,7 @@ const FormeDetailPanel = memo(({ metricKey, metrics, sessions, weeklyCharge, ath
 //   - Logique métier 100% identique
 // ════════════════════════════════════════════════════════════════════════════
 
-function Dashboard({ athlete, weeklyCharge, sessions, competitions, lastMessages, coachName, myPerformances, onNavigate, wellnessToday, onOpenWellness }) {
+function Dashboard({ athlete, weeklyCharge, sessions, competitions, lastMessages, coachName, myPerformances, onNavigate, wellnessToday, onOpenWellness, onOpenMetric }) {
   const today       = new Date();
   const currentWeek = getISOWeek(today);
 
@@ -1031,7 +1031,6 @@ function Dashboard({ athlete, weeklyCharge, sessions, competitions, lastMessages
     s.validations?.find(v => v.athleteId === athlete.id && v.status === "done")
   ).length;
 
-  const [activeMetric, setActiveMetric] = useState(null);
 
   // Couleur statut ACWR pour le dot du hero
   const statusColor = metrics.acwr > 1.3 ? "#E24B4A"
@@ -1379,7 +1378,7 @@ function Dashboard({ athlete, weeklyCharge, sessions, competitions, lastMessages
                   return (
                     <button
                       key={s.key}
-                      onClick={() => setActiveMetric(s.key)}
+                      onClick={() => onOpenMetric(s.key, metrics)}
                       className="w-full bg-slate-50 rounded-2xl px-4 py-3.5 text-left hover:bg-slate-100 transition-all tap-feedback"
                     >
                       <div className="flex items-center justify-between gap-3 mb-2">
@@ -1412,17 +1411,7 @@ function Dashboard({ athlete, weeklyCharge, sessions, competitions, lastMessages
             </div>
           )}
 
-          {/* FormeDetailPanel */}
-          {activeMetric && (
-            <FormeDetailPanel
-              metricKey={activeMetric}
-              metrics={metrics}
-              sessions={sessions}
-              weeklyCharge={weeklyCharge}
-              athlete={athlete}
-              onClose={() => setActiveMetric(null)}
-            />
-          )}
+
 
           {/* ── Séances de la semaine ─────────────────────────────────────── */}
           <div className="card overflow-hidden">
@@ -4633,6 +4622,8 @@ export default function AthleteApp() {
   const [error,          setError]          = useState(null);
   const [wellnessToday,  setWellnessToday]  = useState(null);
   const [showWellness,   setShowWellness]   = useState(false);
+  const [activeMetric,   setActiveMetric]   = useState(null);
+  const [activeMetricData, setActiveMetricData] = useState(null);
   // ★ NOUVEAU : clé pour animer les transitions de vue
   const [viewKey, setViewKey] = useState(0);
  
@@ -5051,6 +5042,7 @@ useEffect(() => {
                 competitions={competitions} lastMessages={lastMessages} coachName={coachName}
                 myPerformances={myPerformances} onNavigate={navigate}
                 wellnessToday={wellnessToday} onOpenWellness={() => setShowWellness(true)}
+                onOpenMetric={(key, metricsData) => { setActiveMetric(key); setActiveMetricData(metricsData); }}
               />
             )}
             {activeView === "planning" && (
@@ -5205,6 +5197,18 @@ useEffect(() => {
         )}
       </nav>
  
+      {/* ── FormeDetailPanel — niveau AthleteApp pour éviter bug iOS fixed/overflow ── */}
+      {activeMetric && athlete && activeMetricData && (
+        <FormeDetailPanel
+          metricKey={activeMetric}
+          metrics={activeMetricData}
+          sessions={sessions}
+          weeklyCharge={weeklyCharge}
+          athlete={athlete}
+          onClose={() => { setActiveMetric(null); setActiveMetricData(null); }}
+        />
+      )}
+
       {/* ── WellnessModal (identique) ─────────────────────────────────────── */}
       {showWellness && athlete && (
         <WellnessModal
