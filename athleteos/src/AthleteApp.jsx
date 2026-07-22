@@ -5155,50 +5155,50 @@ useEffect(() => {
       ══════════════════════════════════════════════════════════════ */}
       {/* ══ BOTTOM NAV MOBILE ══════════════════════════════════════════ */}
       <nav className="md:hidden fixed bottom-0 left-0 right-0 z-30 bottom-nav">
-        <div className="flex items-stretch" style={{ height: "60px" }}>
-          {NAV_ITEMS.map(item => {
-            const Icon     = item.icon;
-            const isActive = activeView === item.id;
-            const hasBadge = item.id === "messagerie" && msgUnread > 0;
-            return (
-              <button
-                key={item.id}
-                onClick={() => navigate(item.id)}
-                className={["bottom-nav-item tap-feedback", isActive ? "active" : ""].join(" ")}
-              >
-                <div className="relative">
-                  <Icon size={isActive ? 21 : 20} strokeWidth={isActive ? 2.2 : 1.6} />
-                  {hasBadge && (
-                    <span className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-red-500 text-white text-[8px] font-bold flex items-center justify-center border-2 border-white animate-bounce-in">
-                      {msgUnread}
-                    </span>
-                  )}
-                </div>
-                <span className="bottom-nav-label truncate max-w-[52px] text-center">
-                  {item.label}
-                </span>
-              </button>
-            );
-          })}
-
-          {/* Bouton notifications */}
-          <button
-            onClick={() => setShowNotifs(v => !v)}
-            className={["bottom-nav-item tap-feedback", showNotifs ? "active" : ""].join(" ")}
-          >
-            <div className="relative">
-              <Bell size={showNotifs ? 21 : 20} strokeWidth={showNotifs ? 2.2 : 1.6} />
-              {unreadCount > 0 && (
-                <span className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-red-500 text-white text-[8px] font-bold flex items-center justify-center border-2 border-white animate-bounce-in">
-                  {unreadCount}
-                </span>
-              )}
-            </div>
-            <span className="bottom-nav-label">
-              {subscribed ? "Notifs ●" : "Notifs"}
+       <div className="flex items-stretch justify-between w-full px-1" style={{ height: "60px" }}>
+  {NAV_ITEMS.map(item => {
+    const Icon = item.icon;
+    const isActive = activeView === item.id;
+    const hasBadge = item.id === "messagerie" && msgUnread > 0;
+    return (
+      <button
+        key={item.id}
+        onClick={() => navigate(item.id)}
+        className={["bottom-nav-item tap-feedback flex-1", isActive ? "active" : ""].join(" ")}
+      >
+        <div className="relative">
+          <Icon size={isActive ? 21 : 20} strokeWidth={isActive ? 2.2 : 1.6} />
+          {hasBadge && (
+            <span className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-red-500 text-white text-[8px] font-bold flex items-center justify-center border-2 border-white animate-bounce-in">
+              {msgUnread}
             </span>
-          </button>
+          )}
         </div>
+        <span className="bottom-nav-label truncate max-w-[52px] text-center">
+          {item.shortLabel ?? item.label}
+        </span>
+      </button>
+    );
+  })}
+
+  {/* Bouton notifications */}
+  <button
+    onClick={() => setShowNotifs(v => !v)}
+    className={["bottom-nav-item tap-feedback flex-1", showNotifs ? "active" : ""].join(" ")}
+  >
+    <div className="relative">
+      <Bell size={showNotifs ? 21 : 20} strokeWidth={showNotifs ? 2.2 : 1.6} />
+      {unreadCount > 0 && (
+        <span className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-red-500 text-white text-[8px] font-bold flex items-center justify-center border-2 border-white animate-bounce-in">
+          {unreadCount}
+        </span>
+      )}
+    </div>
+    <span className="bottom-nav-label">
+      {subscribed ? "Notifs ●" : "Notifs"}
+    </span>
+  </button>
+</div>
 
         {/* ── Panneau notifs — bottom sheet ────────────────────────────── */}
         {showNotifs && (
