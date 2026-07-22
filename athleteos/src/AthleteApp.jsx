@@ -1,3 +1,4 @@
+<file path="src/AthleteApp.jsx">
 // ============================================================
 // AthleteOS — src/AthleteApp.jsx
 // CORRECTIONS :
@@ -4834,7 +4835,7 @@ useEffect(() => {
  
   return (
     <div
-      className="flex h-screen overflow-hidden"
+      className="flex h-screen overflow-hidden w-full"
       style={{ background: "#F5F5F2", fontFamily: "'DM Sans', system-ui, sans-serif" }}
     >
       {/* ── Overlay mobile sidebar ───────────────────────────────────────── */}
@@ -4848,7 +4849,7 @@ useEffect(() => {
       {/* ══════════════════════════════════════════════════════════════
           SIDEBAR DESKTOP PREMIUM
       ══════════════════════════════════════════════════════════════ */}
-      <aside className="sidebar-premium z-30 flex-shrink-0" style={{ width: "220px", display: "none" }} id="athlete-sidebar">
+      <aside id="athlete-sidebar" className="sidebar-premium z-30 flex-shrink-0">
  
         {/* Logo */}
         <div className="flex items-center gap-3 px-4 h-16 border-b border-slate-100/80 flex-shrink-0">
@@ -5234,3 +5235,4 @@ useEffect(() => {
     </div>
   );
 }
+</file>

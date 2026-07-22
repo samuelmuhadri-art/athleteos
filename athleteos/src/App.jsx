@@ -140,7 +140,7 @@ function CoachShell({ user, profile, clubId, signOut }) {
 
   return (
     <div
-      className="flex h-screen overflow-hidden"
+      className="flex h-screen overflow-hidden w-full"
       style={{ background: "#F5F5F2", fontFamily: "'DM Sans', system-ui, sans-serif" }}
     >
       {/* ── Overlay mobile ───────────────────────────────────────────── */}
@@ -349,7 +349,7 @@ function CoachShell({ user, profile, clubId, signOut }) {
         </header>
 
         {/* ── Zone de contenu — transition de vue ── */}
-        <main className="flex-1 overflow-y-auto">
+        <main className="flex-1 overflow-y-auto overflow-x-hidden">
           {/* La clé viewKey change à chaque navigation → re-monte le composant → déclenche view-transition */}
           <div key={viewKey} className="view-transition h-full">
             <Suspense fallback={<ViewLoader />}>
