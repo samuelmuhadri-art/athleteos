@@ -1,4 +1,3 @@
-// ============================================================
 // AthleteOS — src/App.jsx  ★ DESIGN PREMIUM
 // Même logique métier qu'avant, rendu visuel entièrement repoli :
 //   - Sidebar glass avec nav-items animés (pill active)

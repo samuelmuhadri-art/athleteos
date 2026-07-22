@@ -1,4 +1,3 @@
-<file path="src/AthleteApp.jsx">
 // ============================================================
 // AthleteOS — src/AthleteApp.jsx
 // CORRECTIONS :
@@ -5235,4 +5234,3 @@ useEffect(() => {
     </div>
   );
 }
-</file>
