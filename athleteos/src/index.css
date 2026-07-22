@@ -883,11 +883,15 @@ select.input-premium {
 }
 /* Sidebar athlète — cachée mobile, visible tablette+ */
 #athlete-sidebar {
-  display: none;
+  display: none !important;
+  width: 0 !important;
+  overflow: hidden;
 }
 @media (min-width: 768px) {
   #athlete-sidebar {
-    display: flex;
+    display: flex !important;
     flex-direction: column;
+    width: 220px !important;
+    overflow: visible;
   }
 }
