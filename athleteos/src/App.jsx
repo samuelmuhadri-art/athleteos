@@ -1,13 +1,8 @@
-// AthleteOS — src/App.jsx  ★ DESIGN PREMIUM
-// Même logique métier qu'avant, rendu visuel entièrement repoli :
-//   - Sidebar glass avec nav-items animés (pill active)
-//   - Header glassmorphism
-//   - Transitions de vue slide-up
-//   - Loaders et badges premium
-//   - Bouton push intégré dans le header
+// ============================================================
+// AthleteOS — src/App.jsx  ★ DESIGN PREMIUM DARK
 // ============================================================
 
-import { useState, useCallback, useEffect, Suspense, lazy, useRef } from "react";
+import { useState, useCallback, useEffect, Suspense, lazy } from "react";
 import {
   LayoutDashboard, CalendarDays, Users, TrendingUp,
   Activity, Trophy, Bell, MessageSquare,
@@ -32,7 +27,7 @@ const Messaging    = lazy(() => import("./modules/Messaging"));
 
 // ─── Config navigation coach ──────────────────────────────────────────────────
 const NAV_ITEMS = [
-  { id: "dashboard",    label: "Dashboard",       icon: LayoutDashboard },
+  { id: "dashboard",    label: "Dashboard",        icon: LayoutDashboard },
   { id: "planning",     label: "Planning",         icon: CalendarDays    },
   { id: "athletes",     label: "Athlètes",         icon: Users           },
   { id: "performances", label: "Performances",     icon: TrendingUp      },
@@ -63,7 +58,7 @@ function ViewLoader() {
     <div className="flex-1 flex items-center justify-center min-h-screen">
       <div className="flex flex-col items-center gap-4">
         <div className="loader-ring" />
-        <span className="text-[12px] font-semibold text-slate-300 tracking-wide uppercase">
+        <span className="text-[12px] font-semibold tracking-wide uppercase" style={{ color: "var(--c-text-3)" }}>
           Chargement…
         </span>
       </div>
@@ -74,7 +69,7 @@ function ViewLoader() {
 // ─── Loader auth (plein écran) ────────────────────────────────────────────────
 function AuthLoader() {
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center gap-5" style={{ background: "#F5F5F2" }}>
+    <div className="min-h-screen flex flex-col items-center justify-center gap-5" style={{ background: "var(--c-bg)" }}>
       {/* Logo animé */}
       <div
         className="w-14 h-14 rounded-2xl flex items-center justify-center shadow-lg"
@@ -84,7 +79,7 @@ function AuthLoader() {
       </div>
       <div className="flex flex-col items-center gap-2">
         <div className="loader-ring" />
-        <span className="text-[12px] font-semibold text-slate-400 tracking-wide">
+        <span className="text-[12px] font-semibold tracking-wide" style={{ color: "var(--c-text-3)" }}>
           Vérification de la session…
         </span>
       </div>
@@ -104,7 +99,6 @@ function CoachShell({ user, profile, clubId, signOut }) {
   const [sidebarOpen,  setSidebarOpen]  = useState(true);
   const [mobileOpen,   setMobileOpen]   = useState(false);
   const [unreadAlerts, setUnreadAlerts] = useState(0);
-  // Clé pour forcer re-mount de la vue → déclenche l'animation slide-up
   const [viewKey, setViewKey] = useState(0);
 
   const { subscribed, subscribe, permissionState } = usePushNotifications(
@@ -140,7 +134,7 @@ function CoachShell({ user, profile, clubId, signOut }) {
   return (
     <div
       className="flex h-screen overflow-hidden w-full"
-      style={{ background: "#F5F5F2", fontFamily: "'DM Sans', system-ui, sans-serif" }}
+      style={{ background: "var(--c-bg)", fontFamily: "'DM Sans', system-ui, sans-serif" }}
     >
       {/* ── Overlay mobile ───────────────────────────────────────────── */}
       {mobileOpen && (
@@ -151,7 +145,7 @@ function CoachShell({ user, profile, clubId, signOut }) {
       )}
 
       {/* ══════════════════════════════════════════════════════════════
-          SIDEBAR PREMIUM
+         SIDEBAR PREMIUM DARK
       ══════════════════════════════════════════════════════════════ */}
       <aside
         className={[
@@ -163,7 +157,7 @@ function CoachShell({ user, profile, clubId, signOut }) {
         style={{ width: sidebarOpen ? "224px" : "68px" }}
       >
         {/* ── Logo ── */}
-        <div className="flex items-center gap-3 px-4 h-16 border-b border-slate-100/80 flex-shrink-0">
+        <div className="flex items-center gap-3 px-4 h-16 flex-shrink-0" style={{ borderBottom: "1px solid var(--c-border)" }}>
           <div
             className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 shadow-sm"
             style={{ background: "linear-gradient(135deg, #1D9E75 0%, #16826C 100%)" }}
@@ -174,7 +168,7 @@ function CoachShell({ user, profile, clubId, signOut }) {
             className="overflow-hidden transition-all duration-300"
             style={{ width: sidebarOpen ? "auto" : 0, opacity: sidebarOpen ? 1 : 0 }}
           >
-            <span className="font-bold text-slate-800 text-[15px] tracking-tight whitespace-nowrap">
+            <span className="font-bold text-[15px] tracking-tight whitespace-nowrap" style={{ color: "var(--c-text-1)" }}>
               AthleteOS
             </span>
           </div>
@@ -232,7 +226,7 @@ function CoachShell({ user, profile, clubId, signOut }) {
         </nav>
 
         {/* ── Profil coach ── */}
-        <div className="border-t border-slate-100 flex-shrink-0">
+        <div className="flex-shrink-0" style={{ borderTop: "1px solid var(--c-border)" }}>
           <div className="flex items-center gap-3 px-3 py-3.5">
             {/* Avatar coach */}
             <div
@@ -248,18 +242,21 @@ function CoachShell({ user, profile, clubId, signOut }) {
               style={{ width: sidebarOpen ? "auto" : 0, opacity: sidebarOpen ? 1 : 0 }}
             >
               <div className="min-w-0">
-                <p className="text-[12.5px] font-semibold text-slate-700 truncate leading-tight">
+                <p className="text-[12.5px] font-semibold truncate leading-tight" style={{ color: "var(--c-text-1)" }}>
                   {coachName}
                 </p>
                 <div className="flex items-center gap-1.5 mt-0.5">
                   <div className="status-dot-live" style={{ width: 6, height: 6 }} />
-                  <p className="text-[10.5px] text-slate-400">{coachRole}</p>
+                  <p className="text-[10.5px]" style={{ color: "var(--c-text-3)" }}>{coachRole}</p>
                 </div>
               </div>
               <button
                 onClick={signOut}
                 title="Se déconnecter"
-                className="p-1.5 rounded-lg text-slate-300 hover:text-red-500 hover:bg-red-50 transition-all flex-shrink-0 ml-1"
+                className="p-1.5 rounded-lg transition-all flex-shrink-0 ml-1"
+                style={{ color: "var(--c-text-3)" }}
+                onMouseEnter={e => { e.currentTarget.style.color = "#E05252"; e.currentTarget.style.background = "rgba(224,82,82,0.1)"; }}
+                onMouseLeave={e => { e.currentTarget.style.color = "var(--c-text-3)"; e.currentTarget.style.background = "transparent"; }}
               >
                 <LogOut size={14} />
               </button>
@@ -270,7 +267,10 @@ function CoachShell({ user, profile, clubId, signOut }) {
               <button
                 onClick={signOut}
                 title="Se déconnecter"
-                className="flex-shrink-0 p-1.5 rounded-lg text-slate-300 hover:text-red-500 hover:bg-red-50 transition-all"
+                className="flex-shrink-0 p-1.5 rounded-lg transition-all"
+                style={{ color: "var(--c-text-3)" }}
+                onMouseEnter={e => { e.currentTarget.style.color = "#E05252"; e.currentTarget.style.background = "rgba(224,82,82,0.1)"; }}
+                onMouseLeave={e => { e.currentTarget.style.color = "var(--c-text-3)"; e.currentTarget.style.background = "transparent"; }}
               >
                 <LogOut size={14} />
               </button>
@@ -280,7 +280,10 @@ function CoachShell({ user, profile, clubId, signOut }) {
           {/* Toggle réduire / ouvrir */}
           <button
             onClick={() => setSidebarOpen((v) => !v)}
-            className="hidden md:flex w-full items-center justify-center gap-2 py-2.5 text-slate-400 hover:text-slate-600 hover:bg-slate-50 transition-all text-[11.5px] font-medium border-t border-slate-100"
+            className="hidden md:flex w-full items-center justify-center gap-2 py-2.5 transition-all text-[11.5px] font-medium tap-feedback"
+            style={{ borderTop: "1px solid var(--c-border)", color: "var(--c-text-3)" }}
+            onMouseEnter={e => { e.currentTarget.style.color = "var(--c-text-1)"; e.currentTarget.style.background = "var(--c-surface-2)"; }}
+            onMouseLeave={e => { e.currentTarget.style.color = "var(--c-text-3)"; e.currentTarget.style.background = "transparent"; }}
           >
             {sidebarOpen ? (
               <>
@@ -295,7 +298,7 @@ function CoachShell({ user, profile, clubId, signOut }) {
       </aside>
 
       {/* ══════════════════════════════════════════════════════════════
-          ZONE PRINCIPALE
+         ZONE PRINCIPALE
       ══════════════════════════════════════════════════════════════ */}
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
 
@@ -303,7 +306,8 @@ function CoachShell({ user, profile, clubId, signOut }) {
         <header className="h-16 header-glass flex items-center gap-4 px-5 flex-shrink-0 z-10">
           {/* Burger mobile */}
           <button
-            className="md:hidden p-2 rounded-xl text-slate-500 hover:bg-slate-100 transition-all active:scale-95"
+            className="md:hidden p-2 rounded-xl transition-all active:scale-95"
+            style={{ color: "var(--c-text-2)" }}
             onClick={() => setMobileOpen((v) => !v)}
           >
             {mobileOpen ? <X size={19} /> : <Menu size={19} />}
@@ -322,7 +326,7 @@ function CoachShell({ user, profile, clubId, signOut }) {
                 </div>
               ) : null;
             })()}
-            <h1 className="text-[16px] font-bold text-slate-800 tracking-tight">
+            <h1 className="text-[16px] font-bold tracking-tight" style={{ color: "var(--c-text-1)" }}>
               {currentNav?.label ?? "AthleteOS"}
             </h1>
           </div>
@@ -337,8 +341,8 @@ function CoachShell({ user, profile, clubId, signOut }) {
           />
 
           {/* Date */}
-          <div className="hidden sm:flex items-center gap-2 text-[11.5px] text-slate-400 bg-slate-50/80 px-3 py-2 rounded-xl border border-slate-100">
-            <CalendarDays size={12} className="text-slate-300" />
+          <div className="hidden sm:flex items-center gap-2 text-[11.5px] px-3 py-2 rounded-xl" style={{ background: "var(--c-surface)", border: "1px solid var(--c-border)", color: "var(--c-text-3)" }}>
+            <CalendarDays size={12} />
             <span className="font-medium">
               {new Date().toLocaleDateString("fr-BE", {
                 weekday: "long", day: "numeric", month: "long",
@@ -349,7 +353,6 @@ function CoachShell({ user, profile, clubId, signOut }) {
 
         {/* ── Zone de contenu — transition de vue ── */}
         <main className="flex-1 overflow-y-auto overflow-x-hidden">
-          {/* La clé viewKey change à chaque navigation → re-monte le composant → déclenche view-transition */}
           <div key={viewKey} className="view-transition h-full">
             <Suspense fallback={<ViewLoader />}>
               <ActiveView view={activeView} onNavigate={navigate} />
