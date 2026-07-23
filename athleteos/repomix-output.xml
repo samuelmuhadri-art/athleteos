@@ -201,11 +201,10 @@ self.addEventListener("notificationclick", (event) => {
 <file path="src/athlete/components/FormeDetailPanel.jsx">
 // ============================================================
 // AthleteOS — src/athlete/components/FormeDetailPanel.jsx
-// Extrait de AthleteApp.jsx — const FormeDetailPanel = memo(...)
-// Zéro modification du code.
 // ============================================================
 
 import { useMemo, memo } from "react";
+import { createPortal } from "react-dom"; // <-- La solution magique est ici
 import { X, Zap } from "lucide-react";
 import { getISOWeek, METRIC_SCIENCE } from "../shared";
 
@@ -244,7 +243,8 @@ const FormeDetailPanel = memo(({ metricKey, metrics, sessions, weeklyCharge, ath
 
   const maxLoad = Math.max(...recentCharge.map(w => w.load), 1);
 
-  return (
+  // <-- createPortal permet d'afficher la modale tout devant l'écran, sans bug
+  return createPortal(
     <div
       className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4 modal-backdrop"
       onClick={e => e.target === e.currentTarget && onClose()}
@@ -445,7 +445,8 @@ const FormeDetailPanel = memo(({ metricKey, metrics, sessions, weeklyCharge, ath
           </div>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body // <-- Fin de la magie
   );
 });
 
@@ -1280,20 +1281,19 @@ function BadgeIcon({ icon, color, size = 14 }) {
 const BadgeItem = memo(({ badge }) => (
   <div className={[
     "flex flex-col items-center gap-1.5 p-3 rounded-xl text-center transition-all",
-    badge.unlocked ? "bg-white hover:-translate-y-0.5" : "opacity-30",
+    badge.unlocked ? "hover:-translate-y-0.5" : "opacity-30",
   ].join(" ")}
     style={badge.unlocked
-      ? { boxShadow: "0 1px 3px rgba(0,0,0,0.04)", border: "1px solid rgba(0,0,0,0.05)" }
-      : { border: "1px dashed rgba(0,0,0,0.08)" }}>
+      ? { background: "var(--c-surface-2)", border: "1px solid var(--c-border)" }
+      : { background: "var(--c-surface)", border: "1px dashed var(--c-border-strong)" }}>
     <div className="w-8 h-8 rounded-lg flex items-center justify-center"
-      style={{ background: badge.unlocked ? badge.color + "12" : "rgba(0,0,0,0.03)" }}>
-      <BadgeIcon icon={badge.icon} color={badge.unlocked ? badge.color : "#C4C2BC"} />
+      style={{ background: badge.unlocked ? badge.color + "18" : "rgba(255,255,255,0.04)" }}>
+      <BadgeIcon icon={badge.icon} color={badge.unlocked ? badge.color : "var(--c-text-4)"} />
     </div>
     <p style={{ fontSize: 10, fontWeight: 500, color: "var(--c-text-1)", lineHeight: 1.2 }}>{badge.label}</p>
     <p style={{ fontSize: 8.5, color: "var(--c-text-3)", lineHeight: 1.2 }}>{badge.desc}</p>
   </div>
 ));
-
 // ═══════════════════════════════════════════════════════════════════════════════
 // COMPOSANT PRINCIPAL
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -2471,20 +2471,12 @@ export default function AthleteMsgerie({
 
 <file path="src/athlete/views/AthletePerfs.jsx">
 // ============================================================
-// AthleteOS — src/athlete/views/AthletePerfs.jsx  ★ DESIGN PREMIUM
+// AthleteOS — src/athlete/views/AthletePerfs.jsx  ★ DESIGN PREMIUM DARK
 //
 // Logique métier 100% identique.
-// Rendu entièrement repoli :
-//   - Header hero avec stats inline
-//   - Tab bar pill premium (même style que Planning)
-//   - Onglet Records : cards avec liseré coloré, badge PR/SB distincts,
-//     indicateur "Dernière mesure", lien "Voir évolution"
-//   - Onglet Évolution : sélecteur discipline chips, graphique AreaChart
-//     premium avec tooltip custom, PR/SB + delta coloré en footer
-//   - Onglet Objectifs : cards avec barre de progression PR→cible,
-//     badge J-X urgent, bouton "Atteint !" prominent
-//   - Onglet Compétitions : cards avec médaille et résultat en accent
-//   - Modals Perf & Objectif : même charte que les modals Planning
+// Rendu adapté au dark : plus de bg-white / text-slate-* hardcodés.
+// Couleurs disciplines recalibrées (fill faible opacité + texte clair)
+// pour rester lisibles sur fond sombre.
 // ============================================================
 
 import { useState, useMemo, useEffect } from "react";
@@ -2499,14 +2491,16 @@ import {
 import { supabase } from "../../utils/supabaseClient";
 import { getDiscHib, parsePerf, DISC_TYPE_COLORS, DISC_PRESETS } from "../shared";
 
-// ─── Couleurs par discipline ──────────────────────────────────────────────────
+// ─── Couleurs par discipline — recalibrées pour dark ─────────────────────────
+// Chaque teinte reste vive (utilisée en accent/border), on ne pose jamais
+// de fond plein pastel : uniquement des superpositions ${color}14/${color}20.
 const DISC_COLORS = {
-  "100m":       "#3B82F6", "200m":       "#8B5CF6", "400m":       "#F59E0B",
-  "800m":       "#EF4444", "1500m":      "#EC4899", "3000m":      "#06B6D4",
-  "110m haies": "#EF4444", "100m haies": "#EC4899", "400m haies": "#F97316",
-  "Longueur":   "#10B981", "Triple saut":"#14B8A6", "Hauteur":    "#F97316",
-  "Perche":     "#6366F1", "Poids":      "#84CC16", "Disque":     "#A78BFA",
-  "Javelot":    "#FB923C", "Marteau":    "#34D399",
+  "100m":       "#5B9EF5", "200m":       "#A78BFA", "400m":       "#F2B94D",
+  "800m":       "#F0716B", "1500m":      "#F472B6", "3000m":      "#38D6DB",
+  "110m haies": "#F0716B", "100m haies": "#F472B6", "400m haies": "#FB923C",
+  "Longueur":   "#34D399", "Triple saut":"#2DD4BF", "Hauteur":    "#FB923C",
+  "Perche":     "#818CF8", "Poids":      "#A3E635", "Disque":     "#C4B5FD",
+  "Javelot":    "#FDBA74", "Marteau":    "#6EE7B7",
 };
 const discColor = (disc) => DISC_COLORS[disc] ?? "#1D9E75";
 
@@ -2515,10 +2509,11 @@ function PerfTooltip({ active, payload, label }) {
   if (!active || !payload?.length) return null;
   const d = payload[0].payload;
   return (
-    <div className="bg-white border border-slate-100 rounded-2xl shadow-card-md px-3.5 py-3 text-[12px] min-w-[110px]">
-      <p className="font-bold text-slate-500 mb-1.5">{label}</p>
-      <p className="text-[18px] font-black" style={{ color: "#1D9E75" }}>{d.raw}</p>
-      {d.ctx && <p className="text-slate-400 italic mt-1 text-[11px]">{d.ctx}</p>}
+    <div className="rounded-2xl px-3.5 py-3 text-[12px] min-w-[110px]"
+      style={{ background: "var(--c-surface-2)", border: "1px solid var(--c-border)", boxShadow: "var(--shadow-md)" }}>
+      <p className="font-bold mb-1.5" style={{ color: "var(--c-text-2)" }}>{label}</p>
+      <p className="text-[18px] font-black" style={{ color: "#3DBE8B" }}>{d.raw}</p>
+      {d.ctx && <p className="italic mt-1 text-[11px]" style={{ color: "var(--c-text-3)" }}>{d.ctx}</p>}
     </div>
   );
 }
@@ -2532,12 +2527,12 @@ function GoalProgress({ pr, target }) {
   const pct = Math.min(100, Math.round((prN / tgN) * 100));
   return (
     <div className="mt-3">
-      <div className="flex items-center justify-between text-[10px] font-bold text-slate-400 mb-1.5">
+      <div className="flex items-center justify-between text-[10px] font-bold mb-1.5" style={{ color: "var(--c-text-3)" }}>
         <span>PR {pr}</span>
-        <span className="text-emerald-600">{pct}%</span>
+        <span style={{ color: "#3DBE8B" }}>{pct}%</span>
         <span>Objectif {target}</span>
       </div>
-      <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
+      <div className="h-2 rounded-full overflow-hidden" style={{ background: "var(--c-surface-3)" }}>
         <div className="h-full rounded-full transition-all duration-700"
           style={{ width: `${pct}%`, background: "linear-gradient(90deg, #1D9E75, #16826C)" }} />
       </div>
@@ -2549,57 +2544,65 @@ function GoalProgress({ pr, target }) {
 // MODAL SAISIR UNE PERFORMANCE
 // ═══════════════════════════════════════════════════════════════════════════════
 function AddPerfModal({ disciplines, perfForm, setPerfForm, onClose, onSubmit, saving }) {
+  const labelCls = "block text-[10.5px] font-black uppercase tracking-widest mb-2";
+  const labelStyle = { color: "var(--c-text-3)" };
+
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4 modal-backdrop"
       onClick={e => e.target === e.currentTarget && !saving && onClose()}>
-      <div className="bg-white rounded-t-3xl sm:rounded-3xl shadow-2xl w-full sm:max-w-sm max-h-[90vh] flex flex-col overflow-hidden modal-content">
+      <div className="rounded-t-3xl sm:rounded-3xl shadow-2xl w-full sm:max-w-sm max-h-[90vh] flex flex-col overflow-hidden modal-content"
+        style={{ background: "var(--c-surface)" }}>
 
         <div className="flex justify-center pt-3 pb-1 sm:hidden flex-shrink-0">
-          <div className="w-10 h-1 rounded-full bg-slate-200" />
+          <div className="w-10 h-1 rounded-full" style={{ background: "var(--c-border-strong)" }} />
         </div>
 
-        {/* Header vert */}
+        {/* Header vert — fill faible opacité */}
         <div className="px-6 py-5 flex items-start justify-between gap-4 flex-shrink-0"
-          style={{ background: "linear-gradient(135deg, #E8F7F2, #D1F0E6)", borderBottom: "2px solid #1D9E7540" }}>
+          style={{ background: "rgba(29,158,117,0.10)", borderBottom: "2px solid rgba(29,158,117,0.30)" }}>
           <div>
             <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full mb-1.5"
-              style={{ background: "#1D9E7520", border: "1px solid #1D9E7540" }}>
-              <TrendingUp size={10} color="#1D9E75" />
-              <span className="text-[10px] font-black uppercase tracking-widest text-emerald-800">Saisir une performance</span>
+              style={{ background: "rgba(29,158,117,0.16)", border: "1px solid rgba(29,158,117,0.30)" }}>
+              <TrendingUp size={10} color="#3DBE8B" />
+              <span className="text-[10px] font-black uppercase tracking-widest" style={{ color: "#7BD8B4" }}>Saisir une performance</span>
             </div>
-            <p className="text-[12px] font-medium text-emerald-700/70">Chrono, distance, hauteur…</p>
+            <p className="text-[12px] font-medium" style={{ color: "var(--c-text-2)" }}>Chrono, distance, hauteur…</p>
           </div>
           <button onClick={onClose} disabled={saving}
-            className="p-2 rounded-xl hover:bg-black/10 disabled:opacity-40 transition-colors flex-shrink-0">
-            <X size={18} color="#166534" />
+            className="p-2 rounded-xl disabled:opacity-40 transition-colors flex-shrink-0">
+            <X size={18} color="#7BD8B4" />
           </button>
         </div>
 
         <div className="flex-1 overflow-y-auto px-6 py-5 space-y-5">
           {/* Épreuve */}
           <div>
-            <label className="block text-[10.5px] font-black text-slate-400 uppercase tracking-widest mb-2">Épreuve *</label>
+            <label className={labelCls} style={labelStyle}>Épreuve *</label>
             <input className="input-premium" placeholder="Ex: 100m, Longueur…"
               value={perfForm.discipline}
               onChange={e => setPerfForm(f => ({ ...f, discipline: e.target.value }))} />
             {disciplines.length > 0 && (
               <div className="flex flex-wrap gap-1.5 mt-2.5">
-                {disciplines.map(d => (
-                  <button key={d} onClick={() => setPerfForm(f => ({ ...f, discipline: d }))}
-                    className="px-2.5 py-1 rounded-xl text-[10.5px] font-bold border-2 transition-all tap-feedback"
-                    style={perfForm.discipline === d
-                      ? { background: discColor(d), color: "white", borderColor: discColor(d) }
-                      : { background: "white", color: "#64748B", borderColor: "#E2E8F0" }}>
-                    {d}
-                  </button>
-                ))}
+                {disciplines.map(d => {
+                  const sel = perfForm.discipline === d;
+                  const col = discColor(d);
+                  return (
+                    <button key={d} onClick={() => setPerfForm(f => ({ ...f, discipline: d }))}
+                      className="px-2.5 py-1 rounded-xl text-[10.5px] font-bold border-2 transition-all tap-feedback"
+                      style={sel
+                        ? { background: col, color: "#0A150F", borderColor: col }
+                        : { background: `${col}14`, color: col, borderColor: `${col}40` }}>
+                      {d}
+                    </button>
+                  );
+                })}
               </div>
             )}
           </div>
 
           {/* Résultat */}
           <div>
-            <label className="block text-[10.5px] font-black text-slate-400 uppercase tracking-widest mb-2">Résultat *</label>
+            <label className={labelCls} style={labelStyle}>Résultat *</label>
             <input className="input-premium" placeholder="Ex: 10.94 ou 7.45m"
               value={perfForm.value}
               onChange={e => setPerfForm(f => ({ ...f, value: e.target.value }))} />
@@ -2607,7 +2610,7 @@ function AddPerfModal({ disciplines, perfForm, setPerfForm, onClose, onSubmit, s
 
           {/* Date */}
           <div>
-            <label className="block text-[10.5px] font-black text-slate-400 uppercase tracking-widest mb-2">Date</label>
+            <label className={labelCls} style={labelStyle}>Date</label>
             <input type="date" className="input-premium"
               value={perfForm.performance_date}
               onChange={e => setPerfForm(f => ({ ...f, performance_date: e.target.value }))} />
@@ -2615,14 +2618,14 @@ function AddPerfModal({ disciplines, perfForm, setPerfForm, onClose, onSubmit, s
 
           {/* Contexte */}
           <div>
-            <label className="block text-[10.5px] font-black text-slate-400 uppercase tracking-widest mb-2">Contexte (optionnel)</label>
+            <label className={labelCls} style={labelStyle}>Contexte (optionnel)</label>
             <input className="input-premium" placeholder="Ex: Vent +1.2m/s, finale régionale…"
               value={perfForm.context}
               onChange={e => setPerfForm(f => ({ ...f, context: e.target.value }))} />
           </div>
         </div>
 
-        <div className="px-6 py-4 border-t border-slate-100 flex items-center justify-between gap-3 flex-shrink-0">
+        <div className="px-6 py-4 flex items-center justify-between gap-3 flex-shrink-0" style={{ borderTop: "1px solid var(--c-border)" }}>
           <button onClick={onClose} className="btn-secondary">Annuler</button>
           <button onClick={onSubmit}
             disabled={!perfForm.discipline.trim() || !perfForm.value.trim() || saving}
@@ -2641,57 +2644,64 @@ function AddPerfModal({ disciplines, perfForm, setPerfForm, onClose, onSubmit, s
 // MODAL AJOUTER UN OBJECTIF
 // ═══════════════════════════════════════════════════════════════════════════════
 function AddGoalModal({ disciplines, goalForm, setGoalForm, onClose, onSubmit, saving }) {
+  const labelCls = "block text-[10.5px] font-black uppercase tracking-widest mb-2";
+  const labelStyle = { color: "var(--c-text-3)" };
+
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4 modal-backdrop"
       onClick={e => e.target === e.currentTarget && !saving && onClose()}>
-      <div className="bg-white rounded-t-3xl sm:rounded-3xl shadow-2xl w-full sm:max-w-sm max-h-[90vh] flex flex-col overflow-hidden modal-content">
+      <div className="rounded-t-3xl sm:rounded-3xl shadow-2xl w-full sm:max-w-sm max-h-[90vh] flex flex-col overflow-hidden modal-content"
+        style={{ background: "var(--c-surface)" }}>
 
         <div className="flex justify-center pt-3 pb-1 sm:hidden flex-shrink-0">
-          <div className="w-10 h-1 rounded-full bg-slate-200" />
+          <div className="w-10 h-1 rounded-full" style={{ background: "var(--c-border-strong)" }} />
         </div>
 
         {/* Header amber */}
         <div className="px-6 py-5 flex items-start justify-between gap-4 flex-shrink-0"
-          style={{ background: "linear-gradient(135deg, #FEF9C3, #FEF3C7)", borderBottom: "2px solid #EF9F2740" }}>
+          style={{ background: "rgba(234,179,8,0.10)", borderBottom: "2px solid rgba(234,179,8,0.30)" }}>
           <div>
             <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full mb-1.5"
-              style={{ background: "#EF9F2720", border: "1px solid #EF9F2740" }}>
-              <Target size={10} color="#D97706" />
-              <span className="text-[10px] font-black uppercase tracking-widest text-amber-800">Nouvel objectif</span>
+              style={{ background: "rgba(234,179,8,0.16)", border: "1px solid rgba(234,179,8,0.30)" }}>
+              <Target size={10} color="#EAB308" />
+              <span className="text-[10px] font-black uppercase tracking-widest" style={{ color: "#F0CB61" }}>Nouvel objectif</span>
             </div>
-            <p className="text-[12px] font-medium text-amber-700/70">Fixe-toi un cap à atteindre</p>
+            <p className="text-[12px] font-medium" style={{ color: "var(--c-text-2)" }}>Fixe-toi un cap à atteindre</p>
           </div>
           <button onClick={onClose} disabled={saving}
-            className="p-2 rounded-xl hover:bg-black/10 disabled:opacity-40 transition-colors flex-shrink-0">
-            <X size={18} color="#92400E" />
+            className="p-2 rounded-xl disabled:opacity-40 transition-colors flex-shrink-0">
+            <X size={18} color="#F0CB61" />
           </button>
         </div>
 
         <div className="flex-1 overflow-y-auto px-6 py-5 space-y-5">
           {/* Épreuve */}
           <div>
-            <label className="block text-[10.5px] font-black text-slate-400 uppercase tracking-widest mb-2">Épreuve *</label>
+            <label className={labelCls} style={labelStyle}>Épreuve *</label>
             <input className="input-premium" placeholder="Ex: 100m, Longueur…"
               value={goalForm.discipline}
               onChange={e => setGoalForm(f => ({ ...f, discipline: e.target.value }))} />
             {disciplines.length > 0 && (
               <div className="flex flex-wrap gap-1.5 mt-2.5">
-                {disciplines.map(d => (
-                  <button key={d} onClick={() => setGoalForm(f => ({ ...f, discipline: d }))}
-                    className="px-2.5 py-1 rounded-xl text-[10.5px] font-bold border-2 transition-all tap-feedback"
-                    style={goalForm.discipline === d
-                      ? { background: "#F59E0B", color: "white", borderColor: "#F59E0B" }
-                      : { background: "white", color: "#64748B", borderColor: "#E2E8F0" }}>
-                    {d}
-                  </button>
-                ))}
+                {disciplines.map(d => {
+                  const sel = goalForm.discipline === d;
+                  return (
+                    <button key={d} onClick={() => setGoalForm(f => ({ ...f, discipline: d }))}
+                      className="px-2.5 py-1 rounded-xl text-[10.5px] font-bold border-2 transition-all tap-feedback"
+                      style={sel
+                        ? { background: "#EAB308", color: "#0A150F", borderColor: "#EAB308" }
+                        : { background: "var(--c-surface-2)", color: "var(--c-text-3)", borderColor: "var(--c-border)" }}>
+                      {d}
+                    </button>
+                  );
+                })}
               </div>
             )}
           </div>
 
           {/* Objectif */}
           <div>
-            <label className="block text-[10.5px] font-black text-slate-400 uppercase tracking-widest mb-2">Objectif à atteindre *</label>
+            <label className={labelCls} style={labelStyle}>Objectif à atteindre *</label>
             <input className="input-premium" placeholder="Ex: 10.80 ou 7.60m"
               value={goalForm.target_value}
               onChange={e => setGoalForm(f => ({ ...f, target_value: e.target.value }))} />
@@ -2699,7 +2709,7 @@ function AddGoalModal({ disciplines, goalForm, setGoalForm, onClose, onSubmit, s
 
           {/* Échéance */}
           <div>
-            <label className="block text-[10.5px] font-black text-slate-400 uppercase tracking-widest mb-2">Échéance (optionnel)</label>
+            <label className={labelCls} style={labelStyle}>Échéance (optionnel)</label>
             <input type="date" className="input-premium"
               value={goalForm.deadline}
               onChange={e => setGoalForm(f => ({ ...f, deadline: e.target.value }))} />
@@ -2707,7 +2717,7 @@ function AddGoalModal({ disciplines, goalForm, setGoalForm, onClose, onSubmit, s
 
           {/* Notes */}
           <div>
-            <label className="block text-[10.5px] font-black text-slate-400 uppercase tracking-widest mb-2">Notes</label>
+            <label className={labelCls} style={labelStyle}>Notes</label>
             <textarea className="input-premium resize-none" rows={2}
               placeholder="Motivation, contexte…"
               value={goalForm.notes}
@@ -2715,7 +2725,7 @@ function AddGoalModal({ disciplines, goalForm, setGoalForm, onClose, onSubmit, s
           </div>
         </div>
 
-        <div className="px-6 py-4 border-t border-slate-100 flex items-center justify-between gap-3 flex-shrink-0">
+        <div className="px-6 py-4 flex items-center justify-between gap-3 flex-shrink-0" style={{ borderTop: "1px solid var(--c-border)" }}>
           <button onClick={onClose} className="btn-secondary">Annuler</button>
           <button onClick={onSubmit}
             disabled={!goalForm.discipline.trim() || !goalForm.target_value.trim() || saving}
@@ -2893,8 +2903,8 @@ export default function AthletePerfs({ athlete, competitions, myPerformances, my
       {/* ── HEADER ─────────────────────────────────────────────────────────── */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <h2 className="text-[20px] font-black text-slate-800">Mes performances</h2>
-          <p className="text-[12px] text-slate-400 mt-0.5">
+          <h2 className="text-[20px] font-black" style={{ color: "var(--c-text-1)" }}>Mes performances</h2>
+          <p className="text-[12px] mt-0.5" style={{ color: "var(--c-text-3)" }}>
             {disciplines.length} épreuve{disciplines.length !== 1 ? "s" : ""}
             {" · "}
             {localPerfs.length} mesure{localPerfs.length !== 1 ? "s" : ""}
@@ -2907,13 +2917,14 @@ export default function AthletePerfs({ athlete, competitions, myPerformances, my
       </div>
 
       {/* ── TAB BAR pill premium ─────────────────────────────────────────── */}
-      <div className="flex gap-1 bg-white rounded-2xl border border-slate-100 shadow-card p-1.5 overflow-x-auto">
+      <div className="flex gap-1 rounded-2xl p-1.5 overflow-x-auto"
+        style={{ background: "var(--c-surface)", border: "1px solid var(--c-border)" }}>
         {PERF_TABS.map(tab => (
           <button key={tab.id} onClick={() => setActiveTab(tab.id)}
             className="flex-1 px-3 py-2 rounded-xl text-[12px] font-bold whitespace-nowrap transition-all text-center tap-feedback"
             style={activeTab === tab.id
-              ? { background: "#1D9E75", color: "white", boxShadow: "0 2px 8px rgba(29,158,117,0.25)" }
-              : { color: "#64748B" }}>
+              ? { background: "#1D9E75", color: "#0A150F", boxShadow: "0 2px 8px rgba(29,158,117,0.30)" }
+              : { color: "var(--c-text-3)" }}>
             {tab.label}
           </button>
         ))}
@@ -2926,11 +2937,11 @@ export default function AthletePerfs({ athlete, competitions, myPerformances, my
         <div className="space-y-4">
           {disciplines.length === 0 ? (
             <div className="card p-12 text-center">
-              <div className="w-16 h-16 rounded-3xl bg-slate-100 flex items-center justify-center mx-auto mb-4">
-                <Trophy size={28} className="text-slate-300" strokeWidth={1.5} />
+              <div className="w-16 h-16 rounded-3xl flex items-center justify-center mx-auto mb-4" style={{ background: "var(--c-surface-2)" }}>
+                <Trophy size={28} strokeWidth={1.5} style={{ color: "var(--c-text-4)" }} />
               </div>
-              <p className="text-[14px] font-bold text-slate-400">Aucun record enregistré</p>
-              <p className="text-[12px] text-slate-300 mt-1">Ton coach les ajoutera après tes premières compétitions</p>
+              <p className="text-[14px] font-bold" style={{ color: "var(--c-text-3)" }}>Aucun record enregistré</p>
+              <p className="text-[12px] mt-1" style={{ color: "var(--c-text-4)" }}>Ton coach les ajoutera après tes premières compétitions</p>
             </div>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -2940,7 +2951,7 @@ export default function AthletePerfs({ athlete, competitions, myPerformances, my
                 const stats = disciplineStats[disc];
                 return (
                   <div key={disc} className="card-hover rounded-2xl overflow-hidden"
-                    style={{ border: "1px solid #F1F5F9", background: "white" }}>
+                    style={{ border: "1px solid var(--c-border)", background: "var(--c-surface)" }}>
                     {/* Liseré coloré en haut */}
                     <div className="h-1.5 w-full" style={{ background: `linear-gradient(90deg, ${col}, ${col}80)` }} />
                     <div className="p-5">
@@ -2948,10 +2959,10 @@ export default function AthletePerfs({ athlete, competitions, myPerformances, my
                       <div className="flex items-center justify-between mb-4">
                         <div className="flex items-center gap-2.5">
                           <div className="w-8 h-8 rounded-xl flex items-center justify-center"
-                            style={{ background: col + "15" }}>
+                            style={{ background: `${col}1F` }}>
                             <div className="w-3 h-3 rounded-full" style={{ background: col }} />
                           </div>
-                          <p className="text-[14px] font-black text-slate-800">{disc}</p>
+                          <p className="text-[14px] font-black" style={{ color: "var(--c-text-1)" }}>{disc}</p>
                         </div>
                         <button
                           onClick={() => { setSelectedDisc(disc); setActiveTab("evolution"); }}
@@ -2963,24 +2974,24 @@ export default function AthletePerfs({ athlete, competitions, myPerformances, my
 
                       {/* PR + SB */}
                       <div className="grid grid-cols-2 gap-2.5 mb-3">
-                        <div className="rounded-2xl p-3 text-center" style={{ background: col + "10" }}>
+                        <div className="rounded-2xl p-3 text-center" style={{ background: `${col}14` }}>
                           <p className="text-[24px] font-black leading-none" style={{ color: col }}>
                             {rec.pr ?? "—"}
                           </p>
-                          <p className="text-[9px] font-black uppercase tracking-wider mt-1.5" style={{ color: col + "90" }}>
+                          <p className="text-[9px] font-black uppercase tracking-wider mt-1.5" style={{ color: `${col}CC` }}>
                             Record perso
                           </p>
                           {rec.prDate && (
-                            <p className="text-[9px] mt-0.5" style={{ color: col + "60" }}>
+                            <p className="text-[9px] mt-0.5" style={{ color: `${col}90` }}>
                               {new Date(rec.prDate).toLocaleDateString("fr-BE", { day: "numeric", month: "short", year: "numeric" })}
                             </p>
                           )}
                         </div>
-                        <div className="bg-slate-50 rounded-2xl p-3 text-center border border-slate-100">
-                          <p className="text-[24px] font-black leading-none text-slate-600">
+                        <div className="rounded-2xl p-3 text-center" style={{ background: "var(--c-surface-2)", border: "1px solid var(--c-border)" }}>
+                          <p className="text-[24px] font-black leading-none" style={{ color: "var(--c-text-2)" }}>
                             {rec.sb ?? "—"}
                           </p>
-                          <p className="text-[9px] font-black uppercase tracking-wider mt-1.5 text-slate-400">
+                          <p className="text-[9px] font-black uppercase tracking-wider mt-1.5" style={{ color: "var(--c-text-3)" }}>
                             Season Best
                           </p>
                         </div>
@@ -2988,15 +2999,15 @@ export default function AthletePerfs({ athlete, competitions, myPerformances, my
 
                       {/* Stats mesures locales */}
                       {stats && (
-                        <div className="flex items-center gap-2 text-[11px] text-slate-400 pt-3 border-t border-slate-50">
-                          <span className="font-semibold text-slate-500">
+                        <div className="flex items-center gap-2 text-[11px] pt-3" style={{ color: "var(--c-text-3)", borderTop: "1px solid var(--c-border)" }}>
+                          <span className="font-semibold" style={{ color: "var(--c-text-2)" }}>
                             {stats.count} mesure{stats.count > 1 ? "s" : ""}
                           </span>
                           {stats.last && (
                             <>
-                              <span className="text-slate-200">·</span>
+                              <span style={{ color: "var(--c-text-4)" }}>·</span>
                               <span>
-                                Dernière : <strong className="text-slate-600">{stats.last.raw}</strong>
+                                Dernière : <strong style={{ color: "var(--c-text-2)" }}>{stats.last.raw}</strong>
                               </span>
                             </>
                           )}
@@ -3012,31 +3023,32 @@ export default function AthletePerfs({ athlete, competitions, myPerformances, my
           {/* Dernières compétitions en bas des records */}
           {compHistory.length > 0 && (
             <div className="card overflow-hidden">
-              <div className="px-5 py-4 border-b border-slate-50 flex items-center justify-between">
+              <div className="px-5 py-4 flex items-center justify-between" style={{ borderBottom: "1px solid var(--c-border)" }}>
                 <div className="flex items-center gap-2">
-                  <div className="w-7 h-7 rounded-xl bg-amber-50 flex items-center justify-center">
-                    <Trophy size={13} color="#EF9F27" />
+                  <div className="w-7 h-7 rounded-xl flex items-center justify-center" style={{ background: "rgba(234,179,8,0.14)" }}>
+                    <Trophy size={13} color="#EAB308" />
                   </div>
-                  <h3 className="text-[14px] font-bold text-slate-800">Dernières compétitions</h3>
+                  <h3 className="text-[14px] font-bold" style={{ color: "var(--c-text-1)" }}>Dernières compétitions</h3>
                 </div>
                 <button onClick={() => setActiveTab("comps")}
-                  className="text-[11px] font-bold text-emerald-600 hover:text-emerald-700 transition-colors">
+                  className="text-[11px] font-bold transition-colors" style={{ color: "#3DBE8B" }}>
                   Tout voir →
                 </button>
               </div>
-              <div className="divide-y divide-slate-50">
+              <div>
                 {compHistory.slice(0, 3).map(({ comp, result }, i) => (
-                  <div key={i} className="px-5 py-3.5 flex items-center gap-3 hover:bg-slate-50/50 transition-colors">
-                    <div className="w-9 h-9 rounded-2xl bg-amber-50 flex items-center justify-center flex-shrink-0">
-                      <Trophy size={14} color="#EF9F27" />
+                  <div key={i} className="px-5 py-3.5 flex items-center gap-3 transition-colors"
+                    style={{ borderTop: i > 0 ? "1px solid var(--c-border)" : "none" }}>
+                    <div className="w-9 h-9 rounded-2xl flex items-center justify-center flex-shrink-0" style={{ background: "rgba(234,179,8,0.14)" }}>
+                      <Trophy size={14} color="#EAB308" />
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="text-[12.5px] font-bold text-slate-700 truncate">{comp.name}</p>
-                      <p className="text-[11px] text-slate-400">
-                        {result.event} · <strong className="text-emerald-600">{result.result}</strong>
+                      <p className="text-[12.5px] font-bold truncate" style={{ color: "var(--c-text-1)" }}>{comp.name}</p>
+                      <p className="text-[11px]" style={{ color: "var(--c-text-3)" }}>
+                        {result.event} · <strong style={{ color: "#3DBE8B" }}>{result.result}</strong>
                       </p>
                     </div>
-                    <span className="text-[10.5px] text-slate-400 flex-shrink-0">
+                    <span className="text-[10.5px] flex-shrink-0" style={{ color: "var(--c-text-3)" }}>
                       {new Date(comp.date).toLocaleDateString("fr-BE", { day: "numeric", month: "short" })}
                     </span>
                   </div>
@@ -3063,8 +3075,8 @@ export default function AthletePerfs({ athlete, competitions, myPerformances, my
                   <button key={disc} onClick={() => setSelectedDisc(disc)}
                     className="px-3 py-1.5 rounded-xl text-[12px] font-bold border-2 transition-all tap-feedback"
                     style={sel
-                      ? { background: col, color: "white", borderColor: col, boxShadow: `0 2px 8px ${col}40` }
-                      : { background: "white", color: "#64748B", borderColor: "#E2E8F0" }}>
+                      ? { background: col, color: "#0A150F", borderColor: col, boxShadow: `0 2px 8px ${col}40` }
+                      : { background: `${col}14`, color: col, borderColor: `${col}40` }}>
                     {disc}
                   </button>
                 );
@@ -3075,28 +3087,28 @@ export default function AthletePerfs({ athlete, competitions, myPerformances, my
           {/* Graphique */}
           <div className="card p-5">
             <div className="flex items-center justify-between mb-1">
-              <h3 className="text-[15px] font-black text-slate-800">
+              <h3 className="text-[15px] font-black" style={{ color: "var(--c-text-1)" }}>
                 {selectedDisc ?? "Sélectionne une épreuve"}
               </h3>
               <button onClick={() => setShowAddPerf(true)}
-                className="text-[11px] font-bold text-emerald-600 hover:text-emerald-700 transition-colors">
+                className="text-[11px] font-bold transition-colors" style={{ color: "#3DBE8B" }}>
                 + Saisir
               </button>
             </div>
-            <p className="text-[11px] text-slate-400 mb-4">
+            <p className="text-[11px] mb-4" style={{ color: "var(--c-text-3)" }}>
               {chartData.length} mesure{chartData.length !== 1 ? "s" : ""}
             </p>
 
             {chartData.length < 2 ? (
               <div className="h-[180px] flex flex-col items-center justify-center gap-2">
-                <div className="w-12 h-12 rounded-2xl bg-slate-100 flex items-center justify-center">
-                  <BarChart2 size={22} className="text-slate-300" strokeWidth={1.5} />
+                <div className="w-12 h-12 rounded-2xl flex items-center justify-center" style={{ background: "var(--c-surface-2)" }}>
+                  <BarChart2 size={22} strokeWidth={1.5} style={{ color: "var(--c-text-4)" }} />
                 </div>
-                <p className="text-[12px] text-slate-400 text-center">
+                <p className="text-[12px] text-center" style={{ color: "var(--c-text-3)" }}>
                   Minimum 2 mesures pour afficher le graphique
                 </p>
                 <button onClick={() => setShowAddPerf(true)}
-                  className="text-[12px] font-bold text-emerald-600 hover:text-emerald-700 transition-colors mt-1">
+                  className="text-[12px] font-bold transition-colors mt-1" style={{ color: "#3DBE8B" }}>
                   + Saisir une performance
                 </button>
               </div>
@@ -3106,13 +3118,13 @@ export default function AthletePerfs({ athlete, competitions, myPerformances, my
                   <AreaChart data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
                     <defs>
                       <linearGradient id="gradPerf" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%"  stopColor="#1D9E75" stopOpacity={0.2} />
+                        <stop offset="5%"  stopColor="#1D9E75" stopOpacity={0.35} />
                         <stop offset="95%" stopColor="#1D9E75" stopOpacity={0}   />
                       </linearGradient>
                     </defs>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#F1F5F9" />
-                    <XAxis dataKey="label" tick={{ fontSize: 10, fill: "#94a3b8" }} axisLine={false} tickLine={false} />
-                    <YAxis tick={{ fontSize: 10, fill: "#94a3b8" }} axisLine={false} tickLine={false} width={45}
+                    <CartesianGrid strokeDasharray="3 3" stroke="var(--c-border)" />
+                    <XAxis dataKey="label" tick={{ fontSize: 10, fill: "var(--c-text-3)" }} axisLine={false} tickLine={false} />
+                    <YAxis tick={{ fontSize: 10, fill: "var(--c-text-3)" }} axisLine={false} tickLine={false} width={45}
                       domain={([min, max]) => {
                         const padding = (max - min) * 0.1 || 0.5;
                         return [Math.floor((min - padding) * 100) / 100, Math.ceil((max + padding) * 100) / 100];
@@ -3120,25 +3132,25 @@ export default function AthletePerfs({ athlete, competitions, myPerformances, my
                       tickCount={6} />
                     <Tooltip content={<PerfTooltip />} />
                     <Area dataKey="value" name={selectedDisc ?? ""}
-                      stroke="#1D9E75" fill="url(#gradPerf)"
+                      stroke="#3DBE8B" fill="url(#gradPerf)"
                       strokeWidth={2.5}
-                      dot={{ r: 4, fill: "#1D9E75", strokeWidth: 2, stroke: "white" }}
+                      dot={{ r: 4, fill: "#3DBE8B", strokeWidth: 2, stroke: "var(--c-surface)" }}
                       activeDot={{ r: 6, strokeWidth: 0 }} />
                   </AreaChart>
                 </ResponsiveContainer>
 
                 {/* Footer PR / SB / delta */}
                 {selectedDisc && athlete.records?.[selectedDisc] && (
-                  <div className="flex items-center gap-4 mt-3 pt-3 border-t border-slate-50 text-[12px] flex-wrap">
-                    <span className="text-slate-400">
-                      PR <strong className="text-emerald-600 text-[14px]">{athlete.records[selectedDisc].pr}</strong>
+                  <div className="flex items-center gap-4 mt-3 pt-3 text-[12px] flex-wrap" style={{ borderTop: "1px solid var(--c-border)" }}>
+                    <span style={{ color: "var(--c-text-3)" }}>
+                      PR <strong className="text-[14px]" style={{ color: "#3DBE8B" }}>{athlete.records[selectedDisc].pr}</strong>
                     </span>
-                    <span className="text-slate-400">
-                      SB <strong className="text-slate-600">{athlete.records[selectedDisc].sb}</strong>
+                    <span style={{ color: "var(--c-text-3)" }}>
+                      SB <strong style={{ color: "var(--c-text-2)" }}>{athlete.records[selectedDisc].sb}</strong>
                     </span>
                     {chartData.length >= 2 && (() => {
                       const diff = chartData[chartData.length - 1].value - chartData[0].value;
-                      const col  = diff >= 0 ? "#1D9E75" : "#E24B4A";
+                      const col  = diff >= 0 ? "#3DBE8B" : "#EF6B6B";
                       const Icon = diff > 0 ? TrendingUp : diff < 0 ? TrendingDown : Minus;
                       return (
                         <span className="ml-auto flex items-center gap-1 font-bold" style={{ color: col }}>
@@ -3156,20 +3168,21 @@ export default function AthletePerfs({ athlete, competitions, myPerformances, my
           {/* Tableau de toutes les mesures */}
           {chartData.length > 0 && (
             <div className="card overflow-hidden">
-              <div className="px-5 py-4 border-b border-slate-50 flex items-center justify-between">
-                <h3 className="text-[13px] font-bold text-slate-800">
+              <div className="px-5 py-4 flex items-center justify-between" style={{ borderBottom: "1px solid var(--c-border)" }}>
+                <h3 className="text-[13px] font-bold" style={{ color: "var(--c-text-1)" }}>
                   Toutes les mesures — {selectedDisc}
                 </h3>
-                <span className="text-[11px] text-slate-400">{chartData.length} entrée{chartData.length > 1 ? "s" : ""}</span>
+                <span className="text-[11px]" style={{ color: "var(--c-text-3)" }}>{chartData.length} entrée{chartData.length > 1 ? "s" : ""}</span>
               </div>
-              <div className="divide-y divide-slate-50 max-h-64 overflow-y-auto">
+              <div className="max-h-64 overflow-y-auto">
                 {[...chartData].reverse().map((d, i) => (
-                  <div key={i} className="px-5 py-3 flex items-center justify-between hover:bg-slate-50/50 transition-colors">
+                  <div key={i} className="px-5 py-3 flex items-center justify-between transition-colors"
+                    style={{ borderTop: i > 0 ? "1px solid var(--c-border)" : "none" }}>
                     <div>
-                      <p className="text-[15px] font-black text-emerald-600">{d.raw}</p>
-                      {d.ctx && <p className="text-[11px] text-slate-400 italic">{d.ctx}</p>}
+                      <p className="text-[15px] font-black" style={{ color: "#3DBE8B" }}>{d.raw}</p>
+                      {d.ctx && <p className="text-[11px] italic" style={{ color: "var(--c-text-3)" }}>{d.ctx}</p>}
                     </div>
-                    <p className="text-[11px] text-slate-400 font-medium">{d.label}</p>
+                    <p className="text-[11px] font-medium" style={{ color: "var(--c-text-3)" }}>{d.label}</p>
                   </div>
                 ))}
               </div>
@@ -3191,11 +3204,11 @@ export default function AthletePerfs({ athlete, competitions, myPerformances, my
 
           {activeGoals.length === 0 && achievedGoals.length === 0 ? (
             <div className="card p-12 text-center">
-              <div className="w-16 h-16 rounded-3xl bg-amber-50 flex items-center justify-center mx-auto mb-4">
-                <Target size={28} color="#EF9F27" strokeWidth={1.5} />
+              <div className="w-16 h-16 rounded-3xl flex items-center justify-center mx-auto mb-4" style={{ background: "rgba(234,179,8,0.12)" }}>
+                <Target size={28} color="#EAB308" strokeWidth={1.5} />
               </div>
-              <p className="text-[14px] font-bold text-slate-400">Aucun objectif défini</p>
-              <p className="text-[12px] text-slate-300 mt-1">Fixe-toi des objectifs pour rester motivé</p>
+              <p className="text-[14px] font-bold" style={{ color: "var(--c-text-3)" }}>Aucun objectif défini</p>
+              <p className="text-[12px] mt-1" style={{ color: "var(--c-text-4)" }}>Fixe-toi des objectifs pour rester motivé</p>
               <button onClick={() => setShowAddGoal(true)} className="mt-5 btn-primary mx-auto">
                 <Plus size={14} /> Définir un objectif
               </button>
@@ -3205,7 +3218,7 @@ export default function AthletePerfs({ athlete, competitions, myPerformances, my
               {/* Objectifs en cours */}
               {activeGoals.length > 0 && (
                 <div className="space-y-3">
-                  <p className="text-[10.5px] font-black text-slate-400 uppercase tracking-widest">
+                  <p className="text-[10.5px] font-black uppercase tracking-widest" style={{ color: "var(--c-text-3)" }}>
                     En cours ({activeGoals.length})
                   </p>
                   {activeGoals.map(g => {
@@ -3219,17 +3232,17 @@ export default function AthletePerfs({ athlete, competitions, myPerformances, my
                       <div key={g.id} className="card overflow-hidden">
                         {/* Liseré haut coloré */}
                         <div className="h-1 w-full"
-                          style={{ background: isUrgent ? "#F59E0B" : col }} />
+                          style={{ background: isUrgent ? "#EAB308" : col }} />
                         <div className="p-5">
                           <div className="flex items-start justify-between gap-3 mb-1">
                             <div className="flex-1">
                               <div className="flex items-center gap-2 flex-wrap mb-2">
-                                <p className="text-[14px] font-bold text-slate-700">{g.discipline}</p>
+                                <p className="text-[14px] font-bold" style={{ color: "var(--c-text-1)" }}>{g.discipline}</p>
                                 {daysLeft !== null && (
                                   <span className="text-[10px] font-bold px-2 py-0.5 rounded-full"
                                     style={isUrgent
-                                      ? { background: "#FEF3C7", color: "#B45309" }
-                                      : { background: "#F1F5F9", color: "#64748B" }}>
+                                      ? { background: "rgba(234,179,8,0.16)", color: "#F0CB61" }
+                                      : { background: "var(--c-surface-2)", color: "var(--c-text-2)" }}>
                                     {daysLeft > 0 ? `J-${daysLeft}` : daysLeft === 0 ? "Aujourd'hui !" : "Échu"}
                                   </span>
                                 )}
@@ -3238,10 +3251,10 @@ export default function AthletePerfs({ athlete, competitions, myPerformances, my
                                 {g.target_value}
                               </p>
                               {g.notes && (
-                                <p className="text-[11.5px] text-slate-400 italic mt-1">{g.notes}</p>
+                                <p className="text-[11.5px] italic mt-1" style={{ color: "var(--c-text-3)" }}>{g.notes}</p>
                               )}
                               {g.deadline && (
-                                <p className="text-[11px] text-slate-400 mt-1">
+                                <p className="text-[11px] mt-1" style={{ color: "var(--c-text-3)" }}>
                                   Échéance : {new Date(g.deadline).toLocaleDateString("fr-BE", { day: "numeric", month: "long", year: "numeric" })}
                                 </p>
                               )}
@@ -3254,13 +3267,15 @@ export default function AthletePerfs({ athlete, competitions, myPerformances, my
                             </div>
                           </div>
 
-                          <div className="flex items-center gap-3 pt-3 border-t border-slate-50 mt-3">
+                          <div className="flex items-center gap-3 pt-3 mt-3" style={{ borderTop: "1px solid var(--c-border)" }}>
                             <button onClick={() => handleMarkGoalDone(g.id)}
-                              className="flex items-center gap-1.5 text-[12px] font-bold text-emerald-600 hover:text-emerald-700 transition-colors tap-feedback">
+                              className="flex items-center gap-1.5 text-[12px] font-bold transition-colors tap-feedback"
+                              style={{ color: "#3DBE8B" }}>
                               <CheckCircle size={14} /> Marquer atteint
                             </button>
                             <button onClick={() => handleDeleteGoal(g.id)}
-                              className="text-[12px] font-semibold text-red-400 hover:text-red-600 transition-colors ml-auto tap-feedback">
+                              className="text-[12px] font-semibold transition-colors ml-auto tap-feedback"
+                              style={{ color: "#F19A9A" }}>
                               Supprimer
                             </button>
                           </div>
@@ -3274,19 +3289,19 @@ export default function AthletePerfs({ athlete, competitions, myPerformances, my
               {/* Objectifs atteints */}
               {achievedGoals.length > 0 && (
                 <div className="space-y-2">
-                  <p className="text-[10.5px] font-black text-slate-400 uppercase tracking-widest">
+                  <p className="text-[10.5px] font-black uppercase tracking-widest" style={{ color: "var(--c-text-3)" }}>
                     Atteints 🏆 ({achievedGoals.length})
                   </p>
                   {achievedGoals.map(g => (
                     <div key={g.id} className="card p-4 flex items-center gap-3 opacity-60">
-                      <div className="w-8 h-8 rounded-xl bg-emerald-50 flex items-center justify-center flex-shrink-0">
-                        <CheckCircle size={16} color="#1D9E75" />
+                      <div className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: "rgba(29,158,117,0.12)" }}>
+                        <CheckCircle size={16} color="#3DBE8B" />
                       </div>
                       <div className="flex-1">
-                        <p className="text-[12.5px] font-bold text-slate-600">
+                        <p className="text-[12.5px] font-bold" style={{ color: "var(--c-text-2)" }}>
                           {g.discipline} — {g.target_value}
                         </p>
-                        {g.notes && <p className="text-[11px] text-slate-400">{g.notes}</p>}
+                        {g.notes && <p className="text-[11px]" style={{ color: "var(--c-text-3)" }}>{g.notes}</p>}
                       </div>
                     </div>
                   ))}
@@ -3304,41 +3319,40 @@ export default function AthletePerfs({ athlete, competitions, myPerformances, my
         <div className="space-y-3">
           {compHistory.length === 0 ? (
             <div className="card p-12 text-center">
-              <div className="w-16 h-16 rounded-3xl bg-amber-50 flex items-center justify-center mx-auto mb-4">
-                <Trophy size={28} color="#EF9F27" strokeWidth={1.5} />
+              <div className="w-16 h-16 rounded-3xl flex items-center justify-center mx-auto mb-4" style={{ background: "rgba(234,179,8,0.12)" }}>
+                <Trophy size={28} color="#EAB308" strokeWidth={1.5} />
               </div>
-              <p className="text-[14px] font-bold text-slate-400">Aucune compétition enregistrée</p>
+              <p className="text-[14px] font-bold" style={{ color: "var(--c-text-3)" }}>Aucune compétition enregistrée</p>
             </div>
           ) : (
             compHistory.map(({ comp, result }, i) => (
               <div key={i} className="card p-5 card-hover">
                 <div className="flex items-start gap-4">
-                  <div className="w-12 h-12 rounded-2xl bg-amber-50 flex items-center justify-center flex-shrink-0 shadow-sm">
-                    <Trophy size={20} color="#EF9F27" />
+                  <div className="w-12 h-12 rounded-2xl flex items-center justify-center flex-shrink-0" style={{ background: "rgba(234,179,8,0.14)" }}>
+                    <Trophy size={20} color="#EAB308" />
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap mb-1">
-                      <p className="text-[14px] font-black text-slate-800">{comp.name}</p>
-                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-500">
+                      <p className="text-[14px] font-black" style={{ color: "var(--c-text-1)" }}>{comp.name}</p>
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ background: "var(--c-surface-2)", color: "var(--c-text-2)" }}>
                         {comp.type}
                       </span>
                     </div>
-                    <p className="text-[12px] text-slate-400 mb-3">
+                    <p className="text-[12px] mb-3" style={{ color: "var(--c-text-3)" }}>
                       {comp.location && `📍 ${comp.location} · `}
                       {new Date(comp.date).toLocaleDateString("fr-BE", { day: "numeric", month: "long", year: "numeric" })}
                     </p>
                     {/* Résultat mis en avant */}
-                    <div className="inline-block rounded-2xl px-4 py-3"
-                      style={{ background: "linear-gradient(135deg, #E8F7F2, #D1F0E6)" }}>
-                      <p className="text-[10px] font-black uppercase tracking-wider text-emerald-600 mb-0.5">
+                    <div className="inline-block rounded-2xl px-4 py-3" style={{ background: "rgba(29,158,117,0.10)", border: "1px solid rgba(29,158,117,0.25)" }}>
+                      <p className="text-[10px] font-black uppercase tracking-wider mb-0.5" style={{ color: "#3DBE8B" }}>
                         {result.event}
                       </p>
-                      <p className="text-[24px] font-black text-emerald-700 leading-tight">
+                      <p className="text-[24px] font-black leading-tight" style={{ color: "#7BD8B4" }}>
                         {result.result}
                       </p>
                     </div>
                     {result.context && (
-                      <p className="text-[11.5px] text-slate-400 italic mt-2">{result.context}</p>
+                      <p className="text-[11.5px] italic mt-2" style={{ color: "var(--c-text-3)" }}>{result.context}</p>
                     )}
                   </div>
                 </div>
@@ -3376,24 +3390,12 @@ export default function AthletePerfs({ athlete, competitions, myPerformances, my
 
 <file path="src/athlete/views/AthletePlanning.jsx">
 // ============================================================
-// AthleteOS — src/athlete/views/AthletePlanning.jsx  ★ DESIGN PREMIUM
-//
-// Logique métier 100% identique à la version précédente.
-// Rendu entièrement repoli :
-//   - Header glassmorphism avec sélecteur de vue pill premium
-//   - Vue Agenda : timeline verticale avec date-badge colorée, cards avec
-//     liseré coloré catégorie + glow amber si RPE attendu
-//   - Vue Mois : grille premium, cellule aujourd'hui en dégradé vert,
-//     pills sessions compactes avec bordure gauche colorée
-//   - Vue Semaine : sélecteur jour horizontal premium, cards détaillées
-//   - SessionDetailModal : header en couleur catégorie, RPE avec couleur
-//     progressive (vert→amber→rouge), étoiles feeling animées
-//   - CreateSessionModal : header coloré réactif à la catégorie,
-//     chips catégorie styled, sélecteur athlètes avatar
-//   - Toutes les transitions spring via CSS premium (card, tap-feedback…)
+// AthleteOS — src/athlete/views/AthletePlanning.jsx
+// ★ DESIGN PREMIUM + PORTALS + DARK MODE (Variables CSS)
 // ============================================================
 
 import { useState, useMemo, memo, useCallback } from "react";
+import { createPortal } from "react-dom";
 import {
   Plus, ChevronLeft, ChevronRight, X, Clock, Star, CalendarDays,
   FileText, Users, AlertCircle, CheckCircle, Zap,
@@ -3405,27 +3407,27 @@ import {
   isSameDay, dateToISOWeek, dateToDayName,
 } from "../shared";
 
-// ─── Palette catégories (cohérente avec Planning.jsx coach) ──────────────────
+// ─── Palette catégories (Adaptée Mode Sombre/Clair avec opacité) ─────────────
 const CAT_COLORS = {
-  sprint:       { bg: "#DBEAFE", border: "#3B82F6", text: "#1D4ED8", glow: "rgba(59,130,246,0.15)"  },
-  haies:        { bg: "#EDE9FE", border: "#7C3AED", text: "#4C1D95", glow: "rgba(124,58,237,0.15)" },
-  force:        { bg: "#DCFCE7", border: "#16A34A", text: "#14532D", glow: "rgba(22,163,74,0.15)"  },
-  saut:         { bg: "#F3E8FF", border: "#A855F7", text: "#6B21A8", glow: "rgba(168,85,247,0.15)" },
-  lancer:       { bg: "#FFEDD5", border: "#F97316", text: "#9A3412", glow: "rgba(249,115,22,0.15)" },
-  endurance:    { bg: "#E0F2FE", border: "#0284C7", text: "#0C4A6E", glow: "rgba(2,132,199,0.15)"  },
-  technique:    { bg: "#F1F5F9", border: "#64748B", text: "#1E293B", glow: "rgba(100,116,139,0.12)"},
-  mobilite:     { bg: "#FEF9C3", border: "#CA8A04", text: "#713F12", glow: "rgba(202,138,4,0.15)"  },
-  recuperation: { bg: "#F8FAFC", border: "#CBD5E1", text: "#475569", glow: "rgba(203,213,225,0.15)"},
+  sprint:       { border: "#3B82F6", text: "#60A5FA", glow: "rgba(59,130,246,0.15)" },
+  haies:        { border: "#8B5CF6", text: "#A78BFA", glow: "rgba(139,92,246,0.15)" },
+  force:        { border: "#22C55E", text: "#4ADE80", glow: "rgba(34,197,94,0.15)" },
+  saut:         { border: "#A855F7", text: "#C084FC", glow: "rgba(168,85,247,0.15)" },
+  lancer:       { border: "#F97316", text: "#FB923C", glow: "rgba(249,115,22,0.15)" },
+  endurance:    { border: "#0EA5E9", text: "#38BDF8", glow: "rgba(14,165,233,0.15)" },
+  technique:    { border: "#64748B", text: "#94A3B8", glow: "rgba(100,116,139,0.12)" },
+  mobilite:     { border: "#EAB308", text: "#FACC15", glow: "rgba(234,179,8,0.15)" },
+  recuperation: { border: "#94A3B8", text: "#CBD5E1", glow: "rgba(148,163,184,0.15)" },
 };
 const cat = (key) => CAT_COLORS[key] ?? CAT_COLORS.technique;
 
 // ─── Helper : badge statut ────────────────────────────────────────────────────
 function StatusBadge({ status, size = "sm" }) {
   const cfg = {
-    done:    { label: "Réalisée",  bg: "#DCFCE7", color: "#15803D", dot: "#22C55E" },
-    partial: { label: "Partielle", bg: "#FEF3C7", color: "#B45309", dot: "#F59E0B" },
-    none:    { label: "Absent",    bg: "#FEE2E2", color: "#B91C1C", dot: "#EF4444" },
-    future:  { label: "Prévue",    bg: "#EFF6FF", color: "#1D4ED8", dot: "#60A5FA" },
+    done:    { label: "Réalisée",  bg: "rgba(34,197,94,0.15)", color: "#4ADE80", dot: "#22C55E" },
+    partial: { label: "Partielle", bg: "rgba(245,158,11,0.15)", color: "#FBBF24", dot: "#F59E0B" },
+    none:    { label: "Absent",    bg: "rgba(239,68,68,0.15)", color: "#F87171", dot: "#EF4444" },
+    future:  { label: "Prévue",    bg: "var(--c-surface-3)", color: "var(--c-text-3)", dot: "var(--c-text-4)" },
   };
   const s = cfg[status] ?? cfg.future;
   const px = size === "sm" ? "px-2 py-0.5 text-[10px]" : "px-3 py-1 text-[11px]";
@@ -3440,8 +3442,8 @@ function StatusBadge({ status, size = "sm" }) {
 
 // ─── RPE : couleur progressive ────────────────────────────────────────────────
 function rpeColor(i) {
-  if (i <= 3) return { active: "#22C55E", border: "#16A34A", text: "white" };
-  if (i <= 6) return { active: "#F59E0B", border: "#D97706", text: "white" };
+  if (i <= 3) return { active: "#22C55E", border: "#16A34A", text: "#0A150F" };
+  if (i <= 6) return { active: "#F59E0B", border: "#D97706", text: "#0A150F" };
   return          { active: "#EF4444", border: "#DC2626", text: "white" };
 }
 
@@ -3509,59 +3511,57 @@ const CreateSessionModal = memo(({ athlete, allAthletes, clubId, createdBy, coac
 
   const others = allAthletes.filter(a => a.id !== athlete.id);
 
-  return (
+  return createPortal(
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4 modal-backdrop"
       onClick={e => e.target === e.currentTarget && !saving && onClose()}>
-      <div className="bg-white rounded-t-3xl sm:rounded-3xl shadow-2xl w-full sm:max-w-md max-h-[95vh] flex flex-col overflow-hidden modal-content">
+      <div className="rounded-t-3xl sm:rounded-3xl shadow-2xl w-full sm:max-w-md max-h-[95vh] flex flex-col overflow-hidden modal-content"
+           style={{ background: "var(--c-surface)" }}>
 
-        {/* Poignée mobile */}
         <div className="flex justify-center pt-3 pb-1 sm:hidden flex-shrink-0">
-          <div className="w-10 h-1 rounded-full bg-slate-200" />
+          <div className="w-10 h-1 rounded-full" style={{ background: "var(--c-border-strong)" }} />
         </div>
 
-        {/* Header coloré réactif à la catégorie */}
         <div className="px-6 py-5 flex items-start justify-between gap-4 flex-shrink-0 transition-colors duration-300"
-          style={{ background: c.bg, borderBottom: `2px solid ${c.border}40` }}>
+          style={{ background: `${c.border}15`, borderBottom: `2px solid ${c.border}40` }}>
           <div>
             <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full mb-2"
-              style={{ background: c.border + "20", border: `1px solid ${c.border}40` }}>
-              <Zap size={10} style={{ color: c.border }} />
+              style={{ background: `${c.border}25`, border: `1px solid ${c.border}40` }}>
+              <Zap size={10} style={{ color: c.text }} />
               <span className="text-[10px] font-black uppercase tracking-widest" style={{ color: c.text }}>
                 Planifier une séance
               </span>
             </div>
-            <p className="text-[12px] font-medium" style={{ color: c.text + "80" }}>
+            <p className="text-[12px] font-medium" style={{ color: "var(--c-text-2)" }}>
               Ton coach sera notifié automatiquement
             </p>
           </div>
           <button onClick={onClose} disabled={saving}
-            className="p-2 rounded-xl hover:bg-black/10 disabled:opacity-40 transition-colors flex-shrink-0">
+            className="p-2 rounded-xl disabled:opacity-40 transition-colors flex-shrink-0"
+            style={{ background: "transparent" }}
+            onMouseEnter={e => e.currentTarget.style.background = "rgba(150,150,150,0.15)"}
+            onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
             <X size={18} style={{ color: c.text }} />
           </button>
         </div>
 
-        {/* Corps */}
         <div className="flex-1 overflow-y-auto px-6 py-5 space-y-5">
-
           {err && (
-            <div className="flex items-start gap-2.5 bg-red-50 border border-red-100 rounded-2xl px-4 py-3">
-              <AlertCircle size={14} className="text-red-500 mt-0.5 flex-shrink-0" />
-              <p className="text-[12px] text-red-700">{err}</p>
+            <div className="flex items-start gap-2.5 rounded-2xl px-4 py-3" style={{ background: "rgba(239,68,68,0.15)", border: "1px solid rgba(239,68,68,0.3)" }}>
+              <AlertCircle size={14} color="#F87171" className="mt-0.5 flex-shrink-0" />
+              <p className="text-[12px]" style={{ color: "#F87171" }}>{err}</p>
             </div>
           )}
 
-          {/* Titre */}
           <div>
-            <label className="block text-[10.5px] font-black text-slate-400 uppercase tracking-widest mb-2">
+            <label className="block text-[10.5px] font-black uppercase tracking-widest mb-2" style={{ color: "var(--c-text-3)" }}>
               Titre *
             </label>
             <input className="input-premium" placeholder="Ex: Footing récup, Technique saut…"
               value={form.title} onChange={e => set("title", e.target.value)} />
           </div>
 
-          {/* Catégories — chips */}
           <div>
-            <label className="block text-[10.5px] font-black text-slate-400 uppercase tracking-widest mb-2">
+            <label className="block text-[10.5px] font-black uppercase tracking-widest mb-2" style={{ color: "var(--c-text-3)" }}>
               Type de séance
             </label>
             <div className="flex flex-wrap gap-1.5">
@@ -3572,8 +3572,8 @@ const CreateSessionModal = memo(({ athlete, allAthletes, clubId, createdBy, coac
                   <button key={id} onClick={() => set("category", id)}
                     className="px-3 py-1.5 rounded-xl text-[11.5px] font-bold border-2 transition-all tap-feedback"
                     style={sel
-                      ? { background: cc.border, color: "white",  borderColor: cc.border,        boxShadow: `0 2px 8px ${cc.glow}` }
-                      : { background: cc.bg,     color: cc.text,  borderColor: cc.border + "50" }}>
+                      ? { background: cc.border, color: "#0A150F", borderColor: cc.border, boxShadow: `0 2px 8px ${cc.glow}` }
+                      : { background: `${cc.border}15`, color: cc.text, borderColor: `${cc.border}40` }}>
                     {label}
                   </button>
                 );
@@ -3581,23 +3581,21 @@ const CreateSessionModal = memo(({ athlete, allAthletes, clubId, createdBy, coac
             </div>
           </div>
 
-          {/* Date + Heure */}
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-[10.5px] font-black text-slate-400 uppercase tracking-widest mb-2">Date *</label>
+              <label className="block text-[10.5px] font-black uppercase tracking-widest mb-2" style={{ color: "var(--c-text-3)" }}>Date *</label>
               <input type="date" className="input-premium" value={form.sessionDate}
                 onChange={e => set("sessionDate", e.target.value)} />
             </div>
             <div>
-              <label className="block text-[10.5px] font-black text-slate-400 uppercase tracking-widest mb-2">Heure</label>
+              <label className="block text-[10.5px] font-black uppercase tracking-widest mb-2" style={{ color: "var(--c-text-3)" }}>Heure</label>
               <input type="time" className="input-premium" value={form.time}
                 onChange={e => set("time", e.target.value)} />
             </div>
           </div>
 
-          {/* Durée */}
           <div>
-            <label className="block text-[10.5px] font-black text-slate-400 uppercase tracking-widest mb-2">
+            <label className="block text-[10.5px] font-black uppercase tracking-widest mb-2" style={{ color: "var(--c-text-3)" }}>
               Durée (min)
             </label>
             <input type="number" min="5" step="5" className="input-premium"
@@ -3605,9 +3603,8 @@ const CreateSessionModal = memo(({ athlete, allAthletes, clubId, createdBy, coac
               onChange={e => set("durationMinutes", Number(e.target.value))} />
           </div>
 
-          {/* Description */}
           <div>
-            <label className="block text-[10.5px] font-black text-slate-400 uppercase tracking-widest mb-2">
+            <label className="block text-[10.5px] font-black uppercase tracking-widest mb-2" style={{ color: "var(--c-text-3)" }}>
               Description
             </label>
             <textarea className="input-premium resize-none" rows={2}
@@ -3615,19 +3612,19 @@ const CreateSessionModal = memo(({ athlete, allAthletes, clubId, createdBy, coac
               value={form.description} onChange={e => set("description", e.target.value)} />
           </div>
 
-          {/* PDF */}
           <div>
-            <label className="block text-[10.5px] font-black text-slate-400 uppercase tracking-widest mb-2">
+            <label className="block text-[10.5px] font-black uppercase tracking-widest mb-2" style={{ color: "var(--c-text-3)" }}>
               PDF (optionnel)
             </label>
-            <label className="flex items-center gap-3 p-3 rounded-2xl border-2 border-dashed border-slate-200 cursor-pointer hover:border-slate-300 transition-colors">
-              <div className="w-8 h-8 rounded-xl bg-blue-50 flex items-center justify-center flex-shrink-0">
-                <FileText size={14} className="text-blue-500" />
+            <label className="flex items-center gap-3 p-3 rounded-2xl border-2 border-dashed cursor-pointer transition-colors"
+                   style={{ borderColor: "var(--c-border-strong)", background: "var(--c-surface-2)" }}>
+              <div className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: "rgba(59,130,246,0.15)" }}>
+                <FileText size={14} color="#60A5FA" />
               </div>
               <div className="flex-1 min-w-0">
                 {pdfFile
-                  ? <p className="text-[12px] font-semibold text-slate-700 truncate">📎 {pdfFile.name}</p>
-                  : <p className="text-[12px] text-slate-400">Appuie pour joindre un PDF</p>
+                  ? <p className="text-[12px] font-semibold truncate" style={{ color: "var(--c-text-1)" }}>📎 {pdfFile.name}</p>
+                  : <p className="text-[12px]" style={{ color: "var(--c-text-4)" }}>Appuie pour joindre un PDF</p>
                 }
               </div>
               <input type="file" accept="application/pdf" className="sr-only"
@@ -3635,10 +3632,9 @@ const CreateSessionModal = memo(({ athlete, allAthletes, clubId, createdBy, coac
             </label>
           </div>
 
-          {/* Inviter athlètes */}
           {others.length > 0 && (
             <div>
-              <label className="block text-[10.5px] font-black text-slate-400 uppercase tracking-widest mb-2">
+              <label className="block text-[10.5px] font-black uppercase tracking-widest mb-2" style={{ color: "var(--c-text-3)" }}>
                 <Users size={11} className="inline mr-1" />Inviter d'autres athlètes
               </label>
               <div className="flex flex-wrap gap-2">
@@ -3646,14 +3642,16 @@ const CreateSessionModal = memo(({ athlete, allAthletes, clubId, createdBy, coac
                   const sel = form.invitedAthletes.includes(a.id);
                   return (
                     <button key={a.id} onClick={() => toggleInv(a.id)}
-                      className={["flex items-center gap-2 px-3 py-2 rounded-xl text-[12px] font-semibold border-2 transition-all tap-feedback",
-                        sel ? "bg-emerald-50 border-emerald-400 text-emerald-700" : "bg-white border-slate-200 text-slate-500"].join(" ")}>
-                      <div className="w-6 h-6 rounded-full flex items-center justify-center text-white text-[8px] font-black"
-                        style={{ background: sel ? "#1D9E75" : "#94a3b8" }}>
+                      className="flex items-center gap-2 px-3 py-2 rounded-xl text-[12px] font-semibold border-2 transition-all tap-feedback"
+                      style={sel
+                        ? { background: "rgba(34,197,94,0.15)", borderColor: "#22C55E", color: "#4ADE80" }
+                        : { background: "var(--c-surface-2)", borderColor: "var(--c-border)", color: "var(--c-text-3)" }}>
+                      <div className="w-6 h-6 rounded-full flex items-center justify-center text-[8px] font-black"
+                        style={{ background: sel ? "#22C55E" : "var(--c-surface-3)", color: sel ? "#0A150F" : "var(--c-text-3)" }}>
                         {(a.name?.[0] ?? "?").toUpperCase()}
                       </div>
                       {a.name.split(" ")[0]}
-                      {sel && <CheckCircle size={12} className="text-emerald-600" />}
+                      {sel && <CheckCircle size={12} color="#22C55E" />}
                     </button>
                   );
                 })}
@@ -3662,21 +3660,17 @@ const CreateSessionModal = memo(({ athlete, allAthletes, clubId, createdBy, coac
           )}
         </div>
 
-        {/* Footer */}
-        <div className="px-6 py-4 border-t border-slate-100 flex items-center justify-between gap-3 flex-shrink-0">
-          <button onClick={onClose} disabled={saving}
-            className="btn-secondary">
-            Annuler
-          </button>
-          <button onClick={handleSubmit} disabled={!form.title.trim() || saving}
-            className="btn-primary">
+        <div className="px-6 py-4 flex items-center justify-between gap-3 flex-shrink-0" style={{ borderTop: "1px solid var(--c-border)" }}>
+          <button onClick={onClose} disabled={saving} className="btn-secondary">Annuler</button>
+          <button onClick={handleSubmit} disabled={!form.title.trim() || saving} className="btn-primary">
             {saving
               ? <><div className="w-3.5 h-3.5 border-2 border-white/40 border-t-white rounded-full animate-spin" />Création…</>
               : <><Plus size={15} />Planifier</>}
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 });
 
@@ -3697,98 +3691,98 @@ const SessionDetailModal = memo(({ session, athlete, onClose, onSetStatus, onSet
   const status  = val?.status ?? null;
   const hasPerf = status === "done" || status === "partial";
 
-  return (
+  return createPortal(
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4 modal-backdrop"
       onClick={e => e.target === e.currentTarget && onClose()}>
-      <div className="bg-white rounded-t-3xl sm:rounded-3xl shadow-2xl w-full max-w-lg max-h-[95vh] flex flex-col overflow-hidden modal-content">
+      <div className="rounded-t-3xl sm:rounded-3xl shadow-2xl w-full max-w-lg max-h-[95vh] flex flex-col overflow-hidden modal-content"
+           style={{ background: "var(--c-surface)" }}>
 
-        {/* Poignée mobile */}
         <div className="flex justify-center pt-3 pb-1 sm:hidden flex-shrink-0">
-          <div className="w-10 h-1 rounded-full bg-slate-200" />
+          <div className="w-10 h-1 rounded-full" style={{ background: "var(--c-border-strong)" }} />
         </div>
 
-        {/* Header coloré catégorie */}
         <div className="px-6 py-5 flex items-start justify-between gap-4 flex-shrink-0"
-          style={{ background: `linear-gradient(135deg, ${c.bg} 0%, ${c.bg}80 100%)`, borderBottom: `2px solid ${c.border}` }}>
+          style={{ background: `linear-gradient(135deg, ${c.border}25 0%, ${c.border}10 100%)`, borderBottom: `2px solid ${c.border}50` }}>
           <div className="flex-1 min-w-0">
             <span className="text-[9.5px] font-black uppercase tracking-widest px-2.5 py-1 rounded-full inline-flex items-center gap-1 mb-2.5"
-              style={{ background: c.border, color: "white" }}>
+              style={{ background: c.border, color: "#0A150F" }}>
               <span>{CATEGORIES.find(x => x.id === session.category)?.label ?? session.type}</span>
             </span>
             <h3 className="text-[20px] font-black leading-tight" style={{ color: c.text }}>
               {session.title}
             </h3>
-            <p className="text-[12px] mt-2 font-medium flex items-center gap-2 flex-wrap" style={{ color: c.text + "90" }}>
+            <p className="text-[12px] mt-2 font-medium flex items-center gap-2 flex-wrap" style={{ color: "var(--c-text-2)" }}>
               <span>📅 {dateStr}</span>
               {session.time && <span>· ⏰ {session.time}</span>}
               {session.durationMinutes && <span>· {session.durationMinutes} min</span>}
             </p>
           </div>
           <button onClick={onClose}
-            className="p-2 rounded-xl hover:bg-black/10 transition-colors flex-shrink-0">
+            className="p-2 rounded-xl transition-colors flex-shrink-0"
+            style={{ background: "transparent" }}
+            onMouseEnter={e => e.currentTarget.style.background = "rgba(150,150,150,0.15)"}
+            onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
             <X size={18} style={{ color: c.text }} />
           </button>
         </div>
 
-        {/* Corps */}
         <div className="flex-1 overflow-y-auto px-6 py-5 space-y-5">
-
-          {/* Description */}
           {session.description && (
-            <div className="bg-slate-50 rounded-2xl p-4 border border-slate-100">
-              <p className="text-[13px] text-slate-600 leading-relaxed">{session.description}</p>
+            <div className="rounded-2xl p-4" style={{ background: "var(--c-surface-2)", border: "1px solid var(--c-border)" }}>
+              <p className="text-[13px] leading-relaxed" style={{ color: "var(--c-text-1)" }}>{session.description}</p>
             </div>
           )}
 
-          {/* Consignes coach */}
           {session.instructions && (
-            <div className="rounded-2xl overflow-hidden border border-amber-200" style={{ background: "#FFFBF0" }}>
-              <div className="px-4 py-2.5 border-b border-amber-100 flex items-center gap-2">
-                <span className="text-[9.5px] font-black text-amber-700 uppercase tracking-widest">💬 Consignes du coach</span>
+            <div className="rounded-2xl overflow-hidden" style={{ border: "1px solid rgba(245,158,11,0.3)", background: "rgba(245,158,11,0.1)" }}>
+              <div className="px-4 py-2.5 flex items-center gap-2" style={{ borderBottom: "1px solid rgba(245,158,11,0.2)" }}>
+                <span className="text-[9.5px] font-black uppercase tracking-widest" style={{ color: "#FBBF24" }}>💬 Consignes du coach</span>
               </div>
-              <p className="px-4 py-3 text-[13px] text-amber-800 leading-relaxed">{session.instructions}</p>
+              <p className="px-4 py-3 text-[13px] leading-relaxed" style={{ color: "#FDE68A" }}>{session.instructions}</p>
             </div>
           )}
 
-          {/* PDF */}
           {session.pdfUrl && (
             <a href={session.pdfUrl} target="_blank" rel="noopener noreferrer"
-              className="flex items-center gap-3 px-4 py-3.5 rounded-2xl bg-blue-50 border border-blue-100 text-[13px] font-semibold text-blue-600 hover:bg-blue-100 transition-colors tap-feedback">
-              <div className="w-8 h-8 rounded-xl bg-blue-100 flex items-center justify-center flex-shrink-0">
-                <FileText size={14} className="text-blue-600" />
+              className="flex items-center gap-3 px-4 py-3.5 rounded-2xl text-[13px] font-semibold transition-colors tap-feedback"
+              style={{ background: "rgba(59,130,246,0.15)", border: "1px solid rgba(59,130,246,0.3)", color: "#60A5FA" }}>
+              <div className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: "rgba(59,130,246,0.25)" }}>
+                <FileText size={14} color="#60A5FA" />
               </div>
               Voir le PDF de séance
-              <ChevronRight size={14} className="ml-auto text-blue-400" />
+              <ChevronRight size={14} className="ml-auto" color="#60A5FA" />
             </a>
           )}
 
-          {/* ── Présence ── */}
           <div>
-            <p className="text-[10.5px] font-black text-slate-400 uppercase tracking-widest mb-3">Ma présence</p>
+            <p className="text-[10.5px] font-black uppercase tracking-widest mb-3" style={{ color: "var(--c-text-3)" }}>Ma présence</p>
             <div className="flex gap-2">
               {[
-                { id: "done",    label: "Réalisée",  icon: "✅", activeCls: "bg-emerald-50 border-emerald-400 text-emerald-700" },
-                { id: "partial", label: "Partielle",  icon: "🟡", activeCls: "bg-amber-50 border-amber-400 text-amber-700"   },
-                { id: "none",    label: "Absent",     icon: "❌", activeCls: "bg-red-50 border-red-400 text-red-700"          },
-              ].map(opt => (
-                <button key={opt.id} onClick={() => onSetStatus(session.id, athlete.id, opt.id)}
-                  className={["flex-1 py-3 rounded-2xl text-[11.5px] font-bold border-2 transition-all tap-feedback flex flex-col items-center gap-1",
-                    status === opt.id ? opt.activeCls : "bg-white border-slate-200 text-slate-400 hover:border-slate-300"].join(" ")}>
-                  <span className="text-[18px]">{opt.icon}</span>
-                  <span>{opt.label}</span>
-                </button>
-              ))}
+                { id: "done",    label: "Réalisée",  icon: "✅", activeCls: { bg: "rgba(34,197,94,0.15)", border: "#22C55E", color: "#4ADE80" } },
+                { id: "partial", label: "Partielle", icon: "🟡", activeCls: { bg: "rgba(245,158,11,0.15)", border: "#F59E0B", color: "#FBBF24" } },
+                { id: "none",    label: "Absent",    icon: "❌", activeCls: { bg: "rgba(239,68,68,0.15)", border: "#EF4444", color: "#F87171" } },
+              ].map(opt => {
+                const sel = status === opt.id;
+                return (
+                  <button key={opt.id} onClick={() => onSetStatus(session.id, athlete.id, opt.id)}
+                    className="flex-1 py-3 rounded-2xl text-[11.5px] font-bold border-2 transition-all tap-feedback flex flex-col items-center gap-1"
+                    style={sel 
+                      ? { background: opt.activeCls.bg, borderColor: opt.activeCls.border, color: opt.activeCls.color }
+                      : { background: "var(--c-surface-2)", borderColor: "var(--c-border)", color: "var(--c-text-3)" }}>
+                    <span className="text-[18px]">{opt.icon}</span>
+                    <span>{opt.label}</span>
+                  </button>
+                );
+              })}
             </div>
           </div>
 
-          {/* ── RPE ── affiché si présence renseignée et pas "none" */}
           {hasPerf && (
             <div>
-              <p className="text-[10.5px] font-black text-slate-400 uppercase tracking-widest mb-3">
+              <p className="text-[10.5px] font-black uppercase tracking-widest mb-3" style={{ color: "var(--c-text-3)" }}>
                 Effort ressenti (RPE)
                 {val?.rpe != null && (
-                  <span className="ml-2 font-black"
-                    style={{ color: rpeColor(val.rpe).active }}>
+                  <span className="ml-2 font-black" style={{ color: rpeColor(val.rpe).active }}>
                     {val.rpe}/10
                   </span>
                 )}
@@ -3802,31 +3796,29 @@ const SessionDetailModal = memo(({ session, athlete, onClose, onSetStatus, onSet
                       className="w-10 h-10 rounded-2xl text-[12px] font-black border-2 transition-all tap-feedback"
                       style={sel
                         ? { background: rc.active, borderColor: rc.border, color: rc.text, transform: "scale(1.12)", boxShadow: `0 2px 8px ${rc.active}60` }
-                        : { background: "white",   borderColor: "#E2E8F0", color: "#94A3B8" }}>
+                        : { background: "var(--c-surface-2)", borderColor: "var(--c-border)", color: "var(--c-text-3)" }}>
                       {i}
                     </button>
                   );
                 })}
               </div>
-              {/* Légende RPE */}
               <div className="flex items-center gap-3 mt-2">
                 {[{ range: "0-3", color: "#22C55E", label: "Facile" }, { range: "4-6", color: "#F59E0B", label: "Modéré" }, { range: "7-10", color: "#EF4444", label: "Intense" }].map(l => (
                   <div key={l.range} className="flex items-center gap-1">
                     <div className="w-2 h-2 rounded-full" style={{ background: l.color }} />
-                    <span className="text-[10px] text-slate-400 font-medium">{l.range} {l.label}</span>
+                    <span className="text-[10px] font-medium" style={{ color: "var(--c-text-4)" }}>{l.range} {l.label}</span>
                   </div>
                 ))}
               </div>
             </div>
           )}
 
-          {/* ── Ressenti général (étoiles) ── */}
           {hasPerf && (
             <div>
-              <p className="text-[10.5px] font-black text-slate-400 uppercase tracking-widest mb-3">
+              <p className="text-[10.5px] font-black uppercase tracking-widest mb-3" style={{ color: "var(--c-text-3)" }}>
                 Ressenti général
                 {val?.feeling != null && (
-                  <span className="ml-2 font-black text-amber-500">{val.feeling}/5 ⭐</span>
+                  <span className="ml-2 font-black" style={{ color: "#F59E0B" }}>{val.feeling}/5 ⭐</span>
                 )}
               </p>
               <div className="flex gap-2">
@@ -3836,7 +3828,7 @@ const SessionDetailModal = memo(({ session, athlete, onClose, onSetStatus, onSet
                     <Star
                       size={32}
                       fill={val?.feeling >= n ? "#F59E0B" : "none"}
-                      color={val?.feeling >= n ? "#F59E0B" : "#E2E8F0"}
+                      color={val?.feeling >= n ? "#F59E0B" : "var(--c-border-strong)"}
                       strokeWidth={1.5}
                     />
                   </button>
@@ -3845,10 +3837,9 @@ const SessionDetailModal = memo(({ session, athlete, onClose, onSetStatus, onSet
             </div>
           )}
 
-          {/* ── Commentaire ── */}
           {hasPerf && (
             <div>
-              <p className="text-[10.5px] font-black text-slate-400 uppercase tracking-widest mb-2">
+              <p className="text-[10.5px] font-black uppercase tracking-widest mb-2" style={{ color: "var(--c-text-3)" }}>
                 Commentaire
               </p>
               <textarea
@@ -3863,15 +3854,12 @@ const SessionDetailModal = memo(({ session, athlete, onClose, onSetStatus, onSet
           )}
         </div>
 
-        {/* Footer */}
-        <div className="px-6 py-4 border-t border-slate-100 flex justify-end flex-shrink-0">
-          <button onClick={onClose}
-            className="btn-secondary">
-            Fermer
-          </button>
+        <div className="px-6 py-4 flex justify-end flex-shrink-0" style={{ borderTop: "1px solid var(--c-border)" }}>
+          <button onClick={onClose} className="btn-secondary">Fermer</button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 });
 
@@ -3892,7 +3880,6 @@ export default function AthletePlanning({
   const [activeSession, setActiveSession] = useState(null);
   const [showCreate,    setShowCreate]    = useState(false);
 
-  // ── Index sessions par date ──────────────────────────────────────────────────
   const sessionsByDate = useMemo(() => {
     const map = {};
     sessions.forEach(s => {
@@ -3904,7 +3891,6 @@ export default function AthletePlanning({
     return map;
   }, [sessions]);
 
-  // ── Jours du mois pour la grille ────────────────────────────────────────────
   const calDays = useMemo(() => {
     const first    = new Date(viewYear, viewMonth, 1);
     const last     = new Date(viewYear, viewMonth + 1, 0);
@@ -3917,7 +3903,6 @@ export default function AthletePlanning({
     return days;
   }, [viewYear, viewMonth]);
 
-  // ── Jours de la semaine sélectionnée ────────────────────────────────────────
   const weekDays = useMemo(() => {
     const ref = selectedDate ?? today;
     const dow = (ref.getDay() + 6) % 7;
@@ -3928,7 +3913,6 @@ export default function AthletePlanning({
     });
   }, [selectedDate]);
 
-  // ── Agenda groupé par date ───────────────────────────────────────────────────
   const groupedAgenda = useMemo(() => {
     const sorted = [...sessions].filter(s => s.sessionDate).sort((a, b) => a.sessionDate.localeCompare(b.sessionDate));
     const groups = []; const seen = new Set();
@@ -3940,14 +3924,12 @@ export default function AthletePlanning({
     return groups;
   }, [sessions]);
 
-  // ── Navigation ───────────────────────────────────────────────────────────────
   const prevMonth = () => { if (viewMonth === 0) { setViewYear(y => y-1); setViewMonth(11); } else setViewMonth(m => m-1); };
   const nextMonth = () => { if (viewMonth === 11) { setViewYear(y => y+1); setViewMonth(0); } else setViewMonth(m => m+1); };
   const prevWeek  = () => { const d = new Date(selectedDate ?? today); d.setDate(d.getDate()-7); setSelectedDate(d); };
   const nextWeek  = () => { const d = new Date(selectedDate ?? today); d.setDate(d.getDate()+7); setSelectedDate(d); };
   const goToday   = () => { setViewYear(today.getFullYear()); setViewMonth(today.getMonth()); setSelectedDate(today); };
 
-  // Toujours ouvrir la session en version live (mise à jour temps réel)
   const liveActive = activeSession ? sessions.find(s => s.id === activeSession.id) ?? activeSession : null;
 
   const navLabel = useMemo(() => {
@@ -3959,7 +3941,6 @@ export default function AthletePlanning({
     return `${mon.toLocaleDateString("fr-BE", { day: "numeric", month: "short" })} – ${sun.toLocaleDateString("fr-BE", { day: "numeric", month: "short" })}`;
   }, [viewMode, viewMonth, viewYear, weekDays]);
 
-  // ── Helpers carte séance ─────────────────────────────────────────────────────
   const SessionCard = useCallback(({ s, isPast = false, compact = false }) => {
     const c   = cat(s.category);
     const val = s.validations?.find(v => v.athleteId === athlete.id);
@@ -3970,7 +3951,7 @@ export default function AthletePlanning({
       return (
         <div onClick={e => { e.stopPropagation(); setActiveSession(s); }}
           className="flex items-center gap-1.5 px-2 py-1 rounded-xl text-[9.5px] font-bold cursor-pointer hover:opacity-80 transition-opacity truncate"
-          style={{ background: c.bg, color: c.text, borderLeft: `3px solid ${c.border}` }}>
+          style={{ background: `${c.border}1A`, color: c.text, borderLeft: `3px solid ${c.border}` }}>
           <span className="truncate flex-1">{s.title}</span>
           {st === "done" && <span className="flex-shrink-0">✅</span>}
           {st === "none" && <span className="flex-shrink-0">❌</span>}
@@ -3982,24 +3963,22 @@ export default function AthletePlanning({
       <div onClick={() => setActiveSession(s)}
         className="card card-hover rounded-2xl overflow-hidden cursor-pointer tap-feedback"
         style={rpeNeeded ? { borderWidth: 2, borderColor: "#F59E0B", boxShadow: "0 0 0 3px rgba(245,158,11,0.12)" } : {}}>
-        {/* En-tête coloré catégorie */}
         <div className="px-4 py-2.5 flex items-center justify-between"
-          style={{ background: c.bg, borderBottom: `1.5px solid ${c.border}` }}>
+          style={{ background: `${c.border}15`, borderBottom: `1.5px solid ${c.border}40` }}>
           <div className="flex items-center gap-2">
             <span className="text-[9.5px] font-black uppercase tracking-wider px-2.5 py-0.5 rounded-full"
-              style={{ background: c.border, color: "white" }}>
+              style={{ background: c.border, color: "#0A150F" }}>
               {CATEGORIES.find(x => x.id === s.category)?.label ?? s.type}
             </span>
             {s.pdfUrl && (
-              <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-blue-100 text-blue-600">📄 PDF</span>
+              <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full" style={{ background: "rgba(59,130,246,0.15)", color: "#60A5FA" }}>📄 PDF</span>
             )}
           </div>
           <StatusBadge status={st} size="sm" />
         </div>
-        {/* Corps */}
-        <div className="px-4 py-3.5 bg-white">
-          <p className="text-[15px] font-black text-slate-800 leading-tight mb-1.5">{s.title}</p>
-          <div className="flex items-center gap-3 text-[11.5px] text-slate-400 mb-2">
+        <div className="px-4 py-3.5" style={{ background: "var(--c-surface)" }}>
+          <p className="text-[15px] font-black leading-tight mb-1.5" style={{ color: "var(--c-text-1)" }}>{s.title}</p>
+          <div className="flex items-center gap-3 text-[11.5px] mb-2" style={{ color: "var(--c-text-3)" }}>
             <span className="flex items-center gap-1"><Clock size={11} /> {s.time}</span>
             {s.durationMinutes && <span>{s.durationMinutes} min</span>}
             {val?.rpe != null && (
@@ -4007,13 +3986,13 @@ export default function AthletePlanning({
             )}
           </div>
           {s.instructions && (
-            <p className="text-[11px] text-amber-700 bg-amber-50 rounded-xl px-3 py-2 mb-2 line-clamp-2">
+            <p className="text-[11px] rounded-xl px-3 py-2 mb-2 line-clamp-2" style={{ background: "rgba(245,158,11,0.1)", color: "#FBBF24" }}>
               💬 {s.instructions}
             </p>
           )}
           {rpeNeeded && (
-            <p className="text-[11px] font-bold text-amber-600 flex items-center gap-1.5">
-              <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
+            <p className="text-[11px] font-bold flex items-center gap-1.5" style={{ color: "#FBBF24" }}>
+              <span className="w-1.5 h-1.5 rounded-full animate-pulse" style={{ background: "#F59E0B" }} />
               Valide ta séance
             </p>
           )}
@@ -4022,73 +4001,65 @@ export default function AthletePlanning({
     );
   }, [athlete.id, sessions]);
 
-  // ══════════════════════════════════════════════════════════════════════════════
   return (
-    <div className="flex flex-col h-full" style={{ background: "var(--c-bg, #F5F5F2)" }}>
+    <div className="flex flex-col h-full" style={{ background: "var(--c-bg)" }}>
 
       {/* ── HEADER GLASSMORPHISM ─────────────────────────────────────────────── */}
       <div className="header-glass px-3 md:px-5 py-3 flex items-center justify-between gap-2 flex-shrink-0 z-10">
-
-        {/* Navigation mois / semaine */}
         <div className="flex items-center gap-1">
           {viewMode !== "agenda" && (
             <button onClick={viewMode === "month" ? prevMonth : prevWeek}
-              className="w-8 h-8 rounded-xl hover:bg-slate-100 text-slate-500 flex items-center justify-center transition-all tap-feedback">
+              className="w-8 h-8 rounded-xl flex items-center justify-center transition-all tap-feedback" style={{ color: "var(--c-text-2)" }}>
               <ChevronLeft size={16} />
             </button>
           )}
-          <p className="text-[14px] md:text-[15px] font-black text-slate-800 px-1 min-w-[100px] text-center truncate">
+          <p className="text-[14px] md:text-[15px] font-black px-1 min-w-[100px] text-center truncate" style={{ color: "var(--c-text-1)" }}>
             {navLabel}
           </p>
           {viewMode !== "agenda" && (
             <button onClick={viewMode === "month" ? nextMonth : nextWeek}
-              className="w-8 h-8 rounded-xl hover:bg-slate-100 text-slate-500 flex items-center justify-center transition-all tap-feedback">
+              className="w-8 h-8 rounded-xl flex items-center justify-center transition-all tap-feedback" style={{ color: "var(--c-text-2)" }}>
               <ChevronRight size={16} />
             </button>
           )}
           {viewMode !== "agenda" && (
             <button onClick={goToday}
-              className="px-2.5 py-1 rounded-lg text-[10px] font-bold border border-slate-200 text-slate-500 hover:bg-slate-50 ml-1 transition-colors">
+              className="px-2.5 py-1 rounded-lg text-[10px] font-bold border transition-colors ml-1"
+              style={{ borderColor: "var(--c-border)", color: "var(--c-text-3)", background: "transparent" }}>
               Auj.
             </button>
           )}
         </div>
 
-        {/* Contrôles droite */}
         <div className="flex items-center gap-1.5">
-          {/* Sélecteur de vue — pill premium */}
-          <div className="flex rounded-xl border border-slate-200 overflow-hidden text-[10px] font-bold bg-white">
+          <div className="flex rounded-xl border overflow-hidden text-[10px] font-bold" style={{ borderColor: "var(--c-border)", background: "var(--c-surface)" }}>
             {[{ id: "agenda", label: "Liste" }, { id: "month", label: "Mois" }, { id: "week", label: "Sem." }].map(v => (
               <button key={v.id} onClick={() => setViewMode(v.id)}
                 className="px-3 py-1.5 transition-colors"
                 style={viewMode === v.id
-                  ? { background: "#0F172A", color: "white" }
-                  : { background: "white", color: "#64748B" }}>
+                  ? { background: "var(--c-text-1)", color: "var(--c-bg)" }
+                  : { background: "var(--c-surface)", color: "var(--c-text-3)" }}>
                 {v.label}
               </button>
             ))}
           </div>
-          {/* Bouton planifier */}
           <button onClick={() => setShowCreate(true)} className="btn-primary !py-2 !px-3">
             <Plus size={14} /><span className="hidden sm:inline">Planifier</span>
           </button>
         </div>
       </div>
 
-      {/* ══════════════════════════════════════════════════════════════════════
-          VUE AGENDA (liste chronologique)
-         ══════════════════════════════════════════════════════════════════════ */}
+      {/* ── VUE AGENDA ─────────────────────────────────────────────────────── */}
       {viewMode === "agenda" && (
         <div className="flex-1 overflow-y-auto">
           {groupedAgenda.length === 0 ? (
-            /* État vide */
             <div className="flex flex-col items-center justify-center h-full gap-4 p-8">
-              <div className="w-16 h-16 rounded-3xl bg-slate-100 flex items-center justify-center">
-                <CalendarDays size={28} className="text-slate-300" strokeWidth={1.5} />
+              <div className="w-16 h-16 rounded-3xl flex items-center justify-center" style={{ background: "var(--c-surface-2)" }}>
+                <CalendarDays size={28} strokeWidth={1.5} style={{ color: "var(--c-text-4)" }} />
               </div>
               <div className="text-center">
-                <p className="text-[15px] font-bold text-slate-500">Aucune séance planifiée</p>
-                <p className="text-[12px] text-slate-400 mt-1">Ton coach ou toi pouvez planifier des séances</p>
+                <p className="text-[15px] font-bold" style={{ color: "var(--c-text-2)" }}>Aucune séance planifiée</p>
+                <p className="text-[12px] mt-1" style={{ color: "var(--c-text-4)" }}>Ton coach ou toi pouvez planifier des séances</p>
               </div>
               <button onClick={() => setShowCreate(true)} className="btn-primary">
                 <Plus size={14} /> Planifier une séance
@@ -4102,38 +4073,33 @@ export default function AthletePlanning({
                 const isPast  = dateObj < new Date(today.toISOString().slice(0, 10));
                 return (
                   <div key={date}>
-                    {/* En-tête groupe date */}
                     <div className="flex items-center gap-3 mb-3">
                       <div className="w-12 h-12 rounded-2xl flex flex-col items-center justify-center flex-shrink-0 shadow-sm"
                         style={isToday
-                          ? { background: "linear-gradient(135deg, #1D9E75, #16826C)" }
-                          : isPast
-                            ? { background: "#F1F5F9", border: "1px solid #E2E8F0" }
-                            : { background: "white", border: "1.5px solid #E2E8F0" }}>
+                          ? { background: "linear-gradient(135deg, #1D9E75, #16826C)", border: "none" }
+                          : { background: isPast ? "var(--c-surface-2)" : "var(--c-surface)", border: "1.5px solid var(--c-border)" }}>
                         <span className="text-[9px] font-black uppercase leading-none"
-                          style={{ color: isToday ? "rgba(255,255,255,0.75)" : isPast ? "#94A3B8" : "#64748B" }}>
+                          style={{ color: isToday ? "rgba(255,255,255,0.75)" : isPast ? "var(--c-text-4)" : "var(--c-text-3)" }}>
                           {dateObj.toLocaleDateString("fr-BE", { weekday: "short" }).replace(".", "")}
                         </span>
                         <span className="text-[18px] font-black leading-tight"
-                          style={{ color: isToday ? "white" : isPast ? "#94A3B8" : "#1E293B" }}>
+                          style={{ color: isToday ? "white" : isPast ? "var(--c-text-3)" : "var(--c-text-1)" }}>
                           {dateObj.getDate()}
                         </span>
                       </div>
                       <div>
                         <p className="text-[13px] font-black"
-                          style={{ color: isToday ? "#1D9E75" : isPast ? "#94A3B8" : "#1E293B" }}>
+                          style={{ color: isToday ? "#3DBE8B" : isPast ? "var(--c-text-4)" : "var(--c-text-1)" }}>
                           {isToday
                             ? "Aujourd'hui"
                             : dateObj.toLocaleDateString("fr-BE", { weekday: "long", day: "numeric", month: "long" })}
                         </p>
-                        <p className="text-[10.5px] text-slate-400 mt-0.5">
+                        <p className="text-[10.5px] mt-0.5" style={{ color: "var(--c-text-3)" }}>
                           {ds.length} séance{ds.length > 1 ? "s" : ""}
                         </p>
                       </div>
                     </div>
-
-                    {/* Cards séances avec ligne verticale */}
-                    <div className="ml-4 pl-11 border-l-2 border-slate-100 space-y-2.5">
+                    <div className="ml-4 pl-11 border-l-2 space-y-2.5" style={{ borderColor: "var(--c-border-strong)" }}>
                       {ds.sort((a, b) => a.time.localeCompare(b.time)).map(s => (
                         <SessionCard key={s.id} s={s} isPast={isPast} />
                       ))}
@@ -4146,21 +4112,16 @@ export default function AthletePlanning({
         </div>
       )}
 
-      {/* ══════════════════════════════════════════════════════════════════════
-          VUE MOIS (grille calendrier)
-         ══════════════════════════════════════════════════════════════════════ */}
+      {/* ── VUE MOIS ───────────────────────────────────────────────────────── */}
       {viewMode === "month" && (
         <div className="flex-1 overflow-y-auto p-3 md:p-4">
-          {/* En-têtes jours */}
           <div className="grid grid-cols-7 mb-2">
             {["L", "M", "M", "J", "V", "S", "D"].map((d, i) => (
-              <div key={i} className="text-center text-[9px] md:text-[10.5px] font-black text-slate-400 uppercase tracking-widest py-1.5">
+              <div key={i} className="text-center text-[9px] md:text-[10.5px] font-black uppercase tracking-widest py-1.5" style={{ color: "var(--c-text-3)" }}>
                 {d}
               </div>
             ))}
           </div>
-
-          {/* Grille jours */}
           <div className="grid grid-cols-7 gap-0.5 md:gap-1">
             {calDays.map(({ date, cur }, idx) => {
               const key     = date.toISOString().slice(0, 10);
@@ -4176,23 +4137,19 @@ export default function AthletePlanning({
                   }}
                   className="min-h-[52px] md:min-h-[90px] rounded-xl md:rounded-2xl p-1 md:p-2 cursor-pointer transition-all border"
                   style={isToday
-                    ? { background: "#F0FBF7", borderColor: "#1D9E75", borderWidth: 2, boxShadow: "0 0 0 3px rgba(29,158,117,0.08)" }
+                    ? { background: "rgba(29,158,117,0.08)", borderColor: "rgba(29,158,117,0.45)", borderWidth: 2 }
                     : isSel
-                      ? { background: "#EFF6FF", borderColor: "#60A5FA", borderWidth: 2 }
+                      ? { background: "rgba(91,158,245,0.08)", borderColor: "rgba(91,158,245,0.45)", borderWidth: 2 }
                       : cur
-                        ? { background: "white", borderColor: "#F1F5F9" }
-                        : { background: "rgba(248,250,252,0.4)", borderColor: "transparent", opacity: 0.4 }}>
-
+                        ? { background: "var(--c-surface)", borderColor: "var(--c-border)" }
+                        : { background: "transparent", borderColor: "transparent", opacity: 0.35 }}>
                   <div className="flex items-start justify-between mb-1">
-                    {/* Numéro du jour */}
                     <span className="text-[11px] md:text-[13px] font-black w-6 h-6 md:w-7 md:h-7 flex items-center justify-center rounded-xl flex-shrink-0"
                       style={isToday
                         ? { background: "linear-gradient(135deg, #1D9E75, #16826C)", color: "white" }
-                        : { color: cur ? "#334155" : "#94a3b8" }}>
+                        : { color: cur ? "var(--c-text-1)" : "var(--c-text-4)" }}>
                       {date.getDate()}
                     </span>
-
-                    {/* Dots mobile */}
                     {ds.length > 0 && (
                       <div className="md:hidden flex flex-wrap gap-0.5 justify-end mt-1">
                         {ds.slice(0, 3).map(s => (
@@ -4203,22 +4160,18 @@ export default function AthletePlanning({
                       </div>
                     )}
                   </div>
-
-                  {/* Pills séances desktop */}
                   <div className="hidden md:block space-y-0.5">
                     {ds.slice(0, 3).map(s => (
                       <SessionCard key={s.id} s={s} compact />
                     ))}
                     {ds.length > 3 && (
-                      <p className="text-[9px] text-slate-400 font-semibold px-1">+{ds.length - 3}</p>
+                      <p className="text-[9px] font-semibold px-1" style={{ color: "var(--c-text-4)" }}>+{ds.length - 3}</p>
                     )}
                   </div>
                 </div>
               );
             })}
           </div>
-
-          {/* Séances du jour sélectionné (en bas de la grille) */}
           {selectedDate && (() => {
             const key = selectedDate.toISOString().slice(0, 10);
             const ds  = (sessionsByDate[key] ?? []).sort((a, b) => a.time.localeCompare(b.time));
@@ -4226,9 +4179,9 @@ export default function AthletePlanning({
             const isPast = selectedDate < new Date(today.toISOString().slice(0, 10));
             return (
               <div className="mt-5 space-y-2">
-                <p className="text-[12px] font-bold text-slate-500 mb-3 flex items-center gap-2">
+                <p className="text-[12px] font-bold mb-3 flex items-center gap-2" style={{ color: "var(--c-text-3)" }}>
                   <span className="w-4 h-4 rounded-lg flex items-center justify-center" style={{ background: "#1D9E75" }}>
-                    <CalendarDays size={9} color="white" />
+                    <CalendarDays size={9} color="#0A150F" />
                   </span>
                   {selectedDate.toLocaleDateString("fr-BE", { weekday: "long", day: "numeric", month: "long" })}
                 </p>
@@ -4239,45 +4192,40 @@ export default function AthletePlanning({
         </div>
       )}
 
-      {/* ══════════════════════════════════════════════════════════════════════
-          VUE SEMAINE
-         ══════════════════════════════════════════════════════════════════════ */}
+      {/* ── VUE SEMAINE ──────────────────────────────────────────────────────── */}
       {viewMode === "week" && (
         <div className="flex-1 overflow-y-auto flex flex-col">
-          {/* Sélecteur de jour — strip horizontal */}
-          <div className="flex overflow-x-auto gap-1.5 px-3 py-3 bg-white border-b border-slate-100 flex-shrink-0"
-            style={{ scrollbarWidth: "none" }}>
+          <div className="flex overflow-x-auto gap-1.5 px-3 py-3 flex-shrink-0"
+            style={{ background: "var(--c-surface)", borderBottom: "1px solid var(--c-border)", scrollbarWidth: "none" }}>
             {weekDays.map((date, i) => {
               const isToday = isSameDay(date, today);
               const isSel   = isSameDay(date, selectedDate ?? today);
               const hasSess = (sessionsByDate[date.toISOString().slice(0, 10)] ?? []).length > 0;
               return (
                 <button key={i} onClick={() => setSelectedDate(date)}
-                  className="flex-shrink-0 flex flex-col items-center gap-0.5 w-11 py-2.5 rounded-2xl transition-all tap-feedback"
+                  className="flex-shrink-0 flex flex-col items-center gap-0.5 w-11 py-2.5 rounded-2xl transition-all tap-feedback border"
                   style={isToday
-                    ? { background: "linear-gradient(135deg, #1D9E75, #16826C)" }
+                    ? { background: "linear-gradient(135deg, #1D9E75, #16826C)", borderColor: "transparent" }
                     : isSel
-                      ? { background: "#0F172A" }
-                      : { background: "transparent" }}>
+                      ? { background: "var(--c-surface-3)", borderColor: "var(--c-border)" }
+                      : { background: "transparent", borderColor: "transparent" }}>
                   <span className="text-[9px] font-black uppercase tracking-wider"
-                    style={{ color: (isToday || isSel) ? "rgba(255,255,255,0.7)" : "#94A3B8" }}>
+                    style={{ color: (isToday) ? "rgba(255,255,255,0.7)" : isSel ? "var(--c-text-2)" : "var(--c-text-4)" }}>
                     {["L", "M", "M", "J", "V", "S", "D"][i]}
                   </span>
                   <span className="text-[18px] font-black leading-tight"
-                    style={{ color: (isToday || isSel) ? "white" : "#1E293B" }}>
+                    style={{ color: (isToday) ? "white" : "var(--c-text-1)" }}>
                     {date.getDate()}
                   </span>
-                  {/* Dot séance */}
                   <div className="w-1.5 h-1.5 rounded-full transition-colors"
                     style={{ background: hasSess
-                      ? (isToday || isSel) ? "rgba(255,255,255,0.6)" : "#1D9E75"
+                      ? isToday ? "rgba(255,255,255,0.6)" : "#3DBE8B"
                       : "transparent" }} />
                 </button>
               );
             })}
           </div>
 
-          {/* Séances du jour */}
           <div className="flex-1 overflow-y-auto p-3 space-y-2.5">
             {(() => {
               const key     = (selectedDate ?? today).toISOString().slice(0, 10);
@@ -4287,12 +4235,12 @@ export default function AthletePlanning({
 
               if (ds.length === 0) return (
                 <div className="flex flex-col items-center justify-center py-16 gap-3">
-                  <div className="w-14 h-14 rounded-3xl bg-slate-100 flex items-center justify-center">
-                    <CalendarDays size={24} className="text-slate-300" strokeWidth={1.5} />
+                  <div className="w-14 h-14 rounded-3xl flex items-center justify-center" style={{ background: "var(--c-surface-2)" }}>
+                    <CalendarDays size={24} strokeWidth={1.5} style={{ color: "var(--c-text-4)" }} />
                   </div>
-                  <p className="text-[13px] font-semibold text-slate-400">Repos ce jour</p>
+                  <p className="text-[13px] font-semibold" style={{ color: "var(--c-text-3)" }}>Repos ce jour</p>
                   <button onClick={() => setShowCreate(true)}
-                    className="text-[12px] font-bold text-emerald-600 hover:text-emerald-700 transition-colors">
+                    className="text-[12px] font-bold transition-colors" style={{ color: "#3DBE8B" }}>
                     + Planifier une séance
                   </button>
                 </div>
@@ -11468,16 +11416,11 @@ export default memo(Performances);
 
 <file path="src/modules/Planning.jsx">
 // ============================================================
-// AthleteOS — src/modules/Planning.jsx  ★ DESIGN PREMIUM
-// Logique métier identique — rendu entièrement repoli :
-//   - Header glass avec navigation fluide
-//   - Vue mois : grille premium, cellules avec hover glow
-//   - Vue semaine : cards journalières avec timeline verticale
-//   - Panneau latéral desktop : séances du jour premium
-//   - Drawer mobile : bottom sheet glassmorphism
-//   - SessionModal : header coloré, feedback RPE premium
-//   - AddSessionModal : formulaire premium
-//   - Toutes les transitions spring
+// AthleteOS — src/modules/Planning.jsx  ★ DESIGN PREMIUM DARK
+// Rendu adapté au dark mode : plus de bg-white / text-slate-*
+// hardcodés. Couleurs de catégorie recalibrées pour rester
+// lisibles et subtiles sur fond sombre (fill faible opacité +
+// texte clair teinté, jamais blanc pur sur noir).
 // ============================================================
 
 import { memo, useState, useMemo, useCallback, useEffect } from "react";
@@ -11515,16 +11458,20 @@ const CATEGORIES = [
   { id: "recuperation", label: "Récupération" },
 ];
 
+// Couleurs recalibrées pour le dark mode :
+// - border = teinte saturée (accent visible)
+// - text   = version claire de la teinte (lisible sur fond sombre)
+// - bg     = utilisé uniquement en superposition ${border}1A/${border}22 (opacité faible)
 const SESSION_COLORS = {
-  sprint:       { bg: "#DBEAFE", border: "#3B82F6", text: "#1D4ED8", dot: "#3B82F6" },
-  haies:        { bg: "#EDE9FE", border: "#7C3AED", text: "#4C1D95", dot: "#7C3AED" },
-  force:        { bg: "#DCFCE7", border: "#16A34A", text: "#14532D", dot: "#16A34A" },
-  saut:         { bg: "#F3E8FF", border: "#A855F7", text: "#6B21A8", dot: "#A855F7" },
-  lancer:       { bg: "#FFEDD5", border: "#F97316", text: "#9A3412", dot: "#F97316" },
-  endurance:    { bg: "#E0F2FE", border: "#0284C7", text: "#0C4A6E", dot: "#0284C7" },
-  technique:    { bg: "#F1F5F9", border: "#64748B", text: "#1E293B", dot: "#64748B" },
-  mobilite:     { bg: "#FEF9C3", border: "#CA8A04", text: "#713F12", dot: "#CA8A04" },
-  recuperation: { bg: "#F8FAFC", border: "#CBD5E1", text: "#475569", dot: "#CBD5E1" },
+  sprint:       { border: "#5B9EF5", text: "#A9CBFB", dot: "#5B9EF5" },
+  haies:        { border: "#A78BFA", text: "#D2C4FB", dot: "#A78BFA" },
+  force:        { border: "#34D399", text: "#9CF0D1", dot: "#34D399" },
+  saut:         { border: "#C084FC", text: "#E3C6FD", dot: "#C084FC" },
+  lancer:       { border: "#FB923C", text: "#FDCBA0", dot: "#FB923C" },
+  endurance:    { border: "#38BDF8", text: "#A6E4FC", dot: "#38BDF8" },
+  technique:    { border: "#94A3B8", text: "#D3D9E0", dot: "#94A3B8" },
+  mobilite:     { border: "#EAB308", text: "#F7DD8B", dot: "#EAB308" },
+  recuperation: { border: "#64748B", text: "#C2C9D2", dot: "#64748B" },
 };
 
 const EMPTY_FORM = {
@@ -11588,26 +11535,38 @@ function getCalendarDays(year, month) {
   return days;
 }
 
-// ─── Icônes statut ────────────────────────────────────────────────────────────
+// ─── Statuts génériques (couleurs identiques quel que soit le thème) ─────────
+const STATUS_COLORS = {
+  done:    "#3DBE8B",
+  partial: "#EAB308",
+  none:    "#EF6B6B",
+};
 
 function StatusIcon({ status, size = 14 }) {
-  if (status === "done")    return <CheckCircle   size={size} color="#1D9E75" />;
-  if (status === "partial") return <AlertTriangle size={size} color="#EF9F27" />;
-  if (status === "none")    return <XCircle       size={size} color="#E24B4A" />;
+  if (status === "done")    return <CheckCircle   size={size} color={STATUS_COLORS.done} />;
+  if (status === "partial") return <AlertTriangle size={size} color={STATUS_COLORS.partial} />;
+  if (status === "none")    return <XCircle       size={size} color={STATUS_COLORS.none} />;
   return null;
 }
 
 function ValidationBadge({ status }) {
   const map = {
-    done:    { label: "Réalisée",     cls: "bg-emerald-50 text-emerald-700 border border-emerald-100" },
-    partial: { label: "Partielle",    cls: "bg-amber-50 text-amber-700 border border-amber-100"       },
-    none:    { label: "Non réalisée", cls: "bg-red-50 text-red-700 border border-red-100"             },
+    done:    { label: "Réalisée",     bg: "rgba(61,190,139,0.14)", color: "#7BD8B4" },
+    partial: { label: "Partielle",    bg: "rgba(234,179,8,0.14)",  color: "#F0CB61" },
+    none:    { label: "Non réalisée", bg: "rgba(239,107,107,0.14)",color: "#F19A9A" },
   };
-  const b = map[status] ?? { label: "À venir", cls: "bg-slate-100 text-slate-400" };
-  return <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${b.cls}`}>{b.label}</span>;
+  const b = map[status] ?? { label: "À venir", bg: "var(--c-surface-3)", color: "var(--c-text-3)" };
+  return (
+    <span
+      className="text-[10px] font-semibold px-2 py-0.5 rounded-full"
+      style={{ background: b.bg, color: b.color }}
+    >
+      {b.label}
+    </span>
+  );
 }
 
-// ─── SessionModal premium ─────────────────────────────────────────────────────
+// ─── SessionModal premium (dark) ──────────────────────────────────────────────
 
 const SessionModal = memo(({ session, athletes, onClose, onSetRpe, onSetStatus, onEditRequest, onDeleteSession }) => {
   const [deleting,    setDeleting]    = useState(false);
@@ -11636,28 +11595,30 @@ const SessionModal = memo(({ session, athletes, onClose, onSetRpe, onSetStatus, 
       className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4 modal-backdrop"
       onClick={e => e.target === e.currentTarget && onClose()}
     >
-      <div className="bg-white rounded-t-3xl sm:rounded-3xl shadow-2xl w-full sm:max-w-lg max-h-[95vh] sm:max-h-[90vh] flex flex-col overflow-hidden modal-content">
+      <div className="rounded-t-3xl sm:rounded-3xl shadow-2xl w-full sm:max-w-lg max-h-[95vh] sm:max-h-[90vh] flex flex-col overflow-hidden modal-content"
+        style={{ background: "var(--c-surface)" }}>
 
         {/* Handle mobile */}
         <div className="flex justify-center pt-3 pb-1 sm:hidden flex-shrink-0">
-          <div className="w-10 h-1 rounded-full bg-slate-200" />
+          <div className="w-10 h-1 rounded-full" style={{ background: "var(--c-border-strong)" }} />
         </div>
 
-        {/* Header coloré */}
+        {/* Header coloré — fill faible opacité, pas de blanc */}
         <div
           className="px-6 py-5 flex items-start justify-between gap-4 flex-shrink-0"
-          style={{ background: c.bg, borderBottom: `2px solid ${c.border}` }}
+          style={{ background: `${c.border}14`, borderBottom: `2px solid ${c.border}40` }}
         >
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 mb-2 flex-wrap">
               <span
                 className="text-[10px] font-black uppercase tracking-widest px-2.5 py-1 rounded-full"
-                style={{ background: c.border, color: "white" }}
+                style={{ background: c.border, color: "#0A150F" }}
               >
                 {CATEGORIES.find(x => x.id === session.category)?.label ?? session.type}
               </span>
               {session.createdByAthlete && (
-                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-purple-100 text-purple-700">
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full"
+                  style={{ background: "rgba(168,85,247,0.16)", color: "#D8B4FE" }}>
                   📋 Proposé par un athlète
                 </span>
               )}
@@ -11666,7 +11627,7 @@ const SessionModal = memo(({ session, athletes, onClose, onSetRpe, onSetStatus, 
             <h3 className="text-[20px] font-black leading-tight" style={{ color: c.text }}>
               {session.title}
             </h3>
-            <p className="text-[12px] mt-1.5 font-medium" style={{ color: c.text + "99" }}>
+            <p className="text-[12px] mt-1.5 font-medium" style={{ color: "var(--c-text-2)" }}>
               📅 {dateStr}
               {session.time && ` · ⏰ ${session.time}`}
               {session.durationMinutes && ` · ${session.durationMinutes} min`}
@@ -11674,7 +11635,10 @@ const SessionModal = memo(({ session, athletes, onClose, onSetRpe, onSetStatus, 
           </div>
           <button
             onClick={onClose}
-            className="p-2 rounded-xl hover:bg-black/10 flex-shrink-0 transition-colors"
+            className="p-2 rounded-xl flex-shrink-0 transition-colors"
+            style={{ background: "transparent" }}
+            onMouseEnter={e => e.currentTarget.style.background = "rgba(255,255,255,0.08)"}
+            onMouseLeave={e => e.currentTarget.style.background = "transparent"}
           >
             <X size={18} style={{ color: c.text }} />
           </button>
@@ -11684,12 +11648,15 @@ const SessionModal = memo(({ session, athletes, onClose, onSetRpe, onSetStatus, 
 
           {/* Feedback rapide */}
           {pendingFeedback.length > 0 && (
-            <div className="rounded-2xl border-2 border-amber-200 overflow-hidden" style={{ background: "#FFFBF0" }}>
-              <div className="px-4 py-3 border-b border-amber-100 flex items-center gap-2">
-                <div className="w-7 h-7 rounded-xl bg-amber-100 flex items-center justify-center flex-shrink-0">
-                  <Zap size={13} color="#EF9F27" />
+            <div className="rounded-2xl border overflow-hidden"
+              style={{ borderColor: "rgba(234,179,8,0.35)", background: "rgba(234,179,8,0.06)" }}>
+              <div className="px-4 py-3 flex items-center gap-2"
+                style={{ borderBottom: "1px solid rgba(234,179,8,0.20)" }}>
+                <div className="w-7 h-7 rounded-xl flex items-center justify-center flex-shrink-0"
+                  style={{ background: "rgba(234,179,8,0.18)" }}>
+                  <Zap size={13} color="#EAB308" />
                 </div>
-                <p className="text-[13px] font-bold text-amber-800">Confirmer les présences</p>
+                <p className="text-[13px] font-bold" style={{ color: "#F0CB61" }}>Confirmer les présences</p>
               </div>
               <div className="p-4 space-y-5">
                 {pendingFeedback.map(id => {
@@ -11699,45 +11666,48 @@ const SessionModal = memo(({ session, athletes, onClose, onSetRpe, onSetStatus, 
                   return (
                     <div key={id}>
                       <div className="flex items-center gap-2 mb-2.5">
-                        <div className="w-7 h-7 rounded-full flex items-center justify-center text-white text-[9px] font-bold flex-shrink-0"
-                          style={{ background: c.border }}>
+                        <div className="w-7 h-7 rounded-full flex items-center justify-center text-[9px] font-bold flex-shrink-0"
+                          style={{ background: c.border, color: "#0A150F" }}>
                           {a.avatar?.slice(0,1) ?? "?"}
                         </div>
-                        <p className="text-[12.5px] font-bold text-amber-900">{a.name.split(" ")[0]}</p>
+                        <p className="text-[12.5px] font-bold" style={{ color: "#F0CB61" }}>{a.name.split(" ")[0]}</p>
                       </div>
                       <div className="flex gap-2 mb-2">
                         {[
-                          { id: "done",    label: "✅ Réalisée",  cls: "border-emerald-400 bg-emerald-50 text-emerald-700" },
-                          { id: "partial", label: "🟡 Partielle", cls: "border-amber-400 bg-amber-50 text-amber-700"       },
-                          { id: "none",    label: "❌ Absent",    cls: "border-red-400 bg-red-50 text-red-700"             },
-                        ].map(opt => (
-                          <button key={opt.id}
-                            onClick={() => onSetStatus(session.id, id, opt.id)}
-                            className={[
-                              "flex-1 py-2 rounded-xl text-[11px] font-bold border-2 transition-all tap-feedback",
-                              v?.status === opt.id ? opt.cls : "bg-white border-slate-200 text-slate-400",
-                            ].join(" ")}
-                          >
-                            {opt.label}
-                          </button>
-                        ))}
+                          { id: "done",    label: "✅ Réalisée",  bg: "rgba(61,190,139,0.16)", border: "#3DBE8B", color: "#7BD8B4" },
+                          { id: "partial", label: "🟡 Partielle", bg: "rgba(234,179,8,0.16)",  border: "#EAB308", color: "#F0CB61" },
+                          { id: "none",    label: "❌ Absent",    bg: "rgba(239,107,107,0.16)",border: "#EF6B6B", color: "#F19A9A" },
+                        ].map(opt => {
+                          const sel = v?.status === opt.id;
+                          return (
+                            <button key={opt.id}
+                              onClick={() => onSetStatus(session.id, id, opt.id)}
+                              className="flex-1 py-2 rounded-xl text-[11px] font-bold border-2 transition-all tap-feedback"
+                              style={sel
+                                ? { background: opt.bg, borderColor: opt.border, color: opt.color }
+                                : { background: "var(--c-surface-2)", borderColor: "var(--c-border)", color: "var(--c-text-3)" }}
+                            >
+                              {opt.label}
+                            </button>
+                          );
+                        })}
                       </div>
                       {v?.status && v.status !== "none" && (
                         <div>
-                          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">RPE</p>
+                          <p className="text-[10px] font-bold uppercase tracking-wider mb-1.5" style={{ color: "var(--c-text-3)" }}>RPE</p>
                           <div className="flex gap-1 flex-wrap">
-                            {Array.from({ length: 11 }, (_, i) => (
-                              <button key={i} onClick={() => onSetRpe(session.id, id, i)}
-                                className={[
-                                  "w-8 h-8 rounded-xl text-[11px] font-black border-2 transition-all tap-feedback",
-                                  v?.rpe === i
-                                    ? i <= 3 ? "bg-emerald-500 text-white border-emerald-600"
-                                    : i <= 6 ? "bg-amber-500 text-white border-amber-600"
-                                    :          "bg-red-500 text-white border-red-600"
-                                    : "bg-white text-slate-400 border-slate-200",
-                                ].join(" ")}
-                              >{i}</button>
-                            ))}
+                            {Array.from({ length: 11 }, (_, i) => {
+                              const sel = v?.rpe === i;
+                              const rpeColor = i <= 3 ? "#3DBE8B" : i <= 6 ? "#EAB308" : "#EF6B6B";
+                              return (
+                                <button key={i} onClick={() => onSetRpe(session.id, id, i)}
+                                  className="w-8 h-8 rounded-xl text-[11px] font-black border-2 transition-all tap-feedback"
+                                  style={sel
+                                    ? { background: rpeColor, borderColor: rpeColor, color: "#0A150F" }
+                                    : { background: "var(--c-surface-2)", borderColor: "var(--c-border)", color: "var(--c-text-3)" }}
+                                >{i}</button>
+                              );
+                            })}
                           </div>
                         </div>
                       )}
@@ -11750,30 +11720,31 @@ const SessionModal = memo(({ session, athletes, onClose, onSetRpe, onSetStatus, 
 
           {/* Description */}
           {session.description && (
-            <div className="bg-slate-50 rounded-2xl p-4">
+            <div className="rounded-2xl p-4" style={{ background: "var(--c-surface-2)" }}>
               <div className="flex items-center gap-2 mb-2">
-                <FileText size={13} className="text-slate-400" />
-                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Description</span>
+                <FileText size={13} style={{ color: "var(--c-text-3)" }} />
+                <span className="text-[10px] font-bold uppercase tracking-wider" style={{ color: "var(--c-text-3)" }}>Description</span>
               </div>
-              <p className="text-[13px] text-slate-600 leading-relaxed">{session.description}</p>
+              <p className="text-[13px] leading-relaxed" style={{ color: "var(--c-text-2)" }}>{session.description}</p>
             </div>
           )}
 
           {/* Consignes */}
           {session.instructions && (
-            <div className="rounded-2xl border border-amber-200 overflow-hidden" style={{ background: "#FFFBF0" }}>
-              <div className="px-4 py-2.5 border-b border-amber-100 flex items-center gap-2">
-                <AlertCircle size={13} color="#EF9F27" />
-                <span className="text-[10px] font-bold text-amber-700 uppercase tracking-wider">Consignes du coach</span>
+            <div className="rounded-2xl overflow-hidden" style={{ border: "1px solid rgba(234,179,8,0.30)", background: "rgba(234,179,8,0.06)" }}>
+              <div className="px-4 py-2.5 flex items-center gap-2" style={{ borderBottom: "1px solid rgba(234,179,8,0.20)" }}>
+                <AlertCircle size={13} color="#EAB308" />
+                <span className="text-[10px] font-bold uppercase tracking-wider" style={{ color: "#F0CB61" }}>Consignes du coach</span>
               </div>
-              <p className="px-4 py-3 text-[13px] text-amber-800 leading-relaxed">{session.instructions}</p>
+              <p className="px-4 py-3 text-[13px] leading-relaxed" style={{ color: "#E6D189" }}>{session.instructions}</p>
             </div>
           )}
 
           {/* PDF */}
           {session.pdfUrl && (
             <a href={session.pdfUrl} target="_blank" rel="noopener noreferrer"
-              className="flex items-center gap-3 px-4 py-3.5 rounded-2xl bg-blue-50 border border-blue-100 text-[13px] font-semibold text-blue-600 hover:bg-blue-100 transition-colors">
+              className="flex items-center gap-3 px-4 py-3.5 rounded-2xl text-[13px] font-semibold transition-colors"
+              style={{ background: "rgba(91,158,245,0.10)", border: "1px solid rgba(91,158,245,0.25)", color: "#A9CBFB" }}>
               <span className="text-[18px]">📄</span>
               Voir le PDF de séance
             </a>
@@ -11782,13 +11753,13 @@ const SessionModal = memo(({ session, athletes, onClose, onSetRpe, onSetStatus, 
           {/* Athlètes */}
           <div>
             <div className="flex items-center gap-2 mb-3">
-              <Users size={13} className="text-slate-400" />
-              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+              <Users size={13} style={{ color: "var(--c-text-3)" }} />
+              <span className="text-[10px] font-bold uppercase tracking-wider" style={{ color: "var(--c-text-3)" }}>
                 Participants ({session.athleteIds.length})
               </span>
             </div>
             {session.athleteIds.length === 0 ? (
-              <p className="text-[12px] text-slate-300">Aucun athlète assigné</p>
+              <p className="text-[12px]" style={{ color: "var(--c-text-4)" }}>Aucun athlète assigné</p>
             ) : (
               <div className="space-y-2">
                 {session.athleteIds.map(id => {
@@ -11798,16 +11769,17 @@ const SessionModal = memo(({ session, athletes, onClose, onSetRpe, onSetStatus, 
                   if (!a) return null;
                   return (
                     <div key={id} className="card flex items-start gap-3 p-3.5">
-                      <div className="w-9 h-9 rounded-xl flex items-center justify-center text-white text-[10px] font-bold flex-shrink-0"
-                        style={{ background: c.border }}>
+                      <div className="w-9 h-9 rounded-xl flex items-center justify-center text-[10px] font-bold flex-shrink-0"
+                        style={{ background: c.border, color: "#0A150F" }}>
                         {a.avatar}
                       </div>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 flex-wrap mb-1">
-                          <span className="text-[13px] font-bold text-slate-700">{a.name}</span>
+                          <span className="text-[13px] font-bold" style={{ color: "var(--c-text-1)" }}>{a.name}</span>
                           <ValidationBadge status={st} />
                           {v?.rpe != null && (
-                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">
+                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full"
+                              style={{ background: "var(--c-surface-3)", color: "var(--c-text-2)" }}>
                               RPE {v.rpe}
                             </span>
                           )}
@@ -11816,13 +11788,13 @@ const SessionModal = memo(({ session, athletes, onClose, onSetRpe, onSetStatus, 
                           <div className="flex gap-0.5 mb-1">
                             {[1,2,3,4,5].map(n => (
                               <Star key={n} size={11}
-                                fill={v.feeling >= n ? "#EF9F27" : "none"}
-                                color={v.feeling >= n ? "#EF9F27" : "#e2e8f0"} />
+                                fill={v.feeling >= n ? "#EAB308" : "none"}
+                                color={v.feeling >= n ? "#EAB308" : "var(--c-border-strong)"} />
                             ))}
                           </div>
                         )}
                         {v?.comment && (
-                          <p className="text-[11.5px] text-slate-400 italic">« {v.comment} »</p>
+                          <p className="text-[11.5px] italic" style={{ color: "var(--c-text-3)" }}>« {v.comment} »</p>
                         )}
                       </div>
                     </div>
@@ -11833,33 +11805,32 @@ const SessionModal = memo(({ session, athletes, onClose, onSetRpe, onSetStatus, 
           </div>
 
           {deleteError && (
-            <p className="text-[12px] text-red-600 bg-red-50 rounded-xl px-3 py-2">{deleteError}</p>
+            <p className="text-[12px] rounded-xl px-3 py-2" style={{ color: "#F19A9A", background: "rgba(239,107,107,0.10)" }}>{deleteError}</p>
           )}
         </div>
 
         {/* Footer */}
-        <div className="px-6 py-4 border-t border-slate-100 flex items-center justify-between gap-3 flex-shrink-0">
+        <div className="px-6 py-4 flex items-center justify-between gap-3 flex-shrink-0" style={{ borderTop: "1px solid var(--c-border)" }}>
           <div className="flex items-center gap-3">
             {!confirmDel ? (
               <button onClick={() => setConfirmDel(true)} disabled={deleting}
-                className="text-[12px] text-red-400 hover:text-red-600 font-semibold transition-colors">
+                className="text-[12px] font-semibold transition-colors"
+                style={{ color: "#F19A9A" }}>
                 Supprimer
               </button>
             ) : (
               <span className="flex items-center gap-2">
-                <span className="text-[12px] text-red-600 font-semibold">Confirmer ?</span>
+                <span className="text-[12px] font-semibold" style={{ color: "#F19A9A" }}>Confirmer ?</span>
                 <button onClick={handleDelete} disabled={deleting}
-                  className="text-[11px] font-bold text-white bg-red-500 rounded-lg px-2.5 py-1 tap-feedback">
+                  className="text-[11px] font-bold rounded-lg px-2.5 py-1 tap-feedback"
+                  style={{ background: "#EF6B6B", color: "#0A150F" }}>
                   {deleting ? "…" : "Oui"}
                 </button>
-                <button onClick={() => setConfirmDel(false)} className="text-[11px] text-slate-500">Non</button>
+                <button onClick={() => setConfirmDel(false)} className="text-[11px]" style={{ color: "var(--c-text-3)" }}>Non</button>
               </span>
             )}
           </div>
-          <button
-            onClick={() => onEditRequest(session)}
-            className="btn-primary"
-          >
+          <button onClick={() => onEditRequest(session)} className="btn-primary">
             ✏️ Modifier
           </button>
         </div>
@@ -11868,7 +11839,7 @@ const SessionModal = memo(({ session, athletes, onClose, onSetRpe, onSetStatus, 
   );
 });
 
-// ─── AddSessionModal premium ──────────────────────────────────────────────────
+// ─── AddSessionModal premium (dark) ───────────────────────────────────────────
 
 const AddSessionModal = memo(({ athletes, initialData, onClose, onAdd }) => {
   const isEdit = !!initialData;
@@ -11921,58 +11892,49 @@ const AddSessionModal = memo(({ athletes, initialData, onClose, onAdd }) => {
   };
 
   const selCat = SESSION_COLORS[form.category] ?? SESSION_COLORS.technique;
+  const labelCls = "block text-[11px] font-bold uppercase tracking-wider mb-1.5";
+  const labelStyle = { color: "var(--c-text-3)" };
 
   return (
     <div
       className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4 modal-backdrop"
       onClick={e => e.target === e.currentTarget && !saving && onClose()}
     >
-      <div className="bg-white rounded-t-3xl sm:rounded-3xl shadow-2xl w-full sm:max-w-lg max-h-[95vh] sm:max-h-[90vh] flex flex-col overflow-hidden modal-content">
+      <div className="rounded-t-3xl sm:rounded-3xl shadow-2xl w-full sm:max-w-lg max-h-[95vh] sm:max-h-[90vh] flex flex-col overflow-hidden modal-content"
+        style={{ background: "var(--c-surface)" }}>
 
-        {/* Handle mobile */}
         <div className="flex justify-center pt-3 pb-1 sm:hidden flex-shrink-0">
-          <div className="w-10 h-1 rounded-full bg-slate-200" />
+          <div className="w-10 h-1 rounded-full" style={{ background: "var(--c-border-strong)" }} />
         </div>
 
-        {/* Header */}
         <div
-          className="px-6 py-5 border-b flex items-center justify-between flex-shrink-0 transition-colors"
-          style={{ background: selCat.bg, borderBottomColor: selCat.border + "40" }}
+          className="px-6 py-5 flex items-center justify-between flex-shrink-0 transition-colors"
+          style={{ background: `${selCat.border}14`, borderBottom: `1px solid ${selCat.border}40` }}
         >
           <div>
             <h3 className="text-[17px] font-black" style={{ color: selCat.text }}>
               {isEdit ? "Modifier la séance" : "Nouvelle séance"}
             </h3>
-            <p className="text-[11px] mt-0.5" style={{ color: selCat.text + "80" }}>
+            <p className="text-[11px] mt-0.5" style={{ color: "var(--c-text-2)" }}>
               {isEdit ? "Modifie les détails" : "Planifie un entraînement"}
             </p>
           </div>
           <button onClick={onClose} disabled={saving}
-            className="p-2 rounded-xl hover:bg-black/10 disabled:opacity-40 transition-colors">
+            className="p-2 rounded-xl disabled:opacity-40 transition-colors">
             <X size={18} style={{ color: selCat.text }} />
           </button>
         </div>
 
         <div className="flex-1 overflow-y-auto px-6 py-5 space-y-4">
 
-          {/* Titre */}
           <div>
-            <label className="block text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">
-              Titre *
-            </label>
-            <input
-              className="input-premium"
-              placeholder="Ex: Sprint — sorties de blocs"
-              value={form.title}
-              onChange={e => set("title", e.target.value)}
-            />
+            <label className={labelCls} style={labelStyle}>Titre *</label>
+            <input className="input-premium" placeholder="Ex: Sprint — sorties de blocs"
+              value={form.title} onChange={e => set("title", e.target.value)} />
           </div>
 
-          {/* Catégorie — sélecteur visuel */}
           <div>
-            <label className="block text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">
-              Catégorie
-            </label>
+            <label className={labelCls} style={labelStyle}>Catégorie</label>
             <div className="flex flex-wrap gap-1.5">
               {CATEGORIES.map(cat => {
                 const cc  = SESSION_COLORS[cat.id];
@@ -11981,8 +11943,8 @@ const AddSessionModal = memo(({ athletes, initialData, onClose, onAdd }) => {
                   <button key={cat.id} onClick={() => set("category", cat.id)}
                     className="px-3 py-1.5 rounded-xl text-[11.5px] font-semibold border-2 transition-all tap-feedback"
                     style={sel
-                      ? { background: cc.border, color: "white", borderColor: cc.border }
-                      : { background: cc.bg, color: cc.text, borderColor: cc.border + "60" }
+                      ? { background: cc.border, color: "#0A150F", borderColor: cc.border }
+                      : { background: `${cc.border}14`, color: cc.text, borderColor: `${cc.border}40` }
                     }>
                     {cat.label}
                   </button>
@@ -11991,95 +11953,73 @@ const AddSessionModal = memo(({ athletes, initialData, onClose, onAdd }) => {
             </div>
           </div>
 
-          {/* Date + Heure */}
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">
-                Date *
-              </label>
+              <label className={labelCls} style={labelStyle}>Date *</label>
               <input type="date" className="input-premium"
-                value={form.sessionDate}
-                onChange={e => set("sessionDate", e.target.value)} />
+                value={form.sessionDate} onChange={e => set("sessionDate", e.target.value)} />
             </div>
             <div>
-              <label className="block text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">
-                Heure
-              </label>
+              <label className={labelCls} style={labelStyle}>Heure</label>
               <input type="time" className="input-premium"
-                value={form.time}
-                onChange={e => set("time", e.target.value)} />
+                value={form.time} onChange={e => set("time", e.target.value)} />
             </div>
           </div>
 
-          {/* Durée */}
           <div>
-            <label className="block text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">
-              Durée (minutes)
-            </label>
+            <label className={labelCls} style={labelStyle}>Durée (minutes)</label>
             <input type="number" min="5" step="5" className="input-premium"
-              value={form.durationMinutes}
-              onChange={e => set("durationMinutes", Number(e.target.value))} />
+              value={form.durationMinutes} onChange={e => set("durationMinutes", Number(e.target.value))} />
           </div>
 
-          {/* Description */}
           <div>
-            <label className="block text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">
-              Description
-            </label>
+            <label className={labelCls} style={labelStyle}>Description</label>
             <textarea className="input-premium resize-none" rows={3}
               placeholder="Volume, intensité, objectifs…"
-              value={form.description}
-              onChange={e => set("description", e.target.value)} />
+              value={form.description} onChange={e => set("description", e.target.value)} />
           </div>
 
-          {/* Consignes */}
           <div>
-            <label className="block text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">
-              Consignes spécifiques
-            </label>
+            <label className={labelCls} style={labelStyle}>Consignes spécifiques</label>
             <textarea className="input-premium resize-none" rows={2}
               placeholder="Instructions particulières…"
-              value={form.instructions}
-              onChange={e => set("instructions", e.target.value)} />
+              value={form.instructions} onChange={e => set("instructions", e.target.value)} />
           </div>
 
-          {/* PDF */}
           <div>
-            <label className="block text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">
-              PDF (optionnel)
-            </label>
+            <label className={labelCls} style={labelStyle}>PDF (optionnel)</label>
             {isEdit && form.pdfUrl && !pdfFile && (
-              <p className="text-[11px] text-emerald-600 mb-1.5">📎 PDF déjà joint</p>
+              <p className="text-[11px] mb-1.5" style={{ color: "#7BD8B4" }}>📎 PDF déjà joint</p>
             )}
             <input type="file" accept="application/pdf"
               onChange={e => setPdfFile(e.target.files?.[0] ?? null)}
-              className="w-full text-[12px] text-slate-500 file:mr-3 file:py-1.5 file:px-3 file:rounded-xl file:border-0 file:text-[11.5px] file:font-semibold file:bg-emerald-50 file:text-emerald-700 hover:file:bg-emerald-100" />
-            {pdfFile && <p className="text-[11px] text-slate-400 mt-1">📎 {pdfFile.name}</p>}
+              className="w-full text-[12px] file:mr-3 file:py-1.5 file:px-3 file:rounded-xl file:border-0 file:text-[11.5px] file:font-semibold"
+              style={{ color: "var(--c-text-3)" }} />
+            {pdfFile && <p className="text-[11px] mt-1" style={{ color: "var(--c-text-3)" }}>📎 {pdfFile.name}</p>}
           </div>
 
-          {/* Athlètes */}
           <div>
-            <label className="block text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">
+            <label className={labelCls} style={labelStyle}>
               Athlètes * ({form.athleteIds.length} sélectionné{form.athleteIds.length > 1 ? "s" : ""})
             </label>
             {athletes.length === 0 ? (
-              <p className="text-[12px] text-slate-300">Aucun athlète disponible</p>
+              <p className="text-[12px]" style={{ color: "var(--c-text-4)" }}>Aucun athlète disponible</p>
             ) : (
               <div className="flex flex-wrap gap-2">
                 {athletes.map(a => {
                   const sel = form.athleteIds.includes(a.id);
                   return (
                     <button key={a.id} type="button" onClick={() => toggleAthlete(a.id)}
-                      className={[
-                        "flex items-center gap-2 px-3 py-2 rounded-xl text-[12px] font-semibold border-2 transition-all tap-feedback",
-                        sel ? "bg-emerald-50 border-emerald-400 text-emerald-700" : "bg-white border-slate-200 text-slate-500",
-                      ].join(" ")}>
-                      <div className="w-6 h-6 rounded-full flex items-center justify-center text-white text-[8px] font-bold"
-                        style={{ background: sel ? "#1D9E75" : "#94a3b8" }}>
+                      className="flex items-center gap-2 px-3 py-2 rounded-xl text-[12px] font-semibold border-2 transition-all tap-feedback"
+                      style={sel
+                        ? { background: "rgba(29,158,117,0.14)", borderColor: "#1D9E75", color: "#7BD8B4" }
+                        : { background: "var(--c-surface-2)", borderColor: "var(--c-border)", color: "var(--c-text-3)" }}>
+                      <div className="w-6 h-6 rounded-full flex items-center justify-center text-[8px] font-bold"
+                        style={{ background: sel ? "#1D9E75" : "var(--c-surface-3)", color: sel ? "#0A150F" : "var(--c-text-3)" }}>
                         {a.avatar?.slice(0, 1) ?? "?"}
                       </div>
                       {a.name.split(" ")[0]}
-                      {sel && <CheckCircle size={12} color="#1D9E75" />}
+                      {sel && <CheckCircle size={12} color="#3DBE8B" />}
                     </button>
                   );
                 })}
@@ -12088,16 +12028,13 @@ const AddSessionModal = memo(({ athletes, initialData, onClose, onAdd }) => {
           </div>
         </div>
 
-        {/* Footer */}
-        <div className="px-6 py-4 border-t border-slate-100 flex items-center justify-between gap-3 flex-shrink-0">
-          <button onClick={onClose} disabled={saving}
-            className="px-4 py-2.5 rounded-xl bg-slate-100 text-slate-600 text-[13px] font-semibold hover:bg-slate-200 disabled:opacity-40 transition-colors">
+        <div className="px-6 py-4 flex items-center justify-between gap-3 flex-shrink-0" style={{ borderTop: "1px solid var(--c-border)" }}>
+          <button onClick={onClose} disabled={saving} className="btn-secondary">
             Annuler
           </button>
           <button onClick={handleSubmit}
             disabled={!form.title.trim() || form.athleteIds.length === 0 || saving}
-            className="btn-primary"
-          >
+            className="btn-primary">
             {saving ? (
               <><div className="w-3.5 h-3.5 border-2 border-white/40 border-t-white rounded-full animate-spin" />
               {uploadingPdf ? "Envoi PDF…" : "Enregistrement…"}</>
@@ -12288,7 +12225,6 @@ function Planning() {
       .sort((a, b) => a.time.localeCompare(b.time));
   }, [selectedDate, sessionsByDate]);
 
-  // Semaine courante pour la vue semaine
   const weekDays = useMemo(() => {
     const ref = selectedDate ?? today;
     const dow = (ref.getDay() + 6) % 7;
@@ -12342,7 +12278,6 @@ function Planning() {
     };
   }
 
-  // Label navigation
   const navLabel = useMemo(() => {
     if (viewMode === "month") return `${MONTHS_FR[viewMonth]} ${viewYear}`;
     const mon = weekDays[0], sun = weekDays[6];
@@ -12359,50 +12294,51 @@ function Planning() {
   const athleteSessionCount = sessionList.filter(s => s.createdByAthlete).length;
 
   return (
-    <div className="flex flex-col h-full" style={{ background: "#F5F5F2" }}>
+    <div className="flex flex-col h-full" style={{ background: "var(--c-bg)" }}>
 
       {/* ── Header glassmorphism ─────────────────────────────────────────── */}
       <div className="header-glass px-3 md:px-5 py-3 flex items-center justify-between gap-2 flex-shrink-0 z-10">
 
-        {/* Navigation */}
         <div className="flex items-center gap-1">
           <button
             onClick={viewMode === "month" ? prevMonth : prevWeek}
-            className="w-8 h-8 rounded-xl hover:bg-slate-100 text-slate-500 flex items-center justify-center transition-all tap-feedback"
+            className="w-8 h-8 rounded-xl flex items-center justify-center transition-all tap-feedback"
+            style={{ color: "var(--c-text-2)" }}
           >
             <ChevronLeft size={16} />
           </button>
           <div className="text-center px-1 min-w-[110px] md:min-w-[160px]">
-            <p className="text-[14px] md:text-[16px] font-black text-slate-800 tracking-tight truncate">
+            <p className="text-[14px] md:text-[16px] font-black tracking-tight truncate" style={{ color: "var(--c-text-1)" }}>
               {navLabel}
             </p>
           </div>
           <button
             onClick={viewMode === "month" ? nextMonth : nextWeek}
-            className="w-8 h-8 rounded-xl hover:bg-slate-100 text-slate-500 flex items-center justify-center transition-all tap-feedback"
+            className="w-8 h-8 rounded-xl flex items-center justify-center transition-all tap-feedback"
+            style={{ color: "var(--c-text-2)" }}
           >
             <ChevronRight size={16} />
           </button>
           <button onClick={goToday}
-            className="px-2.5 py-1 rounded-lg text-[10px] md:text-[11px] font-bold border border-slate-200 text-slate-500 hover:bg-slate-50 transition-all ml-1">
+            className="px-2.5 py-1 rounded-lg text-[10px] md:text-[11px] font-bold transition-all ml-1"
+            style={{ border: "1px solid var(--c-border)", color: "var(--c-text-3)" }}>
             Auj.
           </button>
         </div>
 
-        {/* Contrôles droite */}
         <div className="flex items-center gap-1.5">
 
           {/* Toggle vue */}
-          <div className="flex rounded-xl border border-slate-200 overflow-hidden text-[10px] md:text-[11px] font-bold">
+          <div className="flex rounded-xl overflow-hidden text-[10px] md:text-[11px] font-bold" style={{ border: "1px solid var(--c-border)" }}>
             {[
               { id: "month", label: "Mois" },
               { id: "week",  label: "Sem." },
             ].map(v => (
               <button key={v.id} onClick={() => setViewMode(v.id)}
-                className={[
-                  "px-2.5 md:px-3 py-1.5 transition-colors",
-                  viewMode === v.id ? "bg-slate-800 text-white" : "bg-white text-slate-500",
-                ].join(" ")}>
+                className="px-2.5 md:px-3 py-1.5 transition-colors"
+                style={viewMode === v.id
+                  ? { background: "#1D9E75", color: "#0A150F" }
+                  : { background: "var(--c-surface-2)", color: "var(--c-text-3)" }}>
                 {v.label}
               </button>
             ))}
@@ -12410,24 +12346,23 @@ function Planning() {
 
           {/* Filtre séances athlètes — desktop */}
           {athleteSessionCount > 0 && (
-            <div className="hidden lg:flex rounded-xl border border-slate-200 overflow-hidden text-[11px] font-bold">
+            <div className="hidden lg:flex rounded-xl overflow-hidden text-[11px] font-bold" style={{ border: "1px solid var(--c-border)" }}>
               {[
                 { id: "all",     label: "Toutes" },
                 { id: "coach",   label: "Coach"  },
                 { id: "athlete", label: `📋 ${athleteSessionCount}` },
               ].map(f => (
                 <button key={f.id} onClick={() => setFilterMode(f.id)}
-                  className={[
-                    "px-2.5 py-1.5 transition-colors",
-                    filterMode === f.id ? "bg-slate-800 text-white" : "bg-white text-slate-500",
-                  ].join(" ")}>
+                  className="px-2.5 py-1.5 transition-colors"
+                  style={filterMode === f.id
+                    ? { background: "#1D9E75", color: "#0A150F" }
+                    : { background: "var(--c-surface-2)", color: "var(--c-text-3)" }}>
                   {f.label}
                 </button>
               ))}
             </div>
           )}
 
-          {/* Bouton ajouter */}
           <button
             onClick={() => setSessionModalTarget("create")}
             disabled={athletes.length === 0}
@@ -12441,9 +12376,6 @@ function Planning() {
 
       <div className="flex flex-1 overflow-hidden">
 
-        {/* ════════════════════════════════════════════════════════════════
-            CONTENU CALENDRIER
-        ════════════════════════════════════════════════════════════════ */}
         <div className="flex-1 overflow-auto">
 
           {/* ── VUE SEMAINE ── */}
@@ -12458,36 +12390,31 @@ function Planning() {
                 return (
                   <div
                     key={i}
-                    className={[
-                      "rounded-2xl overflow-hidden border transition-all",
-                      isToday ? "border-emerald-300 shadow-glow-green" : "border-slate-100",
-                    ].join(" ")}
+                    className="rounded-2xl overflow-hidden border transition-all"
+                    style={isToday
+                      ? { borderColor: "rgba(29,158,117,0.45)", boxShadow: "0 0 0 1px rgba(29,158,117,0.20)" }
+                      : { borderColor: "var(--c-border)" }}
                   >
                     {/* Header jour */}
                     <div
-                      className={[
-                        "px-4 py-3 flex items-center justify-between",
-                        isToday ? "bg-emerald-50" : "bg-white",
-                      ].join(" ")}
+                      className="px-4 py-3 flex items-center justify-between"
+                      style={{ background: isToday ? "rgba(29,158,117,0.08)" : "var(--c-surface)" }}
                     >
                       <div className="flex items-center gap-3">
                         <div
-                          className={[
-                            "w-10 h-10 rounded-2xl flex items-center justify-center font-black text-[16px] flex-shrink-0",
-                            isToday ? "text-white shadow-sm" : isPast ? "bg-slate-100 text-slate-400" : "bg-slate-100 text-slate-600",
-                          ].join(" ")}
-                          style={isToday ? { background: "linear-gradient(135deg, #1D9E75, #16826C)" } : {}}
+                          className="w-10 h-10 rounded-2xl flex items-center justify-center font-black text-[16px] flex-shrink-0"
+                          style={isToday
+                            ? { background: "linear-gradient(135deg, #1D9E75, #16826C)", color: "white" }
+                            : { background: "var(--c-surface-2)", color: isPast ? "var(--c-text-4)" : "var(--c-text-2)" }}
                         >
                           {date.getDate()}
                         </div>
                         <div>
-                          <p className={[
-                            "text-[14px] font-black",
-                            isToday ? "text-emerald-700" : isPast ? "text-slate-400" : "text-slate-700",
-                          ].join(" ")}>
+                          <p className="text-[14px] font-black"
+                            style={{ color: isToday ? "#3DBE8B" : isPast ? "var(--c-text-4)" : "var(--c-text-1)" }}>
                             {DAYS_FR[i]}
                           </p>
-                          <p className="text-[11px] text-slate-400">
+                          <p className="text-[11px]" style={{ color: "var(--c-text-3)" }}>
                             {date.toLocaleDateString("fr-BE", { day: "numeric", month: "long" })}
                           </p>
                         </div>
@@ -12495,16 +12422,17 @@ function Planning() {
 
                       <div className="flex items-center gap-2">
                         {ds.length > 0 && (
-                          <span className={[
-                            "text-[11px] font-bold px-2 py-0.5 rounded-full",
-                            isToday ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-500",
-                          ].join(" ")}>
+                          <span className="text-[11px] font-bold px-2 py-0.5 rounded-full"
+                            style={isToday
+                              ? { background: "rgba(29,158,117,0.16)", color: "#7BD8B4" }
+                              : { background: "var(--c-surface-2)", color: "var(--c-text-2)" }}>
                             {ds.length} séance{ds.length > 1 ? "s" : ""}
                           </span>
                         )}
                         <button
                           onClick={() => { setSelectedDate(date); setSessionModalTarget("create"); }}
-                          className="w-7 h-7 rounded-lg bg-slate-100 hover:bg-emerald-100 text-slate-400 hover:text-emerald-600 flex items-center justify-center transition-all"
+                          className="w-7 h-7 rounded-lg flex items-center justify-center transition-all"
+                          style={{ background: "var(--c-surface-2)", color: "var(--c-text-3)" }}
                         >
                           <Plus size={13} />
                         </button>
@@ -12513,8 +12441,8 @@ function Planning() {
 
                     {/* Séances du jour */}
                     {ds.length > 0 ? (
-                      <div className="divide-y divide-slate-50 bg-white">
-                        {ds.map(s => {
+                      <div style={{ background: "var(--c-surface)" }}>
+                        {ds.map((s, idx) => {
                           const c  = colors(s.category);
                           const st = sessionStatus(s);
                           const missingStatus = s.athleteIds.filter(id => {
@@ -12526,54 +12454,53 @@ function Planning() {
                             <div
                               key={s.id}
                               onClick={() => setActiveSession(s)}
-                              className="flex items-center gap-3 px-4 py-3.5 cursor-pointer hover:bg-slate-50/80 transition-colors tap-feedback"
+                              className="flex items-center gap-3 px-4 py-3.5 cursor-pointer transition-colors tap-feedback"
+                              style={{ borderTop: idx > 0 ? "1px solid var(--c-border)" : "none" }}
+                              onMouseEnter={e => e.currentTarget.style.background = "var(--c-surface-2)"}
+                              onMouseLeave={e => e.currentTarget.style.background = "transparent"}
                             >
-                              {/* Barre colorée */}
-                              <div
-                                className="w-1 h-12 rounded-full flex-shrink-0"
-                                style={{ background: c.border }}
-                              />
+                              <div className="w-1 h-12 rounded-full flex-shrink-0" style={{ background: c.border }} />
 
-                              {/* Infos */}
                               <div className="flex-1 min-w-0">
                                 <div className="flex items-center gap-2 mb-0.5">
-                                  <p className="text-[13.5px] font-bold text-slate-800 truncate">{s.title}</p>
+                                  <p className="text-[13.5px] font-bold truncate" style={{ color: "var(--c-text-1)" }}>{s.title}</p>
                                   {s.createdByAthlete && (
-                                    <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-purple-100 text-purple-700 flex-shrink-0">
+                                    <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full flex-shrink-0"
+                                      style={{ background: "rgba(168,85,247,0.16)", color: "#D8B4FE" }}>
                                       📋
                                     </span>
                                   )}
                                 </div>
-                                <div className="flex items-center gap-2 text-[11px] text-slate-400">
+                                <div className="flex items-center gap-2 text-[11px]" style={{ color: "var(--c-text-3)" }}>
                                   <span
                                     className="px-1.5 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider"
-                                    style={{ background: c.bg, color: c.text }}
+                                    style={{ background: `${c.border}1F`, color: c.text }}
                                   >
                                     {CATEGORIES.find(x => x.id === s.category)?.label}
                                   </span>
                                   <Clock size={10} />
                                   <span>{s.time}{s.durationMinutes ? ` · ${s.durationMinutes}min` : ""}</span>
                                   {missingStatus > 0 && isPast && (
-                                    <span className="text-amber-600 font-bold">· {missingStatus} en attente</span>
+                                    <span className="font-bold" style={{ color: "#F0CB61" }}>· {missingStatus} en attente</span>
                                   )}
                                 </div>
                               </div>
 
-                              {/* Avatars + statut */}
                               <div className="flex items-center gap-2 flex-shrink-0">
                                 <div className="flex -space-x-1">
                                   {s.athleteIds.slice(0, 3).map(id => {
                                     const a = athletes.find(x => x.id === id);
                                     return a ? (
                                       <div key={id}
-                                        className="w-6 h-6 rounded-full border-2 border-white flex items-center justify-center text-white text-[7px] font-bold"
-                                        style={{ background: c.border }}>
+                                        className="w-6 h-6 rounded-full flex items-center justify-center text-[7px] font-bold"
+                                        style={{ background: c.border, color: "#0A150F", border: "2px solid var(--c-surface)" }}>
                                         {a.avatar?.slice(0, 1)}
                                       </div>
                                     ) : null;
                                   })}
                                   {s.athleteIds.length > 3 && (
-                                    <div className="w-6 h-6 rounded-full border-2 border-white bg-slate-200 flex items-center justify-center text-slate-500 text-[7px] font-bold">
+                                    <div className="w-6 h-6 rounded-full flex items-center justify-center text-[7px] font-bold"
+                                      style={{ background: "var(--c-surface-3)", color: "var(--c-text-3)", border: "2px solid var(--c-surface)" }}>
                                       +{s.athleteIds.length - 3}
                                     </div>
                                   )}
@@ -12586,8 +12513,8 @@ function Planning() {
                         })}
                       </div>
                     ) : (
-                      <div className="px-4 py-3 bg-white">
-                        <p className="text-[12px] text-slate-200 font-medium">Repos</p>
+                      <div className="px-4 py-3" style={{ background: "var(--c-surface)" }}>
+                        <p className="text-[12px] font-medium" style={{ color: "var(--c-text-4)" }}>Repos</p>
                       </div>
                     )}
                   </div>
@@ -12599,16 +12526,15 @@ function Planning() {
           {/* ── VUE MOIS ── */}
           {viewMode === "month" && (
             <div className="p-2 md:p-4">
-              {/* Headers jours */}
               <div className="grid grid-cols-7 mb-2">
                 {DAYS_SHORT.map(d => (
-                  <div key={d} className="text-center text-[9px] md:text-[11px] font-black text-slate-400 uppercase tracking-wider py-1.5">
+                  <div key={d} className="text-center text-[9px] md:text-[11px] font-black uppercase tracking-wider py-1.5"
+                    style={{ color: "var(--c-text-3)" }}>
                     {d}
                   </div>
                 ))}
               </div>
 
-              {/* Grille */}
               <div className="grid grid-cols-7 gap-0.5 md:gap-1">
                 {calendarDays.map(({ date, isCurrentMonth }, idx) => {
                   const key         = date.toISOString().slice(0, 10);
@@ -12624,30 +12550,23 @@ function Planning() {
                         setSelectedDate(date);
                         if (window.innerWidth < 768) setViewMode("week");
                       }}
-                      className={[
-                        "min-h-[52px] md:min-h-[96px] rounded-xl md:rounded-2xl p-1 md:p-2 cursor-pointer transition-all border",
-                        isToday
-                          ? "bg-emerald-50 border-emerald-300 border-2 shadow-sm"
-                          : isSelected
-                          ? "bg-blue-50 border-blue-300 border-2"
-                          : isCurrentMonth
-                          ? "bg-white border-slate-100 hover:border-slate-200 hover:shadow-sm"
-                          : "bg-slate-50/30 border-transparent opacity-35",
-                      ].join(" ")}
+                      className="min-h-[52px] md:min-h-[96px] rounded-xl md:rounded-2xl p-1 md:p-2 cursor-pointer transition-all border"
+                      style={isToday
+                        ? { background: "rgba(29,158,117,0.08)", borderColor: "rgba(29,158,117,0.45)", borderWidth: 2 }
+                        : isSelected
+                        ? { background: "rgba(91,158,245,0.08)", borderColor: "rgba(91,158,245,0.45)", borderWidth: 2 }
+                        : isCurrentMonth
+                        ? { background: "var(--c-surface)", borderColor: "var(--c-border)" }
+                        : { background: "transparent", borderColor: "transparent", opacity: 0.35 }}
                     >
-                      {/* Numéro */}
                       <div className="flex items-start justify-between mb-1">
-                        <span className={[
-                          "text-[11px] md:text-[13px] font-black w-6 h-6 md:w-7 md:h-7 flex items-center justify-center rounded-xl",
-                          isToday
-                            ? "text-white"
-                            : isCurrentMonth ? "text-slate-700" : "text-slate-400",
-                        ].join(" ")}
-                          style={isToday ? { background: "linear-gradient(135deg, #1D9E75, #16826C)" } : {}}
+                        <span className="text-[11px] md:text-[13px] font-black w-6 h-6 md:w-7 md:h-7 flex items-center justify-center rounded-xl"
+                          style={isToday
+                            ? { background: "linear-gradient(135deg, #1D9E75, #16826C)", color: "white" }
+                            : { color: isCurrentMonth ? "var(--c-text-1)" : "var(--c-text-4)" }}
                         >
                           {date.getDate()}
                         </span>
-                        {/* Dot si séances sur mobile */}
                         {hasSessions && (
                           <div className="md:hidden flex gap-0.5 mt-1 flex-wrap justify-end">
                             {daySessions.slice(0, 3).map(s => (
@@ -12662,7 +12581,6 @@ function Planning() {
                         )}
                       </div>
 
-                      {/* Séances desktop */}
                       <div className="hidden md:block space-y-0.5">
                         {daySessions.slice(0, 3).map(s => {
                           const c  = colors(s.category);
@@ -12671,8 +12589,8 @@ function Planning() {
                             <div
                               key={s.id}
                               onClick={e => { e.stopPropagation(); setActiveSession(s); }}
-                              className="flex items-center gap-1 px-1.5 py-0.5 rounded-lg text-[9.5px] font-bold cursor-pointer hover:opacity-80 transition-opacity truncate"
-                              style={{ background: c.bg, color: c.text, borderLeft: `2.5px solid ${c.border}` }}
+                              className="flex items-center gap-1 px-1.5 py-0.5 rounded-lg text-[9.5px] font-bold cursor-pointer transition-opacity truncate"
+                              style={{ background: `${c.border}1F`, color: c.text, borderLeft: `2.5px solid ${c.border}` }}
                             >
                               <span className="truncate flex-1">{s.title}</span>
                               {st !== "future" && <StatusIcon status={st} size={8} />}
@@ -12681,7 +12599,7 @@ function Planning() {
                           );
                         })}
                         {daySessions.length > 3 && (
-                          <p className="text-[9px] text-slate-400 font-semibold px-1">
+                          <p className="text-[9px] font-semibold px-1" style={{ color: "var(--c-text-3)" }}>
                             +{daySessions.length - 3} autre{daySessions.length - 3 > 1 ? "s" : ""}
                           </p>
                         )}
@@ -12696,35 +12614,32 @@ function Planning() {
 
         {/* ── Panneau latéral desktop ──────────────────────────────────── */}
         {selectedDate && (
-          <div className="hidden lg:flex w-80 flex-shrink-0 bg-white border-l border-slate-100 flex-col overflow-hidden">
-            {/* Header panneau */}
-            <div className="px-5 py-4 border-b border-slate-100 flex-shrink-0">
+          <div className="hidden lg:flex w-80 flex-shrink-0 flex-col overflow-hidden"
+            style={{ background: "var(--c-surface)", borderLeft: "1px solid var(--c-border)" }}>
+            <div className="px-5 py-4 flex-shrink-0" style={{ borderBottom: "1px solid var(--c-border)" }}>
               <div className="flex items-center justify-between mb-0.5">
                 <div>
-                  <p className="text-[14px] font-black text-slate-800">
+                  <p className="text-[14px] font-black" style={{ color: "var(--c-text-1)" }}>
                     {selectedDate.toLocaleDateString("fr-BE", { weekday: "long", day: "numeric", month: "long" })}
                   </p>
-                  <p className="text-[11px] text-slate-400 mt-0.5">
+                  <p className="text-[11px] mt-0.5" style={{ color: "var(--c-text-3)" }}>
                     {selectedDaySessions.length} séance{selectedDaySessions.length !== 1 ? "s" : ""} planifiée{selectedDaySessions.length !== 1 ? "s" : ""}
                   </p>
                 </div>
                 <button onClick={() => setSelectedDate(null)}
-                  className="p-1.5 rounded-xl hover:bg-slate-100 text-slate-400 transition-colors">
+                  className="p-1.5 rounded-xl transition-colors" style={{ color: "var(--c-text-3)" }}>
                   <X size={14} />
                 </button>
               </div>
             </div>
 
-            {/* Séances du jour */}
             <div className="flex-1 overflow-y-auto p-3 space-y-2">
               {selectedDaySessions.length === 0 ? (
-                <div className="flex flex-col items-center justify-center h-full text-slate-300 gap-3 py-10">
+                <div className="flex flex-col items-center justify-center h-full gap-3 py-10" style={{ color: "var(--c-text-4)" }}>
                   <CalendarDays size={32} strokeWidth={1.5} />
                   <p className="text-[12px] text-center font-medium">Aucune séance ce jour</p>
-                  <button
-                    onClick={() => setSessionModalTarget("create")}
-                    className="text-[12px] font-semibold text-emerald-600 hover:text-emerald-700 transition-colors"
-                  >
+                  <button onClick={() => setSessionModalTarget("create")}
+                    className="text-[12px] font-semibold transition-colors" style={{ color: "#3DBE8B" }}>
                     + Planifier une séance
                   </button>
                 </div>
@@ -12739,22 +12654,17 @@ function Planning() {
                   }).length;
 
                   return (
-                    <div
-                      key={s.id}
-                      onClick={() => setActiveSession(s)}
-                      className="card card-hover rounded-2xl overflow-hidden cursor-pointer"
-                    >
-                      {/* Header card séance */}
-                      <div
-                        className="px-3.5 py-2.5 flex items-center justify-between"
-                        style={{ background: c.bg, borderBottom: `1.5px solid ${c.border}` }}
-                      >
+                    <div key={s.id} onClick={() => setActiveSession(s)}
+                      className="card card-hover rounded-2xl overflow-hidden cursor-pointer">
+                      <div className="px-3.5 py-2.5 flex items-center justify-between"
+                        style={{ background: `${c.border}14`, borderBottom: `1.5px solid ${c.border}40` }}>
                         <div className="flex items-center gap-1.5">
                           <span className="text-[9.5px] font-black uppercase tracking-wider" style={{ color: c.text }}>
                             {CATEGORIES.find(x => x.id === s.category)?.label ?? s.type}
                           </span>
                           {s.createdByAthlete && (
-                            <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-purple-100 text-purple-700">
+                            <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full"
+                              style={{ background: "rgba(168,85,247,0.16)", color: "#D8B4FE" }}>
                               📋
                             </span>
                           )}
@@ -12762,41 +12672,41 @@ function Planning() {
                         <StatusIcon status={st} size={12} />
                       </div>
 
-                      {/* Body card séance */}
                       <div className="px-3.5 py-3">
-                        <p className="text-[13px] font-bold text-slate-800 leading-tight mb-1.5">{s.title}</p>
-                        <div className="flex items-center gap-2 text-[11px] text-slate-400 mb-2">
+                        <p className="text-[13px] font-bold leading-tight mb-1.5" style={{ color: "var(--c-text-1)" }}>{s.title}</p>
+                        <div className="flex items-center gap-2 text-[11px] mb-2" style={{ color: "var(--c-text-3)" }}>
                           <Clock size={10} />
                           <span>{s.time}{s.durationMinutes ? ` · ${s.durationMinutes}min` : ""}</span>
-                          {s.pdfUrl && <span className="text-blue-400">📄</span>}
+                          {s.pdfUrl && <span style={{ color: "#A9CBFB" }}>📄</span>}
                         </div>
 
-                        {/* Alerts */}
                         {missingStatus > 0 && (
-                          <div className="flex items-center gap-1 text-[10px] font-bold text-red-600 bg-red-50 rounded-lg px-2 py-1 mb-1">
+                          <div className="flex items-center gap-1 text-[10px] font-bold rounded-lg px-2 py-1 mb-1"
+                            style={{ background: "rgba(239,107,107,0.10)", color: "#F19A9A" }}>
                             ❗ {missingStatus} présence{missingStatus > 1 ? "s" : ""} à confirmer
                           </div>
                         )}
                         {missingRpe > 0 && (
-                          <div className="flex items-center gap-1 text-[10px] font-bold text-amber-600 bg-amber-50 rounded-lg px-2 py-1 mb-1">
+                          <div className="flex items-center gap-1 text-[10px] font-bold rounded-lg px-2 py-1 mb-1"
+                            style={{ background: "rgba(234,179,8,0.10)", color: "#F0CB61" }}>
                             🔥 {missingRpe} RPE manquant{missingRpe > 1 ? "s" : ""}
                           </div>
                         )}
 
-                        {/* Avatars athlètes */}
                         <div className="flex -space-x-1.5 mt-2">
                           {s.athleteIds.slice(0, 5).map(id => {
                             const a = athletes.find(x => x.id === id);
                             return a ? (
                               <div key={id} title={a.name}
-                                className="w-6 h-6 rounded-full border-2 border-white flex items-center justify-center text-white text-[7px] font-bold"
-                                style={{ background: c.border }}>
+                                className="w-6 h-6 rounded-full flex items-center justify-center text-[7px] font-bold"
+                                style={{ background: c.border, color: "#0A150F", border: "2px solid var(--c-surface)" }}>
                                 {a.avatar?.slice(0, 1) ?? "?"}
                               </div>
                             ) : null;
                           })}
                           {s.athleteIds.length > 5 && (
-                            <div className="w-6 h-6 rounded-full border-2 border-white bg-slate-200 flex items-center justify-center text-slate-500 text-[7px] font-bold">
+                            <div className="w-6 h-6 rounded-full flex items-center justify-center text-[7px] font-bold"
+                              style={{ background: "var(--c-surface-3)", color: "var(--c-text-3)", border: "2px solid var(--c-surface)" }}>
                               +{s.athleteIds.length - 5}
                             </div>
                           )}
@@ -12808,11 +12718,11 @@ function Planning() {
               )}
             </div>
 
-            {/* Bouton ajouter */}
-            <div className="p-3 border-t border-slate-100 flex-shrink-0">
+            <div className="p-3 flex-shrink-0" style={{ borderTop: "1px solid var(--c-border)" }}>
               <button
                 onClick={() => setSessionModalTarget("create")}
-                className="w-full flex items-center justify-center gap-2 py-2.5 rounded-2xl text-[12px] font-bold text-emerald-600 bg-emerald-50 hover:bg-emerald-100 transition-colors border border-emerald-100"
+                className="w-full flex items-center justify-center gap-2 py-2.5 rounded-2xl text-[12px] font-bold transition-colors"
+                style={{ background: "rgba(29,158,117,0.10)", border: "1px solid rgba(29,158,117,0.25)", color: "#3DBE8B" }}
               >
                 <Plus size={13} /> Ajouter une séance
               </button>
@@ -12825,32 +12735,31 @@ function Planning() {
       {selectedDate && (
         <div
           className="md:hidden fixed inset-x-0 bottom-0 z-40 rounded-t-3xl shadow-2xl animate-slide-up"
-          style={{ background: "rgba(255,255,255,0.97)", backdropFilter: "blur(20px)", maxHeight: "65vh" }}
+          style={{ background: "var(--c-surface)", backdropFilter: "blur(20px)", maxHeight: "65vh", border: "1px solid var(--c-border)", borderBottom: "none" }}
         >
-          {/* Handle */}
           <div className="flex justify-center pt-3 pb-1">
-            <div className="w-10 h-1 rounded-full bg-slate-200" />
+            <div className="w-10 h-1 rounded-full" style={{ background: "var(--c-border-strong)" }} />
           </div>
 
           <div className="flex flex-col" style={{ maxHeight: "calc(65vh - 20px)" }}>
             <div className="px-5 py-3 flex items-center justify-between flex-shrink-0">
               <div>
-                <p className="text-[14px] font-black text-slate-800">
+                <p className="text-[14px] font-black" style={{ color: "var(--c-text-1)" }}>
                   {selectedDate.toLocaleDateString("fr-BE", { weekday: "long", day: "numeric", month: "long" })}
                 </p>
-                <p className="text-[11px] text-slate-400 mt-0.5">
+                <p className="text-[11px] mt-0.5" style={{ color: "var(--c-text-3)" }}>
                   {selectedDaySessions.length} séance{selectedDaySessions.length !== 1 ? "s" : ""}
                 </p>
               </div>
               <button onClick={() => setSelectedDate(null)}
-                className="p-2 rounded-xl bg-slate-100 text-slate-500 tap-feedback">
+                className="p-2 rounded-xl tap-feedback" style={{ background: "var(--c-surface-2)", color: "var(--c-text-3)" }}>
                 <X size={16} />
               </button>
             </div>
 
             <div className="flex-1 overflow-y-auto px-4 space-y-2 pb-2">
               {selectedDaySessions.length === 0 ? (
-                <div className="text-center py-8 text-slate-300">
+                <div className="text-center py-8" style={{ color: "var(--c-text-4)" }}>
                   <CalendarDays size={28} className="mx-auto mb-2" strokeWidth={1.5} />
                   <p className="text-[12px]">Aucune séance ce jour</p>
                 </div>
@@ -12861,13 +12770,13 @@ function Planning() {
                   <div
                     key={s.id}
                     onClick={() => { setActiveSession(s); setSelectedDate(null); }}
-                    className="flex items-center gap-3 p-3.5 rounded-2xl bg-white border cursor-pointer tap-feedback"
-                    style={{ borderColor: c.border, borderWidth: "1.5px" }}
+                    className="flex items-center gap-3 p-3.5 rounded-2xl cursor-pointer tap-feedback"
+                    style={{ background: "var(--c-surface-2)", borderColor: c.border, borderWidth: "1.5px", borderStyle: "solid" }}
                   >
                     <div className="w-1.5 h-12 rounded-full flex-shrink-0" style={{ background: c.border }} />
                     <div className="flex-1 min-w-0">
-                      <p className="text-[13.5px] font-bold text-slate-800 truncate">{s.title}</p>
-                      <p className="text-[11px] text-slate-400">{s.time}{s.durationMinutes ? ` · ${s.durationMinutes}min` : ""}</p>
+                      <p className="text-[13.5px] font-bold truncate" style={{ color: "var(--c-text-1)" }}>{s.title}</p>
+                      <p className="text-[11px]" style={{ color: "var(--c-text-3)" }}>{s.time}{s.durationMinutes ? ` · ${s.durationMinutes}min` : ""}</p>
                     </div>
                     <StatusIcon status={st} size={16} />
                   </div>
@@ -12875,10 +12784,11 @@ function Planning() {
               })}
             </div>
 
-            <div className="p-4 border-t border-slate-100 flex-shrink-0">
+            <div className="p-4 flex-shrink-0" style={{ borderTop: "1px solid var(--c-border)" }}>
               <button
                 onClick={() => { setSessionModalTarget("create"); setSelectedDate(null); }}
-                className="w-full py-3 rounded-2xl text-[13px] font-bold text-emerald-600 bg-emerald-50 border border-emerald-100 tap-feedback"
+                className="w-full py-3 rounded-2xl text-[13px] font-bold tap-feedback"
+                style={{ background: "rgba(29,158,117,0.10)", border: "1px solid rgba(29,158,117,0.25)", color: "#3DBE8B" }}
               >
                 <Plus size={14} className="inline mr-1.5" />
                 Ajouter une séance

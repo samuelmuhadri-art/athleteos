@@ -1,16 +1,10 @@
 // ============================================================
-// AthleteOS — src/modules/AthleteList.jsx  ★ DESIGN PREMIUM
-// Logique métier 100% identique.
-// Rendu repoli :
-//   - AthleteCard : card premium avec ring coloré, métriques, hover glow
-//   - AthleteProfile : hero banner gradient, tabs pill premium
-//   - TabCharge : score rings redessinés, chart amélioré
-//   - TabPerformances : tableau premium, records visuels
-//   - TabBlessures : cards avec bordure couleur
-//   - Modals : glass, handle mobile, inputs premium
+// AthleteOS — src/modules/AthleteList.jsx
+// ★ DESIGN PREMIUM DARK + PORTALS
 // ============================================================
 
 import { memo, useState, useMemo, useCallback, useEffect } from "react";
+import { createPortal } from "react-dom";
 import {
   LineChart, Line, AreaChart, Area, XAxis, YAxis, Tooltip,
   ResponsiveContainer, CartesianGrid,
@@ -89,32 +83,36 @@ function ScoreRing({ value, color, label, size = 72 }) {
   return (
     <div className="flex flex-col items-center gap-1.5">
       <svg width={size} height={size} viewBox="0 0 72 72">
-        <circle cx="36" cy="36" r={r} fill="none" stroke="#f1f5f9" strokeWidth="7" />
+        <circle cx="36" cy="36" r={r} fill="none" stroke="var(--c-surface-3)" strokeWidth="7" />
         <circle cx="36" cy="36" r={r} fill="none" stroke={color} strokeWidth="7"
           strokeDasharray={`${dash} ${circ}`} strokeLinecap="round" transform="rotate(-90 36 36)" />
         <text x="36" y="40" textAnchor="middle" fontSize="13" fontWeight="800" fill={color}>{value}</text>
       </svg>
-      <span className="text-[10.5px] text-slate-400 font-semibold text-center leading-tight">{label}</span>
+      <span className="text-[10.5px] font-semibold text-center leading-tight" style={{ color: "var(--c-text-3)" }}>{label}</span>
     </div>
   );
 }
 
 function ValidationBadge({ status }) {
   const map = {
-    done:    { label: "Réalisée",     cls: "bg-emerald-50 text-emerald-700 border border-emerald-100" },
-    partial: { label: "Partielle",    cls: "bg-amber-50 text-amber-700 border border-amber-100"       },
-    none:    { label: "Non réalisée", cls: "bg-red-50 text-red-700 border border-red-100"             },
-    future:  { label: "À venir",      cls: "bg-slate-100 text-slate-400"                              },
+    done:    { label: "Réalisée",     bg: "rgba(61,190,139,0.15)", color: "#7BD8B4", border: "rgba(61,190,139,0.3)" },
+    partial: { label: "Partielle",    bg: "rgba(234,179,8,0.15)",  color: "#F0CB61", border: "rgba(234,179,8,0.3)" },
+    none:    { label: "Non réalisée", bg: "rgba(239,107,107,0.15)",color: "#F19A9A", border: "rgba(239,107,107,0.3)" },
+    future:  { label: "À venir",      bg: "var(--c-surface-3)",    color: "var(--c-text-3)", border: "transparent" },
   };
   const b = map[status] ?? map.future;
-  return <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${b.cls}`}>{b.label}</span>;
+  return (
+    <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full" style={{ background: b.bg, color: b.color, border: `1px solid ${b.border}` }}>
+      {b.label}
+    </span>
+  );
 }
 
 function StarRow({ value, max = 5, color = "#EF9F27" }) {
   return (
     <div className="flex gap-0.5">
       {Array.from({ length: max }).map((_, i) => (
-        <Star key={i} size={11} fill={i < value ? color : "none"} color={i < value ? color : "#e2e8f0"} />
+        <Star key={i} size={11} fill={i < value ? color : "none"} color={i < value ? color : "var(--c-border-strong)"} />
       ))}
     </div>
   );
@@ -123,9 +121,9 @@ function StarRow({ value, max = 5, color = "#EF9F27" }) {
 function EmptySection({ icon: Icon = Trophy, title, sub }) {
   return (
     <div className="card p-12 text-center">
-      <Icon size={32} className="text-slate-200 mx-auto mb-3" strokeWidth={1.5} />
-      <p className="text-[13.5px] font-bold text-slate-400">{title}</p>
-      {sub && <p className="text-[12px] text-slate-300 mt-1">{sub}</p>}
+      <Icon size={32} strokeWidth={1.5} className="mx-auto mb-3" style={{ color: "var(--c-text-4)" }} />
+      <p className="text-[13.5px] font-bold" style={{ color: "var(--c-text-2)" }}>{title}</p>
+      {sub && <p className="text-[12px] mt-1" style={{ color: "var(--c-text-3)" }}>{sub}</p>}
     </div>
   );
 }
@@ -133,8 +131,8 @@ function EmptySection({ icon: Icon = Trophy, title, sub }) {
 const ChartTooltip = ({ active, payload, label }) => {
   if (!active || !payload?.length) return null;
   return (
-    <div className="bg-white border border-slate-100 rounded-2xl shadow-lg px-3 py-2.5 text-[12px]">
-      <p className="font-bold text-slate-600 mb-1">{label}</p>
+    <div className="rounded-2xl shadow-lg px-3 py-2.5 text-[12px]" style={{ background: "var(--c-surface-2)", border: "1px solid var(--c-border)" }}>
+      <p className="font-bold mb-1" style={{ color: "var(--c-text-1)" }}>{label}</p>
       {payload.map(p => (
         <p key={p.dataKey} style={{ color: p.color }}>
           {p.name} : <strong>{typeof p.value === "number" ? p.value.toFixed(2) : p.value}</strong>
@@ -146,9 +144,9 @@ const ChartTooltip = ({ active, payload, label }) => {
 
 // ─── Inputs partagés ──────────────────────────────────────────────────────────
 const inputCls = "input-premium";
-const labelCls = "block text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1.5";
+const labelCls = "block text-[11px] font-bold uppercase tracking-wider mb-1.5";
 
-// ─── AddRecordModal premium ───────────────────────────────────────────────────
+// ─── AddRecordModal premium + Portal ──────────────────────────────────────────
 
 const AddRecordModal = memo(({ athleteName, onClose, onAdd }) => {
   const [form, setForm]     = useState({ discipline: "", sb: "", pr: "", prDate: "" });
@@ -163,58 +161,59 @@ const AddRecordModal = memo(({ athleteName, onClose, onAdd }) => {
     catch (e) { setErr(e.message ?? "Erreur"); setSaving(false); }
   };
 
-  return (
+  return createPortal(
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4 modal-backdrop"
       onClick={e => e.target === e.currentTarget && !saving && onClose()}>
-      <div className="bg-white rounded-t-3xl sm:rounded-3xl shadow-2xl w-full max-w-sm max-h-[90vh] flex flex-col overflow-hidden modal-content">
-        <div className="flex justify-center pt-3 pb-1 sm:hidden"><div className="w-10 h-1 rounded-full bg-slate-200" /></div>
-        <div className="px-6 py-5 border-b border-slate-100 flex items-center justify-between flex-shrink-0">
+      <div className="rounded-t-3xl sm:rounded-3xl shadow-2xl w-full max-w-sm max-h-[90vh] flex flex-col overflow-hidden modal-content"
+           style={{ background: "var(--c-surface)" }}>
+        <div className="flex justify-center pt-3 pb-1 sm:hidden flex-shrink-0">
+          <div className="w-10 h-1 rounded-full" style={{ background: "var(--c-border-strong)" }} />
+        </div>
+        <div className="px-6 py-5 flex items-center justify-between flex-shrink-0" style={{ borderBottom: "1px solid var(--c-border)" }}>
           <div>
-            <h3 className="text-[16px] font-black text-slate-800">Ajouter un record</h3>
-            <p className="text-[12px] text-slate-400 mt-0.5">{athleteName}</p>
+            <h3 className="text-[16px] font-black" style={{ color: "var(--c-text-1)" }}>Ajouter un record</h3>
+            <p className="text-[12px] mt-0.5" style={{ color: "var(--c-text-3)" }}>{athleteName}</p>
           </div>
-          <button onClick={onClose} disabled={saving} className="p-2 rounded-xl hover:bg-slate-100 disabled:opacity-40">
-            <X size={18} className="text-slate-500" />
+          <button onClick={onClose} disabled={saving} className="p-2 rounded-xl transition-colors disabled:opacity-40"
+                  style={{ color: "var(--c-text-2)" }} onMouseEnter={e => e.currentTarget.style.background = "var(--c-surface-2)"} onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
+            <X size={18} />
           </button>
         </div>
         <div className="flex-1 overflow-y-auto px-6 py-5 space-y-4">
-          {err && <div className="bg-red-50 border border-red-100 rounded-2xl px-4 py-3 text-[12px] text-red-700">{err}</div>}
+          {err && <div className="rounded-2xl px-4 py-3 text-[12px]" style={{ background: "rgba(226,75,74,0.1)", border: "1px solid rgba(226,75,74,0.2)", color: "#F19A9A" }}>{err}</div>}
           <div>
-            <label className={labelCls}>Épreuve *</label>
+            <label className={labelCls} style={{ color: "var(--c-text-3)" }}>Épreuve *</label>
             <input className={inputCls} placeholder="Ex: 100m, Longueur…"
               value={form.discipline} onChange={e => set("discipline", e.target.value)} />
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className={labelCls}>Season Best *</label>
+              <label className={labelCls} style={{ color: "var(--c-text-3)" }}>Season Best *</label>
               <input className={inputCls} placeholder="Ex: 10.94s" value={form.sb} onChange={e => set("sb", e.target.value)} />
             </div>
             <div>
-              <label className={labelCls}>Record perso *</label>
+              <label className={labelCls} style={{ color: "var(--c-text-3)" }}>Record perso *</label>
               <input className={inputCls} placeholder="Ex: 10.62s" value={form.pr} onChange={e => set("pr", e.target.value)} />
             </div>
           </div>
           <div>
-            <label className={labelCls}>Date du record perso</label>
+            <label className={labelCls} style={{ color: "var(--c-text-3)" }}>Date du record perso</label>
             <input type="date" className={inputCls} value={form.prDate} onChange={e => set("prDate", e.target.value)} />
           </div>
         </div>
-        <div className="px-6 py-4 border-t border-slate-100 flex items-center justify-between gap-3 flex-shrink-0">
-          <button onClick={onClose} disabled={saving}
-            className="px-4 py-2.5 rounded-xl bg-slate-100 text-slate-600 text-[13px] font-semibold hover:bg-slate-200 disabled:opacity-40">
-            Annuler
-          </button>
-          <button onClick={handleSubmit} disabled={!form.discipline.trim() || !form.sb.trim() || !form.pr.trim() || saving}
-            className="btn-primary">
+        <div className="px-6 py-4 flex items-center justify-between gap-3 flex-shrink-0" style={{ borderTop: "1px solid var(--c-border)" }}>
+          <button onClick={onClose} disabled={saving} className="btn-secondary">Annuler</button>
+          <button onClick={handleSubmit} disabled={!form.discipline.trim() || !form.sb.trim() || !form.pr.trim() || saving} className="btn-primary">
             {saving ? <><div className="w-3.5 h-3.5 border-2 border-white/40 border-t-white rounded-full animate-spin" />Enregistrement…</> : <><Plus size={15} />Ajouter</>}
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 });
 
-// ─── AddInjuryModal premium ───────────────────────────────────────────────────
+// ─── AddInjuryModal premium + Portal ──────────────────────────────────────────
 
 const AddInjuryModal = memo(({ athleteName, initialData, onClose, onSave }) => {
   const isEdit = initialData != null;
@@ -232,81 +231,78 @@ const AddInjuryModal = memo(({ athleteName, initialData, onClose, onSave }) => {
     catch (e) { setErr(e.message ?? "Erreur"); setSaving(false); }
   };
 
-  return (
+  return createPortal(
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4 modal-backdrop"
       onClick={e => e.target === e.currentTarget && !saving && onClose()}>
-      <div className="bg-white rounded-t-3xl sm:rounded-3xl shadow-2xl w-full max-w-sm max-h-[95vh] sm:max-h-[90vh] flex flex-col overflow-hidden modal-content">
-        <div className="flex justify-center pt-3 pb-1 sm:hidden"><div className="w-10 h-1 rounded-full bg-slate-200" /></div>
-        <div className="px-6 py-5 border-b border-slate-100 flex items-center justify-between flex-shrink-0"
-          style={{ background: "linear-gradient(135deg, #fff7f7, #fff)" }}>
+      <div className="rounded-t-3xl sm:rounded-3xl shadow-2xl w-full max-w-sm max-h-[95vh] sm:max-h-[90vh] flex flex-col overflow-hidden modal-content"
+           style={{ background: "var(--c-surface)" }}>
+        <div className="flex justify-center pt-3 pb-1 sm:hidden flex-shrink-0"><div className="w-10 h-1 rounded-full" style={{ background: "var(--c-border-strong)" }} /></div>
+        <div className="px-6 py-5 flex items-center justify-between flex-shrink-0"
+          style={{ background: "rgba(226,75,74,0.08)", borderBottom: "2px solid rgba(226,75,74,0.2)" }}>
           <div>
-            <h3 className="text-[16px] font-black text-slate-800">{isEdit ? "Modifier la blessure" : "Signaler une blessure"}</h3>
-            <p className="text-[12px] text-slate-400 mt-0.5">{athleteName}</p>
+            <h3 className="text-[16px] font-black" style={{ color: "#E24B4A" }}>{isEdit ? "Modifier la blessure" : "Signaler une blessure"}</h3>
+            <p className="text-[12px] mt-0.5" style={{ color: "#F19A9A" }}>{athleteName}</p>
           </div>
-          <button onClick={onClose} disabled={saving} className="p-2 rounded-xl hover:bg-slate-100 disabled:opacity-40">
-            <X size={18} className="text-slate-500" />
+          <button onClick={onClose} disabled={saving} className="p-2 rounded-xl transition-colors disabled:opacity-40"
+                  style={{ color: "#F19A9A" }} onMouseEnter={e => e.currentTarget.style.background = "rgba(226,75,74,0.15)"} onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
+            <X size={18} />
           </button>
         </div>
         <div className="flex-1 overflow-y-auto px-6 py-5 space-y-4">
-          {err && <div className="bg-red-50 border border-red-100 rounded-2xl px-4 py-3 text-[12px] text-red-700">{err}</div>}
+          {err && <div className="rounded-2xl px-4 py-3 text-[12px]" style={{ background: "rgba(226,75,74,0.1)", border: "1px solid rgba(226,75,74,0.2)", color: "#F19A9A" }}>{err}</div>}
           <div>
-            <label className={labelCls}>Nom de la blessure *</label>
+            <label className={labelCls} style={{ color: "var(--c-text-3)" }}>Nom de la blessure *</label>
             <input className={inputCls} placeholder="Ex: Tendinopathie rotulienne"
               value={form.name} onChange={e => set("name", e.target.value)} />
           </div>
           <div>
-            <label className={labelCls}>Localisation</label>
+            <label className={labelCls} style={{ color: "var(--c-text-3)" }}>Localisation</label>
             <input className={inputCls} placeholder="Ex: Genou droit"
               value={form.location} onChange={e => set("location", e.target.value)} />
           </div>
           <div>
             <div className="flex items-center justify-between mb-2">
-              <label className={labelCls}>Intensité douleur</label>
+              <label className={labelCls} style={{ color: "var(--c-text-3)", marginBottom: 0 }}>Intensité douleur</label>
               <span className="text-[14px] font-black" style={{ color: intColor }}>{form.intensity}/10</span>
             </div>
             <input type="range" min="0" max="10" value={form.intensity}
               onChange={e => set("intensity", Number(e.target.value))}
               className="w-full h-2 rounded-full appearance-none cursor-pointer"
-              style={{ accentColor: intColor }} />
-            <div className="flex justify-between text-[9px] text-slate-300 mt-1">
+              style={{ accentColor: intColor, background: "var(--c-surface-3)" }} />
+            <div className="flex justify-between text-[9px] mt-1" style={{ color: "var(--c-text-4)" }}>
               <span>Légère</span><span>Modérée</span><span>Intense</span>
             </div>
           </div>
           <div>
-            <label className={labelCls}>Statut</label>
+            <label className={labelCls} style={{ color: "var(--c-text-3)" }}>Statut</label>
             <select className={inputCls} value={form.status} onChange={e => set("status", e.target.value)}>
               {INJURY_STATUS_OPTIONS.map(s => <option key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</option>)}
             </select>
           </div>
           <div>
-            <label className={labelCls}>Date de début</label>
+            <label className={labelCls} style={{ color: "var(--c-text-3)" }}>Date de début</label>
             <input type="date" className={inputCls} value={form.startDate} onChange={e => set("startDate", e.target.value)} />
           </div>
           <div>
-            <label className={labelCls}>Notes / suivi</label>
+            <label className={labelCls} style={{ color: "var(--c-text-3)" }}>Notes / suivi</label>
             <textarea className={`${inputCls} resize-none`} rows={3}
               placeholder="Kiné, consignes, restrictions…"
               value={form.notes} onChange={e => set("notes", e.target.value)} />
           </div>
         </div>
-        <div className="px-6 py-4 border-t border-slate-100 flex items-center justify-between gap-3 flex-shrink-0">
-          <button onClick={onClose} disabled={saving}
-            className="px-4 py-2.5 rounded-xl bg-slate-100 text-slate-600 text-[13px] font-semibold hover:bg-slate-200 disabled:opacity-40">
-            Annuler
-          </button>
+        <div className="px-6 py-4 flex items-center justify-between gap-3 flex-shrink-0" style={{ borderTop: "1px solid var(--c-border)" }}>
+          <button onClick={onClose} disabled={saving} className="btn-secondary">Annuler</button>
           <button onClick={handleSubmit} disabled={!form.name.trim() || saving} className="btn-primary">
-            {saving
-              ? <><div className="w-3.5 h-3.5 border-2 border-white/40 border-t-white rounded-full animate-spin" />Enregistrement…</>
-              : <><Plus size={15} />{isEdit ? "Enregistrer" : "Ajouter"}</>
-            }
+            {saving ? <><div className="w-3.5 h-3.5 border-2 border-white/40 border-t-white rounded-full animate-spin" />Enregistrement…</> : <><Plus size={15} />{isEdit ? "Enregistrer" : "Ajouter"}</>}
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 });
 
-// ─── AddAthleteModal premium ──────────────────────────────────────────────────
+// ─── AddAthleteModal premium + Portal ─────────────────────────────────────────
 
 const AddAthleteModal = memo(({ onClose, onCreate, initialData = null }) => {
   const isEdit = initialData != null;
@@ -327,107 +323,110 @@ const AddAthleteModal = memo(({ onClose, onCreate, initialData = null }) => {
     catch (e) { setErr(e.message ?? "Erreur"); setSaving(false); }
   };
 
-  return (
+  return createPortal(
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4 modal-backdrop"
       onClick={e => e.target === e.currentTarget && !saving && onClose()}>
-      <div className="bg-white rounded-t-3xl sm:rounded-3xl shadow-2xl w-full max-w-lg max-h-[95vh] sm:max-h-[90vh] flex flex-col overflow-hidden modal-content">
-        <div className="flex justify-center pt-3 pb-1 sm:hidden"><div className="w-10 h-1 rounded-full bg-slate-200" /></div>
-        <div className="px-6 py-5 border-b border-slate-100 flex items-center justify-between flex-shrink-0">
+      <div className="rounded-t-3xl sm:rounded-3xl shadow-2xl w-full max-w-lg max-h-[95vh] sm:max-h-[90vh] flex flex-col overflow-hidden modal-content"
+           style={{ background: "var(--c-surface)" }}>
+        <div className="flex justify-center pt-3 pb-1 sm:hidden flex-shrink-0"><div className="w-10 h-1 rounded-full" style={{ background: "var(--c-border-strong)" }} /></div>
+        <div className="px-6 py-5 flex items-center justify-between flex-shrink-0" style={{ borderBottom: "1px solid var(--c-border)" }}>
           <div>
-            <h3 className="text-[17px] font-black text-slate-800">
+            <h3 className="text-[17px] font-black" style={{ color: "var(--c-text-1)" }}>
               {isEdit ? "Modifier le profil" : "Inscrire un athlète"}
             </h3>
-            <p className="text-[12px] text-slate-400 mt-0.5">
+            <p className="text-[12px]" style={{ color: "var(--c-text-3)", mt: 0.5 }}>
               {isEdit ? "Modifie uniquement ce qui a changé." : "Seul le nom est obligatoire."}
             </p>
           </div>
-          <button onClick={onClose} disabled={saving} className="p-2 rounded-xl hover:bg-slate-100 disabled:opacity-40">
-            <X size={18} className="text-slate-500" />
+          <button onClick={onClose} disabled={saving} className="p-2 rounded-xl transition-colors disabled:opacity-40"
+                  style={{ color: "var(--c-text-2)" }} onMouseEnter={e => e.currentTarget.style.background = "var(--c-surface-2)"} onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
+            <X size={18} />
           </button>
         </div>
         <div className="flex-1 overflow-y-auto px-6 py-5 space-y-4">
-          {err && <div className="bg-red-50 border border-red-100 rounded-2xl px-4 py-3 text-[12px] text-red-700">{err}</div>}
+          {err && <div className="rounded-2xl px-4 py-3 text-[12px]" style={{ background: "rgba(226,75,74,0.1)", border: "1px solid rgba(226,75,74,0.2)", color: "#F19A9A" }}>{err}</div>}
           <div>
-            <label className={labelCls}>Nom complet *</label>
+            <label className={labelCls} style={{ color: "var(--c-text-3)" }}>Nom complet *</label>
             <input className={inputCls} placeholder="Ex: Nora Vandenberghe"
               value={form.name} onChange={e => set("name", e.target.value)} />
           </div>
           <div>
-            <label className={labelCls}>Email (pour la messagerie)</label>
+            <label className={labelCls} style={{ color: "var(--c-text-3)" }}>Email (pour la messagerie)</label>
             <input type="email" className={inputCls} placeholder="nora.v@exemple.be"
               value={form.email} onChange={e => set("email", e.target.value)} />
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className={labelCls}>Âge</label>
+              <label className={labelCls} style={{ color: "var(--c-text-3)" }}>Âge</label>
               <input type="number" className={inputCls} value={form.age} onChange={e => set("age", e.target.value)} />
             </div>
             <div>
-              <label className={labelCls}>Niveau</label>
+              <label className={labelCls} style={{ color: "var(--c-text-3)" }}>Niveau</label>
               <input className={inputCls} placeholder="Ex: Régional" value={form.level} onChange={e => set("level", e.target.value)} />
             </div>
           </div>
           <div>
-            <label className={labelCls}>Discipline principale</label>
+            <label className={labelCls} style={{ color: "var(--c-text-3)" }}>Discipline principale</label>
             <input className={inputCls} placeholder="Ex: Sprint 100m/200m"
               value={form.mainDiscipline} onChange={e => set("mainDiscipline", e.target.value)} />
           </div>
           <div>
-            <label className={labelCls}>Disciplines secondaires</label>
+            <label className={labelCls} style={{ color: "var(--c-text-3)" }}>Disciplines secondaires</label>
             <input className={inputCls} placeholder="Séparées par des virgules"
               value={form.secondaryDisciplines} onChange={e => set("secondaryDisciplines", e.target.value)} />
           </div>
           <div>
-            <label className={labelCls}>Groupe d'entraînement</label>
+            <label className={labelCls} style={{ color: "var(--c-text-3)" }}>Groupe d'entraînement</label>
             <input className={inputCls} placeholder="Ex: Sprint-Haies"
               value={form.group} onChange={e => set("group", e.target.value)} />
           </div>
 
           {/* Profil athlétique collapsible */}
-          <div className="rounded-2xl border border-slate-200 overflow-hidden">
+          <div className="rounded-2xl overflow-hidden" style={{ border: "1px solid var(--c-border)" }}>
             <button type="button" onClick={() => setShowProfile(v => !v)}
-              className="w-full px-4 py-3 flex items-center justify-between bg-slate-50 hover:bg-slate-100 transition-colors">
-              <span className="text-[12.5px] font-semibold text-slate-600">
+              className="w-full px-4 py-3 flex items-center justify-between transition-colors tap-feedback"
+              style={{ background: "var(--c-surface-2)" }}>
+              <span className="text-[12.5px] font-semibold" style={{ color: "var(--c-text-1)" }}>
                 Profil athlétique initial (optionnel)
               </span>
-              <span className="text-[11px] text-slate-400">{showProfile ? "▲" : "▼"}</span>
+              <span className="text-[11px]" style={{ color: "var(--c-text-4)" }}>{showProfile ? "▲" : "▼"}</span>
             </button>
             {showProfile && (
-              <div className="p-4 space-y-3 bg-white">
+              <div className="p-4 space-y-3" style={{ background: "var(--c-surface)" }}>
                 {RADAR_KEYS.map(k => (
                   <div key={k.key}>
                     <div className="flex items-center justify-between mb-1.5">
-                      <label className="text-[11.5px] font-semibold text-slate-500">{k.label}</label>
+                      <label className="text-[11.5px] font-semibold" style={{ color: "var(--c-text-2)" }}>{k.label}</label>
                       <span className="text-[12px] font-black" style={{ color: scoreColor(form[k.key]) }}>
                         {form[k.key]}
                       </span>
                     </div>
                     <input type="range" min="0" max="100" value={form[k.key]}
                       onChange={e => set(k.key, Number(e.target.value))}
-                      className="w-full accent-emerald-600 h-2" />
+                      className="w-full h-2 rounded-full appearance-none" style={{ accentColor: "#1D9E75", background: "var(--c-surface-3)" }} />
                   </div>
                 ))}
                 <div className="grid grid-cols-2 gap-3 pt-2">
                   <div>
-                    <label className={labelCls}>Récupération</label>
+                    <label className={labelCls} style={{ color: "var(--c-text-3)" }}>Récupération</label>
                     <select className={inputCls} value={form.recoveryRate} onChange={e => set("recoveryRate", e.target.value)}>
                       {["lente","normale","rapide"].map(v => <option key={v} value={v}>{v.charAt(0).toUpperCase()+v.slice(1)}</option>)}
                     </select>
                   </div>
                   <div>
-                    <label className={labelCls}>Tolérance volume</label>
+                    <label className={labelCls} style={{ color: "var(--c-text-3)" }}>Tolérance volume</label>
                     <select className={inputCls} value={form.volumeTolerance} onChange={e => set("volumeTolerance", e.target.value)}>
                       {["faible","modérée","élevée"].map(v => <option key={v} value={v}>{v.charAt(0).toUpperCase()+v.slice(1)}</option>)}
                     </select>
                   </div>
                   <div>
-                    <label className={labelCls}>Tolérance intensité</label>
+                    <label className={labelCls} style={{ color: "var(--c-text-3)" }}>Tolérance intensité</label>
                     <select className={inputCls} value={form.intensityTolerance} onChange={e => set("intensityTolerance", e.target.value)}>
                       {["faible","modérée","élevée","très élevée"].map(v => <option key={v} value={v}>{v.charAt(0).toUpperCase()+v.slice(1)}</option>)}
                     </select>
                   </div>
                   <div>
-                    <label className={labelCls}>Profil psychologique</label>
+                    <label className={labelCls} style={{ color: "var(--c-text-3)" }}>Profil psychologique</label>
                     <input className={inputCls} placeholder="Ex: compétitif"
                       value={form.psychProfile} onChange={e => set("psychProfile", e.target.value)} />
                   </div>
@@ -436,20 +435,15 @@ const AddAthleteModal = memo(({ onClose, onCreate, initialData = null }) => {
             )}
           </div>
         </div>
-        <div className="px-6 py-4 border-t border-slate-100 flex items-center justify-between gap-3 flex-shrink-0">
-          <button onClick={onClose} disabled={saving}
-            className="px-4 py-2.5 rounded-xl bg-slate-100 text-slate-600 text-[13px] font-semibold hover:bg-slate-200 disabled:opacity-40">
-            Annuler
-          </button>
+        <div className="px-6 py-4 flex items-center justify-between gap-3 flex-shrink-0" style={{ borderTop: "1px solid var(--c-border)" }}>
+          <button onClick={onClose} disabled={saving} className="btn-secondary">Annuler</button>
           <button onClick={handleSubmit} disabled={!form.name.trim() || saving} className="btn-primary">
-            {saving
-              ? <><div className="w-3.5 h-3.5 border-2 border-white/40 border-t-white rounded-full animate-spin" />{isEdit ? "Enregistrement…" : "Inscription…"}</>
-              : <><Plus size={15} />{isEdit ? "Enregistrer" : "Inscrire l'athlète"}</>
-            }
+            {saving ? <><div className="w-3.5 h-3.5 border-2 border-white/40 border-t-white rounded-full animate-spin" />{isEdit ? "Enregistrement…" : "Inscription…"}</> : <><Plus size={15} />{isEdit ? "Enregistrer" : "Inscrire l'athlète"}</>}
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 });
 
@@ -479,10 +473,10 @@ const TabPerformances = memo(({ athlete, competitions, onAddRecord }) => {
     <div className="space-y-5">
       {/* Records table */}
       <div className="card overflow-hidden">
-        <div className="px-5 py-4 border-b border-slate-50 flex items-center justify-between">
+        <div className="px-5 py-4 flex items-center justify-between" style={{ borderBottom: "1px solid var(--c-border)" }}>
           <div>
-            <h4 className="text-[14px] font-bold text-slate-800">Records & Season Best</h4>
-            <p className="text-[11px] text-slate-400 mt-0.5">{disciplines.length} épreuve{disciplines.length > 1 ? "s" : ""}</p>
+            <h4 className="text-[14px] font-bold" style={{ color: "var(--c-text-1)" }}>Records & Season Best</h4>
+            <p className="text-[11px] mt-0.5" style={{ color: "var(--c-text-3)" }}>{disciplines.length} épreuve{disciplines.length > 1 ? "s" : ""}</p>
           </div>
           <button onClick={() => setShowAdd(true)} className="btn-primary !py-1.5 !px-3 !text-[11.5px]">
             <Plus size={12} /> Ajouter
@@ -495,37 +489,37 @@ const TabPerformances = memo(({ athlete, competitions, onAddRecord }) => {
           <div className="overflow-x-auto">
             <table className="w-full text-[12.5px]">
               <thead>
-                <tr className="border-b border-slate-50">
+                <tr style={{ borderBottom: "1px solid var(--c-border)" }}>
                   {["Épreuve","SB","PR","Date PR","Progression"].map(h => (
-                    <th key={h} className="text-left px-4 py-3 text-[10px] font-bold text-slate-400 uppercase tracking-wider whitespace-nowrap">
+                    <th key={h} className="text-left px-4 py-3 text-[10px] font-bold uppercase tracking-wider whitespace-nowrap" style={{ color: "var(--c-text-3)" }}>
                       {h}
                     </th>
                   ))}
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-50">
-                {disciplines.map(disc => {
+              <tbody style={{ divideY: "1px solid var(--c-border)" }}>
+                {disciplines.map((disc, i) => {
                   const r    = athlete.records[disc];
                   const sbN  = parseFloat(r.sb), prN = parseFloat(r.pr);
                   const pct  = !isNaN(sbN) && !isNaN(prN) && prN > 0 ? Math.min(100, Math.round((sbN/prN)*100)) : null;
-                  const pc   = pct === null ? "#94a3b8" : pct >= 95 ? "#1D9E75" : pct >= 85 ? "#EF9F27" : "#E24B4A";
+                  const pc   = pct === null ? "var(--c-text-4)" : pct >= 95 ? "#1D9E75" : pct >= 85 ? "#EF9F27" : "#E24B4A";
                   return (
-                    <tr key={disc} className="hover:bg-slate-50/50 transition-colors">
-                      <td className="px-4 py-3.5 font-bold text-slate-700">{disc}</td>
-                      <td className="px-4 py-3.5 text-slate-500">{r.sb}</td>
+                    <tr key={disc} style={{ borderTop: i > 0 ? "1px solid var(--c-border)" : "none", transition: "background 0.2s" }} onMouseEnter={e => e.currentTarget.style.background = "var(--c-surface-2)"} onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
+                      <td className="px-4 py-3.5 font-bold" style={{ color: "var(--c-text-1)" }}>{disc}</td>
+                      <td className="px-4 py-3.5" style={{ color: "var(--c-text-2)" }}>{r.sb}</td>
                       <td className="px-4 py-3.5 font-black text-[14px]" style={{ color: "#1D9E75" }}>{r.pr}</td>
-                      <td className="px-4 py-3.5 text-slate-400">
+                      <td className="px-4 py-3.5" style={{ color: "var(--c-text-3)" }}>
                         {r.prDate ? new Date(r.prDate).toLocaleDateString("fr-BE",{day:"numeric",month:"short",year:"numeric"}) : "—"}
                       </td>
                       <td className="px-4 py-3.5">
                         {pct !== null ? (
                           <div className="flex items-center gap-2">
-                            <div className="w-16 h-2 bg-slate-100 rounded-full overflow-hidden">
+                            <div className="w-16 h-2 rounded-full overflow-hidden" style={{ background: "var(--c-surface-3)" }}>
                               <div className="h-full rounded-full" style={{ width:`${pct}%`, background:pc }} />
                             </div>
                             <span className="text-[11px] font-bold" style={{ color:pc }}>{pct}%</span>
                           </div>
-                        ) : <span className="text-slate-300 text-[11px]">—</span>}
+                        ) : <span className="text-[11px]" style={{ color: "var(--c-text-4)" }}>—</span>}
                       </td>
                     </tr>
                   );
@@ -541,40 +535,40 @@ const TabPerformances = memo(({ athlete, competitions, onAddRecord }) => {
         <div className="card p-5">
           <div className="flex items-center justify-between flex-wrap gap-3 mb-4">
             <div>
-              <h4 className="text-[14px] font-bold text-slate-800">Évolution — {athlete.mainDiscipline}</h4>
-              <p className="text-[11px] text-slate-400 mt-0.5">24 derniers mois</p>
+              <h4 className="text-[14px] font-bold" style={{ color: "var(--c-text-1)" }}>Évolution — {athlete.mainDiscipline}</h4>
+              <p className="text-[11px] mt-0.5" style={{ color: "var(--c-text-3)" }}>24 derniers mois</p>
             </div>
             <div className="flex flex-wrap gap-1.5">
               {disciplines.slice(0,5).map(d => (
                 <button key={d} onClick={() => setSelectedDisc(d)}
-                  className={[
-                    "px-2.5 py-1 rounded-xl text-[11px] font-semibold transition-all",
-                    selectedDisc === d ? "bg-emerald-600 text-white shadow-sm" : "bg-slate-100 text-slate-500 hover:bg-slate-200",
-                  ].join(" ")}>{d}</button>
+                  className="px-2.5 py-1 rounded-xl text-[11px] font-semibold transition-all tap-feedback"
+                  style={selectedDisc === d ? { background: "#1D9E75", color: "white", boxShadow: "0 2px 8px rgba(29,158,117,0.3)" } : { background: "var(--c-surface-2)", color: "var(--c-text-3)" }}>
+                  {d}
+                </button>
               ))}
             </div>
           </div>
           {chartData.length > 0 ? (
             <ResponsiveContainer width="100%" height={200}>
               <LineChart data={chartData}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-                <XAxis dataKey="label" tick={{ fontSize:10, fill:"#94a3b8" }} axisLine={false} tickLine={false} />
-                <YAxis tick={{ fontSize:10, fill:"#94a3b8" }} axisLine={false} tickLine={false} width={40} />
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--c-border)" />
+                <XAxis dataKey="label" tick={{ fontSize:10, fill:"var(--c-text-3)" }} axisLine={false} tickLine={false} />
+                <YAxis tick={{ fontSize:10, fill:"var(--c-text-3)" }} axisLine={false} tickLine={false} width={40} />
                 <Tooltip content={<ChartTooltip />} />
                 <Line dataKey="value" name={athlete.mainDiscipline} stroke="#1D9E75" strokeWidth={2.5}
-                  dot={{ r:4, fill:"#1D9E75" }} activeDot={{ r:6 }} connectNulls={false} />
+                  dot={{ r:4, fill:"#1D9E75", strokeWidth: 2, stroke: "var(--c-surface)" }} activeDot={{ r:6 }} connectNulls={false} />
               </LineChart>
             </ResponsiveContainer>
           ) : (
-            <div className="h-[200px] flex items-center justify-center text-slate-300 text-[13px]">
+            <div className="h-[200px] flex items-center justify-center text-[13px]" style={{ color: "var(--c-text-4)" }}>
               Pas de données disponibles
             </div>
           )}
           {rec && (
-            <div className="mt-3 flex items-center gap-4 text-[12px] text-slate-400">
-              <span>SB : <strong className="text-slate-600">{rec.sb}</strong></span>
-              <span>PR : <strong className="text-emerald-600">{rec.pr}</strong></span>
-              {rec.prDate && <span>Date PR : <strong className="text-slate-600">{new Date(rec.prDate).toLocaleDateString("fr-BE",{day:"numeric",month:"short",year:"numeric"})}</strong></span>}
+            <div className="mt-3 flex items-center gap-4 text-[12px] flex-wrap pt-3" style={{ color: "var(--c-text-3)", borderTop: "1px solid var(--c-border)" }}>
+              <span>SB : <strong style={{ color: "var(--c-text-2)" }}>{rec.sb}</strong></span>
+              <span>PR : <strong style={{ color: "#3DBE8B" }}>{rec.pr}</strong></span>
+              {rec.prDate && <span>Date PR : <strong style={{ color: "var(--c-text-2)" }}>{new Date(rec.prDate).toLocaleDateString("fr-BE",{day:"numeric",month:"short",year:"numeric"})}</strong></span>}
             </div>
           )}
         </div>
@@ -582,29 +576,32 @@ const TabPerformances = memo(({ athlete, competitions, onAddRecord }) => {
 
       {/* Historique compétitions */}
       <div className="card overflow-hidden">
-        <div className="px-5 py-4 border-b border-slate-50">
-          <h4 className="text-[14px] font-bold text-slate-800">Historique compétitions</h4>
+        <div className="px-5 py-4" style={{ borderBottom: "1px solid var(--c-border)" }}>
+          <h4 className="text-[14px] font-bold" style={{ color: "var(--c-text-1)" }}>Historique compétitions</h4>
         </div>
         {compHistory.length === 0 ? (
-          <div className="px-5 py-10 text-center text-slate-300 text-[13px]">Aucune compétition enregistrée</div>
+          <div className="px-5 py-10 text-center text-[13px]" style={{ color: "var(--c-text-4)" }}>Aucune compétition enregistrée</div>
         ) : (
-          <div className="divide-y divide-slate-50">
+          <div>
             {compHistory.map(({ comp, result }, i) => (
-              <div key={i} className="px-5 py-4 flex items-start gap-4 hover:bg-slate-50/50 transition-colors">
-                <div className="w-10 h-10 rounded-2xl bg-amber-50 flex items-center justify-center flex-shrink-0">
+              <div key={i} className="px-5 py-4 flex items-start gap-4 transition-colors"
+                   style={{ borderTop: i > 0 ? "1px solid var(--c-border)" : "none" }}
+                   onMouseEnter={e => e.currentTarget.style.background = "var(--c-surface-2)"}
+                   onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
+                <div className="w-10 h-10 rounded-2xl flex items-center justify-center flex-shrink-0" style={{ background: "rgba(239,159,39,0.15)" }}>
                   <Trophy size={16} color="#EF9F27" />
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap mb-1">
-                    <span className="text-[13px] font-bold text-slate-700">{comp.name}</span>
-                    <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-slate-100 text-slate-500">{comp.type}</span>
+                    <span className="text-[13px] font-bold" style={{ color: "var(--c-text-1)" }}>{comp.name}</span>
+                    <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full" style={{ background: "var(--c-surface-3)", color: "var(--c-text-2)" }}>{comp.type}</span>
                   </div>
-                  <p className="text-[12px] text-slate-500">
-                    {result.event} — <strong className="text-emerald-600 text-[13px]">{result.result}</strong>
+                  <p className="text-[12px]" style={{ color: "var(--c-text-3)" }}>
+                    {result.event} — <strong className="text-[13px]" style={{ color: "#3DBE8B" }}>{result.result}</strong>
                   </p>
-                  {result.context && <p className="text-[11px] text-slate-400 italic mt-0.5">{result.context}</p>}
+                  {result.context && <p className="text-[11px] italic mt-0.5" style={{ color: "var(--c-text-4)" }}>{result.context}</p>}
                 </div>
-                <span className="text-[11px] text-slate-400 whitespace-nowrap">
+                <span className="text-[11px] whitespace-nowrap" style={{ color: "var(--c-text-3)" }}>
                   {new Date(comp.date).toLocaleDateString("fr-BE",{day:"numeric",month:"short"})}
                 </span>
               </div>
@@ -644,11 +641,11 @@ const TabCharge = memo(({ athlete, metrics, weeklyCharge, competitions }) => {
   return (
     <div className="space-y-5">
       {/* Score rings */}
-      <div className="grid grid-cols-5 gap-3">
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
         {scoreCards.map(s => (
           <div key={s.label} className="card p-4 flex flex-col items-center gap-2">
             <ScoreRing value={s.value} color={s.color} label={s.label} />
-            <span className="text-[9.5px] text-slate-300 font-medium">{s.hint}</span>
+            <span className="text-[9.5px] font-medium" style={{ color: "var(--c-text-4)" }}>{s.hint}</span>
           </div>
         ))}
       </div>
@@ -656,30 +653,30 @@ const TabCharge = memo(({ athlete, metrics, weeklyCharge, competitions }) => {
       {/* ACWR */}
       <div className="card px-6 py-5 flex items-center justify-between flex-wrap gap-4">
         <div>
-          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">ACWR (Acute : Chronic)</p>
+          <p className="text-[10px] font-bold uppercase tracking-wider mb-1" style={{ color: "var(--c-text-3)" }}>ACWR (Acute : Chronic)</p>
           <p className="text-[32px] font-black leading-none" style={{ color: acwrColor(acwr) }}>{acwr.toFixed(2)}</p>
-          <p className="text-[11px] text-slate-400 mt-1">Cible : 0.80 – 1.30</p>
+          <p className="text-[11px] mt-1" style={{ color: "var(--c-text-4)" }}>Cible : 0.80 – 1.30</p>
         </div>
-        <div className="flex flex-col gap-1.5 text-[11.5px]">
-          <span className="flex items-center gap-2 text-slate-500"><span className="w-3 h-3 rounded-full bg-emerald-400" /> 0.80 – 1.30 : Zone optimale</span>
-          <span className="flex items-center gap-2 text-slate-500"><span className="w-3 h-3 rounded-full bg-blue-400" /> {"< 0.80 : Sous-charge"}</span>
-          <span className="flex items-center gap-2 text-slate-500"><span className="w-3 h-3 rounded-full bg-red-400" /> {"> 1.30 : Surcharge aiguë"}</span>
+        <div className="flex flex-col gap-1.5 text-[11.5px]" style={{ color: "var(--c-text-3)" }}>
+          <span className="flex items-center gap-2"><span className="w-3 h-3 rounded-full" style={{ background: "#1D9E75" }} /> 0.80 – 1.30 : Zone optimale</span>
+          <span className="flex items-center gap-2"><span className="w-3 h-3 rounded-full" style={{ background: "#378ADD" }} /> {"< 0.80 : Sous-charge"}</span>
+          <span className="flex items-center gap-2"><span className="w-3 h-3 rounded-full" style={{ background: "#E24B4A" }} /> {"> 1.30 : Surcharge aiguë"}</span>
         </div>
         <div className="flex-1 min-w-[200px]">
-          <div className="h-3 bg-slate-100 rounded-full overflow-hidden relative">
+          <div className="h-3 rounded-full overflow-hidden relative" style={{ background: "var(--c-surface-3)" }}>
             <div className="h-full rounded-full transition-all" style={{ width:`${Math.min(100,(acwr/2)*100)}%`, background:acwrColor(acwr) }} />
           </div>
-          <div className="flex justify-between text-[9px] text-slate-300 mt-1"><span>0</span><span>0.8</span><span>1.3</span><span>2.0</span></div>
+          <div className="flex justify-between text-[9px] mt-1" style={{ color: "var(--c-text-4)" }}><span>0</span><span>0.8</span><span>1.3</span><span>2.0</span></div>
         </div>
       </div>
 
       {/* Graphique charge */}
       {chartData.length > 0 && (
         <div className="card p-5">
-          <h4 className="text-[14px] font-bold text-slate-800 mb-1">Charge vs Forme — 12 semaines</h4>
-          <p className="text-[11px] text-slate-400 mb-4">Charge brute · Forme · Fatigue</p>
+          <h4 className="text-[14px] font-bold mb-1" style={{ color: "var(--c-text-1)" }}>Charge vs Forme — 12 semaines</h4>
+          <p className="text-[11px] mb-4" style={{ color: "var(--c-text-3)" }}>Charge brute · Forme · Fatigue</p>
           <ResponsiveContainer width="100%" height={220}>
-            <AreaChart data={chartData}>
+            <AreaChart data={chartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
               <defs>
                 <linearGradient id="gradCharge2" x1="0" y1="0" x2="0" y2="1">
                   <stop offset="5%" stopColor="#378ADD" stopOpacity={0.2} />
@@ -690,9 +687,9 @@ const TabCharge = memo(({ athlete, metrics, weeklyCharge, competitions }) => {
                   <stop offset="95%" stopColor="#1D9E75" stopOpacity={0} />
                 </linearGradient>
               </defs>
-              <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-              <XAxis dataKey="label" tick={{ fontSize:10, fill:"#94a3b8" }} axisLine={false} tickLine={false} />
-              <YAxis tick={{ fontSize:10, fill:"#94a3b8" }} axisLine={false} tickLine={false} width={36} />
+              <CartesianGrid strokeDasharray="3 3" stroke="var(--c-border)" />
+              <XAxis dataKey="label" tick={{ fontSize:10, fill:"var(--c-text-3)" }} axisLine={false} tickLine={false} />
+              <YAxis tick={{ fontSize:10, fill:"var(--c-text-3)" }} axisLine={false} tickLine={false} width={45} />
               <Tooltip content={<ChartTooltip />} />
               <Area dataKey="rawLoad" name="Charge brute" stroke="#378ADD" fill="url(#gradCharge2)" strokeWidth={2} />
               <Area dataKey="forme"   name="Forme"        stroke="#1D9E75" fill="url(#gradForme2)"  strokeWidth={2} />
@@ -705,18 +702,18 @@ const TabCharge = memo(({ athlete, metrics, weeklyCharge, competitions }) => {
       {/* Analyse contextuelle */}
       <div className="card p-5">
         <div className="flex items-center gap-2 mb-3">
-          <div className="w-8 h-8 rounded-xl bg-amber-50 flex items-center justify-center flex-shrink-0">
+          <div className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: "rgba(239,159,39,0.15)" }}>
             <Zap size={15} color="#EF9F27" />
           </div>
           <div>
-            <h4 className="text-[14px] font-bold text-slate-800">Analyse contextuelle</h4>
-            <p className="text-[10px] text-slate-400">Règles JS · sans IA</p>
+            <h4 className="text-[14px] font-bold" style={{ color: "var(--c-text-1)" }}>Analyse contextuelle</h4>
+            <p className="text-[10px]" style={{ color: "var(--c-text-4)" }}>Règles JS · sans IA</p>
           </div>
         </div>
         <div className="space-y-2">
           {analysis.map((line, i) => (
-            <div key={i} className="bg-slate-50 rounded-2xl px-4 py-3">
-              <p className="text-[13px] text-slate-600 leading-relaxed">{line}</p>
+            <div key={i} className="rounded-2xl px-4 py-3" style={{ background: "var(--c-surface-2)" }}>
+              <p className="text-[13px] leading-relaxed" style={{ color: "var(--c-text-2)" }}>{line}</p>
             </div>
           ))}
         </div>
@@ -744,34 +741,34 @@ const TabEntrainements = memo(({ athlete, sessions }) => {
         athleteSessions.map(s => {
           const val    = s.validations.find(v => v.athleteId === athlete.id);
           const status = val?.status ?? "future";
-          const iconBg = { done:"bg-emerald-50", partial:"bg-amber-50", none:"bg-red-50", future:"bg-slate-50" }[status] ?? "bg-slate-50";
+          const iconBg = { done:"rgba(29,158,117,0.15)", partial:"rgba(239,159,39,0.15)", none:"rgba(226,75,74,0.15)", future:"var(--c-surface-2)" }[status] ?? "var(--c-surface-2)";
           return (
             <div key={s.id} className="card px-5 py-4 flex items-start gap-4">
-              <div className={`w-10 h-10 rounded-2xl flex items-center justify-center flex-shrink-0 ${iconBg}`}>
+              <div className="w-10 h-10 rounded-2xl flex items-center justify-center flex-shrink-0" style={{ background: iconBg }}>
                 {status === "done"    ? <CheckCircle   size={18} color="#1D9E75" /> :
                  status === "partial" ? <AlertTriangle size={18} color="#EF9F27" /> :
                  status === "none"    ? <AlertTriangle size={18} color="#E24B4A" /> :
-                 <Clock size={18} color="#94a3b8" />}
+                 <Clock size={18} style={{ color: "var(--c-text-4)" }} />}
               </div>
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 flex-wrap mb-1">
-                  <span className="text-[13.5px] font-bold text-slate-700">{s.title}</span>
+                  <span className="text-[13.5px] font-bold" style={{ color: "var(--c-text-1)" }}>{s.title}</span>
                   <ValidationBadge status={status} />
                 </div>
-                <p className="text-[11.5px] text-slate-400 mb-2">
+                <p className="text-[11.5px] mb-2" style={{ color: "var(--c-text-3)" }}>
                   {s.day} · Semaine {s.week} · {s.time} · {s.type}
                 </p>
                 {val?.comment && (
-                  <p className="text-[12px] text-slate-500 italic mb-2">« {val.comment} »</p>
+                  <p className="text-[12px] italic mb-2" style={{ color: "var(--c-text-2)" }}>« {val.comment} »</p>
                 )}
                 {(val?.feeling != null || val?.fatigue != null) && (
-                  <div className="flex items-center gap-4 text-[11px] text-slate-400">
+                  <div className="flex items-center gap-4 text-[11px]" style={{ color: "var(--c-text-3)" }}>
                     {val.feeling != null && <span className="flex items-center gap-1.5">Ressenti <StarRow value={val.feeling} /></span>}
                     {val.fatigue != null && <span className="flex items-center gap-1.5">Fatigue <StarRow value={val.fatigue} color="#E24B4A" /></span>}
                   </div>
                 )}
               </div>
-              <span className="text-[10px] text-slate-300 whitespace-nowrap mt-0.5">S{s.week}</span>
+              <span className="text-[10px] whitespace-nowrap mt-0.5" style={{ color: "var(--c-text-4)" }}>S{s.week}</span>
             </div>
           );
         })
@@ -784,14 +781,14 @@ const TabEntrainements = memo(({ athlete, sessions }) => {
 
 const TabBlessures = memo(({ athlete, onAddInjury, onUpdateInjury, onDeleteInjury }) => {
   const injuries = athlete.injuries ?? [];
-  const [modalTarget,     setModalTarget]     = useState(null);
+  const [modalTarget,      setModalTarget]      = useState(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState(null);
 
   const statusConfig = {
-    "chronique": { cls: "bg-red-100 text-red-700",         border: "#E24B4A", label: "Chronique" },
-    "en suivi":  { cls: "bg-amber-100 text-amber-700",     border: "#EF9F27", label: "En suivi"  },
-    "résolu":    { cls: "bg-emerald-100 text-emerald-700", border: "#1D9E75", label: "Résolu"    },
-    "actif":     { cls: "bg-red-100 text-red-700",         border: "#E24B4A", label: "Actif"     },
+    "chronique": { bg: "rgba(226,75,74,0.15)", color: "#F19A9A", border: "#E24B4A", label: "Chronique" },
+    "en suivi":  { bg: "rgba(239,159,39,0.15)", color: "#F0CB61", border: "#EF9F27", label: "En suivi"  },
+    "résolu":    { bg: "rgba(29,158,117,0.15)", color: "#7BD8B4", border: "#1D9E75", label: "Résolu"    },
+    "actif":     { bg: "rgba(226,75,74,0.15)", color: "#F19A9A", border: "#E24B4A", label: "Actif"      },
   };
 
   return (
@@ -805,8 +802,8 @@ const TabBlessures = memo(({ athlete, onAddInjury, onUpdateInjury, onDeleteInjur
       {injuries.length === 0 ? (
         <div className="card p-12 text-center">
           <CheckCircle size={36} color="#1D9E75" className="mx-auto mb-3" />
-          <p className="text-[14px] font-bold text-slate-600">Aucun antécédent enregistré</p>
-          <p className="text-[12px] text-slate-400 mt-1">Athlète sans blessure connue</p>
+          <p className="text-[14px] font-bold" style={{ color: "var(--c-text-2)" }}>Aucun antécédent enregistré</p>
+          <p className="text-[12px] mt-1" style={{ color: "var(--c-text-4)" }}>Athlète sans blessure connue</p>
         </div>
       ) : (
         injuries.map(inj => {
@@ -824,19 +821,19 @@ const TabBlessures = memo(({ athlete, onAddInjury, onUpdateInjury, onDeleteInjur
                 <div className="flex items-start justify-between gap-3 flex-wrap mb-3">
                   <div>
                     <div className="flex items-center gap-2 flex-wrap mb-1">
-                      <h4 className="text-[15px] font-black text-slate-800">{inj.name}</h4>
-                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${sc.cls}`}>
+                      <h4 className="text-[15px] font-black" style={{ color: "var(--c-text-1)" }}>{inj.name}</h4>
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ background: sc.bg, color: sc.color }}>
                         {sc.label}
                       </span>
                     </div>
-                    <p className="text-[12px] text-slate-500">📍 {inj.location}</p>
+                    <p className="text-[12px]" style={{ color: "var(--c-text-3)" }}>📍 {inj.location}</p>
                   </div>
                   <div className="text-right">
-                    <p className="text-[10px] text-slate-400 mb-1.5">Intensité douleur</p>
+                    <p className="text-[10px] mb-1.5" style={{ color: "var(--c-text-4)" }}>Intensité douleur</p>
                     <div className="flex items-center gap-1 justify-end">
                       {Array.from({ length: 10 }).map((_, i) => (
                         <div key={i} className="w-2.5 h-2.5 rounded-sm transition-colors"
-                          style={{ background: i < inj.intensity ? iColor : "#f1f5f9" }} />
+                          style={{ background: i < inj.intensity ? iColor : "var(--c-surface-3)" }} />
                       ))}
                       <span className="text-[13px] font-black ml-1.5" style={{ color: iColor }}>
                         {inj.intensity}/10
@@ -850,37 +847,37 @@ const TabBlessures = memo(({ athlete, onAddInjury, onUpdateInjury, onDeleteInjur
                   <div className="progress-fill" style={{ width:`${pct}%`, background:iColor }} />
                 </div>
 
-                <div className="flex items-center gap-4 text-[11.5px] text-slate-400 mb-3 flex-wrap">
+                <div className="flex items-center gap-4 text-[11.5px] mb-3 flex-wrap" style={{ color: "var(--c-text-3)" }}>
                   {inj.startDate && (
-                    <span>Début : <strong className="text-slate-600">
+                    <span>Début : <strong style={{ color: "var(--c-text-2)" }}>
                       {new Date(inj.startDate).toLocaleDateString("fr-BE",{day:"numeric",month:"long",year:"numeric"})}
                     </strong></span>
                   )}
-                  {!inj.endDate && active && <span className="text-amber-600 font-bold">⚡ En cours</span>}
+                  {!inj.endDate && active && <span className="font-bold" style={{ color: "#EF9F27" }}>⚡ En cours</span>}
                 </div>
 
                 {inj.notes && (
-                  <div className="bg-slate-50 rounded-2xl px-4 py-3 border border-slate-100 mb-3">
-                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Notes / suivi</p>
-                    <p className="text-[12.5px] text-slate-600 leading-relaxed">{inj.notes}</p>
+                  <div className="rounded-2xl px-4 py-3 border mb-3" style={{ background: "var(--c-surface-2)", borderColor: "var(--c-border)" }}>
+                    <p className="text-[10px] font-bold uppercase tracking-wider mb-1" style={{ color: "var(--c-text-4)" }}>Notes / suivi</p>
+                    <p className="text-[12.5px] leading-relaxed" style={{ color: "var(--c-text-2)" }}>{inj.notes}</p>
                   </div>
                 )}
 
-                <div className="flex items-center gap-3 pt-3 border-t border-slate-50">
+                <div className="flex items-center gap-3 pt-3" style={{ borderTop: "1px solid var(--c-border)" }}>
                   <button onClick={() => setModalTarget(inj)}
-                    className="text-[11.5px] font-semibold text-slate-500 hover:text-slate-800 transition-colors">
+                    className="text-[11.5px] font-semibold transition-colors" style={{ color: "var(--c-text-3)" }} onMouseEnter={e => e.currentTarget.style.color = "var(--c-text-1)"} onMouseLeave={e => e.currentTarget.style.color = "var(--c-text-3)"}>
                     ✏️ Modifier
                   </button>
                   {confirmDeleteId === inj.id ? (
                     <span className="flex items-center gap-2">
-                      <span className="text-[11px] text-red-600 font-semibold">Confirmer ?</span>
+                      <span className="text-[11px] font-semibold" style={{ color: "#F19A9A" }}>Confirmer ?</span>
                       <button onClick={async () => { await onDeleteInjury(inj.id); setConfirmDeleteId(null); }}
-                        className="text-[11px] font-bold text-white bg-red-500 rounded-lg px-2 py-0.5">Oui</button>
-                      <button onClick={() => setConfirmDeleteId(null)} className="text-[11px] text-slate-500">Non</button>
+                        className="text-[11px] font-bold text-white rounded-lg px-2 py-0.5" style={{ background: "#E24B4A" }}>Oui</button>
+                      <button onClick={() => setConfirmDeleteId(null)} className="text-[11px]" style={{ color: "var(--c-text-4)" }}>Non</button>
                     </span>
                   ) : (
                     <button onClick={() => setConfirmDeleteId(inj.id)}
-                      className="text-[11.5px] font-semibold text-red-400 hover:text-red-600 transition-colors">
+                      className="text-[11.5px] font-semibold transition-colors" style={{ color: "#F19A9A" }} onMouseEnter={e => e.currentTarget.style.color = "#E24B4A"} onMouseLeave={e => e.currentTarget.style.color = "#F19A9A"}>
                       🗑️ Supprimer
                     </button>
                   )}
@@ -913,14 +910,14 @@ const TabProfil = memo(({ athlete }) => {
   const p = athlete.profile ?? {};
   const hasProfile = Object.keys(p).length > 0;
   const stabilityScore = computePerformanceStability(athlete.performanceHistory);
-  const stabilityColor = s => s === null ? "#94a3b8" : s >= 75 ? "#1D9E75" : s >= 50 ? "#EF9F27" : "#E24B4A";
+  const stabilityColor = s => s === null ? "var(--c-text-4)" : s >= 75 ? "#1D9E75" : s >= 50 ? "#EF9F27" : "#E24B4A";
   const toleranceColor = v => (v==="très élevée"||v==="élevée") ? "#1D9E75" : (v==="modérée"||v==="normale") ? "#EF9F27" : "#E24B4A";
 
   const stabilityCard = (
     <div className="card px-6 py-5 flex items-center gap-5">
       <div className="flex-shrink-0">
         <svg width="72" height="72" viewBox="0 0 72 72">
-          <circle cx="36" cy="36" r="28" fill="none" stroke="#f1f5f9" strokeWidth="7" />
+          <circle cx="36" cy="36" r="28" fill="none" stroke="var(--c-surface-3)" strokeWidth="7" />
           {stabilityScore !== null && (
             <circle cx="36" cy="36" r="28" fill="none" stroke={stabilityColor(stabilityScore)} strokeWidth="7"
               strokeDasharray={`${(stabilityScore/100)*2*Math.PI*28} ${2*Math.PI*28}`}
@@ -932,8 +929,8 @@ const TabProfil = memo(({ athlete }) => {
         </svg>
       </div>
       <div>
-        <p className="text-[14px] font-bold text-slate-700">Stabilité de performance</p>
-        <p className="text-[12px] text-slate-400 mt-1 leading-relaxed">
+        <p className="text-[14px] font-bold" style={{ color: "var(--c-text-1)" }}>Stabilité de performance</p>
+        <p className="text-[12px] mt-1 leading-relaxed" style={{ color: "var(--c-text-3)" }}>
           {stabilityScore !== null
             ? "Régularité des résultats (coefficient de variation)."
             : "Pas encore assez de mesures (minimum 3)."}
@@ -957,13 +954,13 @@ const TabProfil = memo(({ athlete }) => {
       {stabilityCard}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
         <div className="card p-5">
-          <h4 className="text-[14px] font-bold text-slate-800 mb-1">Profil athlétique</h4>
-          <p className="text-[11px] text-slate-400 mb-4">Scores 0 – 100</p>
+          <h4 className="text-[14px] font-bold mb-1" style={{ color: "var(--c-text-1)" }}>Profil athlétique</h4>
+          <p className="text-[11px] mb-4" style={{ color: "var(--c-text-4)" }}>Scores 0 – 100</p>
           <ResponsiveContainer width="100%" height={260}>
             <RadarChart data={radarData} cx="50%" cy="50%" outerRadius="70%">
-              <PolarGrid stroke="#f1f5f9" />
-              <PolarAngleAxis dataKey="discipline" tick={{ fontSize:12, fill:"#64748b", fontWeight:600 }} />
-              <PolarRadiusAxis angle={90} domain={[0,100]} tick={{ fontSize:9, fill:"#94a3b8" }} tickCount={4} />
+              <PolarGrid stroke="var(--c-border)" />
+              <PolarAngleAxis dataKey="discipline" tick={{ fontSize:12, fill:"var(--c-text-3)", fontWeight:600 }} />
+              <PolarRadiusAxis angle={90} domain={[0,100]} tick={{ fontSize:9, fill:"var(--c-text-4)" }} tickCount={4} />
               <Radar name={athlete.name} dataKey="value" stroke="#1D9E75" fill="#1D9E75" fillOpacity={0.18} strokeWidth={2.5} />
               <Tooltip content={<ChartTooltip />} />
             </RadarChart>
@@ -972,18 +969,18 @@ const TabProfil = memo(({ athlete }) => {
             {RADAR_KEYS.map(k => (
               <div key={k.key} className="text-center">
                 <p className="text-[18px] font-black" style={{ color: scoreColor(p[k.key] ?? 0) }}>{p[k.key] ?? "—"}</p>
-                <p className="text-[9.5px] text-slate-400">{k.label}</p>
+                <p className="text-[9.5px]" style={{ color: "var(--c-text-4)" }}>{k.label}</p>
               </div>
             ))}
           </div>
         </div>
         <div className="space-y-4">
           <div className="card p-5">
-            <h4 className="text-[14px] font-bold text-slate-800 mb-4">Caractéristiques</h4>
+            <h4 className="text-[14px] font-bold mb-4" style={{ color: "var(--c-text-1)" }}>Caractéristiques</h4>
             <div className="space-y-3">
               {infoRows.map(r => (
-                <div key={r.label} className="flex items-center justify-between py-2 border-b border-slate-50 last:border-0">
-                  <span className="text-[12.5px] text-slate-500">{r.label}</span>
+                <div key={r.label} className="flex items-center justify-between py-2 border-b last:border-0" style={{ borderColor: "var(--c-border)" }}>
+                  <span className="text-[12.5px]" style={{ color: "var(--c-text-3)" }}>{r.label}</span>
                   <span className="text-[12.5px] font-bold capitalize" style={{ color: toleranceColor(r.value) }}>
                     {r.value}
                   </span>
@@ -992,13 +989,13 @@ const TabProfil = memo(({ athlete }) => {
             </div>
           </div>
           <div className="card p-5">
-            <h4 className="text-[14px] font-bold text-slate-800 mb-3">Identité</h4>
+            <h4 className="text-[14px] font-bold mb-3" style={{ color: "var(--c-text-1)" }}>Identité</h4>
             <div className="space-y-2.5 text-[12.5px]">
-              <div className="flex justify-between"><span className="text-slate-400">Discipline</span><span className="font-bold text-slate-700">{athlete.mainDiscipline ?? "—"}</span></div>
-              {athlete.secondaryDisciplines?.length > 0 && <div className="flex justify-between gap-4"><span className="text-slate-400">Secondaires</span><span className="font-bold text-slate-700 text-right">{athlete.secondaryDisciplines.join(", ")}</span></div>}
-              <div className="flex justify-between"><span className="text-slate-400">Groupe</span><span className="font-bold text-slate-700">{athlete.group ?? "—"}</span></div>
-              <div className="flex justify-between"><span className="text-slate-400">Niveau</span><span className="font-bold text-slate-700">{athlete.level ?? "—"}</span></div>
-              <div className="flex justify-between"><span className="text-slate-400">Âge</span><span className="font-bold text-slate-700">{athlete.age ? `${athlete.age} ans` : "—"}</span></div>
+              <div className="flex justify-between"><span style={{ color: "var(--c-text-4)" }}>Discipline</span><span className="font-bold" style={{ color: "var(--c-text-1)" }}>{athlete.mainDiscipline ?? "—"}</span></div>
+              {athlete.secondaryDisciplines?.length > 0 && <div className="flex justify-between gap-4"><span style={{ color: "var(--c-text-4)" }}>Secondaires</span><span className="font-bold text-right" style={{ color: "var(--c-text-1)" }}>{athlete.secondaryDisciplines.join(", ")}</span></div>}
+              <div className="flex justify-between"><span style={{ color: "var(--c-text-4)" }}>Groupe</span><span className="font-bold" style={{ color: "var(--c-text-1)" }}>{athlete.group ?? "—"}</span></div>
+              <div className="flex justify-between"><span style={{ color: "var(--c-text-4)" }}>Niveau</span><span className="font-bold" style={{ color: "var(--c-text-1)" }}>{athlete.level ?? "—"}</span></div>
+              <div className="flex justify-between"><span style={{ color: "var(--c-text-4)" }}>Âge</span><span className="font-bold" style={{ color: "var(--c-text-1)" }}>{athlete.age ? `${athlete.age} ans` : "—"}</span></div>
             </div>
           </div>
         </div>
@@ -1010,9 +1007,9 @@ const TabProfil = memo(({ athlete }) => {
 // ─── AthleteProfile premium ───────────────────────────────────────────────────
 
 const AthleteProfile = memo(({ athlete, weeklyCharge, sessions, competitions, onBack, onAddRecord, onEditRequest, onDelete, onAddInjury, onUpdateInjury, onDeleteInjury }) => {
-  const [activeTab,     setActiveTab]     = useState("performances");
+  const [activeTab,      setActiveTab]      = useState("performances");
   const [confirmDelete, setConfirmDelete] = useState(false);
-  const [deleting,      setDeleting]      = useState(false);
+  const [deleting,       setDeleting]       = useState(false);
   const [deleteError,   setDeleteError]   = useState(null);
 
   const metrics        = useMemo(() => getAthleteMetricsForWeek(athlete.id, weeklyCharge), [athlete.id, weeklyCharge]);
@@ -1030,35 +1027,35 @@ const AthleteProfile = memo(({ athlete, weeklyCharge, sessions, competitions, on
       {/* Barre actions */}
       <div className="flex items-center justify-between flex-wrap gap-2">
         <button onClick={onBack}
-          className="flex items-center gap-1.5 text-[13px] font-semibold text-slate-500 hover:text-slate-800 transition-colors tap-feedback">
+          className="flex items-center gap-1.5 text-[13px] font-semibold transition-colors tap-feedback" style={{ color: "var(--c-text-3)" }} onMouseEnter={e => e.currentTarget.style.color = "var(--c-text-1)"} onMouseLeave={e => e.currentTarget.style.color = "var(--c-text-3)"}>
           <ArrowLeft size={16} /> Retour à la liste
         </button>
         <div className="flex items-center gap-2">
           <button onClick={() => onEditRequest(athlete)}
-            className="text-[12px] font-bold text-slate-500 hover:text-slate-800 border border-slate-200 rounded-xl px-3 py-1.5 transition-colors">
+            className="text-[12px] font-bold border rounded-xl px-3 py-1.5 transition-colors" style={{ color: "var(--c-text-3)", borderColor: "var(--c-border)", background: "transparent" }} onMouseEnter={e => e.currentTarget.style.background = "var(--c-surface-2)"} onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
             ✏️ Modifier
           </button>
           {!confirmDelete ? (
             <button onClick={() => setConfirmDelete(true)}
-              className="text-[12px] font-bold text-red-500 hover:text-red-700 border border-red-200 rounded-xl px-3 py-1.5 transition-colors">
+              className="text-[12px] font-bold border rounded-xl px-3 py-1.5 transition-colors" style={{ color: "#F19A9A", borderColor: "rgba(226,75,74,0.3)", background: "transparent" }} onMouseEnter={e => e.currentTarget.style.background = "rgba(226,75,74,0.1)"} onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
               🗑️ Supprimer
             </button>
           ) : (
-            <div className="flex items-center gap-2 bg-red-50 border border-red-200 rounded-xl px-3 py-1.5">
-              <span className="text-[12px] text-red-700 font-semibold">Confirmer ?</span>
+            <div className="flex items-center gap-2 border rounded-xl px-3 py-1.5" style={{ background: "rgba(226,75,74,0.1)", borderColor: "rgba(226,75,74,0.3)" }}>
+              <span className="text-[12px] font-semibold" style={{ color: "#F19A9A" }}>Confirmer ?</span>
               <button onClick={handleDelete} disabled={deleting}
-                className="text-[11px] font-bold text-white bg-red-500 hover:bg-red-600 rounded-lg px-2 py-0.5 disabled:opacity-50">
+                className="text-[11px] font-bold text-white rounded-lg px-2 py-0.5 disabled:opacity-50" style={{ background: "#E24B4A" }}>
                 {deleting ? "…" : "Oui"}
               </button>
               <button onClick={() => setConfirmDelete(false)} disabled={deleting}
-                className="text-[11px] text-slate-500 hover:text-slate-700">Non</button>
+                className="text-[11px]" style={{ color: "var(--c-text-4)" }} onMouseEnter={e => e.currentTarget.style.color = "var(--c-text-2)"} onMouseLeave={e => e.currentTarget.style.color = "var(--c-text-4)"}>Non</button>
             </div>
           )}
         </div>
       </div>
 
       {deleteError && (
-        <div className="bg-red-50 border border-red-100 rounded-2xl px-4 py-3 text-[12.5px] text-red-700">
+        <div className="rounded-2xl px-4 py-3 text-[12.5px]" style={{ background: "rgba(226,75,74,0.1)", border: "1px solid rgba(226,75,74,0.3)", color: "#F19A9A" }}>
           {deleteError}
         </div>
       )}
@@ -1083,7 +1080,7 @@ const AthleteProfile = memo(({ athlete, weeklyCharge, sessions, competitions, on
               <h2 className="text-[22px] font-black text-white tracking-tight">{athlete.name}</h2>
               <StatusBadge readiness={readiness} fatigue={fatigue} acwr={acwr} />
               {activeInjuries.length > 0 && (
-                <span className="flex items-center gap-1 text-[11px] font-bold bg-amber-400/20 border border-amber-400/30 px-2.5 py-1 rounded-full text-white">
+                <span className="flex items-center gap-1 text-[11px] font-bold px-2.5 py-1 rounded-full text-white" style={{ background: "rgba(239,159,39,0.3)", border: "1px solid rgba(239,159,39,0.4)" }}>
                   <HeartPulse size={11} /> {activeInjuries.length} blessure{activeInjuries.length > 1 ? "s" : ""}
                 </span>
               )}
@@ -1120,16 +1117,14 @@ const AthleteProfile = memo(({ athlete, weeklyCharge, sessions, competitions, on
       </div>
 
       {/* Tabs pill premium */}
-      <div className="flex gap-1 bg-white rounded-2xl border border-slate-100 shadow-card p-1.5 overflow-x-auto">
+      <div className="flex gap-1 rounded-2xl border p-1.5 overflow-x-auto" style={{ background: "var(--c-surface)", borderColor: "var(--c-border)" }}>
         {TABS.map(tab => {
           const Icon     = tab.icon;
           const isActive = activeTab === tab.id;
           return (
             <button key={tab.id} onClick={() => setActiveTab(tab.id)}
-              className={[
-                "flex items-center gap-2 px-4 py-2 rounded-xl text-[12.5px] font-bold whitespace-nowrap transition-all flex-1 justify-center tap-feedback",
-                isActive ? "bg-emerald-600 text-white shadow-sm" : "text-slate-500 hover:bg-slate-50 hover:text-slate-700",
-              ].join(" ")}
+              className={["flex items-center gap-2 px-4 py-2 rounded-xl text-[12.5px] font-bold whitespace-nowrap transition-all flex-1 justify-center tap-feedback", isActive ? "" : "hover:opacity-80"].join(" ")}
+              style={isActive ? { background: "#1D9E75", color: "#0A150F", boxShadow: "0 2px 8px rgba(29,158,117,0.30)" } : { color: "var(--c-text-3)", background: "transparent" }}
             >
               <Icon size={13} strokeWidth={isActive ? 2.5 : 2} />
               {tab.label}
@@ -1174,11 +1169,11 @@ const AthleteCard = memo(({ athlete, weeklyCharge, onClick }) => {
             {athlete.avatar}
           </div>
           <div>
-            <p className="text-[14.5px] font-black text-slate-800 leading-tight">{athlete.name}</p>
-            <p className="text-[11px] text-slate-400 mt-0.5">{athlete.mainDiscipline ?? "—"}</p>
+            <p className="text-[14.5px] font-black leading-tight" style={{ color: "var(--c-text-1)" }}>{athlete.name}</p>
+            <p className="text-[11px] mt-0.5" style={{ color: "var(--c-text-4)" }}>{athlete.mainDiscipline ?? "—"}</p>
           </div>
         </div>
-        <ChevronRight size={16} className="text-slate-200 flex-shrink-0 mt-1" />
+        <ChevronRight size={16} className="flex-shrink-0 mt-1" style={{ color: "var(--c-text-4)" }} />
       </div>
 
       {/* Badges */}
@@ -1189,11 +1184,11 @@ const AthleteCard = memo(({ athlete, weeklyCharge, onClick }) => {
             {status.dot} {status.label}
           </span>
         )}
-        <span className="text-[10.5px] font-semibold px-2.5 py-1 rounded-full bg-slate-100 text-slate-500">
+        <span className="text-[10.5px] font-semibold px-2.5 py-1 rounded-full" style={{ background: "var(--c-surface-2)", color: "var(--c-text-3)" }}>
           {athlete.level ?? "Niveau —"}
         </span>
         {activeInjuries.length > 0 && (
-          <span className="text-[10.5px] font-bold px-2.5 py-1 rounded-full bg-amber-50 text-amber-700 border border-amber-100">
+          <span className="text-[10.5px] font-bold px-2.5 py-1 rounded-full" style={{ background: "rgba(239,159,39,0.15)", color: "#F0CB61", border: "1px solid rgba(239,159,39,0.3)" }}>
             ⚕ {activeInjuries.length} blessure{activeInjuries.length > 1 ? "s" : ""}
           </span>
         )}
@@ -1207,19 +1202,19 @@ const AthleteCard = memo(({ athlete, weeklyCharge, onClick }) => {
             { label: "Fatigue",   value: fatigue,         color: scoreColor(fatigue, true)   },
             { label: "ACWR",      value: acwr.toFixed(2), color: acwrColor(acwr)             },
           ].map(s => (
-            <div key={s.label} className="bg-slate-50 rounded-2xl p-2.5 text-center">
+            <div key={s.label} className="rounded-2xl p-2.5 text-center" style={{ background: "var(--c-surface-2)" }}>
               <p className="text-[18px] font-black leading-tight" style={{ color: s.color }}>{s.value}</p>
-              <p className="text-[9.5px] text-slate-400 mt-0.5 font-medium">{s.label}</p>
+              <p className="text-[9.5px] mt-0.5 font-medium" style={{ color: "var(--c-text-4)" }}>{s.label}</p>
             </div>
           ))}
         </div>
       ) : (
-        <div className="bg-slate-50 rounded-2xl p-3 text-center">
-          <p className="text-[11px] text-slate-300 font-medium">Pas encore de charge enregistrée</p>
+        <div className="rounded-2xl p-3 text-center" style={{ background: "var(--c-surface-2)" }}>
+          <p className="text-[11px] font-medium" style={{ color: "var(--c-text-4)" }}>Pas encore de charge enregistrée</p>
         </div>
       )}
 
-      <p className="text-[11px] text-slate-400 font-medium">{athlete.group ?? "Groupe —"}</p>
+      <p className="text-[11px] font-medium" style={{ color: "var(--c-text-4)" }}>{athlete.group ?? "Groupe —"}</p>
     </button>
   );
 });
@@ -1386,8 +1381,8 @@ function AthleteList({ onNavigate }) {
       {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <h2 className="text-[22px] font-black text-slate-800 tracking-tight">Athlètes</h2>
-          <p className="text-[13px] text-slate-400 mt-0.5">
+          <h2 className="text-[22px] font-black tracking-tight" style={{ color: "var(--c-text-1)" }}>Athlètes</h2>
+          <p className="text-[13px] mt-0.5" style={{ color: "var(--c-text-3)" }}>
             {athletes.length > 0
               ? `${athletes.length} athlète${athletes.length>1?"s":""} suivi${athletes.length>1?"s":""} · Cliquez pour le profil complet`
               : "Aucun athlète pour l'instant"}
