@@ -48,7 +48,7 @@ function computeBadges({ athlete, weeklyCharge, sessions, competitions, myPerfor
   const add = (id, label, desc, color, icon = "zap") =>
     badges.push({ id, label, desc, color, icon, unlocked: true });
   const addLocked = (id, label, desc) =>
-    badges.push({ id, label, desc, color: "#C4C2BC", icon: "lock", unlocked: false });
+    badges.push({ id, label, desc, color: "var(--c-text-4)", icon: "lock", unlocked: false });
 
   if (streak >= 1)  add("s1",  "Premier feu",  "1 sem. consécutive",   "#C8890A", "zap");
   if (streak >= 3)  add("s3",  "En feu",       "3 sem. consécutives",  "#C8890A", "zap");
@@ -115,8 +115,8 @@ const BadgeItem = memo(({ badge }) => (
       style={{ background: badge.unlocked ? badge.color + "12" : "rgba(0,0,0,0.03)" }}>
       <BadgeIcon icon={badge.icon} color={badge.unlocked ? badge.color : "#C4C2BC"} />
     </div>
-    <p style={{ fontSize: 10, fontWeight: 500, color: "#1C1C1A", lineHeight: 1.2 }}>{badge.label}</p>
-    <p style={{ fontSize: 8.5, color: "#96948E", lineHeight: 1.2 }}>{badge.desc}</p>
+    <p style={{ fontSize: 10, fontWeight: 500, color: "var(--c-text-1)", lineHeight: 1.2 }}>{badge.label}</p>
+    <p style={{ fontSize: 8.5, color: "var(--c-text-3)", lineHeight: 1.2 }}>{badge.desc}</p>
   </div>
 ));
 
@@ -211,7 +211,7 @@ export default function AthleteDashboard({
   // ── Séparateur de section ──────────────────────────────────────────────────
   const SectionDivider = ({ label, action, onAction }) => (
     <div className="flex items-center justify-between mb-3 mt-5 first:mt-0">
-      <p style={{ fontSize: 9, fontWeight: 500, letterSpacing: "0.09em", textTransform: "uppercase", color: "#96948E" }}>
+      <p style={{ fontSize: 9, fontWeight: 500, letterSpacing: "0.09em", textTransform: "uppercase", color: "var(--c-text-3)" }}>
         {label}
       </p>
       {action && (
@@ -342,29 +342,29 @@ export default function AthleteDashboard({
                 <div key={q.key} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4, padding: "8px 4px", borderRadius: 8, background: "var(--c-surface-2)" }}>
                   <Icon size={11} color={q.color} strokeWidth={2} />
                   <span style={{ fontSize: 15, fontWeight: 600, color: col, fontVariantNumeric: "tabular-nums", lineHeight: 1 }}>{val}</span>
-                  <span style={{ fontSize: 7.5, color: "#96948E", textAlign: "center", lineHeight: 1.2 }}>{q.label.split(" ")[0]}</span>
+                  <span style={{ fontSize: 7.5, color: "var(--c-text-3)", textAlign: "center", lineHeight: 1.2 }}>{q.label.split(" ")[0]}</span>
                 </div>
               );
             })}
           </div>
           {wellnessToday.notes && (
-            <p style={{ marginTop: 10, fontSize: 11, color: "#96948E", fontStyle: "italic", borderTop: "1px solid var(--c-border)", paddingTop: 10 }}>
+            <p style={{ marginTop: 10, fontSize: 11, color: "var(--c-text-3)", fontStyle: "italic", borderTop: "1px solid var(--c-border)", paddingTop: 10 }}>
               {wellnessToday.notes}
             </p>
           )}
-          <button onClick={onOpenWellness} style={{ marginTop: 8, fontSize: 10.5, fontWeight: 400, color: "#96948E", background: "none", border: "none", cursor: "pointer", padding: 0 }}>
+          <button onClick={onOpenWellness} style={{ marginTop: 8, fontSize: 10.5, fontWeight: 400, color: "var(--c-text-3)", background: "none", border: "none", cursor: "pointer", padding: 0 }}>
             Modifier →
           </button>
         </div>
       ) : (
-        <div style={{ borderRadius: 14, padding: "14px 16px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16, background: "linear-gradient(135deg, #EDF6F2, #E4F3EC)", border: "1px solid rgba(29,158,117,0.10)" }}>
+        <div style={{ borderRadius: 14, padding: "14px 16px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16, background: "rgba(29,158,117,0.08)", border: "1px solid rgba(29,158,117,0.15)" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
             <div style={{ width: 36, height: 36, borderRadius: 9, background: "rgba(29,158,117,0.12)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
               <Activity size={15} color="#1D9E75" strokeWidth={2} />
             </div>
             <div>
-              <p style={{ fontSize: 13, fontWeight: 500, color: "#0F4A30" }}>Questionnaire matinal</p>
-              <p style={{ fontSize: 11, color: "#2E7A58", marginTop: 1 }}>30 secondes · Améliore ton Readiness</p>
+              <p style={{ fontSize: 13, fontWeight: 500, color: "rgba(255,255,255,0.80)" }}>Questionnaire matinal</p>
+              <p style={{ fontSize: 11, color: "rgba(255,255,255,0.45)", marginTop: 1 }}>30 secondes · Améliore ton Readiness</p>
             </div>
           </div>
           <button onClick={onOpenWellness} className="btn-primary" style={{ flexShrink: 0 }}>
@@ -453,7 +453,7 @@ export default function AthleteDashboard({
                 {[
                   { label: "ACWR",      value: metrics.acwr.toFixed(2), color: acwrColor(metrics.acwr), sub: "0.8–1.3 optimal" },
                   { label: "Aiguë",     value: metrics.acute,           color: "#4B7BDB",               sub: "4 sem." },
-                  { label: "Chronique", value: metrics.chronic,         color: "#96948E",               sub: "12 sem." },
+                  { label: "Chronique", value: metrics.chronic,         color: "var(--c-text-3)",               sub: "12 sem." },
                 ].map((s, idx) => (
                   <div key={s.label} style={{
                     flex: 1, textAlign: "center", paddingTop: 2, paddingBottom: 2,
@@ -462,17 +462,17 @@ export default function AthleteDashboard({
                     <p style={{ fontSize: 17, fontWeight: 600, color: s.color, fontVariantNumeric: "tabular-nums", letterSpacing: "-0.025em", lineHeight: 1 }}>
                       {s.value}
                     </p>
-                    <p style={{ fontSize: 8, fontWeight: 500, letterSpacing: "0.08em", textTransform: "uppercase", color: "#96948E", marginTop: 3 }}>
+                    <p style={{ fontSize: 8, fontWeight: 500, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--c-text-3)", marginTop: 3 }}>
                       {s.label}
                     </p>
-                    <p style={{ fontSize: 8, color: "#C4C2BC", marginTop: 1 }}>{s.sub}</p>
+                    <p style={{ fontSize: 8, color: "var(--c-text-4)", marginTop: 1 }}>{s.sub}</p>
                   </div>
                 ))}
               </div>
 
               {/* Réglette ACWR */}
               <div style={{ padding: "0 16px 14px" }}>
-                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 8.5, color: "#96948E", marginBottom: 5 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 8.5, color: "var(--c-text-3)", marginBottom: 5 }}>
                   <span>Sous-charge</span>
                   <span style={{ color: "#1D9E75", fontWeight: 500 }}>Zone optimale</span>
                   <span>Surcharge</span>
@@ -485,7 +485,7 @@ export default function AthleteDashboard({
                     transition: "left 0.7s cubic-bezier(0.16,1,0.3,1)",
                   }} />
                 </div>
-                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 7.5, color: "#C4C2BC", marginTop: 4 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 7.5, color: "var(--c-text-4)", marginTop: 4 }}>
                   <span>0</span><span>0.8</span><span>1.3</span><span>2.0</span>
                 </div>
               </div>
@@ -497,7 +497,7 @@ export default function AthleteDashboard({
             <div className="card p-4">
               <div className="flex items-center justify-between mb-1">
                 <p className="card-title">État de forme</p>
-                <span style={{ fontSize: 9, color: "#C4C2BC", fontWeight: 400 }}>Tap pour le détail</span>
+                <span style={{ fontSize: 9, color: "var(--c-text-4)", fontWeight: 400 }}>Tap pour le détail</span>
               </div>
               <p className="card-subtitle mb-4">Basé sur ta charge réelle</p>
               <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
@@ -518,7 +518,7 @@ export default function AthleteDashboard({
                       style={{ background: "var(--c-surface-2)", borderRadius: 10, padding: "10px 12px", textAlign: "left", border: "none", cursor: "pointer", transition: "background 0.15s ease", width: "100%" }}>
                       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: 7 }}>
                         <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
-                          <span style={{ fontSize: 12.5, fontWeight: 400, color: "#1C1C1A" }}>{s.label}</span>
+                          <span style={{ fontSize: 12.5, fontWeight: 400, color: "var(--c-text-1)" }}>{s.label}</span>
                           {thresh && (
                             <span style={{ fontSize: 9, fontWeight: 500, padding: "1px 6px", borderRadius: 4, background: thresh.color + "10", color: thresh.color }}>
                               {thresh.label}
@@ -538,7 +538,7 @@ export default function AthleteDashboard({
                   );
                 })}
               </div>
-              <p style={{ fontSize: 8.5, color: "#C4C2BC", marginTop: 12, textAlign: "center" }}>
+              <p style={{ fontSize: 8.5, color: "var(--c-text-4)", marginTop: 12, textAlign: "center" }}>
                 ACWR : Gabbett (2016) · Récup. : Hasegawa (2024) · Banister (1975)
               </p>
             </div>
@@ -558,7 +558,7 @@ export default function AthleteDashboard({
             {weekSessions.length === 0 ? (
               <div style={{ padding: "32px 16px", textAlign: "center" }}>
                 <CalendarDays size={20} color="#C4C2BC" strokeWidth={1.5} style={{ margin: "0 auto 8px" }} />
-                <p style={{ fontSize: 12, color: "#96948E" }}>Aucune séance cette semaine</p>
+                <p style={{ fontSize: 12, color: "var(--c-text-3)" }}>Aucune séance cette semaine</p>
               </div>
             ) : weekSessions.map((s, idx) => {
               const c   = colorsFor(s.category);
@@ -568,15 +568,15 @@ export default function AthleteDashboard({
                 done:    { label: "Fait",    bg: "rgba(29,158,117,0.07)",  color: "#16826C" },
                 partial: { label: "Partiel", bg: "rgba(200,137,10,0.07)",  color: "#9A6800" },
                 none:    { label: "Absent",  bg: "rgba(192,57,43,0.07)",   color: "#922B21" },
-                future:  { label: "À venir", bg: "rgba(0,0,0,0.04)",       color: "#96948E" },
-              }[st] ?? { label: "À venir", bg: "rgba(0,0,0,0.04)", color: "#96948E" };
+                future:  { label: "À venir", bg: "rgba(0,0,0,0.04)",       color: "var(--c-text-3)" },
+              }[st] ?? { label: "À venir", bg: "rgba(0,0,0,0.04)", color: "var(--c-text-3)" };
               return (
                 <div key={s.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 16px", borderTop: idx > 0 ? "1px solid var(--c-border)" : "none" }}>
                   {/* Liseré catégorie 2px */}
                   <div style={{ width: 2, alignSelf: "stretch", borderRadius: 2, flexShrink: 0, background: c.border }} />
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <p style={{ fontSize: 12.5, fontWeight: 500, color: "#1C1C1A" }} className="truncate">{s.title}</p>
-                    <p style={{ fontSize: 10.5, color: "#96948E", marginTop: 1 }}>
+                    <p style={{ fontSize: 12.5, fontWeight: 500, color: "var(--c-text-1)" }} className="truncate">{s.title}</p>
+                    <p style={{ fontSize: 10.5, color: "var(--c-text-3)", marginTop: 1 }}>
                       {s.sessionDate
                         ? new Date(s.sessionDate).toLocaleDateString("fr-BE", { weekday: "short", day: "numeric", month: "short" })
                         : s.day} · {s.time}
@@ -639,13 +639,13 @@ export default function AthleteDashboard({
                     }}>
                       <div style={{ display: "flex", alignItems: "center", gap: 5, marginBottom: 6 }}>
                         <div style={{ width: 5, height: 5, borderRadius: "50%", background: c.dot, flexShrink: 0 }} />
-                        <p style={{ fontSize: 9.5, fontWeight: 500, color: "#96948E", textTransform: "uppercase", letterSpacing: "0.06em" }}>{disc}</p>
+                        <p style={{ fontSize: 9.5, fontWeight: 500, color: "var(--c-text-3)", textTransform: "uppercase", letterSpacing: "0.06em" }}>{disc}</p>
                       </div>
                       <p style={{ fontSize: 20, fontWeight: 600, color: c.border, letterSpacing: "-0.03em", fontVariantNumeric: "tabular-nums", lineHeight: 1 }}>
                         {r.pr}
                       </p>
-                      <p style={{ fontSize: 10.5, color: "#96948E", marginTop: 4 }}>
-                        SB : <span style={{ color: "#5A5A54", fontWeight: 500 }}>{r.sb}</span>
+                      <p style={{ fontSize: 10.5, color: "var(--c-text-3)", marginTop: 4 }}>
+                        SB : <span style={{ color: "var(--c-text-2)", fontWeight: 500 }}>{r.sb}</span>
                       </p>
                     </div>
                   );
@@ -669,7 +669,7 @@ export default function AthleteDashboard({
             {unlockedBadges.length === 0 ? (
               <div style={{ textAlign: "center", padding: "24px 0" }}>
                 <Trophy size={22} color="#C4C2BC" strokeWidth={1.5} style={{ margin: "0 auto 8px" }} />
-                <p style={{ fontSize: 12, color: "#96948E" }}>Commence à t'entraîner pour débloquer tes premiers badges</p>
+                <p style={{ fontSize: 12, color: "var(--c-text-3)" }}>Commence à t'entraîner pour débloquer tes premiers badges</p>
               </div>
             ) : (
               <>
@@ -678,7 +678,7 @@ export default function AthleteDashboard({
                 </div>
                 {lockedBadges.length > 0 && (
                   <>
-                    <p style={{ fontSize: 8.5, fontWeight: 500, letterSpacing: "0.09em", textTransform: "uppercase", color: "#C4C2BC", marginBottom: 7 }}>
+                    <p style={{ fontSize: 8.5, fontWeight: 500, letterSpacing: "0.09em", textTransform: "uppercase", color: "var(--c-text-4)", marginBottom: 7 }}>
                       À débloquer
                     </p>
                     <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 7 }}>
@@ -751,33 +751,33 @@ export default function AthleteDashboard({
                 <span style={{ fontSize: 40, fontWeight: 600, color: "#C8890A", fontVariantNumeric: "tabular-nums", letterSpacing: "-0.04em", lineHeight: 1 }}>
                   {streak}
                 </span>
-                <span style={{ fontSize: 12, fontWeight: 400, color: "#96948E", marginBottom: 3 }}>sem.</span>
+                <span style={{ fontSize: 12, fontWeight: 400, color: "var(--c-text-3)", marginBottom: 3 }}>sem.</span>
               </div>
-              <p style={{ fontSize: 10.5, color: "#96948E", marginBottom: 8 }}>avec au moins 1 séance validée</p>
+              <p style={{ fontSize: 10.5, color: "var(--c-text-3)", marginBottom: 8 }}>avec au moins 1 séance validée</p>
               <div className="progress-bar">
                 <div className="progress-fill" style={{ width: `${Math.min(100,streak*10)}%`, background: "#C8890A" }} />
               </div>
-              <p style={{ fontSize: 8.5, color: "#C4C2BC", textAlign: "right", marginTop: 4 }}>{streak}/10 badge Maestro</p>
+              <p style={{ fontSize: 8.5, color: "var(--c-text-4)", textAlign: "right", marginTop: 4 }}>{streak}/10 badge Maestro</p>
             </div>
           )}
 
           {/* Blessures */}
           {activeInjuries.length > 0 && (
-            <div style={{ borderRadius: 14, padding: "14px", background: "#FDFAF3", border: "1px solid rgba(200,137,10,0.12)" }}>
+            <div style={{ borderRadius: 14, padding: "14px", background: "var(--c-surface-2)", border: "1px solid rgba(232,160,32,0.15)" }}>
               <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 10 }}>
                 <HeartPulse size={13} color="#C8890A" strokeWidth={2} />
-                <p style={{ fontSize: 12.5, fontWeight: 500, color: "#7A5200" }}>Blessures en cours</p>
+                <p style={{ fontSize: 12.5, fontWeight: 500, color: "var(--c-dim-alerte)" }}>Blessures en cours</p>
               </div>
               <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
                 {activeInjuries.map(inj => (
-                  <div key={inj.id} style={{ borderRadius: 10, padding: "10px 12px", background: "rgba(255,255,255,0.80)", border: "1px solid rgba(200,137,10,0.08)" }}>
+                  <div key={inj.id} style={{ borderRadius: 10, padding: "10px 12px", background: "var(--c-surface-3)", border: "1px solid rgba(200,137,10,0.08)" }}>
                     <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
-                      <p style={{ fontSize: 12, fontWeight: 500, color: "#1C1C1A" }}>{inj.name}</p>
+                      <p style={{ fontSize: 12, fontWeight: 500, color: "var(--c-text-1)" }}>{inj.name}</p>
                       <span style={{ fontSize: 9.5, fontWeight: 500, padding: "1px 6px", borderRadius: 5, background: "rgba(200,137,10,0.08)", color: "#9A6800" }}>
                         {inj.intensity}/10
                       </span>
                     </div>
-                    <p style={{ fontSize: 10.5, color: "#96948E", marginBottom: 6 }}>{inj.location}</p>
+                    <p style={{ fontSize: 10.5, color: "var(--c-text-3)", marginBottom: 6 }}>{inj.location}</p>
                     <div className="progress-bar">
                       <div className="progress-fill" style={{
                         width: `${(inj.intensity/10)*100}%`,
@@ -799,8 +799,8 @@ export default function AthleteDashboard({
                     {initialsFromName(coachName ?? "C")}
                   </div>
                   <div>
-                    <p style={{ fontSize: 12.5, fontWeight: 500, color: "#1C1C1A" }}>{coachName?.split(" ")[0] ?? "Coach"}</p>
-                    <p style={{ fontSize: 10, color: "#96948E" }}>Message récent</p>
+                    <p style={{ fontSize: 12.5, fontWeight: 500, color: "var(--c-text-1)" }}>{coachName?.split(" ")[0] ?? "Coach"}</p>
+                    <p style={{ fontSize: 10, color: "var(--c-text-3)" }}>Message récent</p>
                   </div>
                 </div>
                 <button onClick={() => onNavigate("messagerie")} className="btn-ghost" style={{ minHeight: "auto", padding: 0, fontSize: 11 }}>
@@ -809,8 +809,8 @@ export default function AthleteDashboard({
               </div>
               {lastMessages.slice(0, 2).map(m => (
                 <div key={m.id} style={{ borderRadius: 10, padding: "9px 11px", marginBottom: 6, background: "var(--c-surface-2)" }}>
-                  <p style={{ fontSize: 12, color: "#5A5A54", lineHeight: 1.5 }} className="line-clamp-2">{m.content}</p>
-                  <p style={{ fontSize: 9.5, color: "#C4C2BC", marginTop: 4 }}>
+                  <p style={{ fontSize: 12, color: "var(--c-text-2)", lineHeight: 1.5 }} className="line-clamp-2">{m.content}</p>
+                  <p style={{ fontSize: 9.5, color: "var(--c-text-4)", marginTop: 4 }}>
                     {new Date(m.created_at).toLocaleDateString("fr-BE", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}
                   </p>
                 </div>
