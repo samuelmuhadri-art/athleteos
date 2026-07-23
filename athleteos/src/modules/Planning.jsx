@@ -1,14 +1,9 @@
 // ============================================================
-// AthleteOS — src/modules/Planning.jsx  ★ DESIGN PREMIUM
-// Logique métier identique — rendu entièrement repoli :
-//   - Header glass avec navigation fluide
-//   - Vue mois : grille premium, cellules avec hover glow
-//   - Vue semaine : cards journalières avec timeline verticale
-//   - Panneau latéral desktop : séances du jour premium
-//   - Drawer mobile : bottom sheet glassmorphism
-//   - SessionModal : header coloré, feedback RPE premium
-//   - AddSessionModal : formulaire premium
-//   - Toutes les transitions spring
+// AthleteOS — src/modules/Planning.jsx  ★ DESIGN PREMIUM DARK
+// Rendu adapté au dark mode : plus de bg-white / text-slate-*
+// hardcodés. Couleurs de catégorie recalibrées pour rester
+// lisibles et subtiles sur fond sombre (fill faible opacité +
+// texte clair teinté, jamais blanc pur sur noir).
 // ============================================================
 
 import { memo, useState, useMemo, useCallback, useEffect } from "react";
@@ -46,16 +41,20 @@ const CATEGORIES = [
   { id: "recuperation", label: "Récupération" },
 ];
 
+// Couleurs recalibrées pour le dark mode :
+// - border = teinte saturée (accent visible)
+// - text   = version claire de la teinte (lisible sur fond sombre)
+// - bg     = utilisé uniquement en superposition ${border}1A/${border}22 (opacité faible)
 const SESSION_COLORS = {
-  sprint:       { bg: "#DBEAFE", border: "#3B82F6", text: "#1D4ED8", dot: "#3B82F6" },
-  haies:        { bg: "#EDE9FE", border: "#7C3AED", text: "#4C1D95", dot: "#7C3AED" },
-  force:        { bg: "#DCFCE7", border: "#16A34A", text: "#14532D", dot: "#16A34A" },
-  saut:         { bg: "#F3E8FF", border: "#A855F7", text: "#6B21A8", dot: "#A855F7" },
-  lancer:       { bg: "#FFEDD5", border: "#F97316", text: "#9A3412", dot: "#F97316" },
-  endurance:    { bg: "#E0F2FE", border: "#0284C7", text: "#0C4A6E", dot: "#0284C7" },
-  technique:    { bg: "#F1F5F9", border: "#64748B", text: "#1E293B", dot: "#64748B" },
-  mobilite:     { bg: "#FEF9C3", border: "#CA8A04", text: "#713F12", dot: "#CA8A04" },
-  recuperation: { bg: "#F8FAFC", border: "#CBD5E1", text: "#475569", dot: "#CBD5E1" },
+  sprint:       { border: "#5B9EF5", text: "#A9CBFB", dot: "#5B9EF5" },
+  haies:        { border: "#A78BFA", text: "#D2C4FB", dot: "#A78BFA" },
+  force:        { border: "#34D399", text: "#9CF0D1", dot: "#34D399" },
+  saut:         { border: "#C084FC", text: "#E3C6FD", dot: "#C084FC" },
+  lancer:       { border: "#FB923C", text: "#FDCBA0", dot: "#FB923C" },
+  endurance:    { border: "#38BDF8", text: "#A6E4FC", dot: "#38BDF8" },
+  technique:    { border: "#94A3B8", text: "#D3D9E0", dot: "#94A3B8" },
+  mobilite:     { border: "#EAB308", text: "#F7DD8B", dot: "#EAB308" },
+  recuperation: { border: "#64748B", text: "#C2C9D2", dot: "#64748B" },
 };
 
 const EMPTY_FORM = {
@@ -119,26 +118,38 @@ function getCalendarDays(year, month) {
   return days;
 }
 
-// ─── Icônes statut ────────────────────────────────────────────────────────────
+// ─── Statuts génériques (couleurs identiques quel que soit le thème) ─────────
+const STATUS_COLORS = {
+  done:    "#3DBE8B",
+  partial: "#EAB308",
+  none:    "#EF6B6B",
+};
 
 function StatusIcon({ status, size = 14 }) {
-  if (status === "done")    return <CheckCircle   size={size} color="#1D9E75" />;
-  if (status === "partial") return <AlertTriangle size={size} color="#EF9F27" />;
-  if (status === "none")    return <XCircle       size={size} color="#E24B4A" />;
+  if (status === "done")    return <CheckCircle   size={size} color={STATUS_COLORS.done} />;
+  if (status === "partial") return <AlertTriangle size={size} color={STATUS_COLORS.partial} />;
+  if (status === "none")    return <XCircle       size={size} color={STATUS_COLORS.none} />;
   return null;
 }
 
 function ValidationBadge({ status }) {
   const map = {
-    done:    { label: "Réalisée",     cls: "bg-emerald-50 text-emerald-700 border border-emerald-100" },
-    partial: { label: "Partielle",    cls: "bg-amber-50 text-amber-700 border border-amber-100"       },
-    none:    { label: "Non réalisée", cls: "bg-red-50 text-red-700 border border-red-100"             },
+    done:    { label: "Réalisée",     bg: "rgba(61,190,139,0.14)", color: "#7BD8B4" },
+    partial: { label: "Partielle",    bg: "rgba(234,179,8,0.14)",  color: "#F0CB61" },
+    none:    { label: "Non réalisée", bg: "rgba(239,107,107,0.14)",color: "#F19A9A" },
   };
-  const b = map[status] ?? { label: "À venir", cls: "bg-slate-100 text-slate-400" };
-  return <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${b.cls}`}>{b.label}</span>;
+  const b = map[status] ?? { label: "À venir", bg: "var(--c-surface-3)", color: "var(--c-text-3)" };
+  return (
+    <span
+      className="text-[10px] font-semibold px-2 py-0.5 rounded-full"
+      style={{ background: b.bg, color: b.color }}
+    >
+      {b.label}
+    </span>
+  );
 }
 
-// ─── SessionModal premium ─────────────────────────────────────────────────────
+// ─── SessionModal premium (dark) ──────────────────────────────────────────────
 
 const SessionModal = memo(({ session, athletes, onClose, onSetRpe, onSetStatus, onEditRequest, onDeleteSession }) => {
   const [deleting,    setDeleting]    = useState(false);
@@ -167,28 +178,30 @@ const SessionModal = memo(({ session, athletes, onClose, onSetRpe, onSetStatus, 
       className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4 modal-backdrop"
       onClick={e => e.target === e.currentTarget && onClose()}
     >
-      <div className="bg-white rounded-t-3xl sm:rounded-3xl shadow-2xl w-full sm:max-w-lg max-h-[95vh] sm:max-h-[90vh] flex flex-col overflow-hidden modal-content">
+      <div className="rounded-t-3xl sm:rounded-3xl shadow-2xl w-full sm:max-w-lg max-h-[95vh] sm:max-h-[90vh] flex flex-col overflow-hidden modal-content"
+        style={{ background: "var(--c-surface)" }}>
 
         {/* Handle mobile */}
         <div className="flex justify-center pt-3 pb-1 sm:hidden flex-shrink-0">
-          <div className="w-10 h-1 rounded-full bg-slate-200" />
+          <div className="w-10 h-1 rounded-full" style={{ background: "var(--c-border-strong)" }} />
         </div>
 
-        {/* Header coloré */}
+        {/* Header coloré — fill faible opacité, pas de blanc */}
         <div
           className="px-6 py-5 flex items-start justify-between gap-4 flex-shrink-0"
-          style={{ background: c.bg, borderBottom: `2px solid ${c.border}` }}
+          style={{ background: `${c.border}14`, borderBottom: `2px solid ${c.border}40` }}
         >
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 mb-2 flex-wrap">
               <span
                 className="text-[10px] font-black uppercase tracking-widest px-2.5 py-1 rounded-full"
-                style={{ background: c.border, color: "white" }}
+                style={{ background: c.border, color: "#0A150F" }}
               >
                 {CATEGORIES.find(x => x.id === session.category)?.label ?? session.type}
               </span>
               {session.createdByAthlete && (
-                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-purple-100 text-purple-700">
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full"
+                  style={{ background: "rgba(168,85,247,0.16)", color: "#D8B4FE" }}>
                   📋 Proposé par un athlète
                 </span>
               )}
@@ -197,7 +210,7 @@ const SessionModal = memo(({ session, athletes, onClose, onSetRpe, onSetStatus, 
             <h3 className="text-[20px] font-black leading-tight" style={{ color: c.text }}>
               {session.title}
             </h3>
-            <p className="text-[12px] mt-1.5 font-medium" style={{ color: c.text + "99" }}>
+            <p className="text-[12px] mt-1.5 font-medium" style={{ color: "var(--c-text-2)" }}>
               📅 {dateStr}
               {session.time && ` · ⏰ ${session.time}`}
               {session.durationMinutes && ` · ${session.durationMinutes} min`}
@@ -205,7 +218,10 @@ const SessionModal = memo(({ session, athletes, onClose, onSetRpe, onSetStatus, 
           </div>
           <button
             onClick={onClose}
-            className="p-2 rounded-xl hover:bg-black/10 flex-shrink-0 transition-colors"
+            className="p-2 rounded-xl flex-shrink-0 transition-colors"
+            style={{ background: "transparent" }}
+            onMouseEnter={e => e.currentTarget.style.background = "rgba(255,255,255,0.08)"}
+            onMouseLeave={e => e.currentTarget.style.background = "transparent"}
           >
             <X size={18} style={{ color: c.text }} />
           </button>
@@ -215,12 +231,15 @@ const SessionModal = memo(({ session, athletes, onClose, onSetRpe, onSetStatus, 
 
           {/* Feedback rapide */}
           {pendingFeedback.length > 0 && (
-            <div className="rounded-2xl border-2 border-amber-200 overflow-hidden" style={{ background: "#FFFBF0" }}>
-              <div className="px-4 py-3 border-b border-amber-100 flex items-center gap-2">
-                <div className="w-7 h-7 rounded-xl bg-amber-100 flex items-center justify-center flex-shrink-0">
-                  <Zap size={13} color="#EF9F27" />
+            <div className="rounded-2xl border overflow-hidden"
+              style={{ borderColor: "rgba(234,179,8,0.35)", background: "rgba(234,179,8,0.06)" }}>
+              <div className="px-4 py-3 flex items-center gap-2"
+                style={{ borderBottom: "1px solid rgba(234,179,8,0.20)" }}>
+                <div className="w-7 h-7 rounded-xl flex items-center justify-center flex-shrink-0"
+                  style={{ background: "rgba(234,179,8,0.18)" }}>
+                  <Zap size={13} color="#EAB308" />
                 </div>
-                <p className="text-[13px] font-bold text-amber-800">Confirmer les présences</p>
+                <p className="text-[13px] font-bold" style={{ color: "#F0CB61" }}>Confirmer les présences</p>
               </div>
               <div className="p-4 space-y-5">
                 {pendingFeedback.map(id => {
@@ -230,45 +249,48 @@ const SessionModal = memo(({ session, athletes, onClose, onSetRpe, onSetStatus, 
                   return (
                     <div key={id}>
                       <div className="flex items-center gap-2 mb-2.5">
-                        <div className="w-7 h-7 rounded-full flex items-center justify-center text-white text-[9px] font-bold flex-shrink-0"
-                          style={{ background: c.border }}>
+                        <div className="w-7 h-7 rounded-full flex items-center justify-center text-[9px] font-bold flex-shrink-0"
+                          style={{ background: c.border, color: "#0A150F" }}>
                           {a.avatar?.slice(0,1) ?? "?"}
                         </div>
-                        <p className="text-[12.5px] font-bold text-amber-900">{a.name.split(" ")[0]}</p>
+                        <p className="text-[12.5px] font-bold" style={{ color: "#F0CB61" }}>{a.name.split(" ")[0]}</p>
                       </div>
                       <div className="flex gap-2 mb-2">
                         {[
-                          { id: "done",    label: "✅ Réalisée",  cls: "border-emerald-400 bg-emerald-50 text-emerald-700" },
-                          { id: "partial", label: "🟡 Partielle", cls: "border-amber-400 bg-amber-50 text-amber-700"       },
-                          { id: "none",    label: "❌ Absent",    cls: "border-red-400 bg-red-50 text-red-700"             },
-                        ].map(opt => (
-                          <button key={opt.id}
-                            onClick={() => onSetStatus(session.id, id, opt.id)}
-                            className={[
-                              "flex-1 py-2 rounded-xl text-[11px] font-bold border-2 transition-all tap-feedback",
-                              v?.status === opt.id ? opt.cls : "bg-white border-slate-200 text-slate-400",
-                            ].join(" ")}
-                          >
-                            {opt.label}
-                          </button>
-                        ))}
+                          { id: "done",    label: "✅ Réalisée",  bg: "rgba(61,190,139,0.16)", border: "#3DBE8B", color: "#7BD8B4" },
+                          { id: "partial", label: "🟡 Partielle", bg: "rgba(234,179,8,0.16)",  border: "#EAB308", color: "#F0CB61" },
+                          { id: "none",    label: "❌ Absent",    bg: "rgba(239,107,107,0.16)",border: "#EF6B6B", color: "#F19A9A" },
+                        ].map(opt => {
+                          const sel = v?.status === opt.id;
+                          return (
+                            <button key={opt.id}
+                              onClick={() => onSetStatus(session.id, id, opt.id)}
+                              className="flex-1 py-2 rounded-xl text-[11px] font-bold border-2 transition-all tap-feedback"
+                              style={sel
+                                ? { background: opt.bg, borderColor: opt.border, color: opt.color }
+                                : { background: "var(--c-surface-2)", borderColor: "var(--c-border)", color: "var(--c-text-3)" }}
+                            >
+                              {opt.label}
+                            </button>
+                          );
+                        })}
                       </div>
                       {v?.status && v.status !== "none" && (
                         <div>
-                          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">RPE</p>
+                          <p className="text-[10px] font-bold uppercase tracking-wider mb-1.5" style={{ color: "var(--c-text-3)" }}>RPE</p>
                           <div className="flex gap-1 flex-wrap">
-                            {Array.from({ length: 11 }, (_, i) => (
-                              <button key={i} onClick={() => onSetRpe(session.id, id, i)}
-                                className={[
-                                  "w-8 h-8 rounded-xl text-[11px] font-black border-2 transition-all tap-feedback",
-                                  v?.rpe === i
-                                    ? i <= 3 ? "bg-emerald-500 text-white border-emerald-600"
-                                    : i <= 6 ? "bg-amber-500 text-white border-amber-600"
-                                    :          "bg-red-500 text-white border-red-600"
-                                    : "bg-white text-slate-400 border-slate-200",
-                                ].join(" ")}
-                              >{i}</button>
-                            ))}
+                            {Array.from({ length: 11 }, (_, i) => {
+                              const sel = v?.rpe === i;
+                              const rpeColor = i <= 3 ? "#3DBE8B" : i <= 6 ? "#EAB308" : "#EF6B6B";
+                              return (
+                                <button key={i} onClick={() => onSetRpe(session.id, id, i)}
+                                  className="w-8 h-8 rounded-xl text-[11px] font-black border-2 transition-all tap-feedback"
+                                  style={sel
+                                    ? { background: rpeColor, borderColor: rpeColor, color: "#0A150F" }
+                                    : { background: "var(--c-surface-2)", borderColor: "var(--c-border)", color: "var(--c-text-3)" }}
+                                >{i}</button>
+                              );
+                            })}
                           </div>
                         </div>
                       )}
@@ -281,30 +303,31 @@ const SessionModal = memo(({ session, athletes, onClose, onSetRpe, onSetStatus, 
 
           {/* Description */}
           {session.description && (
-            <div className="bg-slate-50 rounded-2xl p-4">
+            <div className="rounded-2xl p-4" style={{ background: "var(--c-surface-2)" }}>
               <div className="flex items-center gap-2 mb-2">
-                <FileText size={13} className="text-slate-400" />
-                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Description</span>
+                <FileText size={13} style={{ color: "var(--c-text-3)" }} />
+                <span className="text-[10px] font-bold uppercase tracking-wider" style={{ color: "var(--c-text-3)" }}>Description</span>
               </div>
-              <p className="text-[13px] text-slate-600 leading-relaxed">{session.description}</p>
+              <p className="text-[13px] leading-relaxed" style={{ color: "var(--c-text-2)" }}>{session.description}</p>
             </div>
           )}
 
           {/* Consignes */}
           {session.instructions && (
-            <div className="rounded-2xl border border-amber-200 overflow-hidden" style={{ background: "#FFFBF0" }}>
-              <div className="px-4 py-2.5 border-b border-amber-100 flex items-center gap-2">
-                <AlertCircle size={13} color="#EF9F27" />
-                <span className="text-[10px] font-bold text-amber-700 uppercase tracking-wider">Consignes du coach</span>
+            <div className="rounded-2xl overflow-hidden" style={{ border: "1px solid rgba(234,179,8,0.30)", background: "rgba(234,179,8,0.06)" }}>
+              <div className="px-4 py-2.5 flex items-center gap-2" style={{ borderBottom: "1px solid rgba(234,179,8,0.20)" }}>
+                <AlertCircle size={13} color="#EAB308" />
+                <span className="text-[10px] font-bold uppercase tracking-wider" style={{ color: "#F0CB61" }}>Consignes du coach</span>
               </div>
-              <p className="px-4 py-3 text-[13px] text-amber-800 leading-relaxed">{session.instructions}</p>
+              <p className="px-4 py-3 text-[13px] leading-relaxed" style={{ color: "#E6D189" }}>{session.instructions}</p>
             </div>
           )}
 
           {/* PDF */}
           {session.pdfUrl && (
             <a href={session.pdfUrl} target="_blank" rel="noopener noreferrer"
-              className="flex items-center gap-3 px-4 py-3.5 rounded-2xl bg-blue-50 border border-blue-100 text-[13px] font-semibold text-blue-600 hover:bg-blue-100 transition-colors">
+              className="flex items-center gap-3 px-4 py-3.5 rounded-2xl text-[13px] font-semibold transition-colors"
+              style={{ background: "rgba(91,158,245,0.10)", border: "1px solid rgba(91,158,245,0.25)", color: "#A9CBFB" }}>
               <span className="text-[18px]">📄</span>
               Voir le PDF de séance
             </a>
@@ -313,13 +336,13 @@ const SessionModal = memo(({ session, athletes, onClose, onSetRpe, onSetStatus, 
           {/* Athlètes */}
           <div>
             <div className="flex items-center gap-2 mb-3">
-              <Users size={13} className="text-slate-400" />
-              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+              <Users size={13} style={{ color: "var(--c-text-3)" }} />
+              <span className="text-[10px] font-bold uppercase tracking-wider" style={{ color: "var(--c-text-3)" }}>
                 Participants ({session.athleteIds.length})
               </span>
             </div>
             {session.athleteIds.length === 0 ? (
-              <p className="text-[12px] text-slate-300">Aucun athlète assigné</p>
+              <p className="text-[12px]" style={{ color: "var(--c-text-4)" }}>Aucun athlète assigné</p>
             ) : (
               <div className="space-y-2">
                 {session.athleteIds.map(id => {
@@ -329,16 +352,17 @@ const SessionModal = memo(({ session, athletes, onClose, onSetRpe, onSetStatus, 
                   if (!a) return null;
                   return (
                     <div key={id} className="card flex items-start gap-3 p-3.5">
-                      <div className="w-9 h-9 rounded-xl flex items-center justify-center text-white text-[10px] font-bold flex-shrink-0"
-                        style={{ background: c.border }}>
+                      <div className="w-9 h-9 rounded-xl flex items-center justify-center text-[10px] font-bold flex-shrink-0"
+                        style={{ background: c.border, color: "#0A150F" }}>
                         {a.avatar}
                       </div>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 flex-wrap mb-1">
-                          <span className="text-[13px] font-bold text-slate-700">{a.name}</span>
+                          <span className="text-[13px] font-bold" style={{ color: "var(--c-text-1)" }}>{a.name}</span>
                           <ValidationBadge status={st} />
                           {v?.rpe != null && (
-                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">
+                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full"
+                              style={{ background: "var(--c-surface-3)", color: "var(--c-text-2)" }}>
                               RPE {v.rpe}
                             </span>
                           )}
@@ -347,13 +371,13 @@ const SessionModal = memo(({ session, athletes, onClose, onSetRpe, onSetStatus, 
                           <div className="flex gap-0.5 mb-1">
                             {[1,2,3,4,5].map(n => (
                               <Star key={n} size={11}
-                                fill={v.feeling >= n ? "#EF9F27" : "none"}
-                                color={v.feeling >= n ? "#EF9F27" : "#e2e8f0"} />
+                                fill={v.feeling >= n ? "#EAB308" : "none"}
+                                color={v.feeling >= n ? "#EAB308" : "var(--c-border-strong)"} />
                             ))}
                           </div>
                         )}
                         {v?.comment && (
-                          <p className="text-[11.5px] text-slate-400 italic">« {v.comment} »</p>
+                          <p className="text-[11.5px] italic" style={{ color: "var(--c-text-3)" }}>« {v.comment} »</p>
                         )}
                       </div>
                     </div>
@@ -364,33 +388,32 @@ const SessionModal = memo(({ session, athletes, onClose, onSetRpe, onSetStatus, 
           </div>
 
           {deleteError && (
-            <p className="text-[12px] text-red-600 bg-red-50 rounded-xl px-3 py-2">{deleteError}</p>
+            <p className="text-[12px] rounded-xl px-3 py-2" style={{ color: "#F19A9A", background: "rgba(239,107,107,0.10)" }}>{deleteError}</p>
           )}
         </div>
 
         {/* Footer */}
-        <div className="px-6 py-4 border-t border-slate-100 flex items-center justify-between gap-3 flex-shrink-0">
+        <div className="px-6 py-4 flex items-center justify-between gap-3 flex-shrink-0" style={{ borderTop: "1px solid var(--c-border)" }}>
           <div className="flex items-center gap-3">
             {!confirmDel ? (
               <button onClick={() => setConfirmDel(true)} disabled={deleting}
-                className="text-[12px] text-red-400 hover:text-red-600 font-semibold transition-colors">
+                className="text-[12px] font-semibold transition-colors"
+                style={{ color: "#F19A9A" }}>
                 Supprimer
               </button>
             ) : (
               <span className="flex items-center gap-2">
-                <span className="text-[12px] text-red-600 font-semibold">Confirmer ?</span>
+                <span className="text-[12px] font-semibold" style={{ color: "#F19A9A" }}>Confirmer ?</span>
                 <button onClick={handleDelete} disabled={deleting}
-                  className="text-[11px] font-bold text-white bg-red-500 rounded-lg px-2.5 py-1 tap-feedback">
+                  className="text-[11px] font-bold rounded-lg px-2.5 py-1 tap-feedback"
+                  style={{ background: "#EF6B6B", color: "#0A150F" }}>
                   {deleting ? "…" : "Oui"}
                 </button>
-                <button onClick={() => setConfirmDel(false)} className="text-[11px] text-slate-500">Non</button>
+                <button onClick={() => setConfirmDel(false)} className="text-[11px]" style={{ color: "var(--c-text-3)" }}>Non</button>
               </span>
             )}
           </div>
-          <button
-            onClick={() => onEditRequest(session)}
-            className="btn-primary"
-          >
+          <button onClick={() => onEditRequest(session)} className="btn-primary">
             ✏️ Modifier
           </button>
         </div>
@@ -399,7 +422,7 @@ const SessionModal = memo(({ session, athletes, onClose, onSetRpe, onSetStatus, 
   );
 });
 
-// ─── AddSessionModal premium ──────────────────────────────────────────────────
+// ─── AddSessionModal premium (dark) ───────────────────────────────────────────
 
 const AddSessionModal = memo(({ athletes, initialData, onClose, onAdd }) => {
   const isEdit = !!initialData;
@@ -452,58 +475,49 @@ const AddSessionModal = memo(({ athletes, initialData, onClose, onAdd }) => {
   };
 
   const selCat = SESSION_COLORS[form.category] ?? SESSION_COLORS.technique;
+  const labelCls = "block text-[11px] font-bold uppercase tracking-wider mb-1.5";
+  const labelStyle = { color: "var(--c-text-3)" };
 
   return (
     <div
       className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4 modal-backdrop"
       onClick={e => e.target === e.currentTarget && !saving && onClose()}
     >
-      <div className="bg-white rounded-t-3xl sm:rounded-3xl shadow-2xl w-full sm:max-w-lg max-h-[95vh] sm:max-h-[90vh] flex flex-col overflow-hidden modal-content">
+      <div className="rounded-t-3xl sm:rounded-3xl shadow-2xl w-full sm:max-w-lg max-h-[95vh] sm:max-h-[90vh] flex flex-col overflow-hidden modal-content"
+        style={{ background: "var(--c-surface)" }}>
 
-        {/* Handle mobile */}
         <div className="flex justify-center pt-3 pb-1 sm:hidden flex-shrink-0">
-          <div className="w-10 h-1 rounded-full bg-slate-200" />
+          <div className="w-10 h-1 rounded-full" style={{ background: "var(--c-border-strong)" }} />
         </div>
 
-        {/* Header */}
         <div
-          className="px-6 py-5 border-b flex items-center justify-between flex-shrink-0 transition-colors"
-          style={{ background: selCat.bg, borderBottomColor: selCat.border + "40" }}
+          className="px-6 py-5 flex items-center justify-between flex-shrink-0 transition-colors"
+          style={{ background: `${selCat.border}14`, borderBottom: `1px solid ${selCat.border}40` }}
         >
           <div>
             <h3 className="text-[17px] font-black" style={{ color: selCat.text }}>
               {isEdit ? "Modifier la séance" : "Nouvelle séance"}
             </h3>
-            <p className="text-[11px] mt-0.5" style={{ color: selCat.text + "80" }}>
+            <p className="text-[11px] mt-0.5" style={{ color: "var(--c-text-2)" }}>
               {isEdit ? "Modifie les détails" : "Planifie un entraînement"}
             </p>
           </div>
           <button onClick={onClose} disabled={saving}
-            className="p-2 rounded-xl hover:bg-black/10 disabled:opacity-40 transition-colors">
+            className="p-2 rounded-xl disabled:opacity-40 transition-colors">
             <X size={18} style={{ color: selCat.text }} />
           </button>
         </div>
 
         <div className="flex-1 overflow-y-auto px-6 py-5 space-y-4">
 
-          {/* Titre */}
           <div>
-            <label className="block text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">
-              Titre *
-            </label>
-            <input
-              className="input-premium"
-              placeholder="Ex: Sprint — sorties de blocs"
-              value={form.title}
-              onChange={e => set("title", e.target.value)}
-            />
+            <label className={labelCls} style={labelStyle}>Titre *</label>
+            <input className="input-premium" placeholder="Ex: Sprint — sorties de blocs"
+              value={form.title} onChange={e => set("title", e.target.value)} />
           </div>
 
-          {/* Catégorie — sélecteur visuel */}
           <div>
-            <label className="block text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">
-              Catégorie
-            </label>
+            <label className={labelCls} style={labelStyle}>Catégorie</label>
             <div className="flex flex-wrap gap-1.5">
               {CATEGORIES.map(cat => {
                 const cc  = SESSION_COLORS[cat.id];
@@ -512,8 +526,8 @@ const AddSessionModal = memo(({ athletes, initialData, onClose, onAdd }) => {
                   <button key={cat.id} onClick={() => set("category", cat.id)}
                     className="px-3 py-1.5 rounded-xl text-[11.5px] font-semibold border-2 transition-all tap-feedback"
                     style={sel
-                      ? { background: cc.border, color: "white", borderColor: cc.border }
-                      : { background: cc.bg, color: cc.text, borderColor: cc.border + "60" }
+                      ? { background: cc.border, color: "#0A150F", borderColor: cc.border }
+                      : { background: `${cc.border}14`, color: cc.text, borderColor: `${cc.border}40` }
                     }>
                     {cat.label}
                   </button>
@@ -522,95 +536,73 @@ const AddSessionModal = memo(({ athletes, initialData, onClose, onAdd }) => {
             </div>
           </div>
 
-          {/* Date + Heure */}
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">
-                Date *
-              </label>
+              <label className={labelCls} style={labelStyle}>Date *</label>
               <input type="date" className="input-premium"
-                value={form.sessionDate}
-                onChange={e => set("sessionDate", e.target.value)} />
+                value={form.sessionDate} onChange={e => set("sessionDate", e.target.value)} />
             </div>
             <div>
-              <label className="block text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">
-                Heure
-              </label>
+              <label className={labelCls} style={labelStyle}>Heure</label>
               <input type="time" className="input-premium"
-                value={form.time}
-                onChange={e => set("time", e.target.value)} />
+                value={form.time} onChange={e => set("time", e.target.value)} />
             </div>
           </div>
 
-          {/* Durée */}
           <div>
-            <label className="block text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">
-              Durée (minutes)
-            </label>
+            <label className={labelCls} style={labelStyle}>Durée (minutes)</label>
             <input type="number" min="5" step="5" className="input-premium"
-              value={form.durationMinutes}
-              onChange={e => set("durationMinutes", Number(e.target.value))} />
+              value={form.durationMinutes} onChange={e => set("durationMinutes", Number(e.target.value))} />
           </div>
 
-          {/* Description */}
           <div>
-            <label className="block text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">
-              Description
-            </label>
+            <label className={labelCls} style={labelStyle}>Description</label>
             <textarea className="input-premium resize-none" rows={3}
               placeholder="Volume, intensité, objectifs…"
-              value={form.description}
-              onChange={e => set("description", e.target.value)} />
+              value={form.description} onChange={e => set("description", e.target.value)} />
           </div>
 
-          {/* Consignes */}
           <div>
-            <label className="block text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">
-              Consignes spécifiques
-            </label>
+            <label className={labelCls} style={labelStyle}>Consignes spécifiques</label>
             <textarea className="input-premium resize-none" rows={2}
               placeholder="Instructions particulières…"
-              value={form.instructions}
-              onChange={e => set("instructions", e.target.value)} />
+              value={form.instructions} onChange={e => set("instructions", e.target.value)} />
           </div>
 
-          {/* PDF */}
           <div>
-            <label className="block text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">
-              PDF (optionnel)
-            </label>
+            <label className={labelCls} style={labelStyle}>PDF (optionnel)</label>
             {isEdit && form.pdfUrl && !pdfFile && (
-              <p className="text-[11px] text-emerald-600 mb-1.5">📎 PDF déjà joint</p>
+              <p className="text-[11px] mb-1.5" style={{ color: "#7BD8B4" }}>📎 PDF déjà joint</p>
             )}
             <input type="file" accept="application/pdf"
               onChange={e => setPdfFile(e.target.files?.[0] ?? null)}
-              className="w-full text-[12px] text-slate-500 file:mr-3 file:py-1.5 file:px-3 file:rounded-xl file:border-0 file:text-[11.5px] file:font-semibold file:bg-emerald-50 file:text-emerald-700 hover:file:bg-emerald-100" />
-            {pdfFile && <p className="text-[11px] text-slate-400 mt-1">📎 {pdfFile.name}</p>}
+              className="w-full text-[12px] file:mr-3 file:py-1.5 file:px-3 file:rounded-xl file:border-0 file:text-[11.5px] file:font-semibold"
+              style={{ color: "var(--c-text-3)" }} />
+            {pdfFile && <p className="text-[11px] mt-1" style={{ color: "var(--c-text-3)" }}>📎 {pdfFile.name}</p>}
           </div>
 
-          {/* Athlètes */}
           <div>
-            <label className="block text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">
+            <label className={labelCls} style={labelStyle}>
               Athlètes * ({form.athleteIds.length} sélectionné{form.athleteIds.length > 1 ? "s" : ""})
             </label>
             {athletes.length === 0 ? (
-              <p className="text-[12px] text-slate-300">Aucun athlète disponible</p>
+              <p className="text-[12px]" style={{ color: "var(--c-text-4)" }}>Aucun athlète disponible</p>
             ) : (
               <div className="flex flex-wrap gap-2">
                 {athletes.map(a => {
                   const sel = form.athleteIds.includes(a.id);
                   return (
                     <button key={a.id} type="button" onClick={() => toggleAthlete(a.id)}
-                      className={[
-                        "flex items-center gap-2 px-3 py-2 rounded-xl text-[12px] font-semibold border-2 transition-all tap-feedback",
-                        sel ? "bg-emerald-50 border-emerald-400 text-emerald-700" : "bg-white border-slate-200 text-slate-500",
-                      ].join(" ")}>
-                      <div className="w-6 h-6 rounded-full flex items-center justify-center text-white text-[8px] font-bold"
-                        style={{ background: sel ? "#1D9E75" : "#94a3b8" }}>
+                      className="flex items-center gap-2 px-3 py-2 rounded-xl text-[12px] font-semibold border-2 transition-all tap-feedback"
+                      style={sel
+                        ? { background: "rgba(29,158,117,0.14)", borderColor: "#1D9E75", color: "#7BD8B4" }
+                        : { background: "var(--c-surface-2)", borderColor: "var(--c-border)", color: "var(--c-text-3)" }}>
+                      <div className="w-6 h-6 rounded-full flex items-center justify-center text-[8px] font-bold"
+                        style={{ background: sel ? "#1D9E75" : "var(--c-surface-3)", color: sel ? "#0A150F" : "var(--c-text-3)" }}>
                         {a.avatar?.slice(0, 1) ?? "?"}
                       </div>
                       {a.name.split(" ")[0]}
-                      {sel && <CheckCircle size={12} color="#1D9E75" />}
+                      {sel && <CheckCircle size={12} color="#3DBE8B" />}
                     </button>
                   );
                 })}
@@ -619,16 +611,13 @@ const AddSessionModal = memo(({ athletes, initialData, onClose, onAdd }) => {
           </div>
         </div>
 
-        {/* Footer */}
-        <div className="px-6 py-4 border-t border-slate-100 flex items-center justify-between gap-3 flex-shrink-0">
-          <button onClick={onClose} disabled={saving}
-            className="px-4 py-2.5 rounded-xl bg-slate-100 text-slate-600 text-[13px] font-semibold hover:bg-slate-200 disabled:opacity-40 transition-colors">
+        <div className="px-6 py-4 flex items-center justify-between gap-3 flex-shrink-0" style={{ borderTop: "1px solid var(--c-border)" }}>
+          <button onClick={onClose} disabled={saving} className="btn-secondary">
             Annuler
           </button>
           <button onClick={handleSubmit}
             disabled={!form.title.trim() || form.athleteIds.length === 0 || saving}
-            className="btn-primary"
-          >
+            className="btn-primary">
             {saving ? (
               <><div className="w-3.5 h-3.5 border-2 border-white/40 border-t-white rounded-full animate-spin" />
               {uploadingPdf ? "Envoi PDF…" : "Enregistrement…"}</>
@@ -819,7 +808,6 @@ function Planning() {
       .sort((a, b) => a.time.localeCompare(b.time));
   }, [selectedDate, sessionsByDate]);
 
-  // Semaine courante pour la vue semaine
   const weekDays = useMemo(() => {
     const ref = selectedDate ?? today;
     const dow = (ref.getDay() + 6) % 7;
@@ -873,7 +861,6 @@ function Planning() {
     };
   }
 
-  // Label navigation
   const navLabel = useMemo(() => {
     if (viewMode === "month") return `${MONTHS_FR[viewMonth]} ${viewYear}`;
     const mon = weekDays[0], sun = weekDays[6];
@@ -890,50 +877,51 @@ function Planning() {
   const athleteSessionCount = sessionList.filter(s => s.createdByAthlete).length;
 
   return (
-    <div className="flex flex-col h-full" style={{ background: "#F5F5F2" }}>
+    <div className="flex flex-col h-full" style={{ background: "var(--c-bg)" }}>
 
       {/* ── Header glassmorphism ─────────────────────────────────────────── */}
       <div className="header-glass px-3 md:px-5 py-3 flex items-center justify-between gap-2 flex-shrink-0 z-10">
 
-        {/* Navigation */}
         <div className="flex items-center gap-1">
           <button
             onClick={viewMode === "month" ? prevMonth : prevWeek}
-            className="w-8 h-8 rounded-xl hover:bg-slate-100 text-slate-500 flex items-center justify-center transition-all tap-feedback"
+            className="w-8 h-8 rounded-xl flex items-center justify-center transition-all tap-feedback"
+            style={{ color: "var(--c-text-2)" }}
           >
             <ChevronLeft size={16} />
           </button>
           <div className="text-center px-1 min-w-[110px] md:min-w-[160px]">
-            <p className="text-[14px] md:text-[16px] font-black text-slate-800 tracking-tight truncate">
+            <p className="text-[14px] md:text-[16px] font-black tracking-tight truncate" style={{ color: "var(--c-text-1)" }}>
               {navLabel}
             </p>
           </div>
           <button
             onClick={viewMode === "month" ? nextMonth : nextWeek}
-            className="w-8 h-8 rounded-xl hover:bg-slate-100 text-slate-500 flex items-center justify-center transition-all tap-feedback"
+            className="w-8 h-8 rounded-xl flex items-center justify-center transition-all tap-feedback"
+            style={{ color: "var(--c-text-2)" }}
           >
             <ChevronRight size={16} />
           </button>
           <button onClick={goToday}
-            className="px-2.5 py-1 rounded-lg text-[10px] md:text-[11px] font-bold border border-slate-200 text-slate-500 hover:bg-slate-50 transition-all ml-1">
+            className="px-2.5 py-1 rounded-lg text-[10px] md:text-[11px] font-bold transition-all ml-1"
+            style={{ border: "1px solid var(--c-border)", color: "var(--c-text-3)" }}>
             Auj.
           </button>
         </div>
 
-        {/* Contrôles droite */}
         <div className="flex items-center gap-1.5">
 
           {/* Toggle vue */}
-          <div className="flex rounded-xl border border-slate-200 overflow-hidden text-[10px] md:text-[11px] font-bold">
+          <div className="flex rounded-xl overflow-hidden text-[10px] md:text-[11px] font-bold" style={{ border: "1px solid var(--c-border)" }}>
             {[
               { id: "month", label: "Mois" },
               { id: "week",  label: "Sem." },
             ].map(v => (
               <button key={v.id} onClick={() => setViewMode(v.id)}
-                className={[
-                  "px-2.5 md:px-3 py-1.5 transition-colors",
-                  viewMode === v.id ? "bg-slate-800 text-white" : "bg-white text-slate-500",
-                ].join(" ")}>
+                className="px-2.5 md:px-3 py-1.5 transition-colors"
+                style={viewMode === v.id
+                  ? { background: "#1D9E75", color: "#0A150F" }
+                  : { background: "var(--c-surface-2)", color: "var(--c-text-3)" }}>
                 {v.label}
               </button>
             ))}
@@ -941,24 +929,23 @@ function Planning() {
 
           {/* Filtre séances athlètes — desktop */}
           {athleteSessionCount > 0 && (
-            <div className="hidden lg:flex rounded-xl border border-slate-200 overflow-hidden text-[11px] font-bold">
+            <div className="hidden lg:flex rounded-xl overflow-hidden text-[11px] font-bold" style={{ border: "1px solid var(--c-border)" }}>
               {[
                 { id: "all",     label: "Toutes" },
                 { id: "coach",   label: "Coach"  },
                 { id: "athlete", label: `📋 ${athleteSessionCount}` },
               ].map(f => (
                 <button key={f.id} onClick={() => setFilterMode(f.id)}
-                  className={[
-                    "px-2.5 py-1.5 transition-colors",
-                    filterMode === f.id ? "bg-slate-800 text-white" : "bg-white text-slate-500",
-                  ].join(" ")}>
+                  className="px-2.5 py-1.5 transition-colors"
+                  style={filterMode === f.id
+                    ? { background: "#1D9E75", color: "#0A150F" }
+                    : { background: "var(--c-surface-2)", color: "var(--c-text-3)" }}>
                   {f.label}
                 </button>
               ))}
             </div>
           )}
 
-          {/* Bouton ajouter */}
           <button
             onClick={() => setSessionModalTarget("create")}
             disabled={athletes.length === 0}
@@ -972,9 +959,6 @@ function Planning() {
 
       <div className="flex flex-1 overflow-hidden">
 
-        {/* ════════════════════════════════════════════════════════════════
-            CONTENU CALENDRIER
-        ════════════════════════════════════════════════════════════════ */}
         <div className="flex-1 overflow-auto">
 
           {/* ── VUE SEMAINE ── */}
@@ -989,36 +973,31 @@ function Planning() {
                 return (
                   <div
                     key={i}
-                    className={[
-                      "rounded-2xl overflow-hidden border transition-all",
-                      isToday ? "border-emerald-300 shadow-glow-green" : "border-slate-100",
-                    ].join(" ")}
+                    className="rounded-2xl overflow-hidden border transition-all"
+                    style={isToday
+                      ? { borderColor: "rgba(29,158,117,0.45)", boxShadow: "0 0 0 1px rgba(29,158,117,0.20)" }
+                      : { borderColor: "var(--c-border)" }}
                   >
                     {/* Header jour */}
                     <div
-                      className={[
-                        "px-4 py-3 flex items-center justify-between",
-                        isToday ? "bg-emerald-50" : "bg-white",
-                      ].join(" ")}
+                      className="px-4 py-3 flex items-center justify-between"
+                      style={{ background: isToday ? "rgba(29,158,117,0.08)" : "var(--c-surface)" }}
                     >
                       <div className="flex items-center gap-3">
                         <div
-                          className={[
-                            "w-10 h-10 rounded-2xl flex items-center justify-center font-black text-[16px] flex-shrink-0",
-                            isToday ? "text-white shadow-sm" : isPast ? "bg-slate-100 text-slate-400" : "bg-slate-100 text-slate-600",
-                          ].join(" ")}
-                          style={isToday ? { background: "linear-gradient(135deg, #1D9E75, #16826C)" } : {}}
+                          className="w-10 h-10 rounded-2xl flex items-center justify-center font-black text-[16px] flex-shrink-0"
+                          style={isToday
+                            ? { background: "linear-gradient(135deg, #1D9E75, #16826C)", color: "white" }
+                            : { background: "var(--c-surface-2)", color: isPast ? "var(--c-text-4)" : "var(--c-text-2)" }}
                         >
                           {date.getDate()}
                         </div>
                         <div>
-                          <p className={[
-                            "text-[14px] font-black",
-                            isToday ? "text-emerald-700" : isPast ? "text-slate-400" : "text-slate-700",
-                          ].join(" ")}>
+                          <p className="text-[14px] font-black"
+                            style={{ color: isToday ? "#3DBE8B" : isPast ? "var(--c-text-4)" : "var(--c-text-1)" }}>
                             {DAYS_FR[i]}
                           </p>
-                          <p className="text-[11px] text-slate-400">
+                          <p className="text-[11px]" style={{ color: "var(--c-text-3)" }}>
                             {date.toLocaleDateString("fr-BE", { day: "numeric", month: "long" })}
                           </p>
                         </div>
@@ -1026,16 +1005,17 @@ function Planning() {
 
                       <div className="flex items-center gap-2">
                         {ds.length > 0 && (
-                          <span className={[
-                            "text-[11px] font-bold px-2 py-0.5 rounded-full",
-                            isToday ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-500",
-                          ].join(" ")}>
+                          <span className="text-[11px] font-bold px-2 py-0.5 rounded-full"
+                            style={isToday
+                              ? { background: "rgba(29,158,117,0.16)", color: "#7BD8B4" }
+                              : { background: "var(--c-surface-2)", color: "var(--c-text-2)" }}>
                             {ds.length} séance{ds.length > 1 ? "s" : ""}
                           </span>
                         )}
                         <button
                           onClick={() => { setSelectedDate(date); setSessionModalTarget("create"); }}
-                          className="w-7 h-7 rounded-lg bg-slate-100 hover:bg-emerald-100 text-slate-400 hover:text-emerald-600 flex items-center justify-center transition-all"
+                          className="w-7 h-7 rounded-lg flex items-center justify-center transition-all"
+                          style={{ background: "var(--c-surface-2)", color: "var(--c-text-3)" }}
                         >
                           <Plus size={13} />
                         </button>
@@ -1044,8 +1024,8 @@ function Planning() {
 
                     {/* Séances du jour */}
                     {ds.length > 0 ? (
-                      <div className="divide-y divide-slate-50 bg-white">
-                        {ds.map(s => {
+                      <div style={{ background: "var(--c-surface)" }}>
+                        {ds.map((s, idx) => {
                           const c  = colors(s.category);
                           const st = sessionStatus(s);
                           const missingStatus = s.athleteIds.filter(id => {
@@ -1057,54 +1037,53 @@ function Planning() {
                             <div
                               key={s.id}
                               onClick={() => setActiveSession(s)}
-                              className="flex items-center gap-3 px-4 py-3.5 cursor-pointer hover:bg-slate-50/80 transition-colors tap-feedback"
+                              className="flex items-center gap-3 px-4 py-3.5 cursor-pointer transition-colors tap-feedback"
+                              style={{ borderTop: idx > 0 ? "1px solid var(--c-border)" : "none" }}
+                              onMouseEnter={e => e.currentTarget.style.background = "var(--c-surface-2)"}
+                              onMouseLeave={e => e.currentTarget.style.background = "transparent"}
                             >
-                              {/* Barre colorée */}
-                              <div
-                                className="w-1 h-12 rounded-full flex-shrink-0"
-                                style={{ background: c.border }}
-                              />
+                              <div className="w-1 h-12 rounded-full flex-shrink-0" style={{ background: c.border }} />
 
-                              {/* Infos */}
                               <div className="flex-1 min-w-0">
                                 <div className="flex items-center gap-2 mb-0.5">
-                                  <p className="text-[13.5px] font-bold text-slate-800 truncate">{s.title}</p>
+                                  <p className="text-[13.5px] font-bold truncate" style={{ color: "var(--c-text-1)" }}>{s.title}</p>
                                   {s.createdByAthlete && (
-                                    <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-purple-100 text-purple-700 flex-shrink-0">
+                                    <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full flex-shrink-0"
+                                      style={{ background: "rgba(168,85,247,0.16)", color: "#D8B4FE" }}>
                                       📋
                                     </span>
                                   )}
                                 </div>
-                                <div className="flex items-center gap-2 text-[11px] text-slate-400">
+                                <div className="flex items-center gap-2 text-[11px]" style={{ color: "var(--c-text-3)" }}>
                                   <span
                                     className="px-1.5 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider"
-                                    style={{ background: c.bg, color: c.text }}
+                                    style={{ background: `${c.border}1F`, color: c.text }}
                                   >
                                     {CATEGORIES.find(x => x.id === s.category)?.label}
                                   </span>
                                   <Clock size={10} />
                                   <span>{s.time}{s.durationMinutes ? ` · ${s.durationMinutes}min` : ""}</span>
                                   {missingStatus > 0 && isPast && (
-                                    <span className="text-amber-600 font-bold">· {missingStatus} en attente</span>
+                                    <span className="font-bold" style={{ color: "#F0CB61" }}>· {missingStatus} en attente</span>
                                   )}
                                 </div>
                               </div>
 
-                              {/* Avatars + statut */}
                               <div className="flex items-center gap-2 flex-shrink-0">
                                 <div className="flex -space-x-1">
                                   {s.athleteIds.slice(0, 3).map(id => {
                                     const a = athletes.find(x => x.id === id);
                                     return a ? (
                                       <div key={id}
-                                        className="w-6 h-6 rounded-full border-2 border-white flex items-center justify-center text-white text-[7px] font-bold"
-                                        style={{ background: c.border }}>
+                                        className="w-6 h-6 rounded-full flex items-center justify-center text-[7px] font-bold"
+                                        style={{ background: c.border, color: "#0A150F", border: "2px solid var(--c-surface)" }}>
                                         {a.avatar?.slice(0, 1)}
                                       </div>
                                     ) : null;
                                   })}
                                   {s.athleteIds.length > 3 && (
-                                    <div className="w-6 h-6 rounded-full border-2 border-white bg-slate-200 flex items-center justify-center text-slate-500 text-[7px] font-bold">
+                                    <div className="w-6 h-6 rounded-full flex items-center justify-center text-[7px] font-bold"
+                                      style={{ background: "var(--c-surface-3)", color: "var(--c-text-3)", border: "2px solid var(--c-surface)" }}>
                                       +{s.athleteIds.length - 3}
                                     </div>
                                   )}
@@ -1117,8 +1096,8 @@ function Planning() {
                         })}
                       </div>
                     ) : (
-                      <div className="px-4 py-3 bg-white">
-                        <p className="text-[12px] text-slate-200 font-medium">Repos</p>
+                      <div className="px-4 py-3" style={{ background: "var(--c-surface)" }}>
+                        <p className="text-[12px] font-medium" style={{ color: "var(--c-text-4)" }}>Repos</p>
                       </div>
                     )}
                   </div>
@@ -1130,16 +1109,15 @@ function Planning() {
           {/* ── VUE MOIS ── */}
           {viewMode === "month" && (
             <div className="p-2 md:p-4">
-              {/* Headers jours */}
               <div className="grid grid-cols-7 mb-2">
                 {DAYS_SHORT.map(d => (
-                  <div key={d} className="text-center text-[9px] md:text-[11px] font-black text-slate-400 uppercase tracking-wider py-1.5">
+                  <div key={d} className="text-center text-[9px] md:text-[11px] font-black uppercase tracking-wider py-1.5"
+                    style={{ color: "var(--c-text-3)" }}>
                     {d}
                   </div>
                 ))}
               </div>
 
-              {/* Grille */}
               <div className="grid grid-cols-7 gap-0.5 md:gap-1">
                 {calendarDays.map(({ date, isCurrentMonth }, idx) => {
                   const key         = date.toISOString().slice(0, 10);
@@ -1155,30 +1133,23 @@ function Planning() {
                         setSelectedDate(date);
                         if (window.innerWidth < 768) setViewMode("week");
                       }}
-                      className={[
-                        "min-h-[52px] md:min-h-[96px] rounded-xl md:rounded-2xl p-1 md:p-2 cursor-pointer transition-all border",
-                        isToday
-                          ? "bg-emerald-50 border-emerald-300 border-2 shadow-sm"
-                          : isSelected
-                          ? "bg-blue-50 border-blue-300 border-2"
-                          : isCurrentMonth
-                          ? "bg-white border-slate-100 hover:border-slate-200 hover:shadow-sm"
-                          : "bg-slate-50/30 border-transparent opacity-35",
-                      ].join(" ")}
+                      className="min-h-[52px] md:min-h-[96px] rounded-xl md:rounded-2xl p-1 md:p-2 cursor-pointer transition-all border"
+                      style={isToday
+                        ? { background: "rgba(29,158,117,0.08)", borderColor: "rgba(29,158,117,0.45)", borderWidth: 2 }
+                        : isSelected
+                        ? { background: "rgba(91,158,245,0.08)", borderColor: "rgba(91,158,245,0.45)", borderWidth: 2 }
+                        : isCurrentMonth
+                        ? { background: "var(--c-surface)", borderColor: "var(--c-border)" }
+                        : { background: "transparent", borderColor: "transparent", opacity: 0.35 }}
                     >
-                      {/* Numéro */}
                       <div className="flex items-start justify-between mb-1">
-                        <span className={[
-                          "text-[11px] md:text-[13px] font-black w-6 h-6 md:w-7 md:h-7 flex items-center justify-center rounded-xl",
-                          isToday
-                            ? "text-white"
-                            : isCurrentMonth ? "text-slate-700" : "text-slate-400",
-                        ].join(" ")}
-                          style={isToday ? { background: "linear-gradient(135deg, #1D9E75, #16826C)" } : {}}
+                        <span className="text-[11px] md:text-[13px] font-black w-6 h-6 md:w-7 md:h-7 flex items-center justify-center rounded-xl"
+                          style={isToday
+                            ? { background: "linear-gradient(135deg, #1D9E75, #16826C)", color: "white" }
+                            : { color: isCurrentMonth ? "var(--c-text-1)" : "var(--c-text-4)" }}
                         >
                           {date.getDate()}
                         </span>
-                        {/* Dot si séances sur mobile */}
                         {hasSessions && (
                           <div className="md:hidden flex gap-0.5 mt-1 flex-wrap justify-end">
                             {daySessions.slice(0, 3).map(s => (
@@ -1193,7 +1164,6 @@ function Planning() {
                         )}
                       </div>
 
-                      {/* Séances desktop */}
                       <div className="hidden md:block space-y-0.5">
                         {daySessions.slice(0, 3).map(s => {
                           const c  = colors(s.category);
@@ -1202,8 +1172,8 @@ function Planning() {
                             <div
                               key={s.id}
                               onClick={e => { e.stopPropagation(); setActiveSession(s); }}
-                              className="flex items-center gap-1 px-1.5 py-0.5 rounded-lg text-[9.5px] font-bold cursor-pointer hover:opacity-80 transition-opacity truncate"
-                              style={{ background: c.bg, color: c.text, borderLeft: `2.5px solid ${c.border}` }}
+                              className="flex items-center gap-1 px-1.5 py-0.5 rounded-lg text-[9.5px] font-bold cursor-pointer transition-opacity truncate"
+                              style={{ background: `${c.border}1F`, color: c.text, borderLeft: `2.5px solid ${c.border}` }}
                             >
                               <span className="truncate flex-1">{s.title}</span>
                               {st !== "future" && <StatusIcon status={st} size={8} />}
@@ -1212,7 +1182,7 @@ function Planning() {
                           );
                         })}
                         {daySessions.length > 3 && (
-                          <p className="text-[9px] text-slate-400 font-semibold px-1">
+                          <p className="text-[9px] font-semibold px-1" style={{ color: "var(--c-text-3)" }}>
                             +{daySessions.length - 3} autre{daySessions.length - 3 > 1 ? "s" : ""}
                           </p>
                         )}
@@ -1227,35 +1197,32 @@ function Planning() {
 
         {/* ── Panneau latéral desktop ──────────────────────────────────── */}
         {selectedDate && (
-          <div className="hidden lg:flex w-80 flex-shrink-0 bg-white border-l border-slate-100 flex-col overflow-hidden">
-            {/* Header panneau */}
-            <div className="px-5 py-4 border-b border-slate-100 flex-shrink-0">
+          <div className="hidden lg:flex w-80 flex-shrink-0 flex-col overflow-hidden"
+            style={{ background: "var(--c-surface)", borderLeft: "1px solid var(--c-border)" }}>
+            <div className="px-5 py-4 flex-shrink-0" style={{ borderBottom: "1px solid var(--c-border)" }}>
               <div className="flex items-center justify-between mb-0.5">
                 <div>
-                  <p className="text-[14px] font-black text-slate-800">
+                  <p className="text-[14px] font-black" style={{ color: "var(--c-text-1)" }}>
                     {selectedDate.toLocaleDateString("fr-BE", { weekday: "long", day: "numeric", month: "long" })}
                   </p>
-                  <p className="text-[11px] text-slate-400 mt-0.5">
+                  <p className="text-[11px] mt-0.5" style={{ color: "var(--c-text-3)" }}>
                     {selectedDaySessions.length} séance{selectedDaySessions.length !== 1 ? "s" : ""} planifiée{selectedDaySessions.length !== 1 ? "s" : ""}
                   </p>
                 </div>
                 <button onClick={() => setSelectedDate(null)}
-                  className="p-1.5 rounded-xl hover:bg-slate-100 text-slate-400 transition-colors">
+                  className="p-1.5 rounded-xl transition-colors" style={{ color: "var(--c-text-3)" }}>
                   <X size={14} />
                 </button>
               </div>
             </div>
 
-            {/* Séances du jour */}
             <div className="flex-1 overflow-y-auto p-3 space-y-2">
               {selectedDaySessions.length === 0 ? (
-                <div className="flex flex-col items-center justify-center h-full text-slate-300 gap-3 py-10">
+                <div className="flex flex-col items-center justify-center h-full gap-3 py-10" style={{ color: "var(--c-text-4)" }}>
                   <CalendarDays size={32} strokeWidth={1.5} />
                   <p className="text-[12px] text-center font-medium">Aucune séance ce jour</p>
-                  <button
-                    onClick={() => setSessionModalTarget("create")}
-                    className="text-[12px] font-semibold text-emerald-600 hover:text-emerald-700 transition-colors"
-                  >
+                  <button onClick={() => setSessionModalTarget("create")}
+                    className="text-[12px] font-semibold transition-colors" style={{ color: "#3DBE8B" }}>
                     + Planifier une séance
                   </button>
                 </div>
@@ -1270,22 +1237,17 @@ function Planning() {
                   }).length;
 
                   return (
-                    <div
-                      key={s.id}
-                      onClick={() => setActiveSession(s)}
-                      className="card card-hover rounded-2xl overflow-hidden cursor-pointer"
-                    >
-                      {/* Header card séance */}
-                      <div
-                        className="px-3.5 py-2.5 flex items-center justify-between"
-                        style={{ background: c.bg, borderBottom: `1.5px solid ${c.border}` }}
-                      >
+                    <div key={s.id} onClick={() => setActiveSession(s)}
+                      className="card card-hover rounded-2xl overflow-hidden cursor-pointer">
+                      <div className="px-3.5 py-2.5 flex items-center justify-between"
+                        style={{ background: `${c.border}14`, borderBottom: `1.5px solid ${c.border}40` }}>
                         <div className="flex items-center gap-1.5">
                           <span className="text-[9.5px] font-black uppercase tracking-wider" style={{ color: c.text }}>
                             {CATEGORIES.find(x => x.id === s.category)?.label ?? s.type}
                           </span>
                           {s.createdByAthlete && (
-                            <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-purple-100 text-purple-700">
+                            <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full"
+                              style={{ background: "rgba(168,85,247,0.16)", color: "#D8B4FE" }}>
                               📋
                             </span>
                           )}
@@ -1293,41 +1255,41 @@ function Planning() {
                         <StatusIcon status={st} size={12} />
                       </div>
 
-                      {/* Body card séance */}
                       <div className="px-3.5 py-3">
-                        <p className="text-[13px] font-bold text-slate-800 leading-tight mb-1.5">{s.title}</p>
-                        <div className="flex items-center gap-2 text-[11px] text-slate-400 mb-2">
+                        <p className="text-[13px] font-bold leading-tight mb-1.5" style={{ color: "var(--c-text-1)" }}>{s.title}</p>
+                        <div className="flex items-center gap-2 text-[11px] mb-2" style={{ color: "var(--c-text-3)" }}>
                           <Clock size={10} />
                           <span>{s.time}{s.durationMinutes ? ` · ${s.durationMinutes}min` : ""}</span>
-                          {s.pdfUrl && <span className="text-blue-400">📄</span>}
+                          {s.pdfUrl && <span style={{ color: "#A9CBFB" }}>📄</span>}
                         </div>
 
-                        {/* Alerts */}
                         {missingStatus > 0 && (
-                          <div className="flex items-center gap-1 text-[10px] font-bold text-red-600 bg-red-50 rounded-lg px-2 py-1 mb-1">
+                          <div className="flex items-center gap-1 text-[10px] font-bold rounded-lg px-2 py-1 mb-1"
+                            style={{ background: "rgba(239,107,107,0.10)", color: "#F19A9A" }}>
                             ❗ {missingStatus} présence{missingStatus > 1 ? "s" : ""} à confirmer
                           </div>
                         )}
                         {missingRpe > 0 && (
-                          <div className="flex items-center gap-1 text-[10px] font-bold text-amber-600 bg-amber-50 rounded-lg px-2 py-1 mb-1">
+                          <div className="flex items-center gap-1 text-[10px] font-bold rounded-lg px-2 py-1 mb-1"
+                            style={{ background: "rgba(234,179,8,0.10)", color: "#F0CB61" }}>
                             🔥 {missingRpe} RPE manquant{missingRpe > 1 ? "s" : ""}
                           </div>
                         )}
 
-                        {/* Avatars athlètes */}
                         <div className="flex -space-x-1.5 mt-2">
                           {s.athleteIds.slice(0, 5).map(id => {
                             const a = athletes.find(x => x.id === id);
                             return a ? (
                               <div key={id} title={a.name}
-                                className="w-6 h-6 rounded-full border-2 border-white flex items-center justify-center text-white text-[7px] font-bold"
-                                style={{ background: c.border }}>
+                                className="w-6 h-6 rounded-full flex items-center justify-center text-[7px] font-bold"
+                                style={{ background: c.border, color: "#0A150F", border: "2px solid var(--c-surface)" }}>
                                 {a.avatar?.slice(0, 1) ?? "?"}
                               </div>
                             ) : null;
                           })}
                           {s.athleteIds.length > 5 && (
-                            <div className="w-6 h-6 rounded-full border-2 border-white bg-slate-200 flex items-center justify-center text-slate-500 text-[7px] font-bold">
+                            <div className="w-6 h-6 rounded-full flex items-center justify-center text-[7px] font-bold"
+                              style={{ background: "var(--c-surface-3)", color: "var(--c-text-3)", border: "2px solid var(--c-surface)" }}>
                               +{s.athleteIds.length - 5}
                             </div>
                           )}
@@ -1339,11 +1301,11 @@ function Planning() {
               )}
             </div>
 
-            {/* Bouton ajouter */}
-            <div className="p-3 border-t border-slate-100 flex-shrink-0">
+            <div className="p-3 flex-shrink-0" style={{ borderTop: "1px solid var(--c-border)" }}>
               <button
                 onClick={() => setSessionModalTarget("create")}
-                className="w-full flex items-center justify-center gap-2 py-2.5 rounded-2xl text-[12px] font-bold text-emerald-600 bg-emerald-50 hover:bg-emerald-100 transition-colors border border-emerald-100"
+                className="w-full flex items-center justify-center gap-2 py-2.5 rounded-2xl text-[12px] font-bold transition-colors"
+                style={{ background: "rgba(29,158,117,0.10)", border: "1px solid rgba(29,158,117,0.25)", color: "#3DBE8B" }}
               >
                 <Plus size={13} /> Ajouter une séance
               </button>
@@ -1356,32 +1318,31 @@ function Planning() {
       {selectedDate && (
         <div
           className="md:hidden fixed inset-x-0 bottom-0 z-40 rounded-t-3xl shadow-2xl animate-slide-up"
-          style={{ background: "rgba(255,255,255,0.97)", backdropFilter: "blur(20px)", maxHeight: "65vh" }}
+          style={{ background: "var(--c-surface)", backdropFilter: "blur(20px)", maxHeight: "65vh", border: "1px solid var(--c-border)", borderBottom: "none" }}
         >
-          {/* Handle */}
           <div className="flex justify-center pt-3 pb-1">
-            <div className="w-10 h-1 rounded-full bg-slate-200" />
+            <div className="w-10 h-1 rounded-full" style={{ background: "var(--c-border-strong)" }} />
           </div>
 
           <div className="flex flex-col" style={{ maxHeight: "calc(65vh - 20px)" }}>
             <div className="px-5 py-3 flex items-center justify-between flex-shrink-0">
               <div>
-                <p className="text-[14px] font-black text-slate-800">
+                <p className="text-[14px] font-black" style={{ color: "var(--c-text-1)" }}>
                   {selectedDate.toLocaleDateString("fr-BE", { weekday: "long", day: "numeric", month: "long" })}
                 </p>
-                <p className="text-[11px] text-slate-400 mt-0.5">
+                <p className="text-[11px] mt-0.5" style={{ color: "var(--c-text-3)" }}>
                   {selectedDaySessions.length} séance{selectedDaySessions.length !== 1 ? "s" : ""}
                 </p>
               </div>
               <button onClick={() => setSelectedDate(null)}
-                className="p-2 rounded-xl bg-slate-100 text-slate-500 tap-feedback">
+                className="p-2 rounded-xl tap-feedback" style={{ background: "var(--c-surface-2)", color: "var(--c-text-3)" }}>
                 <X size={16} />
               </button>
             </div>
 
             <div className="flex-1 overflow-y-auto px-4 space-y-2 pb-2">
               {selectedDaySessions.length === 0 ? (
-                <div className="text-center py-8 text-slate-300">
+                <div className="text-center py-8" style={{ color: "var(--c-text-4)" }}>
                   <CalendarDays size={28} className="mx-auto mb-2" strokeWidth={1.5} />
                   <p className="text-[12px]">Aucune séance ce jour</p>
                 </div>
@@ -1392,13 +1353,13 @@ function Planning() {
                   <div
                     key={s.id}
                     onClick={() => { setActiveSession(s); setSelectedDate(null); }}
-                    className="flex items-center gap-3 p-3.5 rounded-2xl bg-white border cursor-pointer tap-feedback"
-                    style={{ borderColor: c.border, borderWidth: "1.5px" }}
+                    className="flex items-center gap-3 p-3.5 rounded-2xl cursor-pointer tap-feedback"
+                    style={{ background: "var(--c-surface-2)", borderColor: c.border, borderWidth: "1.5px", borderStyle: "solid" }}
                   >
                     <div className="w-1.5 h-12 rounded-full flex-shrink-0" style={{ background: c.border }} />
                     <div className="flex-1 min-w-0">
-                      <p className="text-[13.5px] font-bold text-slate-800 truncate">{s.title}</p>
-                      <p className="text-[11px] text-slate-400">{s.time}{s.durationMinutes ? ` · ${s.durationMinutes}min` : ""}</p>
+                      <p className="text-[13.5px] font-bold truncate" style={{ color: "var(--c-text-1)" }}>{s.title}</p>
+                      <p className="text-[11px]" style={{ color: "var(--c-text-3)" }}>{s.time}{s.durationMinutes ? ` · ${s.durationMinutes}min` : ""}</p>
                     </div>
                     <StatusIcon status={st} size={16} />
                   </div>
@@ -1406,10 +1367,11 @@ function Planning() {
               })}
             </div>
 
-            <div className="p-4 border-t border-slate-100 flex-shrink-0">
+            <div className="p-4 flex-shrink-0" style={{ borderTop: "1px solid var(--c-border)" }}>
               <button
                 onClick={() => { setSessionModalTarget("create"); setSelectedDate(null); }}
-                className="w-full py-3 rounded-2xl text-[13px] font-bold text-emerald-600 bg-emerald-50 border border-emerald-100 tap-feedback"
+                className="w-full py-3 rounded-2xl text-[13px] font-bold tap-feedback"
+                style={{ background: "rgba(29,158,117,0.10)", border: "1px solid rgba(29,158,117,0.25)", color: "#3DBE8B" }}
               >
                 <Plus size={14} className="inline mr-1.5" />
                 Ajouter une séance

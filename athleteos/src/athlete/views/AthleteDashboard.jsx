@@ -106,20 +106,19 @@ function BadgeIcon({ icon, color, size = 14 }) {
 const BadgeItem = memo(({ badge }) => (
   <div className={[
     "flex flex-col items-center gap-1.5 p-3 rounded-xl text-center transition-all",
-    badge.unlocked ? "bg-white hover:-translate-y-0.5" : "opacity-30",
+    badge.unlocked ? "hover:-translate-y-0.5" : "opacity-30",
   ].join(" ")}
     style={badge.unlocked
-      ? { boxShadow: "0 1px 3px rgba(0,0,0,0.04)", border: "1px solid rgba(0,0,0,0.05)" }
-      : { border: "1px dashed rgba(0,0,0,0.08)" }}>
+      ? { background: "var(--c-surface-2)", border: "1px solid var(--c-border)" }
+      : { background: "var(--c-surface)", border: "1px dashed var(--c-border-strong)" }}>
     <div className="w-8 h-8 rounded-lg flex items-center justify-center"
-      style={{ background: badge.unlocked ? badge.color + "12" : "rgba(0,0,0,0.03)" }}>
-      <BadgeIcon icon={badge.icon} color={badge.unlocked ? badge.color : "#C4C2BC"} />
+      style={{ background: badge.unlocked ? badge.color + "18" : "rgba(255,255,255,0.04)" }}>
+      <BadgeIcon icon={badge.icon} color={badge.unlocked ? badge.color : "var(--c-text-4)"} />
     </div>
     <p style={{ fontSize: 10, fontWeight: 500, color: "var(--c-text-1)", lineHeight: 1.2 }}>{badge.label}</p>
     <p style={{ fontSize: 8.5, color: "var(--c-text-3)", lineHeight: 1.2 }}>{badge.desc}</p>
   </div>
 ));
-
 // ═══════════════════════════════════════════════════════════════════════════════
 // COMPOSANT PRINCIPAL
 // ═══════════════════════════════════════════════════════════════════════════════
