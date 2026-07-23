@@ -381,14 +381,15 @@ export default function AthleteDashboard({
 
           {/* ── Charge d'entraînement ───────────────────────────────────────── */}
           {hasCharge && chargeHistory.length > 0 && (
-            <div className="card p-4">
-              <div className="flex items-center justify-between mb-4">
+            <div className="card" style={{ overflow: "hidden" }}>
+              {/* Header */}
+              <div style={{ padding: "14px 16px 12px", display: "flex", alignItems: "flex-start", justifyContent: "space-between", borderBottom: "1px solid var(--c-border)" }}>
                 <div>
                   <p className="card-title">Charge d'entraînement</p>
                   <p className="card-subtitle">8 dernières semaines</p>
                 </div>
                 {chargeTrend !== null && (
-                  <div style={{ display: "flex", alignItems: "center", gap: 4, padding: "3px 9px", borderRadius: 8,
+                  <div style={{ display: "flex", alignItems: "center", gap: 4, padding: "3px 9px", borderRadius: 8, flexShrink: 0,
                     background: chargeTrend > 15 ? "rgba(192,57,43,0.07)" : chargeTrend > 0 ? "rgba(200,137,10,0.07)" : "rgba(29,158,117,0.07)",
                     color: chargeTrend > 15 ? "#922B21" : chargeTrend > 0 ? "#9A6800" : "#16826C",
                     fontSize: 10.5, fontWeight: 500,
@@ -399,75 +400,92 @@ export default function AthleteDashboard({
                 )}
               </div>
 
-              {/* Barres — largeur fixe 24px, opacité sur passé */}
-              <div style={{ display: "flex", alignItems: "flex-end", gap: 5, height: 88, overflowX: "auto", paddingBottom: 2, scrollbarWidth: "none" }}>
-                {chargeHistory.map((w, i) => {
-                  const max       = Math.max(...chargeHistory.map(x => x.charge), 1);
-                  const pct       = Math.max((w.charge / max) * 100, 5);
-                  const isCurrent = i === chargeHistory.length - 1;
-                  return (
-                    <div key={i} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 5, flexShrink: 0, width: 24 }}>
-                      {/* Valeur au-dessus — visible seulement sur barre courante */}
-                      <span style={{ fontSize: 7.5, fontWeight: isCurrent ? 600 : 400, color: isCurrent ? w.color : "transparent", height: 10, lineHeight: "10px", fontVariantNumeric: "tabular-nums" }}>
-                        {Math.round(w.charge)}
-                      </span>
-                      {/* Barre */}
-                      <div style={{ flex: 1, width: "100%", display: "flex", alignItems: "flex-end" }}>
-                        <div style={{
-                          width: "100%", height: `${pct}%`, minHeight: 3,
-                          borderRadius: "3px 3px 2px 2px",
-                          background: isCurrent ? w.color : w.color + "30",
-                          boxShadow: isCurrent ? `0 0 0 1px ${w.color}40` : "none",
-                          transition: "height 0.6s cubic-bezier(0.16,1,0.3,1)",
-                        }} />
+              {/* Graphique en colonnes — flex-1 = colonnes qui occupent tout l'espace */}
+              <div style={{ padding: "16px 16px 0" }}>
+                <div style={{ display: "flex", alignItems: "flex-end", gap: 4, height: 100 }}>
+                  {chargeHistory.map((w, i) => {
+                    const max       = Math.max(...chargeHistory.map(x => x.charge), 1);
+                    const pct       = Math.max((w.charge / max) * 100, 4);
+                    const isCurrent = i === chargeHistory.length - 1;
+                    return (
+                      <div key={i} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 0, height: "100%" }}>
+                        {/* Zone haute : valeur + espace */}
+                        <div style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "flex-end", width: "100%", paddingBottom: 4 }}>
+                          {/* Valeur uniquement sur barre courante */}
+                          {isCurrent && (
+                            <span style={{ fontSize: 9, fontWeight: 600, color: w.color, textAlign: "center", display: "block", marginBottom: 4, fontVariantNumeric: "tabular-nums" }}>
+                              {Math.round(w.charge)}
+                            </span>
+                          )}
+                          {/* Colonne */}
+                          <div style={{
+                            width: "100%",
+                            height: `${pct}%`,
+                            minHeight: 4,
+                            borderRadius: "4px 4px 2px 2px",
+                            // Passé : fond très léger, couleur en bg + bordure top colorée
+                            background: isCurrent
+                              ? w.color
+                              : "rgba(0,0,0,0.045)",
+                            // Barre de couleur en haut pour les passées — indique la zone
+                            borderTop: isCurrent ? "none" : `2px solid ${w.color}55`,
+                            transition: "height 0.6s cubic-bezier(0.16,1,0.3,1)",
+                            boxShadow: isCurrent ? `0 2px 8px ${w.color}30` : "none",
+                          }} />
+                        </div>
+                        {/* Label semaine */}
+                        <span style={{
+                          fontSize: 8, lineHeight: 1, paddingTop: 5, paddingBottom: 2,
+                          color: isCurrent ? "#5A5A54" : "#C4C2BC",
+                          fontWeight: isCurrent ? 500 : 400,
+                          textAlign: "center", display: "block",
+                        }}>
+                          {w.label}
+                        </span>
                       </div>
-                      {/* Label */}
-                      <span style={{ fontSize: 7, color: isCurrent ? "#5A5A54" : "#C4C2BC", fontWeight: isCurrent ? 500 : 400, lineHeight: 1 }}>
-                        {w.label}
-                      </span>
-                    </div>
-                  );
-                })}
+                    );
+                  })}
+                </div>
               </div>
 
-              {/* ACWR / Aiguë / Chronique */}
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 8, marginTop: 16, marginBottom: 16 }}>
+              {/* Métriques inline sous le graphe — pas de cards séparées */}
+              <div style={{ padding: "12px 16px", display: "flex", alignItems: "center", gap: 0, borderTop: "1px solid var(--c-border)", marginTop: 4 }}>
                 {[
                   { label: "ACWR",      value: metrics.acwr.toFixed(2), color: acwrColor(metrics.acwr), sub: "0.8–1.3 optimal" },
-                  { label: "Aiguë",     value: metrics.acute,           color: "#4B7BDB",               sub: "4 dernières sem." },
-                  { label: "Chronique", value: metrics.chronic,         color: "#96948E",               sub: "12 dernières sem." },
-                ].map(s => (
-                  <div key={s.label} style={{ background: "var(--c-surface-2)", borderRadius: 10, padding: "10px 8px", textAlign: "center" }}>
-                    <p style={{ fontSize: 18, fontWeight: 600, color: s.color, fontVariantNumeric: "tabular-nums", letterSpacing: "-0.025em", lineHeight: 1 }}>
+                  { label: "Aiguë",     value: metrics.acute,           color: "#4B7BDB",               sub: "4 sem." },
+                  { label: "Chronique", value: metrics.chronic,         color: "#96948E",               sub: "12 sem." },
+                ].map((s, idx) => (
+                  <div key={s.label} style={{
+                    flex: 1, textAlign: "center", paddingTop: 2, paddingBottom: 2,
+                    borderRight: idx < 2 ? "1px solid var(--c-border)" : "none",
+                  }}>
+                    <p style={{ fontSize: 17, fontWeight: 600, color: s.color, fontVariantNumeric: "tabular-nums", letterSpacing: "-0.025em", lineHeight: 1 }}>
                       {s.value}
                     </p>
-                    <p style={{ fontSize: 8.5, fontWeight: 500, letterSpacing: "0.08em", textTransform: "uppercase", color: "#96948E", marginTop: 4 }}>
+                    <p style={{ fontSize: 8, fontWeight: 500, letterSpacing: "0.08em", textTransform: "uppercase", color: "#96948E", marginTop: 3 }}>
                       {s.label}
                     </p>
-                    <p style={{ fontSize: 8.5, color: "#C4C2BC", marginTop: 2 }}>{s.sub}</p>
+                    <p style={{ fontSize: 8, color: "#C4C2BC", marginTop: 1 }}>{s.sub}</p>
                   </div>
                 ))}
               </div>
 
-              {/* Réglette ACWR avec curseur */}
-              <div>
-                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 9, color: "#96948E", marginBottom: 6 }}>
+              {/* Réglette ACWR */}
+              <div style={{ padding: "0 16px 14px" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 8.5, color: "#96948E", marginBottom: 5 }}>
                   <span>Sous-charge</span>
                   <span style={{ color: "#1D9E75", fontWeight: 500 }}>Zone optimale</span>
                   <span>Surcharge</span>
                 </div>
-                <div style={{ position: "relative", height: 5, borderRadius: 99,
-                  background: "linear-gradient(to right, #4B7BDB 0%, #1D9E75 38%, #1D9E75 62%, #C8890A 78%, #C0392B 100%)" }}>
-                  {/* Curseur */}
+                <div style={{ position: "relative", height: 5, borderRadius: 99, background: "linear-gradient(to right, #4B7BDB 0%, #1D9E75 38%, #1D9E75 62%, #C8890A 78%, #C0392B 100%)" }}>
                   <div style={{
                     position: "absolute", top: "50%", transform: "translate(-50%, -50%)",
-                    left: `${acwrPct}%`,
-                    width: 11, height: 11, borderRadius: "50%",
-                    background: "white", boxShadow: "0 1px 4px rgba(0,0,0,0.22)",
+                    left: `${acwrPct}%`, width: 11, height: 11, borderRadius: "50%",
+                    background: "white", boxShadow: "0 1px 4px rgba(0,0,0,0.25)",
                     transition: "left 0.7s cubic-bezier(0.16,1,0.3,1)",
                   }} />
                 </div>
-                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 8, color: "#C4C2BC", marginTop: 4 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 7.5, color: "#C4C2BC", marginTop: 4 }}>
                   <span>0</span><span>0.8</span><span>1.3</span><span>2.0</span>
                 </div>
               </div>

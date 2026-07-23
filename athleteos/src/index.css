@@ -238,17 +238,18 @@ body {
 }
 .nav-item:hover { background: var(--c-surface-2); color: var(--c-text-1); }
 .nav-item.active {
-  background: rgba(29,158,117,0.07);
+  background: rgba(29,158,117,0.05);
   color: var(--c-accent); font-weight: 500;
-  border-color: rgba(29,158,117,0.10);
+  border-color: transparent;
 }
-/* Indicateur latéral fin — 2px seulement */
+/* Indicateur latéral fin — 2px, très discret */
 .nav-item.active::before {
   content: '';
   position: absolute; left: -6px; top: 50%; transform: translateY(-50%);
-  width: 2px; height: 14px;
+  width: 2px; height: 12px;
   background: var(--c-accent);
   border-radius: 0 2px 2px 0;
+  opacity: 0.7;
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════════
