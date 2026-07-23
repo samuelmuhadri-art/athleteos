@@ -398,66 +398,48 @@ export default function AthleteDashboard({
                 )}
               </div>
 
-              {/* Sparkline SVG — élégant quel que soit le nb de semaines */}
-              {(() => {
-                const max = Math.max(...chargeHistory.map(x => x.charge), 1);
-                const W = 600, H = 72, PAD = 8;
-                const pts = chargeHistory.map((w, i) => ({
-                  x: chargeHistory.length === 1
-                    ? W / 2
-                    : PAD + (i / (chargeHistory.length - 1)) * (W - PAD * 2),
-                  y: H - PAD - ((w.charge / max) * (H - PAD * 2)),
-                  ...w,
-                }));
-                const path = pts.map((p, i) => `${i === 0 ? "M" : "L"} ${p.x} ${p.y}`).join(" ");
-                const area = `${path} L ${pts[pts.length-1].x} ${H} L ${pts[0].x} ${H} Z`;
-                const last = pts[pts.length - 1];
-                return (
-                  <div className="mb-4" style={{ position: "relative" }}>
-                    <svg viewBox={`0 0 ${W} ${H + 20}`} style={{ width: "100%", height: 80, overflow: "visible" }}>
-                      {/* Dégradé fill sous la courbe */}
-                      <defs>
-                        <linearGradient id="cg" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="0%"   stopColor="#1D9E75" stopOpacity="0.12" />
-                          <stop offset="100%" stopColor="#1D9E75" stopOpacity="0"    />
-                        </linearGradient>
-                      </defs>
-                      {/* Zone fill */}
-                      <path d={area} fill="url(#cg)" />
-                      {/* Ligne */}
-                      <path d={path} fill="none" stroke="rgba(29,158,117,0.35)" strokeWidth="1.5" strokeLinejoin="round" strokeLinecap="round" />
-                      {/* Points */}
-                      {pts.map((p, i) => {
-                        const isCurrent = i === pts.length - 1;
-                        const dotColor  = p.color;
-                        return (
-                          <g key={i}>
-                            {isCurrent && (
-                              <circle cx={p.x} cy={p.y} r="8" fill={dotColor} opacity="0.12" />
-                            )}
-                            <circle cx={p.x} cy={p.y} r={isCurrent ? 4 : 2.5}
-                              fill={isCurrent ? dotColor : "white"}
-                              stroke={isCurrent ? dotColor : "rgba(29,158,117,0.40)"}
-                              strokeWidth={isCurrent ? 0 : 1.5} />
-                            {/* Valeur au-dessus du point courant */}
-                            {isCurrent && (
-                              <text x={p.x} y={p.y - 10} textAnchor="middle"
-                                style={{ fontSize: 9, fontWeight: 700, fill: dotColor, fontFamily: "DM Sans, system-ui" }}>
-                                {Math.round(p.charge)}
-                              </text>
-                            )}
-                            {/* Label semaine en bas */}
-                            <text x={p.x} y={H + 16} textAnchor="middle"
-                              style={{ fontSize: 8, fill: isCurrent ? "#52606D" : "#BEC8D2", fontWeight: isCurrent ? 600 : 400, fontFamily: "DM Sans, system-ui" }}>
-                              {p.label}
-                            </text>
-                          </g>
-                        );
-                      })}
-                    </svg>
-                  </div>
-                );
-              })()}
+              {/* Barres verticales — largeur fixe 28px, hauteur proportionnelle */}
+              <div className="flex items-end gap-2 mb-4 overflow-x-auto pb-1" style={{ height: "88px", scrollbarWidth: "none" }}>
+                {chargeHistory.map((w, i) => {
+                  const max       = Math.max(...chargeHistory.map(x => x.charge), 1);
+                  const pct       = Math.max((w.charge / max) * 100, 6);
+                  const isCurrent = i === chargeHistory.length - 1;
+                  return (
+                    <div key={i} className="flex flex-col items-center gap-1.5 flex-shrink-0" style={{ width: 28 }}>
+                      {/* Valeur au-dessus si barre courante */}
+                      <span style={{
+                        fontSize: 8, fontWeight: 700,
+                        color: isCurrent ? w.color : "transparent",
+                        height: 12, lineHeight: "12px",
+                        fontVariantNumeric: "tabular-nums",
+                      }}>
+                        {Math.round(w.charge)}
+                      </span>
+                      {/* Barre */}
+                      <div style={{ flex: 1, width: "100%", display: "flex", alignItems: "flex-end" }}>
+                        <div style={{
+                          width: "100%",
+                          height: `${pct}%`,
+                          minHeight: 4,
+                          borderRadius: "4px 4px 2px 2px",
+                          background: isCurrent ? w.color : w.color + "35",
+                          boxShadow: isCurrent ? `0 0 0 1.5px ${w.color}40` : "none",
+                          transition: "height 0.6s cubic-bezier(0.16,1,0.3,1)",
+                        }} />
+                      </div>
+                      {/* Label semaine */}
+                      <span style={{
+                        fontSize: 7.5,
+                        color: isCurrent ? "#52606D" : "#C8D0DA",
+                        fontWeight: isCurrent ? 600 : 400,
+                        lineHeight: 1,
+                      }}>
+                        {w.label}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
 
               {/* Stats ACWR / Aiguë / Chronique — grid 3 cols épurée */}
               <div className="grid grid-cols-3 gap-2 mb-4">
