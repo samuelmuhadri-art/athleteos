@@ -1,0 +1,98 @@
+[33m4ea5e06[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mmain[m[33m, [m[1;31morigin/main[m[33m)[m fix: imports manquants computeBadges getISOWeek
+[33mbeeaccf[m fix: bon contenu AthleteContext
+[33m9cdd535[m refactor: découpage AthleteApp
+[33m04917b1[m fix: alignement et espacement de la bottom nav mobile
+[33m60fac54[m fix: correction du bouton État de forme et ajout du FormeDetailPanel
+[33mb2d3cbf[m fix: retire le position:relative en trop sur .bottom-nav qui cassait le layout mobile
+[33m7df0841[m fix: @import avant @tailwind + JSX div return corrigé
+[33m54589c0[m design: système couleurs sémantiques - dimColor + hero athlète
+[33m96ca726[m fix: bottom nav container was not full width, causing left-shift
+[33mb9c9517[m fix: bottom nav labels shortened to prevent uneven truncation
+[33md0f5135[m fix: FormeDetailPanel remonté niveau AthleteApp - bug iOS fixed/overflow
+[33m3d4db04[m fix: force SW update
+[33maf376c0[m fix: modals z-index, bottom-nav centrage, header mobile titre vue
+[33mafc90fe[m fix: bottom-nav position:fixed écrasé par CSS custom - layout mobile
+[33mf7ef72d[m fix: layout responsive mobile - suppression > orphelin AthleteApp
+[33m03ddd5b[m fix: layout responsive mobile - suppression > orphelin AthleteApp
+[33me2d0b4a[m fix: sidebar width 0 mobile - ecrase sidebar-premium
+[33mf1728d2[m fix: sidebar athlete responsive CSS natif
+[33m32cf784[m fix: sidebar cachee sur mobile
+[33m2b828d9[m design: hero dashboard dark instrumental — WHOOP style
+[33meb0f8e6[m design: Dashboard premium — chips vectoriels, typographie instrumentale, zéro emoji brut
+[33mdcb6ce0[m design: WellnessModal premium — bottom sheet, touch targets, icônes lucide
+[33ma469089[m design: bottom nav premium — safe areas, touch targets, bottom sheet notifs, no emoji
+[33mf9a0230[m design: index.css premium v2 — glassmorphism, safe areas iOS, touch targets
+[33m49c35fc[m fix: indentation commentaire JSX ligne 1018
+[33m8d3c18d[m force rebuild
+[33m156cb3b[m état de forme cliquable - panneau scientifique premium
+[33m91ffe0c[m fix fetchAll boucle infinie
+[33m7b55038[m fix goals description null
+[33mf1e5ae6[m fix athlete_goals notes->description + YAxis zoom
+[33m2463f99[m fix import AreaChart
+[33m8cb1da3[m fix discipline_type not null
+[33m32e5f0f[m fix MesPerformances - evolution cliquable + save sans reset
+[33ma8d47b2[m Fix bouton évolution MesPerformances
+[33m9d40ce2[m MesPerformances premium - graphiques + objectifs
+[33m9ce8e04[m fix date + messagerie
+[33m71c8a4f[m fix wellness loop + messagerie reset + date +1 jour
+[33m5939b87[m AthleteList premium + MonPlanning athlete
+[33me1fdd17[m Amélioration UI MonPlanning (planning premium)
+[33m26d2eb8[m planning premium - coach + athlete
+[33m1da2a3c[m fix import Search
+[33md0044eb[m fix indentation MaMessagerie
+[33mf01dbaa[m messagerie athlete universelle - parler a tout le monde
+[33md0f2eee[m messagerie universelle - coachs + athletes
+[33m0173be5[m fix keyframes CSS + messagerie
+[33m5814262[m dashboard athlete premium
+[33m46c4ac5[m dashboard coach premium
+[33mff0401d[m polish premium - shell coach + athlete
+[33m5c03c86[m Initialize README.md with project details
+[33ma4b8aac[m Add Google Search Console verification tag
+[33me8d7193[m Optimize HTML meta tags for SEO and authorship
+[33m697b647[m Add optimized README for Google indexing
+[33m99b34e4[m Add copyright license protection
+[33m8d1a76a[m feat: wellness modal + état de forme avec interprétation et normes
+[33m2ff0f14[m fix: add missing exports computeChargeChartData, generateContextAnalysis, computePerformanceStability
+[33ma1a7ba5[m feat: wellness quotidien — WellnessModal + fetch athlete_wellness + Dashboard
+[33mc4ea2ff[m feat: fusion ultime AthleteApp avec module Wellness
+[33m20869a5[m upgrade: chargeCalculations.js et trainingLoad.js v2.0 — EWMA, monotonie, wellness, récupération
+[33m6a4131a[m fix: auto-correction subscription push athlete_id en base
+[33m5aeb9cf[m fix: demande permission push automatique côté athlète
+[33m1689567[m fix: bouton push cliquable meme si denied
+[33me6c5027[m fix: auto-correction athlete_id dans push_subscriptions
+[33m42004a4[m fix: notif push coach quand athlète planifie séance
+[33m25609c0[m fix: double import notifications
+[33maa96ae1[m fix: notif push coach sur message athlète
+[33me45f467[m fix sw.js push notifications
+[33mec88e45[m fix: correction du placement du hook usePushNotifications et ajout du bouton
+[33m4ef6458[m Debug push profile id
+[33m447fe9d[m SW skipWaiting force update
+[33m992c378[m usePushNotifications final
+[33mbfa38c7[m Fix push subscription delete then insert
+[33m5ca2dc1[m Fix toggle push sans unsubscribe navigateur
+[33m4caa5a9[m Fix sw.js sans commentaire
+[33m3abfac9[m Force SW update v2
+[33m1164aeb[m Fix toggle push notifications
+[33m93bb9ff[m Push notifs coach App.jsx
+[33mda2ba01[m Fix notif message athleteId correct
+[33me693788[m Fix notif message athlete.id au lieu de userId
+[33mf045f64[m Service Worker custom avec push notifications
+[33m883e77e[m Debug Edge Function send-push
+[33mb6ed48b[m Fix notifications.js sans code double
+[33m7ccf66c[m Fix prevWeek nextWeek Planning coach
+[33m7bf0eeb[m Dossier public a la racine
+[33m8a6ca71[m Fix CORS Edge Function + manifest public
+[33md57574c[m Fix realtime sans filtre club_id
+[33m6e7ec60[m Fix double condition notifs
+[33m8ea26e6[m Bouton push mobile
+[33m29df572[m Fix index.html + hooks jsx
+[33me4feadd[m Service Worker + PWA manifest + notifications push complet
+[33meeaf91f[m Bouton activation notifications push
+[33m12232b3[m Push notifications Edge Function + manifest PWA
+[33m5bcbf62[m Planning mobile refonte + realtime
+[33m393624a[m fix: add missing vite-plugin-pwa dependency
+[33m055b5f6[m fix: remove node_modules from git tracking
+[33ma2f5f0c[m trigger deploy
+[33m79f8d5d[m fix typo notifications
+[33m2e8e5ec[m fix import Messaging
+[33m2e928e2[m AthleteOS initial

@@ -1771,15 +1771,15 @@ function Dashboard({ athlete, weeklyCharge, sessions, competitions, lastMessages
         </div>
       </div>
       {activeMetric && (
-  <FormeDetailPanel
-    metricKey={activeMetric}
-    metrics={metrics}
-    sessions={sessions}
-    weeklyCharge={weeklyCharge}
-    athlete={athlete}
-    onClose={() => setActiveMetric(null)}
-  />
-)}
+        <FormeDetailPanel
+          metricKey={activeMetric}
+          metrics={metrics}
+          sessions={sessions}
+          weeklyCharge={weeklyCharge}
+          athlete={athlete}
+          onClose={() => setActiveMetric(null)}
+        />
+      )}
     </div>
   );
 }
