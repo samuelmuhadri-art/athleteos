@@ -1,10 +1,9 @@
 // ============================================================
 // AthleteOS — src/athlete/components/FormeDetailPanel.jsx
-// Extrait de AthleteApp.jsx — const FormeDetailPanel = memo(...)
-// Zéro modification du code.
 // ============================================================
 
 import { useMemo, memo } from "react";
+import { createPortal } from "react-dom"; // <-- La solution magique est ici
 import { X, Zap } from "lucide-react";
 import { getISOWeek, METRIC_SCIENCE } from "../shared";
 
@@ -43,7 +42,8 @@ const FormeDetailPanel = memo(({ metricKey, metrics, sessions, weeklyCharge, ath
 
   const maxLoad = Math.max(...recentCharge.map(w => w.load), 1);
 
-  return (
+  // <-- createPortal permet d'afficher la modale tout devant l'écran, sans bug
+  return createPortal(
     <div
       className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4 modal-backdrop"
       onClick={e => e.target === e.currentTarget && onClose()}
@@ -244,7 +244,8 @@ const FormeDetailPanel = memo(({ metricKey, metrics, sessions, weeklyCharge, ath
           </div>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body // <-- Fin de la magie
   );
 });
 
