@@ -1,12 +1,7 @@
 // ============================================================
-// AthleteOS — src/AthleteApp.jsx  ★ REFACTORISÉ
-//
-// AVANT : ~4800 lignes avec tout dedans
-// APRÈS : ~200 lignes — uniquement state, fetch, navigation, shell
-//
-// Chaque vue est dans src/athlete/views/
-// Composants : src/athlete/components/
-// Constantes/helpers : src/athlete/shared.js
+// AthleteOS — src/AthleteApp.jsx  ★ DARK MODE
+// Shell uniquement — state, fetch, navigation
+// Couleurs hardcodées remplacées par variables CSS dark
 // ============================================================
 
 import { useState, useCallback, useEffect, useRef } from "react";
@@ -20,7 +15,6 @@ import { getAthleteMetricsForWeek } from "./utils/chargeCalculations";
 import { usePushNotifications, PushToggleButton } from "./hooks/usePushNotifications";
 import { initialsFromName } from "./athlete/shared";
 
-// ─── Vues ─────────────────────────────────────────────────────────────────────
 import AthleteDashboard from "./athlete/views/AthleteDashboard";
 import AthletePlanning  from "./athlete/views/AthletePlanning";
 import AthletePerfs     from "./athlete/views/AthletePerfs";
@@ -28,7 +22,6 @@ import AthleteMsgerie   from "./athlete/views/AthleteMsgerie";
 import AthleteClub      from "./athlete/views/AthleteClub";
 import WellnessModal    from "./athlete/components/WellnessModal";
 
-// ─── Nav ──────────────────────────────────────────────────────────────────────
 const NAV_ITEMS = [
   { id: "dashboard",    label: "Tableau de bord", shortLabel: "Accueil",  icon: LayoutDashboard },
   { id: "planning",     label: "Mon planning",    shortLabel: "Planning", icon: CalendarDays    },
@@ -40,7 +33,6 @@ const NAV_ITEMS = [
 export default function AthleteApp() {
   const { profile, clubId, signOut } = useAuth();
 
-  // ── State ──────────────────────────────────────────────────────────────────
   const [activeView,   setActiveView]   = useState("dashboard");
   const [athlete,      setAthlete]      = useState(null);
   const [allAthletes,  setAllAthletes]  = useState([]);
@@ -60,7 +52,6 @@ export default function AthleteApp() {
   const [showWellness,   setShowWellness]   = useState(false);
   const [viewKey,        setViewKey]        = useState(0);
 
-  // ── Push ───────────────────────────────────────────────────────────────────
   const { subscribed, subscribe, permissionState, swReady } = usePushNotifications(
     athlete?.id ?? null, clubId
   );
@@ -68,7 +59,6 @@ export default function AthleteApp() {
     if (swReady && !subscribed && permissionState !== "denied") subscribe();
   }, [swReady, subscribed, permissionState, subscribe]);
 
-  // ── fetchAll ───────────────────────────────────────────────────────────────
   const fetchAll = useCallback(async () => {
     if (!clubId || !profile?.id) return;
     try {
@@ -174,7 +164,6 @@ export default function AthleteApp() {
     }
   }, [athlete, wellnessToday, loading]);
 
-  // ── Handlers ──────────────────────────────────────────────────────────────
   const handleRpe = useCallback(async (sid,aid,rpe) => {
     setSessions(p=>p.map(s=>s.id!==sid?s:{...s,validations:s.validations.map(v=>v.athleteId===aid?{...v,rpe}:v)}));
     await supabase.from("session_athletes").update({rpe}).eq("session_id",sid).eq("athlete_id",aid);
@@ -198,24 +187,33 @@ export default function AthleteApp() {
 
   // ── Guards ─────────────────────────────────────────────────────────────────
   if (loading) return (
-    <div className="min-h-screen flex flex-col items-center justify-center gap-5" style={{ background: "#F5F5F2" }}>
-      <div className="w-14 h-14 rounded-2xl flex items-center justify-center shadow-lg"
-        style={{ background: "linear-gradient(135deg, #1D9E75 0%, #16826C 100%)" }}>
-        <Zap size={24} color="white" strokeWidth={2.5} />
+    <div className="min-h-screen flex flex-col items-center justify-center gap-5"
+      style={{ background: "var(--c-bg)" }}>
+      <div className="w-14 h-14 rounded-2xl flex items-center justify-center"
+        style={{ background: "linear-gradient(135deg, #1D9E75, #16826C)" }}>
+        <Zap size={24} color="white" strokeWidth={2} />
       </div>
       <div className="flex flex-col items-center gap-2">
         <div className="loader-ring" />
-        <span className="text-[12px] font-semibold text-slate-400 tracking-wide">Chargement de ton espace…</span>
+        <span style={{ fontSize: 12, color: "var(--c-text-3)", letterSpacing: "0.02em" }}>
+          Chargement de ton espace…
+        </span>
       </div>
     </div>
   );
 
   if (error || !athlete) return (
-    <div className="min-h-screen flex items-center justify-center p-6" style={{ background: "#F5F5F2" }}>
+    <div className="min-h-screen flex items-center justify-center p-6"
+      style={{ background: "var(--c-bg)" }}>
       <div className="card p-8 max-w-sm w-full text-center">
-        <p className="text-[15px] font-bold text-slate-700 mb-1">Profil introuvable</p>
-        <p className="text-[12.5px] text-slate-400 mb-6 leading-relaxed">{error}</p>
-        <button onClick={signOut} className="text-[12px] font-semibold text-red-500 hover:text-red-700 transition-colors">
+        <p style={{ fontSize: 15, fontWeight: 500, color: "var(--c-text-1)", marginBottom: 4 }}>
+          Profil introuvable
+        </p>
+        <p style={{ fontSize: 12.5, color: "var(--c-text-3)", marginBottom: 24, lineHeight: 1.6 }}>
+          {error}
+        </p>
+        <button onClick={signOut}
+          style={{ fontSize: 12, fontWeight: 500, color: "#E05252", background: "none", border: "none", cursor: "pointer" }}>
           Se déconnecter
         </button>
       </div>
@@ -226,19 +224,26 @@ export default function AthleteApp() {
   const unreadCount = myNotifs.filter(n => !n.is_read).length;
   const msgUnread   = myNotifs.filter(n => !n.is_read && n.type === "message").length;
 
-  // ── Render ─────────────────────────────────────────────────────────────────
   return (
-    <div className="flex h-screen overflow-hidden w-full" style={{ background: "#F5F5F2", fontFamily: "'DM Sans', system-ui, sans-serif" }}>
+    <div className="flex h-screen overflow-hidden w-full"
+      style={{ background: "var(--c-bg)", fontFamily: "'DM Sans', system-ui, sans-serif" }}>
 
-      {/* SIDEBAR DESKTOP */}
+      {/* ── SIDEBAR DESKTOP ── */}
       <aside id="athlete-sidebar" className="sidebar-premium z-30 flex-shrink-0">
-        <div className="flex items-center gap-3 px-4 h-16 border-b border-slate-100/80 flex-shrink-0">
-          <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 shadow-sm"
-            style={{ background: "linear-gradient(135deg, #1D9E75 0%, #16826C 100%)" }}>
-            <Zap size={17} color="white" strokeWidth={2.5} />
+
+        {/* Logo */}
+        <div className="flex items-center gap-3 px-4 flex-shrink-0"
+          style={{ height: 64, borderBottom: "1px solid var(--c-border)" }}>
+          <div className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0"
+            style={{ background: "linear-gradient(135deg, #1D9E75, #16826C)" }}>
+            <Zap size={15} color="white" strokeWidth={2} />
           </div>
-          <span className="font-bold text-slate-800 text-[15px] tracking-tight">AthleteOS</span>
+          <span style={{ fontWeight: 600, fontSize: 14, color: "var(--c-text-1)", letterSpacing: "-0.01em" }}>
+            AthleteOS
+          </span>
         </div>
+
+        {/* Nav items */}
         <nav className="flex-1 py-3 overflow-y-auto">
           {NAV_ITEMS.map((item, idx) => {
             const Icon     = item.icon;
@@ -249,65 +254,95 @@ export default function AthleteApp() {
                 className={["nav-item w-full animate-slide-right", isActive ? "active" : ""].join(" ")}
                 style={{ animationDelay: `${idx * 25}ms` }}>
                 <div className="relative flex-shrink-0">
-                  <Icon size={18} strokeWidth={isActive ? 2.2 : 1.6} />
-                  {hasBadge && <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-red-500 border-2 border-white animate-bounce-in" />}
+                  <Icon size={17} strokeWidth={isActive ? 2 : 1.5} />
+                  {hasBadge && (
+                    <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full animate-bounce-in"
+                      style={{ background: "#E05252", border: "2px solid var(--c-surface)" }} />
+                  )}
                 </div>
-                <span className="flex-1 text-left truncate text-[13.5px]">{item.label}</span>
-                {hasBadge && <span className="ml-auto text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-red-500 min-w-[20px] text-center animate-bounce-in">{msgUnread}</span>}
+                <span className="flex-1 text-left truncate" style={{ fontSize: 13 }}>{item.label}</span>
+                {hasBadge && (
+                  <span className="ml-auto text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full animate-bounce-in"
+                    style={{ background: "#E05252", minWidth: 20, textAlign: "center" }}>
+                    {msgUnread}
+                  </span>
+                )}
               </button>
             );
           })}
         </nav>
-        <div className="border-t border-slate-100 flex-shrink-0 px-3 py-3.5">
+
+        {/* Footer sidebar */}
+        <div className="flex-shrink-0 px-3 py-3"
+          style={{ borderTop: "1px solid var(--c-border)" }}>
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-full flex items-center justify-center text-white text-[11px] font-bold flex-shrink-0 shadow-sm"
-              style={{ background: "linear-gradient(135deg, #1D9E75 0%, #16826C 100%)" }}>
+            <div className="w-8 h-8 rounded-full flex items-center justify-center text-white flex-shrink-0"
+              style={{ background: "linear-gradient(135deg, #1D9E75, #16826C)", fontSize: 10, fontWeight: 600 }}>
               {initialsFromName(athlete.name)}
             </div>
             <div className="min-w-0 flex-1">
-              <p className="text-[12.5px] font-semibold text-slate-700 truncate leading-tight">{athlete.name}</p>
+              <p style={{ fontSize: 12, fontWeight: 500, color: "var(--c-text-1)" }} className="truncate">
+                {athlete.name}
+              </p>
               <div className="flex items-center gap-1.5 mt-0.5">
-                <div className="status-dot-live" style={{ width: 6, height: 6 }} />
-                <p className="text-[10.5px] text-slate-400">Athlète</p>
+                <div className="status-dot-live" />
+                <p style={{ fontSize: 10, color: "var(--c-text-3)" }}>Athlète</p>
               </div>
             </div>
             <button onClick={() => setShowNotifs(v => !v)}
-              className="relative p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-all flex-shrink-0">
-              <Bell size={15} />
+              className="relative tap-feedback"
+              style={{ padding: 6, borderRadius: 8, background: "none", border: "none", cursor: "pointer", color: "var(--c-text-3)", flexShrink: 0 }}>
+              <Bell size={14} />
               {unreadCount > 0 && (
-                <span className="absolute -top-0.5 -right-0.5 w-4 h-4 rounded-full bg-red-500 text-white text-[9px] font-bold flex items-center justify-center animate-bounce-in">
+                <span className="absolute animate-bounce-in"
+                  style={{ top: 0, right: 0, width: 14, height: 14, borderRadius: "50%", background: "#E05252", color: "white", fontSize: 8, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", border: "1.5px solid var(--c-surface)" }}>
                   {unreadCount}
                 </span>
               )}
             </button>
-            <button onClick={signOut} title="Se déconnecter"
-              className="p-1.5 rounded-lg text-slate-300 hover:text-red-500 hover:bg-red-50 transition-all flex-shrink-0">
-              <LogOut size={14} />
+            <button onClick={signOut}
+              className="tap-feedback"
+              style={{ padding: 6, borderRadius: 8, background: "none", border: "none", cursor: "pointer", color: "var(--c-text-3)", flexShrink: 0 }}>
+              <LogOut size={13} />
             </button>
           </div>
         </div>
-        <div className="px-3 pb-3 border-t border-slate-100 pt-2.5">
+
+        <div className="px-3 pb-3" style={{ borderTop: "1px solid var(--c-border)", paddingTop: 10 }}>
           <PushToggleButton subscribed={subscribed} onToggle={subscribe} permissionState={permissionState} />
         </div>
       </aside>
 
-      {/* ZONE PRINCIPALE */}
+      {/* ── ZONE PRINCIPALE ── */}
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-        <header className="h-14 md:h-16 header-glass flex items-center gap-3 px-4 flex-shrink-0 z-10">
+
+        {/* Header */}
+        <header className="header-glass flex items-center gap-3 px-4 flex-shrink-0 z-10"
+          style={{ height: 56 }}>
+          {/* Logo mobile */}
           <div className="flex md:hidden items-center gap-2.5">
-            <div className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0 shadow-sm"
+            <div className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0"
               style={{ background: "linear-gradient(135deg, #1D9E75, #16826C)" }}>
-              <Zap size={14} color="white" strokeWidth={2.5} />
+              <Zap size={13} color="white" strokeWidth={2} />
             </div>
-            <span className="font-bold text-slate-800 text-[14px] tracking-tight">AthleteOS</span>
+            <span style={{ fontWeight: 600, fontSize: 14, color: "var(--c-text-1)", letterSpacing: "-0.01em" }}>
+              AthleteOS
+            </span>
           </div>
-          <div className="hidden md:flex items-center gap-3">
-            {(() => { const Icon = currentNav?.icon; return Icon ? (
-              <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0" style={{ background: "rgba(29,158,117,0.10)" }}>
-                <Icon size={15} color="#1D9E75" strokeWidth={2} />
-              </div>
-            ) : null; })()}
-            <h1 className="text-[16px] font-bold text-slate-800 tracking-tight">{currentNav?.label ?? "Mon espace"}</h1>
+          {/* Titre vue — desktop */}
+          <div className="hidden md:flex items-center gap-2.5">
+            {(() => {
+              const Icon = currentNav?.icon;
+              return Icon ? (
+                <div className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0"
+                  style={{ background: "rgba(29,158,117,0.12)" }}>
+                  <Icon size={14} color="#1D9E75" strokeWidth={1.8} />
+                </div>
+              ) : null;
+            })()}
+            <h1 style={{ fontSize: 15, fontWeight: 500, color: "var(--c-text-1)", letterSpacing: "-0.01em" }}>
+              {currentNav?.label ?? "Mon espace"}
+            </h1>
           </div>
           <div className="flex-1" />
           <div className="hidden md:block">
@@ -315,6 +350,7 @@ export default function AthleteApp() {
           </div>
         </header>
 
+        {/* Main */}
         <main className="flex-1 overflow-y-auto pb-20 md:pb-0">
           <div key={viewKey} className="view-transition">
             {activeView === "dashboard" && (
@@ -358,7 +394,7 @@ export default function AthleteApp() {
         </main>
       </div>
 
-      {/* BOTTOM NAV MOBILE */}
+      {/* ── BOTTOM NAV MOBILE ── */}
       <nav className="md:hidden fixed bottom-0 left-0 right-0 z-30 bottom-nav">
         <div className="flex items-stretch justify-between w-full px-1" style={{ height: "60px" }}>
           {NAV_ITEMS.map(item => {
@@ -369,23 +405,28 @@ export default function AthleteApp() {
               <button key={item.id} onClick={() => navigate(item.id)}
                 className={["bottom-nav-item tap-feedback flex-1", isActive ? "active" : ""].join(" ")}>
                 <div className="relative">
-                  <Icon size={isActive ? 21 : 20} strokeWidth={isActive ? 2.2 : 1.6} />
+                  <Icon size={20} strokeWidth={isActive ? 2 : 1.5} />
                   {hasBadge && (
-                    <span className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-red-500 text-white text-[8px] font-bold flex items-center justify-center border-2 border-white animate-bounce-in">
+                    <span className="absolute animate-bounce-in"
+                      style={{ top: -5, right: -5, width: 14, height: 14, borderRadius: "50%", background: "#E05252", color: "white", fontSize: 8, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", border: "2px solid var(--c-bg)" }}>
                       {msgUnread}
                     </span>
                   )}
                 </div>
-                <span className="bottom-nav-label truncate max-w-[52px] text-center">{item.shortLabel ?? item.label}</span>
+                <span className="bottom-nav-label truncate max-w-[52px] text-center">
+                  {item.shortLabel ?? item.label}
+                </span>
               </button>
             );
           })}
+          {/* Notifs */}
           <button onClick={() => setShowNotifs(v => !v)}
             className={["bottom-nav-item tap-feedback flex-1", showNotifs ? "active" : ""].join(" ")}>
             <div className="relative">
-              <Bell size={showNotifs ? 21 : 20} strokeWidth={showNotifs ? 2.2 : 1.6} />
+              <Bell size={20} strokeWidth={showNotifs ? 2 : 1.5} />
               {unreadCount > 0 && (
-                <span className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-red-500 text-white text-[8px] font-bold flex items-center justify-center border-2 border-white animate-bounce-in">
+                <span className="absolute animate-bounce-in"
+                  style={{ top: -5, right: -5, width: 14, height: 14, borderRadius: "50%", background: "#E05252", color: "white", fontSize: 8, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", border: "2px solid var(--c-bg)" }}>
                   {unreadCount}
                 </span>
               )}
@@ -394,45 +435,63 @@ export default function AthleteApp() {
           </button>
         </div>
 
+        {/* Panel notifs */}
         {showNotifs && (
           <div className="fixed inset-0 z-40 bottom-sheet-backdrop" onClick={() => setShowNotifs(false)}>
             <div className="bottom-sheet" style={{ bottom: "calc(60px + env(safe-area-inset-bottom))" }}
               onClick={e => e.stopPropagation()}>
               <div className="bottom-sheet-handle" />
-              <div className="px-5 py-4 flex items-center justify-between flex-shrink-0">
-                <p className="text-[15px] font-semibold text-slate-800">Notifications</p>
+              <div className="px-5 py-4 flex items-center justify-between flex-shrink-0"
+                style={{ borderBottom: "1px solid var(--c-border)" }}>
+                <p style={{ fontSize: 14, fontWeight: 500, color: "var(--c-text-1)" }}>Notifications</p>
                 <div className="flex items-center gap-3">
                   <PushToggleButton subscribed={subscribed} onToggle={subscribe} permissionState={permissionState} />
                   {unreadCount > 0 && (
                     <button onClick={async () => {
                       await supabase.from("athlete_notifications").update({ is_read: true }).eq("athlete_id", athlete.id).eq("is_read", false);
                       fetchAll();
-                    }} className="text-[12px] font-semibold text-emerald-600">Tout lire</button>
+                    }} style={{ fontSize: 12, fontWeight: 500, color: "var(--c-accent)", background: "none", border: "none", cursor: "pointer" }}>
+                      Tout lire
+                    </button>
                   )}
                 </div>
               </div>
-              <div className="flex-1 overflow-y-auto divide-y divide-slate-50">
+              <div className="flex-1 overflow-y-auto">
                 {myNotifs.length === 0 ? (
                   <div className="px-5 py-12 text-center">
-                    <Bell size={20} className="mx-auto mb-3 text-slate-300" />
-                    <p className="text-[13px] text-slate-400 font-medium">Aucune notification</p>
+                    <Bell size={20} style={{ margin: "0 auto 10px", color: "var(--c-text-4)" }} />
+                    <p style={{ fontSize: 13, color: "var(--c-text-3)" }}>Aucune notification</p>
                   </div>
                 ) : myNotifs.map(n => {
                   const diff = (new Date() - new Date(n.created_at)) / 1000;
                   const ago  = diff < 60 ? "À l'instant" : diff < 3600 ? `${Math.floor(diff/60)}min` : diff < 86400 ? `${Math.floor(diff/3600)}h` : `${Math.floor(diff/86400)}j`;
                   return (
                     <div key={n.id}
-                      className={["px-5 py-4 cursor-pointer active:bg-slate-50 transition-colors", !n.is_read ? "bg-blue-50/40" : ""].join(" ")}
+                      className="tap-feedback"
+                      style={{
+                        padding: "14px 20px",
+                        borderBottom: "1px solid var(--c-border)",
+                        background: !n.is_read ? "rgba(29,158,117,0.05)" : "transparent",
+                        cursor: "pointer",
+                      }}
                       onClick={async () => {
                         if (!n.is_read) await supabase.from("athlete_notifications").update({ is_read: true }).eq("id", n.id);
                         fetchAll(); setShowNotifs(false);
                       }}>
                       <div className="flex items-start gap-3">
-                        {!n.is_read && <div className="w-2 h-2 rounded-full bg-blue-500 mt-1.5 flex-shrink-0 status-dot-live" />}
+                        {!n.is_read && (
+                          <div className="status-dot-live flex-shrink-0" style={{ marginTop: 5 }} />
+                        )}
                         <div className="flex-1 min-w-0">
-                          <p className="text-[13px] font-semibold text-slate-700 leading-tight">{n.title}</p>
-                          {n.description && <p className="text-[12px] text-slate-400 mt-0.5 line-clamp-2">{n.description}</p>}
-                          <p className="text-[10.5px] text-slate-300 mt-1.5 font-medium">{ago}</p>
+                          <p style={{ fontSize: 13, fontWeight: 500, color: "var(--c-text-1)", lineHeight: 1.3 }}>
+                            {n.title}
+                          </p>
+                          {n.description && (
+                            <p style={{ fontSize: 12, color: "var(--c-text-3)", marginTop: 2, lineHeight: 1.4 }} className="line-clamp-2">
+                              {n.description}
+                            </p>
+                          )}
+                          <p style={{ fontSize: 10, color: "var(--c-text-4)", marginTop: 5 }}>{ago}</p>
                         </div>
                       </div>
                     </div>
