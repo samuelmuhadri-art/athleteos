@@ -1,22 +1,9 @@
 // ============================================================
-// AthleteOS — src/athlete/views/AthletePlanning.jsx  ★ DESIGN PREMIUM
-//
-// Logique métier 100% identique à la version précédente.
-// Rendu entièrement repoli :
-//   - Header glassmorphism avec sélecteur de vue pill premium
-//   - Vue Agenda : timeline verticale avec date-badge colorée, cards avec
-//     liseré coloré catégorie + glow amber si RPE attendu
-//   - Vue Mois : grille premium, cellule aujourd'hui en dégradé vert,
-//     pills sessions compactes avec bordure gauche colorée
-//   - Vue Semaine : sélecteur jour horizontal premium, cards détaillées
-//   - SessionDetailModal : header en couleur catégorie, RPE avec couleur
-//     progressive (vert→amber→rouge), étoiles feeling animées
-//   - CreateSessionModal : header coloré réactif à la catégorie,
-//     chips catégorie styled, sélecteur athlètes avatar
-//   - Toutes les transitions spring via CSS premium (card, tap-feedback…)
+// AthleteOS — src/athlete/views/AthletePlanning.jsx  ★ DESIGN PREMIUM + PORTALS
 // ============================================================
 
 import { useState, useMemo, memo, useCallback } from "react";
+import { createPortal } from "react-dom"; // <-- RÉINTÉGRATION DU PORTAL
 import {
   Plus, ChevronLeft, ChevronRight, X, Clock, Star, CalendarDays,
   FileText, Users, AlertCircle, CheckCircle, Zap,
@@ -132,7 +119,8 @@ const CreateSessionModal = memo(({ athlete, allAthletes, clubId, createdBy, coac
 
   const others = allAthletes.filter(a => a.id !== athlete.id);
 
-  return (
+  // <-- RÉINTÉGRATION DE createPortal
+  return createPortal(
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4 modal-backdrop"
       onClick={e => e.target === e.currentTarget && !saving && onClose()}>
       <div className="bg-white rounded-t-3xl sm:rounded-3xl shadow-2xl w-full sm:max-w-md max-h-[95vh] flex flex-col overflow-hidden modal-content">
@@ -299,7 +287,8 @@ const CreateSessionModal = memo(({ athlete, allAthletes, clubId, createdBy, coac
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 });
 
@@ -320,7 +309,8 @@ const SessionDetailModal = memo(({ session, athlete, onClose, onSetStatus, onSet
   const status  = val?.status ?? null;
   const hasPerf = status === "done" || status === "partial";
 
-  return (
+  // <-- RÉINTÉGRATION DE createPortal
+  return createPortal(
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4 modal-backdrop"
       onClick={e => e.target === e.currentTarget && onClose()}>
       <div className="bg-white rounded-t-3xl sm:rounded-3xl shadow-2xl w-full max-w-lg max-h-[95vh] flex flex-col overflow-hidden modal-content">
@@ -494,7 +484,8 @@ const SessionDetailModal = memo(({ session, athlete, onClose, onSetStatus, onSet
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 });
 
@@ -699,7 +690,7 @@ export default function AthletePlanning({
       </div>
 
       {/* ══════════════════════════════════════════════════════════════════════
-          VUE AGENDA (liste chronologique)
+         VUE AGENDA (liste chronologique)
          ══════════════════════════════════════════════════════════════════════ */}
       {viewMode === "agenda" && (
         <div className="flex-1 overflow-y-auto">
@@ -770,7 +761,7 @@ export default function AthletePlanning({
       )}
 
       {/* ══════════════════════════════════════════════════════════════════════
-          VUE MOIS (grille calendrier)
+         VUE MOIS (grille calendrier)
          ══════════════════════════════════════════════════════════════════════ */}
       {viewMode === "month" && (
         <div className="flex-1 overflow-y-auto p-3 md:p-4">
@@ -863,7 +854,7 @@ export default function AthletePlanning({
       )}
 
       {/* ══════════════════════════════════════════════════════════════════════
-          VUE SEMAINE
+         VUE SEMAINE
          ══════════════════════════════════════════════════════════════════════ */}
       {viewMode === "week" && (
         <div className="flex-1 overflow-y-auto flex flex-col">
