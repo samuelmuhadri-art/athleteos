@@ -159,9 +159,17 @@ export default function AthleteApp() {
 
   const wellnessShownRef = useRef(false);
   useEffect(() => {
-    if (athlete && !wellnessToday && !loading && !wellnessShownRef.current) {
-      wellnessShownRef.current = true; setShowWellness(true);
-    }
+    if (!athlete || loading) return;
+    // Si déjà rempli aujourd'hui -> jamais afficher
+    if (wellnessToday) return;
+    // Clé unique par jour — évite le réaffichage au rechargement de page
+    const today = new Date().toISOString().split("T")[0];
+    const ssKey = `wellness_shown_${athlete.id}_${today}`;
+    if (sessionStorage.getItem(ssKey)) return;
+    if (wellnessShownRef.current) return;
+    wellnessShownRef.current = true;
+    sessionStorage.setItem(ssKey, "1");
+    setShowWellness(true);
   }, [athlete, wellnessToday, loading]);
 
   const handleRpe = useCallback(async (sid,aid,rpe) => {
