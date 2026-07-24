@@ -1,7 +1,6 @@
 // ============================================================
 // AthleteOS — src/athlete/components/WellnessModal.jsx
-// Extrait de AthleteApp.jsx — const WellnessModal = memo(...)
-// Zéro modification du code.
+// ★ DARK MODE + fermeture automatique après save
 // ============================================================
 
 import { useState, useMemo, memo } from "react";
@@ -22,10 +21,10 @@ const WellnessModal = memo(({ athlete, clubId, onClose, onSaved }) => {
   const answeredCount = Object.values(form).filter(v => v !== null).length;
   const previewScore  = useMemo(() => computeWellnessScore(form), [form]);
 
-  const scoreColor = previewScore === null ? "#94a3b8"
+  const scoreColor = previewScore === null ? "var(--c-text-3)"
     : previewScore >= 75 ? "#1D9E75"
-    : previewScore >= 50 ? "#EF9F27"
-    : "#E24B4A";
+    : previewScore >= 50 ? "#E8A020"
+    : "#E05252";
 
   const scoreLabel = previewScore === null ? "—"
     : previewScore >= 75 ? "Optimal"
@@ -49,8 +48,9 @@ const WellnessModal = memo(({ athlete, clubId, onClose, onSaved }) => {
         notes:    notes.trim() || null,
       }, { onConflict: "athlete_id,date" });
       if (error) throw error;
+      // Notifier le parent puis fermer immédiatement
       onSaved({ ...form, notes: notes.trim() || null, date: today });
-      onClose();
+      onClose(); // fermeture garantie
     } catch(e) {
       setErr(e.message ?? "Erreur lors de l'enregistrement");
       setSaving(false);
@@ -59,67 +59,94 @@ const WellnessModal = memo(({ athlete, clubId, onClose, onSaved }) => {
 
   return (
     <div
-      className="fixed inset-0 z-50 bottom-sheet-backdrop flex items-end sm:items-center justify-center sm:p-4"
+      style={{
+        position: "fixed", inset: 0, zIndex: 9999,
+        display: "flex", alignItems: "flex-end", justifyContent: "center",
+        background: "rgba(0,0,0,0.72)",
+        backdropFilter: "blur(10px)",
+        WebkitBackdropFilter: "blur(10px)",
+      }}
       onClick={e => e.target === e.currentTarget && onClose()}
     >
-      <div className="bottom-sheet sm:rounded-3xl w-full sm:max-w-md sm:static sm:transform-none flex flex-col overflow-hidden"
-        style={{ maxHeight: "92dvh" }}
-      >
-        <div className="bottom-sheet-handle sm:hidden" />
+      <div style={{
+        background: "var(--c-surface)",
+        borderRadius: "20px 20px 0 0",
+        border: "1px solid var(--c-border)",
+        borderBottom: "none",
+        width: "100%",
+        maxWidth: 480,
+        maxHeight: "92dvh",
+        display: "flex",
+        flexDirection: "column",
+        overflow: "hidden",
+        boxShadow: "0 -8px 40px rgba(0,0,0,0.50)",
+        animation: "sheet-up 0.32s cubic-bezier(0.16,1,0.3,1) both",
+      }}>
 
-        <div
-          className="px-5 pt-5 pb-4 flex-shrink-0 relative overflow-hidden"
-          style={{ background: "linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%)" }}
-        >
-          <div className="absolute -right-8 -top-8 w-32 h-32 rounded-full opacity-20"
-            style={{ background: "radial-gradient(circle, #1D9E75, transparent)" }} />
+        {/* Poignée */}
+        <div style={{ display: "flex", justifyContent: "center", paddingTop: 10, paddingBottom: 4, flexShrink: 0 }}>
+          <div style={{ width: 32, height: 3, borderRadius: 99, background: "var(--c-border-strong)" }} />
+        </div>
 
-          <div className="relative flex items-start justify-between gap-3">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-2xl flex items-center justify-center flex-shrink-0"
-                style={{ background: "rgba(29,158,117,0.15)" }}>
-                <Activity size={18} color="#1D9E75" strokeWidth={2} />
+        {/* Header dark */}
+        <div style={{
+          padding: "14px 20px 16px",
+          flexShrink: 0,
+          background: "rgba(29,158,117,0.08)",
+          borderBottom: "1px solid rgba(29,158,117,0.12)",
+        }}>
+          <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12, marginBottom: 14 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+              <div style={{ width: 38, height: 38, borderRadius: 10, background: "rgba(29,158,117,0.15)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                <Activity size={17} color="#1D9E75" strokeWidth={2} />
               </div>
               <div>
-                <h3 className="text-[15px] font-bold text-emerald-900 leading-tight">
+                <h3 style={{ fontSize: 14, fontWeight: 500, color: "var(--c-text-1)", lineHeight: 1.3 }}>
                   Comment tu vas ce matin ?
                 </h3>
-                <p className="text-[11.5px] text-emerald-600 mt-0.5">
+                <p style={{ fontSize: 11, color: "var(--c-text-3)", marginTop: 2 }}>
                   {new Date().toLocaleDateString("fr-BE", { weekday: "long", day: "numeric", month: "long" })}
                 </p>
               </div>
             </div>
             <button onClick={onClose}
-              className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0 bg-white/60 hover:bg-white/90 transition-colors tap-feedback">
-              <X size={16} className="text-emerald-700" />
+              style={{ width: 32, height: 32, borderRadius: 9, background: "var(--c-surface-2)", border: "1px solid var(--c-border)", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: "var(--c-text-2)", flexShrink: 0 }}>
+              <X size={15} />
             </button>
           </div>
 
-          <div className="relative mt-4 flex items-center gap-3 bg-white/70 rounded-2xl px-4 py-3">
-            <div className="flex-1">
-              <div className="flex items-center justify-between mb-1.5">
-                <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Progression</p>
-                <p className="text-[10px] font-semibold text-slate-400">{answeredCount} / {WELLNESS_QUESTIONS.length}</p>
+          {/* Barre de progression */}
+          <div style={{ display: "flex", alignItems: "center", gap: 12, background: "var(--c-surface-2)", borderRadius: 10, padding: "10px 14px" }}>
+            <div style={{ flex: 1 }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 5 }}>
+                <p style={{ fontSize: 9.5, fontWeight: 500, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--c-text-3)" }}>
+                  Progression
+                </p>
+                <p style={{ fontSize: 9.5, color: "var(--c-text-3)" }}>
+                  {answeredCount} / {WELLNESS_QUESTIONS.length}
+                </p>
               </div>
-              <div className="progress-bar">
-                <div className="progress-fill"
-                  style={{ width: `${(answeredCount / WELLNESS_QUESTIONS.length) * 100}%`, background: scoreColor }} />
+              <div style={{ height: 4, background: "var(--c-surface-3)", borderRadius: 99, overflow: "hidden" }}>
+                <div style={{ height: "100%", borderRadius: 99, background: scoreColor, width: `${(answeredCount / WELLNESS_QUESTIONS.length) * 100}%`, transition: "width 0.4s ease" }} />
               </div>
             </div>
             {previewScore !== null && (
-              <div className="flex-shrink-0 text-right">
-                <p className="text-[22px] font-black leading-none" style={{ color: scoreColor }}>{previewScore}</p>
-                <span className="chip mt-1" style={{ background: scoreColor + "18", color: scoreColor }}>{scoreLabel}</span>
+              <div style={{ textAlign: "right", flexShrink: 0 }}>
+                <p style={{ fontSize: 22, fontWeight: 600, color: scoreColor, fontVariantNumeric: "tabular-nums", letterSpacing: "-0.02em", lineHeight: 1 }}>
+                  {previewScore}
+                </p>
+                <p style={{ fontSize: 9.5, color: scoreColor, marginTop: 2, fontWeight: 500 }}>{scoreLabel}</p>
               </div>
             )}
           </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto px-5 py-5 space-y-6" style={{ overscrollBehavior: "contain" }}>
+        {/* Corps scrollable */}
+        <div style={{ flex: 1, overflowY: "auto", padding: "16px 20px", display: "flex", flexDirection: "column", gap: 20, overscrollBehavior: "contain" }}>
           {err && (
-            <div className="bg-red-50 border border-red-100 rounded-xl px-4 py-3 flex items-center gap-2.5">
-              <AlertTriangle size={14} className="text-red-500 flex-shrink-0" />
-              <p className="text-[12px] text-red-700">{err}</p>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, background: "rgba(224,82,82,0.10)", border: "1px solid rgba(224,82,82,0.20)", borderRadius: 10, padding: "10px 14px" }}>
+              <AlertTriangle size={14} color="#E05252" style={{ flexShrink: 0 }} />
+              <p style={{ fontSize: 12, color: "#E05252" }}>{err}</p>
             </div>
           )}
 
@@ -128,40 +155,48 @@ const WellnessModal = memo(({ athlete, clubId, onClose, onSaved }) => {
             const answered = form[q.key] !== null;
             return (
               <div key={q.key}>
-                <div className="flex items-center gap-2.5 mb-3">
-                  <div className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0"
-                    style={{ background: q.color + "15" }}>
-                    <Icon size={15} color={q.color} strokeWidth={2} />
+                {/* Label question */}
+                <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
+                  <div style={{ width: 30, height: 30, borderRadius: 8, background: q.color + "18", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                    <Icon size={14} color={q.color} strokeWidth={2} />
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <span className="text-[13px] font-semibold text-slate-800">{q.label}</span>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <span style={{ fontSize: 13, fontWeight: 500, color: "var(--c-text-1)" }}>{q.label}</span>
                     {q.inverted && (
-                      <span className="ml-2 text-[9.5px] font-semibold text-slate-300 uppercase tracking-wider">
-                        (moins = mieux)
+                      <span style={{ marginLeft: 6, fontSize: 9.5, fontWeight: 500, color: "var(--c-text-4)", textTransform: "uppercase", letterSpacing: "0.06em" }}>
+                        moins = mieux
                       </span>
                     )}
                   </div>
-                  {answered && <CheckCircle size={15} color="#1D9E75" className="flex-shrink-0" />}
+                  {answered && <CheckCircle size={14} color="#1D9E75" style={{ flexShrink: 0 }} />}
                 </div>
-                <div className="flex gap-1.5">
+
+                {/* Boutons 1-5 */}
+                <div style={{ display: "flex", gap: 6 }}>
                   {[1, 2, 3, 4, 5].map((v) => {
                     const selected   = form[q.key] === v;
                     const visualGood = q.inverted ? v <= 2 : v >= 4;
                     const visualBad  = q.inverted ? v >= 4 : v <= 2;
                     const btnColor   = selected
-                      ? (visualGood ? "#1D9E75" : visualBad ? "#E24B4A" : "#EF9F27")
+                      ? (visualGood ? "#1D9E75" : visualBad ? "#E05252" : "#E8A020")
                       : undefined;
                     return (
                       <button key={v}
                         onClick={() => setForm(f => ({ ...f, [q.key]: v }))}
-                        className={["flex-1 flex flex-col items-center justify-center gap-1 rounded-2xl border transition-all duration-150 tap-feedback select-none",
-                          selected ? "text-white shadow-sm scale-[1.03]" : "bg-white border-slate-200 text-slate-500 hover:border-slate-300 hover:bg-slate-50",
-                        ].join(" ")}
-                        style={{ minHeight: "60px", ...(selected ? { background: btnColor, borderColor: btnColor } : {}) }}
+                        style={{
+                          flex: 1, minHeight: 58,
+                          display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 3,
+                          borderRadius: 10, cursor: "pointer",
+                          border: `1.5px solid ${selected ? btnColor : "var(--c-border-strong)"}`,
+                          background: selected ? btnColor + "18" : "var(--c-surface-2)",
+                          transition: "all 0.12s ease",
+                          transform: selected ? "scale(1.04)" : "scale(1)",
+                        }}
                       >
-                        <span className="text-[17px] font-bold leading-none">{v}</span>
-                        <span className="text-[8px] font-semibold text-center leading-tight px-0.5"
-                          style={selected ? { color: "rgba(255,255,255,0.85)" } : { color: "#94a3b8" }}>
+                        <span style={{ fontSize: 17, fontWeight: 600, color: selected ? btnColor : "var(--c-text-1)", lineHeight: 1, fontVariantNumeric: "tabular-nums" }}>
+                          {v}
+                        </span>
+                        <span style={{ fontSize: 8, textAlign: "center", lineHeight: 1.2, padding: "0 2px", color: selected ? btnColor : "var(--c-text-3)" }}>
                           {q.desc[v - 1]}
                         </span>
                       </button>
@@ -172,34 +207,50 @@ const WellnessModal = memo(({ athlete, clubId, onClose, onSaved }) => {
             );
           })}
 
+          {/* Note optionnelle */}
           <div>
-            <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">
+            <label style={{ display: "block", fontSize: 9.5, fontWeight: 500, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--c-text-3)", marginBottom: 7 }}>
               Note (optionnel)
             </label>
             <textarea
-              className="w-full border-[1.5px] border-slate-200 rounded-2xl px-4 py-3 text-[13px] text-slate-700 focus:outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100 bg-white resize-none transition-all"
+              style={{ width: "100%", border: "1.5px solid var(--c-border-strong)", borderRadius: 10, padding: "10px 14px", fontSize: 13, color: "var(--c-text-1)", background: "var(--c-surface-2)", resize: "none", outline: "none", lineHeight: 1.5, boxSizing: "border-box" }}
               rows={2} placeholder="Contexte, ressenti particulier…"
               value={notes} onChange={e => setNotes(e.target.value)}
+              onFocus={e => e.target.style.borderColor = "#1D9E75"}
+              onBlur={e => e.target.style.borderColor = "var(--c-border-strong)"}
             />
           </div>
         </div>
 
-        <div className="px-5 py-4 border-t border-slate-100 flex items-center gap-3 flex-shrink-0"
-          style={{ paddingBottom: "calc(16px + env(safe-area-inset-bottom))" }}>
+        {/* Footer */}
+        <div style={{
+          padding: "12px 20px", paddingBottom: "calc(12px + env(safe-area-inset-bottom))",
+          borderTop: "1px solid var(--c-border)", display: "flex", alignItems: "center", gap: 10, flexShrink: 0,
+        }}>
           <button onClick={onClose} disabled={saving}
-            className="flex-shrink-0 flex items-center justify-center gap-1.5 px-5 rounded-2xl bg-slate-100 text-slate-600 text-[13px] font-medium hover:bg-slate-200 disabled:opacity-40 transition-colors tap-feedback"
-            style={{ minHeight: "44px" }}>
+            style={{ flexShrink: 0, minHeight: 44, padding: "0 16px", borderRadius: 10, background: "var(--c-surface-2)", border: "1px solid var(--c-border)", color: "var(--c-text-2)", fontSize: 13, fontWeight: 400, cursor: "pointer", display: "flex", alignItems: "center", gap: 6, opacity: saving ? 0.4 : 1 }}>
             Plus tard
           </button>
           <button onClick={handleSubmit} disabled={!allAnswered || saving}
-            className="flex-1 flex items-center justify-center gap-2 rounded-2xl text-white text-[13.5px] font-semibold disabled:opacity-40 transition-all tap-feedback"
-            style={{ minHeight: "44px", background: allAnswered ? "linear-gradient(135deg, #1D9E75 0%, #16826C 100%)" : "#94a3b8", boxShadow: allAnswered ? "0 4px 12px rgba(29,158,117,0.30)" : "none" }}>
+            style={{
+              flex: 1, minHeight: 44, borderRadius: 10, border: "none",
+              background: allAnswered ? "linear-gradient(135deg, #1D9E75, #16826C)" : "var(--c-surface-2)",
+              color: allAnswered ? "white" : "var(--c-text-3)",
+              fontSize: 13.5, fontWeight: 500, cursor: allAnswered ? "pointer" : "default",
+              display: "flex", alignItems: "center", justifyContent: "center", gap: 7,
+              boxShadow: allAnswered ? "0 4px 12px rgba(29,158,117,0.28)" : "none",
+              transition: "all 0.2s ease",
+              opacity: saving ? 0.7 : 1,
+            }}>
             {saving ? (
-              <><div className="loader-ring loader-ring-sm" />Enregistrement…</>
-            ) : (
-              <><CheckCircle size={15} strokeWidth={2.5} />
-                {allAnswered ? "Valider" : `${5 - answeredCount} question${5 - answeredCount > 1 ? "s" : ""} restante${5 - answeredCount > 1 ? "s" : ""}`}
+              <>
+                <div style={{ width: 14, height: 14, border: "2px solid rgba(255,255,255,0.3)", borderTopColor: "white", borderRadius: "50%", animation: "spin-smooth 0.65s linear infinite" }} />
+                Enregistrement…
               </>
+            ) : allAnswered ? (
+              <><CheckCircle size={15} strokeWidth={2} />Valider</>
+            ) : (
+              `${5 - answeredCount} question${5 - answeredCount > 1 ? "s" : ""} restante${5 - answeredCount > 1 ? "s" : ""}`
             )}
           </button>
         </div>
