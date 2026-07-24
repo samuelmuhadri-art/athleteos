@@ -10,6 +10,7 @@ import { supabase } from "../../utils/supabaseClient";
 import { notifyCoachMessage } from "../../utils/notifications";
 import LoadingState from "../../components/ui/LoadingState";
 import { initialsFromName } from "../shared";
+import { notifyAthleteMessage } from "../../utils/notifications";
 
 export default function AthleteMsgerie({
   athlete, coachUserId, athleteUserId, coachName, clubId, allAthletes,
@@ -43,13 +44,17 @@ export default function AthleteMsgerie({
         color: "#5B8DEF",
       }));
       const athleteContacts = (athleteRows ?? [])
-        .filter(a => a.user_id != null)
-        .map((a, idx) => ({
-          id: `athlete-${a.id}`, userId: a.user_id, name: a.name,
-          avatar: a.profile_data?.avatar ?? initialsFromName(a.name), type: "athlete",
-          subtitle: a.main_discipline ?? "Athlète",
-          color: COLORS[idx % COLORS.length],
-        }));
+  .filter(a => a.user_id != null)
+  .map((a, idx) => ({
+    id: `athlete-${a.id}`, 
+    athleteId: a.id, // <-- CORRECTION ICI
+    userId: a.user_id, 
+    name: a.name,
+    avatar: a.profile_data?.avatar ?? initialsFromName(a.name), 
+    type: "athlete",
+    subtitle: a.main_discipline ?? "Athlète",
+    color: COLORS[idx % COLORS.length],
+  }));
 
       const allContacts = [...coachContacts, ...athleteContacts];
       const allUserIds  = allContacts.map(c => c.userId).filter(Boolean);
@@ -148,10 +153,15 @@ export default function AthleteMsgerie({
         id: data.id, senderId: data.sender_id, receiverId: data.receiver_id,
         content: data.content, date: data.created_at, isRead: data.is_read,
       }]);
-      if (contact.type === "coach") notifyCoachMessage(contact.userId, athlete.name, text).catch(console.warn);
+      // <-- CORRECTION ICI : Notification Coach ou Athlète
+      if (contact.type === "coach") {
+        notifyCoachMessage(contact.userId, athlete.name, text).catch(console.warn);
+      } else if (contact.type === "athlete" && contact.athleteId) {
+        notifyAthleteMessage(clubId, contact.athleteId, athlete.name, text).catch(console.warn);
+      }
     }
     setSending(false);
-  }, [activeId, contacts, athleteUserId, athlete.name]);
+  }, [activeId, contacts, athleteUserId, athlete.name, clubId]);
 
   const handleKeyDown = useCallback((e) => {
     if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSend(draft); setDraft(""); }

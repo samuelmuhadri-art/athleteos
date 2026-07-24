@@ -199,3 +199,17 @@ export async function notifyAthleteCompetitionReminder(clubId, competition) {
   await supabase.from("athlete_notifications").insert(rows);
   await sendWebPush(competition.athleteIds, { title, body: description, tag: `comp-${competition.id}` });
 }
+
+// <-- AJOUT POUR LES PHOTOS BEREAL DU CLUB
+export async function notifyClubNewPost(clubId, authorName, allAthleteIds) {
+  if (!allAthleteIds?.length) return;
+  const title = `📸 Nouveau post de ${authorName}`;
+  const description = `${authorName} a partagé une séance dans le club !`;
+  
+  await sendWebPush(allAthleteIds, { 
+    title, 
+    body: description, 
+    url: "/", 
+    tag: "social" 
+  });
+}

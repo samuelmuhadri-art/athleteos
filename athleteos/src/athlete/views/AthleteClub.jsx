@@ -11,6 +11,7 @@ import { useState, useEffect, useMemo, useCallback, useRef, memo } from "react";
 import { Plus, X, Camera, Send, MessageSquare, Heart, Image, ChevronDown } from "lucide-react";
 import { supabase } from "../../utils/supabaseClient";
 import { initialsFromName, colorsFor, getISOWeek } from "../shared";
+import { notifyClubNewPost } from "../../utils/notifications";
 
 const AVATAR_COLORS = ["#1D9E75","#5B8DEF","#9B84F0","#E8A020","#E05252","#14B8A6","#F97316","#EC4899"];
 const QUICK_REACTIONS = ["🔥","💪","👏","⚡","🎯","❤️"];
@@ -172,7 +173,7 @@ const QuickPostModal = memo(({ session, athlete, allAthletes, clubId, onClose, o
     setImage(f); setPreview(URL.createObjectURL(f));
   };
 
-  const post = async () => {
+ const post = async () => {
     setPosting(true); setErr(null);
     try {
       let imageUrl = null;
@@ -195,6 +196,8 @@ const QuickPostModal = memo(({ session, athlete, allAthletes, clubId, onClose, o
       // Notifier les autres athlètes (pas le coach)
       const otherAthletes = allAthletes.filter(a => a.id !== athlete.id && a.user_id);
       if (otherAthletes.length > 0) {
+        
+        // 1. Sauvegarde dans ta base de données (Ton Code 2)
         await supabase.from("athlete_notifications").insert(
           otherAthletes.map(a => ({
             athlete_id:  a.id,
@@ -205,6 +208,10 @@ const QuickPostModal = memo(({ session, athlete, allAthletes, clubId, onClose, o
             is_read:     false,
           }))
         );
+
+        // 2. L'alerte de notification (Ton Code 1) 👇
+        const otherAthleteIds = otherAthletes.map(a => a.id);
+        notifyClubNewPost(clubId, athlete.name, otherAthleteIds).catch(console.warn);
       }
 
       onPosted(); onClose();
