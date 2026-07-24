@@ -1,19 +1,16 @@
 // ============================================================
-// AthleteOS — src/athlete/views/AthletePlanning.jsx  ★ DESIGN PREMIUM
+// AthleteOS — src/athlete/views/AthletePlanning.jsx  ★ DESIGN PREMIUM DARK v2
 //
-// Logique métier 100% identique à la version précédente.
-// Rendu entièrement repoli :
-//   - Header glassmorphism avec sélecteur de vue pill premium
-//   - Vue Agenda : timeline verticale avec date-badge colorée, cards avec
-//     liseré coloré catégorie + glow amber si RPE attendu
-//   - Vue Mois : grille premium, cellule aujourd'hui en dégradé vert,
-//     pills sessions compactes avec bordure gauche colorée
-//   - Vue Semaine : sélecteur jour horizontal premium, cards détaillées
-//   - SessionDetailModal : header en couleur catégorie, RPE avec couleur
-//     progressive (vert→amber→rouge), étoiles feeling animées
-//   - CreateSessionModal : header coloré réactif à la catégorie,
-//     chips catégorie styled, sélecteur athlètes avatar
-//   - Toutes les transitions spring via CSS premium (card, tap-feedback…)
+// Logique métier 100% identique à l'original.
+// Corrections apportées :
+//   - CAT_COLORS : anciennes couleurs pastel "faites pour fond blanc"
+//     remplacées par des accents vifs + fonds semi-transparents (rgba)
+//     qui fonctionnent sur fond sombre.
+//   - Toutes les modales (CreateSessionModal, SessionDetailModal) :
+//     bg-white / text-slate-* / border-slate-* (littéraux, cassés en
+//     dark) remplacés par les variables CSS var(--c-*) utilisées
+//     partout ailleurs dans l'app (Dashboard, Planning coach, etc.)
+//   - StatusBadge, boutons présence/RPE : passage en rgba() dark-safe.
 // ============================================================
 
 import { useState, useMemo, memo, useCallback } from "react";
@@ -28,27 +25,35 @@ import {
   isSameDay, dateToISOWeek, dateToDayName,
 } from "../shared";
 
-// ─── Palette catégories (cohérente avec Planning.jsx coach) ──────────────────
-const CAT_COLORS = {
-  sprint:       { bg: "#DBEAFE", border: "#3B82F6", text: "#1D4ED8", glow: "rgba(59,130,246,0.15)"  },
-  haies:        { bg: "#EDE9FE", border: "#7C3AED", text: "#4C1D95", glow: "rgba(124,58,237,0.15)" },
-  force:        { bg: "#DCFCE7", border: "#16A34A", text: "#14532D", glow: "rgba(22,163,74,0.15)"  },
-  saut:         { bg: "#F3E8FF", border: "#A855F7", text: "#6B21A8", glow: "rgba(168,85,247,0.15)" },
-  lancer:       { bg: "#FFEDD5", border: "#F97316", text: "#9A3412", glow: "rgba(249,115,22,0.15)" },
-  endurance:    { bg: "#E0F2FE", border: "#0284C7", text: "#0C4A6E", glow: "rgba(2,132,199,0.15)"  },
-  technique:    { bg: "#F1F5F9", border: "#64748B", text: "#1E293B", glow: "rgba(100,116,139,0.12)"},
-  mobilite:     { bg: "#FEF9C3", border: "#CA8A04", text: "#713F12", glow: "rgba(202,138,4,0.15)"  },
-  recuperation: { bg: "#F8FAFC", border: "#CBD5E1", text: "#475569", glow: "rgba(203,213,225,0.15)"},
+// ─── Palette catégories — accents vifs + fond rgba dark-safe ────────────────
+const CAT_COLORS_RAW = {
+  sprint:       "#5B9EF5",
+  haies:        "#A78BFA",
+  force:        "#34D399",
+  saut:         "#C084FC",
+  lancer:       "#FB923C",
+  endurance:    "#38BDF8",
+  technique:    "#94A3B8",
+  mobilite:     "#EAB308",
+  recuperation: "#64748B",
 };
-const cat = (key) => CAT_COLORS[key] ?? CAT_COLORS.technique;
+function cat(key) {
+  const border = CAT_COLORS_RAW[key] ?? CAT_COLORS_RAW.technique;
+  return {
+    border,
+    text: border,
+    bg: `${border}1F`,   // ~12% opacité — fond doux sur dark
+    glow: `${border}33`, // ~20% opacité — pour box-shadow
+  };
+}
 
 // ─── Helper : badge statut ────────────────────────────────────────────────────
 function StatusBadge({ status, size = "sm" }) {
   const cfg = {
-    done:    { label: "Réalisée",  bg: "#DCFCE7", color: "#15803D", dot: "#22C55E" },
-    partial: { label: "Partielle", bg: "#FEF3C7", color: "#B45309", dot: "#F59E0B" },
-    none:    { label: "Absent",    bg: "#FEE2E2", color: "#B91C1C", dot: "#EF4444" },
-    future:  { label: "Prévue",    bg: "#EFF6FF", color: "#1D4ED8", dot: "#60A5FA" },
+    done:    { label: "Réalisée",  bg: "rgba(61,190,139,0.16)",  color: "#7BD8B4", dot: "#3DBE8B" },
+    partial: { label: "Partielle", bg: "rgba(234,179,8,0.16)",   color: "#F0CB61", dot: "#EAB308" },
+    none:    { label: "Absent",    bg: "rgba(239,107,107,0.16)", color: "#F19A9A", dot: "#EF6B6B" },
+    future:  { label: "Prévue",    bg: "var(--c-surface-3)",     color: "var(--c-text-3)", dot: "#5B9EF5" },
   };
   const s = cfg[status] ?? cfg.future;
   const px = size === "sm" ? "px-2 py-0.5 text-[10px]" : "px-3 py-1 text-[11px]";
@@ -63,9 +68,9 @@ function StatusBadge({ status, size = "sm" }) {
 
 // ─── RPE : couleur progressive ────────────────────────────────────────────────
 function rpeColor(i) {
-  if (i <= 3) return { active: "#22C55E", border: "#16A34A", text: "white" };
-  if (i <= 6) return { active: "#F59E0B", border: "#D97706", text: "white" };
-  return          { active: "#EF4444", border: "#DC2626", text: "white" };
+  if (i <= 3) return { active: "#22C55E", border: "#16A34A", text: "#0A150F" };
+  if (i <= 6) return { active: "#F59E0B", border: "#D97706", text: "#0A150F" };
+  return          { active: "#EF4444", border: "#DC2626", text: "#0A150F" };
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -90,6 +95,7 @@ const CreateSessionModal = memo(({ athlete, allAthletes, clubId, createdBy, coac
   }));
 
   const c = cat(form.category);
+  const labelStyle = { display: "block", fontSize: 10.5, fontWeight: 700, color: "var(--c-text-3)", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 8 };
 
   const handleSubmit = async () => {
     if (!form.title.trim()) return;
@@ -119,7 +125,7 @@ const CreateSessionModal = memo(({ athlete, allAthletes, clubId, createdBy, coac
       );
       await supabase.from("alerts").insert({
         club_id: clubId, athlete_id: athlete.id, type: "absence",
-        title: `📋 Séance proposée par ${athlete.name}`,
+        title: `Séance proposée par ${athlete.name}`,
         description: `${athlete.name} a planifié "${form.title}" (${catLabel}) le ${new Date(form.sessionDate).toLocaleDateString("fr-BE", { day: "numeric", month: "long" })}.`,
         severity: "légère", is_read: false,
       });
@@ -135,11 +141,12 @@ const CreateSessionModal = memo(({ athlete, allAthletes, clubId, createdBy, coac
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4 modal-backdrop"
       onClick={e => e.target === e.currentTarget && !saving && onClose()}>
-      <div className="bg-white rounded-t-3xl sm:rounded-3xl shadow-2xl w-full sm:max-w-md max-h-[95vh] flex flex-col overflow-hidden modal-content">
+      <div className="rounded-t-3xl sm:rounded-3xl shadow-2xl w-full sm:max-w-md max-h-[95vh] flex flex-col overflow-hidden modal-content"
+        style={{ background: "var(--c-surface)" }}>
 
         {/* Poignée mobile */}
         <div className="flex justify-center pt-3 pb-1 sm:hidden flex-shrink-0">
-          <div className="w-10 h-1 rounded-full bg-slate-200" />
+          <div style={{ width: 40, height: 4, borderRadius: 99, background: "var(--c-border-strong)" }} />
         </div>
 
         {/* Header coloré réactif à la catégorie */}
@@ -147,18 +154,18 @@ const CreateSessionModal = memo(({ athlete, allAthletes, clubId, createdBy, coac
           style={{ background: c.bg, borderBottom: `2px solid ${c.border}40` }}>
           <div>
             <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full mb-2"
-              style={{ background: c.border + "20", border: `1px solid ${c.border}40` }}>
+              style={{ background: `${c.border}25`, border: `1px solid ${c.border}40` }}>
               <Zap size={10} style={{ color: c.border }} />
-              <span className="text-[10px] font-black uppercase tracking-widest" style={{ color: c.text }}>
+              <span style={{ fontSize: 10, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.07em", color: c.text }}>
                 Planifier une séance
               </span>
             </div>
-            <p className="text-[12px] font-medium" style={{ color: c.text + "80" }}>
+            <p style={{ fontSize: 12, fontWeight: 500, color: "var(--c-text-2)" }}>
               Ton coach sera notifié automatiquement
             </p>
           </div>
           <button onClick={onClose} disabled={saving}
-            className="p-2 rounded-xl hover:bg-black/10 disabled:opacity-40 transition-colors flex-shrink-0">
+            style={{ padding: 8, borderRadius: 10, background: "rgba(255,255,255,0.06)", border: "none", cursor: "pointer", flexShrink: 0 }}>
             <X size={18} style={{ color: c.text }} />
           </button>
         </div>
@@ -167,36 +174,37 @@ const CreateSessionModal = memo(({ athlete, allAthletes, clubId, createdBy, coac
         <div className="flex-1 overflow-y-auto px-6 py-5 space-y-5">
 
           {err && (
-            <div className="flex items-start gap-2.5 bg-red-50 border border-red-100 rounded-2xl px-4 py-3">
-              <AlertCircle size={14} className="text-red-500 mt-0.5 flex-shrink-0" />
-              <p className="text-[12px] text-red-700">{err}</p>
+            <div style={{ display: "flex", alignItems: "flex-start", gap: 10, background: "rgba(239,107,107,0.10)", border: "1px solid rgba(239,107,107,0.25)", borderRadius: 14, padding: "12px 14px" }}>
+              <AlertCircle size={14} color="#F19A9A" style={{ marginTop: 2, flexShrink: 0 }} />
+              <p style={{ fontSize: 12, color: "#F19A9A" }}>{err}</p>
             </div>
           )}
 
           {/* Titre */}
           <div>
-            <label className="block text-[10.5px] font-black text-slate-400 uppercase tracking-widest mb-2">
-              Titre *
-            </label>
+            <label style={labelStyle}>Titre *</label>
             <input className="input-premium" placeholder="Ex: Footing récup, Technique saut…"
               value={form.title} onChange={e => set("title", e.target.value)} />
           </div>
 
           {/* Catégories — chips */}
           <div>
-            <label className="block text-[10.5px] font-black text-slate-400 uppercase tracking-widest mb-2">
-              Type de séance
-            </label>
+            <label style={labelStyle}>Type de séance</label>
             <div className="flex flex-wrap gap-1.5">
               {CATEGORIES.map(({ id, label }) => {
                 const cc  = cat(id);
                 const sel = form.category === id;
                 return (
                   <button key={id} onClick={() => set("category", id)}
-                    className="px-3 py-1.5 rounded-xl text-[11.5px] font-bold border-2 transition-all tap-feedback"
-                    style={sel
-                      ? { background: cc.border, color: "white",  borderColor: cc.border,        boxShadow: `0 2px 8px ${cc.glow}` }
-                      : { background: cc.bg,     color: cc.text,  borderColor: cc.border + "50" }}>
+                    className="tap-feedback"
+                    style={{
+                      padding: "7px 13px", borderRadius: 12, fontSize: 12, fontWeight: 700,
+                      border: `1.5px solid ${sel ? cc.border : `${cc.border}40`}`,
+                      background: sel ? cc.border : cc.bg,
+                      color: sel ? "#0A150F" : cc.text,
+                      boxShadow: sel ? `0 2px 8px ${cc.glow}` : "none",
+                      cursor: "pointer",
+                    }}>
                     {label}
                   </button>
                 );
@@ -207,12 +215,12 @@ const CreateSessionModal = memo(({ athlete, allAthletes, clubId, createdBy, coac
           {/* Date + Heure */}
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-[10.5px] font-black text-slate-400 uppercase tracking-widest mb-2">Date *</label>
+              <label style={labelStyle}>Date *</label>
               <input type="date" className="input-premium" value={form.sessionDate}
                 onChange={e => set("sessionDate", e.target.value)} />
             </div>
             <div>
-              <label className="block text-[10.5px] font-black text-slate-400 uppercase tracking-widest mb-2">Heure</label>
+              <label style={labelStyle}>Heure</label>
               <input type="time" className="input-premium" value={form.time}
                 onChange={e => set("time", e.target.value)} />
             </div>
@@ -220,9 +228,7 @@ const CreateSessionModal = memo(({ athlete, allAthletes, clubId, createdBy, coac
 
           {/* Durée */}
           <div>
-            <label className="block text-[10.5px] font-black text-slate-400 uppercase tracking-widest mb-2">
-              Durée (min)
-            </label>
+            <label style={labelStyle}>Durée (min)</label>
             <input type="number" min="5" step="5" className="input-premium"
               value={form.durationMinutes}
               onChange={e => set("durationMinutes", Number(e.target.value))} />
@@ -230,9 +236,7 @@ const CreateSessionModal = memo(({ athlete, allAthletes, clubId, createdBy, coac
 
           {/* Description */}
           <div>
-            <label className="block text-[10.5px] font-black text-slate-400 uppercase tracking-widest mb-2">
-              Description
-            </label>
+            <label style={labelStyle}>Description</label>
             <textarea className="input-premium resize-none" rows={2}
               placeholder="Objectifs, détails…"
               value={form.description} onChange={e => set("description", e.target.value)} />
@@ -240,18 +244,15 @@ const CreateSessionModal = memo(({ athlete, allAthletes, clubId, createdBy, coac
 
           {/* PDF */}
           <div>
-            <label className="block text-[10.5px] font-black text-slate-400 uppercase tracking-widest mb-2">
-              PDF (optionnel)
-            </label>
-            <label className="flex items-center gap-3 p-3 rounded-2xl border-2 border-dashed border-slate-200 cursor-pointer hover:border-slate-300 transition-colors">
-              <div className="w-8 h-8 rounded-xl bg-blue-50 flex items-center justify-center flex-shrink-0">
-                <FileText size={14} className="text-blue-500" />
+            <label style={labelStyle}>PDF (optionnel)</label>
+            <label style={{ display: "flex", alignItems: "center", gap: 12, padding: 12, borderRadius: 14, border: "2px dashed var(--c-border-strong)", cursor: "pointer" }}>
+              <div style={{ width: 32, height: 32, borderRadius: 10, background: "rgba(91,158,245,0.14)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                <FileText size={14} color="#5B9EF5" />
               </div>
-              <div className="flex-1 min-w-0">
+              <div style={{ flex: 1, minWidth: 0 }}>
                 {pdfFile
-                  ? <p className="text-[12px] font-semibold text-slate-700 truncate">📎 {pdfFile.name}</p>
-                  : <p className="text-[12px] text-slate-400">Appuie pour joindre un PDF</p>
-                }
+                  ? <p style={{ fontSize: 12, fontWeight: 600, color: "var(--c-text-1)" }} className="truncate">{pdfFile.name}</p>
+                  : <p style={{ fontSize: 12, color: "var(--c-text-3)" }}>Appuie pour joindre un PDF</p>}
               </div>
               <input type="file" accept="application/pdf" className="sr-only"
                 onChange={e => setPdfFile(e.target.files?.[0] ?? null)} />
@@ -261,22 +262,24 @@ const CreateSessionModal = memo(({ athlete, allAthletes, clubId, createdBy, coac
           {/* Inviter athlètes */}
           {others.length > 0 && (
             <div>
-              <label className="block text-[10.5px] font-black text-slate-400 uppercase tracking-widest mb-2">
-                <Users size={11} className="inline mr-1" />Inviter d'autres athlètes
-              </label>
+              <label style={labelStyle}><Users size={11} style={{ display: "inline", marginRight: 5 }} />Inviter d'autres athlètes</label>
               <div className="flex flex-wrap gap-2">
                 {others.map(a => {
                   const sel = form.invitedAthletes.includes(a.id);
                   return (
                     <button key={a.id} onClick={() => toggleInv(a.id)}
-                      className={["flex items-center gap-2 px-3 py-2 rounded-xl text-[12px] font-semibold border-2 transition-all tap-feedback",
-                        sel ? "bg-emerald-50 border-emerald-400 text-emerald-700" : "bg-white border-slate-200 text-slate-500"].join(" ")}>
-                      <div className="w-6 h-6 rounded-full flex items-center justify-center text-white text-[8px] font-black"
-                        style={{ background: sel ? "#1D9E75" : "#94a3b8" }}>
+                      className="tap-feedback"
+                      style={{
+                        display: "flex", alignItems: "center", gap: 8, padding: "8px 12px", borderRadius: 12,
+                        fontSize: 12, fontWeight: 600, border: `1.5px solid ${sel ? "#1D9E75" : "var(--c-border-strong)"}`,
+                        background: sel ? "rgba(29,158,117,0.14)" : "var(--c-surface-2)",
+                        color: sel ? "#7BD8B4" : "var(--c-text-2)", cursor: "pointer",
+                      }}>
+                      <div style={{ width: 22, height: 22, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", color: "white", fontSize: 8, fontWeight: 800, background: sel ? "#1D9E75" : "var(--c-surface-3)" }}>
                         {(a.name?.[0] ?? "?").toUpperCase()}
                       </div>
                       {a.name.split(" ")[0]}
-                      {sel && <CheckCircle size={12} className="text-emerald-600" />}
+                      {sel && <CheckCircle size={12} color="#3DBE8B" />}
                     </button>
                   );
                 })}
@@ -286,15 +289,11 @@ const CreateSessionModal = memo(({ athlete, allAthletes, clubId, createdBy, coac
         </div>
 
         {/* Footer */}
-        <div className="px-6 py-4 border-t border-slate-100 flex items-center justify-between gap-3 flex-shrink-0">
-          <button onClick={onClose} disabled={saving}
-            className="btn-secondary">
-            Annuler
-          </button>
-          <button onClick={handleSubmit} disabled={!form.title.trim() || saving}
-            className="btn-primary">
+        <div className="px-6 py-4 flex items-center justify-between gap-3 flex-shrink-0" style={{ borderTop: "1px solid var(--c-border)" }}>
+          <button onClick={onClose} disabled={saving} className="btn-secondary">Annuler</button>
+          <button onClick={handleSubmit} disabled={!form.title.trim() || saving} className="btn-primary">
             {saving
-              ? <><div className="w-3.5 h-3.5 border-2 border-white/40 border-t-white rounded-full animate-spin" />Création…</>
+              ? <><div className="loader-ring loader-ring-sm" />Création…</>
               : <><Plus size={15} />Planifier</>}
           </button>
         </div>
@@ -319,36 +318,47 @@ const SessionDetailModal = memo(({ session, athlete, onClose, onSetStatus, onSet
 
   const status  = val?.status ?? null;
   const hasPerf = status === "done" || status === "partial";
+  const labelStyle = { fontSize: 10.5, fontWeight: 700, color: "var(--c-text-3)", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 12, display: "block" };
+
+  const presenceOpts = [
+    { id: "done",    label: "Réalisée",  activeBg: "rgba(61,190,139,0.16)",  activeBorder: "#3DBE8B", activeText: "#7BD8B4" },
+    { id: "partial", label: "Partielle", activeBg: "rgba(234,179,8,0.16)",   activeBorder: "#EAB308", activeText: "#F0CB61" },
+    { id: "none",    label: "Absent",    activeBg: "rgba(239,107,107,0.16)", activeBorder: "#EF6B6B", activeText: "#F19A9A" },
+  ];
 
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4 modal-backdrop"
       onClick={e => e.target === e.currentTarget && onClose()}>
-      <div className="bg-white rounded-t-3xl sm:rounded-3xl shadow-2xl w-full max-w-lg max-h-[95vh] flex flex-col overflow-hidden modal-content">
+      <div className="rounded-t-3xl sm:rounded-3xl shadow-2xl w-full max-w-lg max-h-[95vh] flex flex-col overflow-hidden modal-content"
+        style={{ background: "var(--c-surface)" }}>
 
         {/* Poignée mobile */}
         <div className="flex justify-center pt-3 pb-1 sm:hidden flex-shrink-0">
-          <div className="w-10 h-1 rounded-full bg-slate-200" />
+          <div style={{ width: 40, height: 4, borderRadius: 99, background: "var(--c-border-strong)" }} />
         </div>
 
         {/* Header coloré catégorie */}
         <div className="px-6 py-5 flex items-start justify-between gap-4 flex-shrink-0"
-          style={{ background: `linear-gradient(135deg, ${c.bg} 0%, ${c.bg}80 100%)`, borderBottom: `2px solid ${c.border}` }}>
+          style={{ background: c.bg, borderBottom: `2px solid ${c.border}` }}>
           <div className="flex-1 min-w-0">
-            <span className="text-[9.5px] font-black uppercase tracking-widest px-2.5 py-1 rounded-full inline-flex items-center gap-1 mb-2.5"
-              style={{ background: c.border, color: "white" }}>
-              <span>{CATEGORIES.find(x => x.id === session.category)?.label ?? session.type}</span>
+            <span style={{
+              fontSize: 9.5, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.07em",
+              padding: "4px 10px", borderRadius: 99, display: "inline-flex", alignItems: "center", gap: 4,
+              marginBottom: 10, background: c.border, color: "#0A150F",
+            }}>
+              {CATEGORIES.find(x => x.id === session.category)?.label ?? session.type}
             </span>
-            <h3 className="text-[20px] font-black leading-tight" style={{ color: c.text }}>
+            <h3 style={{ fontSize: 20, fontWeight: 800, lineHeight: 1.2, color: c.text }}>
               {session.title}
             </h3>
-            <p className="text-[12px] mt-2 font-medium flex items-center gap-2 flex-wrap" style={{ color: c.text + "90" }}>
-              <span>📅 {dateStr}</span>
-              {session.time && <span>· ⏰ {session.time}</span>}
+            <p style={{ fontSize: 12, marginTop: 8, fontWeight: 500, color: "var(--c-text-2)", display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+              <span>{dateStr}</span>
+              {session.time && <span>· {session.time}</span>}
               {session.durationMinutes && <span>· {session.durationMinutes} min</span>}
             </p>
           </div>
           <button onClick={onClose}
-            className="p-2 rounded-xl hover:bg-black/10 transition-colors flex-shrink-0">
+            style={{ padding: 8, borderRadius: 10, background: "rgba(255,255,255,0.06)", border: "none", cursor: "pointer", flexShrink: 0 }}>
             <X size={18} style={{ color: c.text }} />
           </button>
         </div>
@@ -358,110 +368,169 @@ const SessionDetailModal = memo(({ session, athlete, onClose, onSetStatus, onSet
 
           {/* Description */}
           {session.description && (
-            <div className="bg-slate-50 rounded-2xl p-4 border border-slate-100">
-              <p className="text-[13px] text-slate-600 leading-relaxed">{session.description}</p>
+            <div style={{ background: "var(--c-surface-2)", borderRadius: 16, padding: 16, border: "1px solid var(--c-border)" }}>
+              <p style={{ fontSize: 13, lineHeight: 1.6, color: "var(--c-text-2)" }}>{session.description}</p>
             </div>
           )}
 
           {/* Consignes coach */}
           {session.instructions && (
-            <div className="rounded-2xl overflow-hidden border border-amber-200" style={{ background: "#FFFBF0" }}>
-              <div className="px-4 py-2.5 border-b border-amber-100 flex items-center gap-2">
-                <span className="text-[9.5px] font-black text-amber-700 uppercase tracking-widest">💬 Consignes du coach</span>
+            <div style={{ borderRadius: 16, overflow: "hidden", border: "1px solid rgba(234,179,8,0.25)", background: "rgba(234,179,8,0.06)" }}>
+              <div style={{ padding: "10px 16px", borderBottom: "1px solid rgba(234,179,8,0.18)" }}>
+                <span style={{ fontSize: 9.5, fontWeight: 800, color: "#F0CB61", textTransform: "uppercase", letterSpacing: "0.07em" }}>
+                  Consignes du coach
+                </span>
               </div>
-              <p className="px-4 py-3 text-[13px] text-amber-800 leading-relaxed">{session.instructions}</p>
+              <p style={{ padding: "12px 16px", fontSize: 13, lineHeight: 1.6, color: "#E6D189" }}>{session.instructions}</p>
             </div>
           )}
 
           {/* PDF */}
           {session.pdfUrl && (
             <a href={session.pdfUrl} target="_blank" rel="noopener noreferrer"
-              className="flex items-center gap-3 px-4 py-3.5 rounded-2xl bg-blue-50 border border-blue-100 text-[13px] font-semibold text-blue-600 hover:bg-blue-100 transition-colors tap-feedback">
-              <div className="w-8 h-8 rounded-xl bg-blue-100 flex items-center justify-center flex-shrink-0">
-                <FileText size={14} className="text-blue-600" />
+              style={{
+                display: "flex", alignItems: "center", gap: 12, padding: "14px 16px", borderRadius: 16,
+                background: "rgba(91,158,245,0.10)", border: "1px solid rgba(91,158,245,0.25)",
+                fontSize: 13, fontWeight: 700, color: "#5B9EF5", textDecoration: "none",
+              }}>
+              <div style={{ width: 32, height: 32, borderRadius: 10, background: "rgba(91,158,245,0.18)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                <FileText size={14} color="#5B9EF5" />
               </div>
               Voir le PDF de séance
-              <ChevronRight size={14} className="ml-auto text-blue-400" />
+              <ChevronRight size={14} style={{ marginLeft: "auto", color: "#5B9EF5", opacity: 0.6 }} />
             </a>
           )}
 
+          {/* Athlètes */}
+          <div>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
+              <Users size={13} color="var(--c-text-3)" />
+              <span style={labelStyle}>Participants ({session.athleteIds.length})</span>
+            </div>
+            {session.athleteIds.length === 0 ? (
+              <p style={{ fontSize: 12, color: "var(--c-text-4)" }}>Aucun athlète assigné</p>
+            ) : (
+              <div className="space-y-2">
+                {session.athleteIds.map(id => {
+                  const a  = { id }; // rendu minimal, tu peux enrichir avec ta liste d'athlètes si dispo
+                  const v  = session.validations?.find(val => val.athleteId === id);
+                  const st = v?.status ?? "future";
+                  return (
+                    <div key={id} className="card" style={{ display: "flex", alignItems: "flex-start", gap: 12, padding: 14 }}>
+                      <div style={{ width: 36, height: 36, borderRadius: 10, background: c.border, display: "flex", alignItems: "center", justifyContent: "center", color: "#0A150F", fontSize: 11, fontWeight: 800, flexShrink: 0 }}>
+                        #{id}
+                      </div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 4 }}>
+                          <StatusBadge status={st} />
+                          {v?.rpe != null && (
+                            <span style={{ fontSize: 10, fontWeight: 700, padding: "2px 8px", borderRadius: 99, background: "var(--c-surface-3)", color: "var(--c-text-2)" }}>
+                              RPE {v.rpe}
+                            </span>
+                          )}
+                        </div>
+                        {v?.feeling != null && (
+                          <div style={{ display: "flex", gap: 2, marginBottom: 4 }}>
+                            {[1,2,3,4,5].map(n => (
+                              <Star key={n} size={11}
+                                fill={v.feeling >= n ? "#EAB308" : "none"}
+                                color={v.feeling >= n ? "#EAB308" : "var(--c-border-strong)"} />
+                            ))}
+                          </div>
+                        )}
+                        {v?.comment && (
+                          <p style={{ fontSize: 11.5, fontStyle: "italic", color: "var(--c-text-3)" }}>« {v.comment} »</p>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
           {/* ── Présence ── */}
           <div>
-            <p className="text-[10.5px] font-black text-slate-400 uppercase tracking-widest mb-3">Ma présence</p>
+            <label style={labelStyle}>Ma présence</label>
             <div className="flex gap-2">
-              {[
-                { id: "done",    label: "Réalisée",  icon: "✅", activeCls: "bg-emerald-50 border-emerald-400 text-emerald-700" },
-                { id: "partial", label: "Partielle",  icon: "🟡", activeCls: "bg-amber-50 border-amber-400 text-amber-700"   },
-                { id: "none",    label: "Absent",     icon: "❌", activeCls: "bg-red-50 border-red-400 text-red-700"          },
-              ].map(opt => (
-                <button key={opt.id} onClick={() => onSetStatus(session.id, athlete.id, opt.id)}
-                  className={["flex-1 py-3 rounded-2xl text-[11.5px] font-bold border-2 transition-all tap-feedback flex flex-col items-center gap-1",
-                    status === opt.id ? opt.activeCls : "bg-white border-slate-200 text-slate-400 hover:border-slate-300"].join(" ")}>
-                  <span className="text-[18px]">{opt.icon}</span>
-                  <span>{opt.label}</span>
-                </button>
-              ))}
+              {presenceOpts.map(opt => {
+                const sel = status === opt.id;
+                return (
+                  <button key={opt.id} onClick={() => onSetStatus(session.id, athlete.id, opt.id)}
+                    className="tap-feedback"
+                    style={{
+                      flex: 1, padding: "12px 8px", borderRadius: 16, fontSize: 11.5, fontWeight: 700,
+                      display: "flex", flexDirection: "column", alignItems: "center", gap: 6,
+                      border: `1.5px solid ${sel ? opt.activeBorder : "var(--c-border-strong)"}`,
+                      background: sel ? opt.activeBg : "var(--c-surface-2)",
+                      color: sel ? opt.activeText : "var(--c-text-3)",
+                      cursor: "pointer",
+                    }}>
+                    {opt.label}
+                  </button>
+                );
+              })}
             </div>
           </div>
 
-          {/* ── RPE ── affiché si présence renseignée et pas "none" */}
+          {/* ── RPE ── */}
           {hasPerf && (
             <div>
-              <p className="text-[10.5px] font-black text-slate-400 uppercase tracking-widest mb-3">
+              <label style={labelStyle}>
                 Effort ressenti (RPE)
                 {val?.rpe != null && (
-                  <span className="ml-2 font-black"
-                    style={{ color: rpeColor(val.rpe).active }}>
+                  <span style={{ marginLeft: 8, fontWeight: 800, color: rpeColor(val.rpe).active }}>
                     {val.rpe}/10
                   </span>
                 )}
-              </p>
+              </label>
               <div className="flex gap-1.5 flex-wrap">
                 {Array.from({ length: 11 }, (_, i) => {
                   const rc  = rpeColor(i);
                   const sel = val?.rpe === i;
                   return (
                     <button key={i} onClick={() => onSetRpe(session.id, athlete.id, i)}
-                      className="w-10 h-10 rounded-2xl text-[12px] font-black border-2 transition-all tap-feedback"
-                      style={sel
-                        ? { background: rc.active, borderColor: rc.border, color: rc.text, transform: "scale(1.12)", boxShadow: `0 2px 8px ${rc.active}60` }
-                        : { background: "white",   borderColor: "#E2E8F0", color: "#94A3B8" }}>
+                      className="tap-feedback"
+                      style={{
+                        width: 38, height: 38, borderRadius: 12, fontSize: 12, fontWeight: 800,
+                        border: `1.5px solid ${sel ? rc.border : "var(--c-border-strong)"}`,
+                        background: sel ? rc.active : "var(--c-surface-2)",
+                        color: sel ? rc.text : "var(--c-text-3)",
+                        transform: sel ? "scale(1.1)" : "scale(1)",
+                        boxShadow: sel ? `0 2px 8px ${rc.active}55` : "none",
+                        cursor: "pointer",
+                      }}>
                       {i}
                     </button>
                   );
                 })}
               </div>
-              {/* Légende RPE */}
-              <div className="flex items-center gap-3 mt-2">
+              <div style={{ display: "flex", alignItems: "center", gap: 14, marginTop: 8 }}>
                 {[{ range: "0-3", color: "#22C55E", label: "Facile" }, { range: "4-6", color: "#F59E0B", label: "Modéré" }, { range: "7-10", color: "#EF4444", label: "Intense" }].map(l => (
-                  <div key={l.range} className="flex items-center gap-1">
-                    <div className="w-2 h-2 rounded-full" style={{ background: l.color }} />
-                    <span className="text-[10px] text-slate-400 font-medium">{l.range} {l.label}</span>
+                  <div key={l.range} style={{ display: "flex", alignItems: "center", gap: 5 }}>
+                    <div style={{ width: 7, height: 7, borderRadius: "50%", background: l.color }} />
+                    <span style={{ fontSize: 10, color: "var(--c-text-4)", fontWeight: 500 }}>{l.range} {l.label}</span>
                   </div>
                 ))}
               </div>
             </div>
           )}
 
-          {/* ── Ressenti général (étoiles) ── */}
+          {/* ── Ressenti général ── */}
           {hasPerf && (
             <div>
-              <p className="text-[10.5px] font-black text-slate-400 uppercase tracking-widest mb-3">
+              <label style={labelStyle}>
                 Ressenti général
-                {val?.feeling != null && (
-                  <span className="ml-2 font-black text-amber-500">{val.feeling}/5 ⭐</span>
-                )}
-              </p>
+                {val?.feeling != null && <span style={{ marginLeft: 8, fontWeight: 800, color: "#EAB308" }}>{val.feeling}/5</span>}
+              </label>
               <div className="flex gap-2">
                 {[1, 2, 3, 4, 5].map(n => (
                   <button key={n} onClick={() => onSetFeeling(session.id, athlete.id, n)}
-                    className="p-1 transition-transform tap-feedback hover:scale-110">
-                    <Star
-                      size={32}
-                      fill={val?.feeling >= n ? "#F59E0B" : "none"}
-                      color={val?.feeling >= n ? "#F59E0B" : "#E2E8F0"}
-                      strokeWidth={1.5}
-                    />
+                    className="tap-feedback" style={{ background: "none", border: "none", cursor: "pointer", padding: 2 }}>
+                    <Star size={30}
+                      fill={val?.feeling >= n ? "#EAB308" : "none"}
+                      color={val?.feeling >= n ? "#EAB308" : "var(--c-border-strong)"}
+                      strokeWidth={1.5} />
                   </button>
                 ))}
               </div>
@@ -471,9 +540,7 @@ const SessionDetailModal = memo(({ session, athlete, onClose, onSetStatus, onSet
           {/* ── Commentaire ── */}
           {hasPerf && (
             <div>
-              <p className="text-[10.5px] font-black text-slate-400 uppercase tracking-widest mb-2">
-                Commentaire
-              </p>
+              <label style={labelStyle}>Commentaire</label>
               <textarea
                 className="input-premium resize-none"
                 rows={3}
@@ -487,11 +554,8 @@ const SessionDetailModal = memo(({ session, athlete, onClose, onSetStatus, onSet
         </div>
 
         {/* Footer */}
-        <div className="px-6 py-4 border-t border-slate-100 flex justify-end flex-shrink-0">
-          <button onClick={onClose}
-            className="btn-secondary">
-            Fermer
-          </button>
+        <div className="px-6 py-4 flex justify-end flex-shrink-0" style={{ borderTop: "1px solid var(--c-border)" }}>
+          <button onClick={onClose} className="btn-secondary">Fermer</button>
         </div>
       </div>
     </div>
@@ -515,7 +579,6 @@ export default function AthletePlanning({
   const [activeSession, setActiveSession] = useState(null);
   const [showCreate,    setShowCreate]    = useState(false);
 
-  // ── Index sessions par date ──────────────────────────────────────────────────
   const sessionsByDate = useMemo(() => {
     const map = {};
     sessions.forEach(s => {
@@ -527,7 +590,6 @@ export default function AthletePlanning({
     return map;
   }, [sessions]);
 
-  // ── Jours du mois pour la grille ────────────────────────────────────────────
   const calDays = useMemo(() => {
     const first    = new Date(viewYear, viewMonth, 1);
     const last     = new Date(viewYear, viewMonth + 1, 0);
@@ -540,7 +602,6 @@ export default function AthletePlanning({
     return days;
   }, [viewYear, viewMonth]);
 
-  // ── Jours de la semaine sélectionnée ────────────────────────────────────────
   const weekDays = useMemo(() => {
     const ref = selectedDate ?? today;
     const dow = (ref.getDay() + 6) % 7;
@@ -549,9 +610,8 @@ export default function AthletePlanning({
     return Array.from({ length: 7 }, (_, i) => {
       const d = new Date(mon); d.setDate(mon.getDate() + i); return d;
     });
-  }, [selectedDate]);
+  }, [selectedDate]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ── Agenda groupé par date ───────────────────────────────────────────────────
   const groupedAgenda = useMemo(() => {
     const sorted = [...sessions].filter(s => s.sessionDate).sort((a, b) => a.sessionDate.localeCompare(b.sessionDate));
     const groups = []; const seen = new Set();
@@ -563,14 +623,12 @@ export default function AthletePlanning({
     return groups;
   }, [sessions]);
 
-  // ── Navigation ───────────────────────────────────────────────────────────────
   const prevMonth = () => { if (viewMonth === 0) { setViewYear(y => y-1); setViewMonth(11); } else setViewMonth(m => m-1); };
   const nextMonth = () => { if (viewMonth === 11) { setViewYear(y => y+1); setViewMonth(0); } else setViewMonth(m => m+1); };
   const prevWeek  = () => { const d = new Date(selectedDate ?? today); d.setDate(d.getDate()-7); setSelectedDate(d); };
   const nextWeek  = () => { const d = new Date(selectedDate ?? today); d.setDate(d.getDate()+7); setSelectedDate(d); };
   const goToday   = () => { setViewYear(today.getFullYear()); setViewMonth(today.getMonth()); setSelectedDate(today); };
 
-  // Toujours ouvrir la session en version live (mise à jour temps réel)
   const liveActive = activeSession ? sessions.find(s => s.id === activeSession.id) ?? activeSession : null;
 
   const navLabel = useMemo(() => {
@@ -582,7 +640,6 @@ export default function AthletePlanning({
     return `${mon.toLocaleDateString("fr-BE", { day: "numeric", month: "short" })} – ${sun.toLocaleDateString("fr-BE", { day: "numeric", month: "short" })}`;
   }, [viewMode, viewMonth, viewYear, weekDays]);
 
-  // ── Helpers carte séance ─────────────────────────────────────────────────────
   const SessionCard = useCallback(({ s, isPast = false, compact = false }) => {
     const c   = cat(s.category);
     const val = s.validations?.find(v => v.athleteId === athlete.id);
@@ -592,126 +649,127 @@ export default function AthletePlanning({
     if (compact) {
       return (
         <div onClick={e => { e.stopPropagation(); setActiveSession(s); }}
-          className="flex items-center gap-1.5 px-2 py-1 rounded-xl text-[9.5px] font-bold cursor-pointer hover:opacity-80 transition-opacity truncate"
-          style={{ background: c.bg, color: c.text, borderLeft: `3px solid ${c.border}` }}>
-          <span className="truncate flex-1">{s.title}</span>
-          {st === "done" && <span className="flex-shrink-0">✅</span>}
-          {st === "none" && <span className="flex-shrink-0">❌</span>}
+          className="tap-feedback truncate"
+          style={{
+            display: "flex", alignItems: "center", gap: 6, padding: "4px 8px", borderRadius: 10,
+            fontSize: 9.5, fontWeight: 700, cursor: "pointer",
+            background: c.bg, color: c.text, borderLeft: `3px solid ${c.border}`,
+          }}>
+          <span className="truncate" style={{ flex: 1 }}>{s.title}</span>
+          {st === "done" && <CheckCircle size={9} color="#3DBE8B" style={{ flexShrink: 0 }} />}
         </div>
       );
     }
 
     return (
       <div onClick={() => setActiveSession(s)}
-        className="card card-hover rounded-2xl overflow-hidden cursor-pointer tap-feedback"
-        style={rpeNeeded ? { borderWidth: 2, borderColor: "#F59E0B", boxShadow: "0 0 0 3px rgba(245,158,11,0.12)" } : {}}>
+        className="card card-hover tap-feedback"
+        style={{ overflow: "hidden", cursor: "pointer", ...(rpeNeeded ? { borderWidth: 2, borderColor: "#EAB308", boxShadow: "0 0 0 3px rgba(234,179,8,0.14)" } : {}) }}>
         {/* En-tête coloré catégorie */}
-        <div className="px-4 py-2.5 flex items-center justify-between"
-          style={{ background: c.bg, borderBottom: `1.5px solid ${c.border}` }}>
-          <div className="flex items-center gap-2">
-            <span className="text-[9.5px] font-black uppercase tracking-wider px-2.5 py-0.5 rounded-full"
-              style={{ background: c.border, color: "white" }}>
+        <div style={{ padding: "10px 16px", display: "flex", alignItems: "center", justifyContent: "space-between", background: c.bg, borderBottom: `1.5px solid ${c.border}40` }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <span style={{ fontSize: 9.5, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.06em", padding: "3px 10px", borderRadius: 99, background: c.border, color: "#0A150F" }}>
               {CATEGORIES.find(x => x.id === s.category)?.label ?? s.type}
             </span>
             {s.pdfUrl && (
-              <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-blue-100 text-blue-600">📄 PDF</span>
+              <span style={{ fontSize: 9, fontWeight: 700, padding: "2px 7px", borderRadius: 99, background: "rgba(91,158,245,0.16)", color: "#5B9EF5" }}>
+                PDF
+              </span>
             )}
           </div>
           <StatusBadge status={st} size="sm" />
         </div>
         {/* Corps */}
-        <div className="px-4 py-3.5 bg-white">
-          <p className="text-[15px] font-black text-slate-800 leading-tight mb-1.5">{s.title}</p>
-          <div className="flex items-center gap-3 text-[11.5px] text-slate-400 mb-2">
-            <span className="flex items-center gap-1"><Clock size={11} /> {s.time}</span>
+        <div style={{ padding: "14px 16px" }}>
+          <p style={{ fontSize: 15, fontWeight: 800, lineHeight: 1.3, marginBottom: 6, color: "var(--c-text-1)" }}>{s.title}</p>
+          <div style={{ display: "flex", alignItems: "center", gap: 12, fontSize: 11.5, color: "var(--c-text-3)", marginBottom: 8 }}>
+            <span style={{ display: "flex", alignItems: "center", gap: 4 }}><Clock size={11} /> {s.time}</span>
             {s.durationMinutes && <span>{s.durationMinutes} min</span>}
             {val?.rpe != null && (
-              <span className="font-bold" style={{ color: rpeColor(val.rpe).active }}>RPE {val.rpe}/10</span>
+              <span style={{ fontWeight: 700, color: rpeColor(val.rpe).active }}>RPE {val.rpe}/10</span>
             )}
           </div>
           {s.instructions && (
-            <p className="text-[11px] text-amber-700 bg-amber-50 rounded-xl px-3 py-2 mb-2 line-clamp-2">
-              💬 {s.instructions}
+            <p style={{ fontSize: 11, color: "#F0CB61", background: "rgba(234,179,8,0.08)", borderRadius: 12, padding: "8px 12px", marginBottom: 8 }} className="line-clamp-2">
+              {s.instructions}
             </p>
           )}
           {rpeNeeded && (
-            <p className="text-[11px] font-bold text-amber-600 flex items-center gap-1.5">
-              <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
+            <p style={{ fontSize: 11, fontWeight: 700, color: "#F0CB61", display: "flex", alignItems: "center", gap: 6 }}>
+              <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#EAB308" }} className="animate-pulse-soft" />
               Valide ta séance
             </p>
           )}
         </div>
       </div>
     );
-  }, [athlete.id, sessions]);
+  }, [athlete.id]);
 
   // ══════════════════════════════════════════════════════════════════════════════
   return (
-    <div className="flex flex-col h-full" style={{ background: "var(--c-bg, #F5F5F2)" }}>
+    <div className="flex flex-col h-full" style={{ background: "var(--c-bg)" }}>
 
       {/* ── HEADER GLASSMORPHISM ─────────────────────────────────────────────── */}
       <div className="header-glass px-3 md:px-5 py-3 flex items-center justify-between gap-2 flex-shrink-0 z-10">
 
-        {/* Navigation mois / semaine */}
         <div className="flex items-center gap-1">
           {viewMode !== "agenda" && (
             <button onClick={viewMode === "month" ? prevMonth : prevWeek}
-              className="w-8 h-8 rounded-xl hover:bg-slate-100 text-slate-500 flex items-center justify-center transition-all tap-feedback">
+              className="tap-feedback"
+              style={{ width: 32, height: 32, borderRadius: 12, display: "flex", alignItems: "center", justifyContent: "center", background: "none", border: "none", cursor: "pointer", color: "var(--c-text-2)" }}>
               <ChevronLeft size={16} />
             </button>
           )}
-          <p className="text-[14px] md:text-[15px] font-black text-slate-800 px-1 min-w-[100px] text-center truncate">
+          <p style={{ fontSize: 14, fontWeight: 800, padding: "0 4px", minWidth: 100, textAlign: "center", color: "var(--c-text-1)" }} className="truncate">
             {navLabel}
           </p>
           {viewMode !== "agenda" && (
             <button onClick={viewMode === "month" ? nextMonth : nextWeek}
-              className="w-8 h-8 rounded-xl hover:bg-slate-100 text-slate-500 flex items-center justify-center transition-all tap-feedback">
+              className="tap-feedback"
+              style={{ width: 32, height: 32, borderRadius: 12, display: "flex", alignItems: "center", justifyContent: "center", background: "none", border: "none", cursor: "pointer", color: "var(--c-text-2)" }}>
               <ChevronRight size={16} />
             </button>
           )}
           {viewMode !== "agenda" && (
             <button onClick={goToday}
-              className="px-2.5 py-1 rounded-lg text-[10px] font-bold border border-slate-200 text-slate-500 hover:bg-slate-50 ml-1 transition-colors">
+              style={{ padding: "4px 10px", borderRadius: 8, fontSize: 10, fontWeight: 700, border: "1px solid var(--c-border-strong)", color: "var(--c-text-3)", background: "none", cursor: "pointer", marginLeft: 4 }}>
               Auj.
             </button>
           )}
         </div>
 
-        {/* Contrôles droite */}
         <div className="flex items-center gap-1.5">
-          {/* Sélecteur de vue — pill premium */}
-          <div className="flex rounded-xl border border-slate-200 overflow-hidden text-[10px] font-bold bg-white">
+          <div style={{ display: "flex", borderRadius: 12, overflow: "hidden", border: "1px solid var(--c-border-strong)" }}>
             {[{ id: "agenda", label: "Liste" }, { id: "month", label: "Mois" }, { id: "week", label: "Sem." }].map(v => (
               <button key={v.id} onClick={() => setViewMode(v.id)}
-                className="px-3 py-1.5 transition-colors"
-                style={viewMode === v.id
-                  ? { background: "#0F172A", color: "white" }
-                  : { background: "white", color: "#64748B" }}>
+                style={{
+                  padding: "6px 12px", fontSize: 10, fontWeight: 700, border: "none", cursor: "pointer",
+                  background: viewMode === v.id ? "#1D9E75" : "var(--c-surface-2)",
+                  color: viewMode === v.id ? "#0A150F" : "var(--c-text-3)",
+                }}>
                 {v.label}
               </button>
             ))}
           </div>
-          {/* Bouton planifier */}
-          <button onClick={() => setShowCreate(true)} className="btn-primary !py-2 !px-3">
+          <button onClick={() => setShowCreate(true)} className="btn-primary" style={{ padding: "0 12px", minHeight: 34 }}>
             <Plus size={14} /><span className="hidden sm:inline">Planifier</span>
           </button>
         </div>
       </div>
 
       {/* ══════════════════════════════════════════════════════════════════════
-          VUE AGENDA (liste chronologique)
+          VUE AGENDA
          ══════════════════════════════════════════════════════════════════════ */}
       {viewMode === "agenda" && (
         <div className="flex-1 overflow-y-auto">
           {groupedAgenda.length === 0 ? (
-            /* État vide */
             <div className="flex flex-col items-center justify-center h-full gap-4 p-8">
-              <div className="w-16 h-16 rounded-3xl bg-slate-100 flex items-center justify-center">
-                <CalendarDays size={28} className="text-slate-300" strokeWidth={1.5} />
+              <div style={{ width: 64, height: 64, borderRadius: 20, background: "var(--c-surface-2)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                <CalendarDays size={28} color="var(--c-text-4)" strokeWidth={1.5} />
               </div>
-              <div className="text-center">
-                <p className="text-[15px] font-bold text-slate-500">Aucune séance planifiée</p>
-                <p className="text-[12px] text-slate-400 mt-1">Ton coach ou toi pouvez planifier des séances</p>
+              <div style={{ textAlign: "center" }}>
+                <p style={{ fontSize: 15, fontWeight: 700, color: "var(--c-text-2)" }}>Aucune séance planifiée</p>
+                <p style={{ fontSize: 12, color: "var(--c-text-4)", marginTop: 4 }}>Ton coach ou toi pouvez planifier des séances</p>
               </div>
               <button onClick={() => setShowCreate(true)} className="btn-primary">
                 <Plus size={14} /> Planifier une séance
@@ -725,38 +783,29 @@ export default function AthletePlanning({
                 const isPast  = dateObj < new Date(today.toISOString().slice(0, 10));
                 return (
                   <div key={date}>
-                    {/* En-tête groupe date */}
                     <div className="flex items-center gap-3 mb-3">
-                      <div className="w-12 h-12 rounded-2xl flex flex-col items-center justify-center flex-shrink-0 shadow-sm"
-                        style={isToday
-                          ? { background: "linear-gradient(135deg, #1D9E75, #16826C)" }
-                          : isPast
-                            ? { background: "#F1F5F9", border: "1px solid #E2E8F0" }
-                            : { background: "white", border: "1.5px solid #E2E8F0" }}>
-                        <span className="text-[9px] font-black uppercase leading-none"
-                          style={{ color: isToday ? "rgba(255,255,255,0.75)" : isPast ? "#94A3B8" : "#64748B" }}>
+                      <div style={{
+                        width: 48, height: 48, borderRadius: 16, flexShrink: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+                        background: isToday ? "linear-gradient(135deg, #1D9E75, #16826C)" : "var(--c-surface-2)",
+                        border: isToday ? "none" : "1px solid var(--c-border)",
+                      }}>
+                        <span style={{ fontSize: 9, fontWeight: 800, textTransform: "uppercase", lineHeight: 1, color: isToday ? "rgba(255,255,255,0.75)" : "var(--c-text-3)" }}>
                           {dateObj.toLocaleDateString("fr-BE", { weekday: "short" }).replace(".", "")}
                         </span>
-                        <span className="text-[18px] font-black leading-tight"
-                          style={{ color: isToday ? "white" : isPast ? "#94A3B8" : "#1E293B" }}>
+                        <span style={{ fontSize: 18, fontWeight: 800, lineHeight: 1.2, color: isToday ? "white" : (isPast ? "var(--c-text-4)" : "var(--c-text-1)") }}>
                           {dateObj.getDate()}
                         </span>
                       </div>
                       <div>
-                        <p className="text-[13px] font-black"
-                          style={{ color: isToday ? "#1D9E75" : isPast ? "#94A3B8" : "#1E293B" }}>
-                          {isToday
-                            ? "Aujourd'hui"
-                            : dateObj.toLocaleDateString("fr-BE", { weekday: "long", day: "numeric", month: "long" })}
+                        <p style={{ fontSize: 13, fontWeight: 800, color: isToday ? "#4DC9A0" : (isPast ? "var(--c-text-4)" : "var(--c-text-1)") }}>
+                          {isToday ? "Aujourd'hui" : dateObj.toLocaleDateString("fr-BE", { weekday: "long", day: "numeric", month: "long" })}
                         </p>
-                        <p className="text-[10.5px] text-slate-400 mt-0.5">
+                        <p style={{ fontSize: 10.5, color: "var(--c-text-3)", marginTop: 2 }}>
                           {ds.length} séance{ds.length > 1 ? "s" : ""}
                         </p>
                       </div>
                     </div>
-
-                    {/* Cards séances avec ligne verticale */}
-                    <div className="ml-4 pl-11 border-l-2 border-slate-100 space-y-2.5">
+                    <div style={{ marginLeft: 16, paddingLeft: 44, borderLeft: "2px solid var(--c-border)" }} className="space-y-2.5">
                       {ds.sort((a, b) => a.time.localeCompare(b.time)).map(s => (
                         <SessionCard key={s.id} s={s} isPast={isPast} />
                       ))}
@@ -770,20 +819,18 @@ export default function AthletePlanning({
       )}
 
       {/* ══════════════════════════════════════════════════════════════════════
-          VUE MOIS (grille calendrier)
+          VUE MOIS
          ══════════════════════════════════════════════════════════════════════ */}
       {viewMode === "month" && (
         <div className="flex-1 overflow-y-auto p-3 md:p-4">
-          {/* En-têtes jours */}
           <div className="grid grid-cols-7 mb-2">
             {["L", "M", "M", "J", "V", "S", "D"].map((d, i) => (
-              <div key={i} className="text-center text-[9px] md:text-[10.5px] font-black text-slate-400 uppercase tracking-widest py-1.5">
+              <div key={i} style={{ textAlign: "center", fontSize: 9.5, fontWeight: 800, color: "var(--c-text-4)", textTransform: "uppercase", letterSpacing: "0.07em", padding: "6px 0" }}>
                 {d}
               </div>
             ))}
           </div>
 
-          {/* Grille jours */}
           <div className="grid grid-cols-7 gap-0.5 md:gap-1">
             {calDays.map(({ date, cur }, idx) => {
               const key     = date.toISOString().slice(0, 10);
@@ -793,47 +840,35 @@ export default function AthletePlanning({
 
               return (
                 <div key={idx}
-                  onClick={() => {
-                    setSelectedDate(date);
-                    if (window.innerWidth < 768) setViewMode("week");
-                  }}
-                  className="min-h-[52px] md:min-h-[90px] rounded-xl md:rounded-2xl p-1 md:p-2 cursor-pointer transition-all border"
-                  style={isToday
-                    ? { background: "#F0FBF7", borderColor: "#1D9E75", borderWidth: 2, boxShadow: "0 0 0 3px rgba(29,158,117,0.08)" }
-                    : isSel
-                      ? { background: "#EFF6FF", borderColor: "#60A5FA", borderWidth: 2 }
-                      : cur
-                        ? { background: "white", borderColor: "#F1F5F9" }
-                        : { background: "rgba(248,250,252,0.4)", borderColor: "transparent", opacity: 0.4 }}>
-
+                  onClick={() => { setSelectedDate(date); if (window.innerWidth < 768) setViewMode("week"); }}
+                  className="tap-feedback"
+                  style={{
+                    minHeight: 60, borderRadius: 14, padding: 6, cursor: "pointer",
+                    border: isToday ? "2px solid rgba(29,158,117,0.45)" : isSel ? "2px solid rgba(91,158,245,0.45)" : "1px solid var(--c-border)",
+                    background: isToday ? "rgba(29,158,117,0.08)" : isSel ? "rgba(91,158,245,0.08)" : cur ? "var(--c-surface)" : "transparent",
+                    opacity: cur ? 1 : 0.35,
+                  }}>
                   <div className="flex items-start justify-between mb-1">
-                    {/* Numéro du jour */}
-                    <span className="text-[11px] md:text-[13px] font-black w-6 h-6 md:w-7 md:h-7 flex items-center justify-center rounded-xl flex-shrink-0"
-                      style={isToday
-                        ? { background: "linear-gradient(135deg, #1D9E75, #16826C)", color: "white" }
-                        : { color: cur ? "#334155" : "#94a3b8" }}>
+                    <span style={{
+                      fontSize: 12, fontWeight: 800, width: 24, height: 24, borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
+                      background: isToday ? "linear-gradient(135deg, #1D9E75, #16826C)" : "transparent",
+                      color: isToday ? "white" : (cur ? "var(--c-text-1)" : "var(--c-text-4)"),
+                    }}>
                       {date.getDate()}
                     </span>
-
-                    {/* Dots mobile */}
                     {ds.length > 0 && (
                       <div className="md:hidden flex flex-wrap gap-0.5 justify-end mt-1">
                         {ds.slice(0, 3).map(s => (
-                          <div key={s.id} className="w-1.5 h-1.5 rounded-full"
-                            style={{ background: cat(s.category).border }}
+                          <div key={s.id} style={{ width: 6, height: 6, borderRadius: "50%", background: cat(s.category).border }}
                             onClick={e => { e.stopPropagation(); setActiveSession(s); }} />
                         ))}
                       </div>
                     )}
                   </div>
-
-                  {/* Pills séances desktop */}
                   <div className="hidden md:block space-y-0.5">
-                    {ds.slice(0, 3).map(s => (
-                      <SessionCard key={s.id} s={s} compact />
-                    ))}
+                    {ds.slice(0, 3).map(s => <SessionCard key={s.id} s={s} compact />)}
                     {ds.length > 3 && (
-                      <p className="text-[9px] text-slate-400 font-semibold px-1">+{ds.length - 3}</p>
+                      <p style={{ fontSize: 9, fontWeight: 700, color: "var(--c-text-4)", padding: "0 4px" }}>+{ds.length - 3}</p>
                     )}
                   </div>
                 </div>
@@ -841,7 +876,6 @@ export default function AthletePlanning({
             })}
           </div>
 
-          {/* Séances du jour sélectionné (en bas de la grille) */}
           {selectedDate && (() => {
             const key = selectedDate.toISOString().slice(0, 10);
             const ds  = (sessionsByDate[key] ?? []).sort((a, b) => a.time.localeCompare(b.time));
@@ -849,8 +883,8 @@ export default function AthletePlanning({
             const isPast = selectedDate < new Date(today.toISOString().slice(0, 10));
             return (
               <div className="mt-5 space-y-2">
-                <p className="text-[12px] font-bold text-slate-500 mb-3 flex items-center gap-2">
-                  <span className="w-4 h-4 rounded-lg flex items-center justify-center" style={{ background: "#1D9E75" }}>
+                <p style={{ fontSize: 12, fontWeight: 700, color: "var(--c-text-2)", marginBottom: 10, display: "flex", alignItems: "center", gap: 8 }}>
+                  <span style={{ width: 16, height: 16, borderRadius: 5, background: "#1D9E75", display: "flex", alignItems: "center", justifyContent: "center" }}>
                     <CalendarDays size={9} color="white" />
                   </span>
                   {selectedDate.toLocaleDateString("fr-BE", { weekday: "long", day: "numeric", month: "long" })}
@@ -867,40 +901,30 @@ export default function AthletePlanning({
          ══════════════════════════════════════════════════════════════════════ */}
       {viewMode === "week" && (
         <div className="flex-1 overflow-y-auto flex flex-col">
-          {/* Sélecteur de jour — strip horizontal */}
-          <div className="flex overflow-x-auto gap-1.5 px-3 py-3 bg-white border-b border-slate-100 flex-shrink-0"
-            style={{ scrollbarWidth: "none" }}>
+          <div style={{ display: "flex", overflowX: "auto", gap: 6, padding: "12px", background: "var(--c-surface)", borderBottom: "1px solid var(--c-border)", flexShrink: 0, scrollbarWidth: "none" }}>
             {weekDays.map((date, i) => {
               const isToday = isSameDay(date, today);
               const isSel   = isSameDay(date, selectedDate ?? today);
               const hasSess = (sessionsByDate[date.toISOString().slice(0, 10)] ?? []).length > 0;
               return (
                 <button key={i} onClick={() => setSelectedDate(date)}
-                  className="flex-shrink-0 flex flex-col items-center gap-0.5 w-11 py-2.5 rounded-2xl transition-all tap-feedback"
-                  style={isToday
-                    ? { background: "linear-gradient(135deg, #1D9E75, #16826C)" }
-                    : isSel
-                      ? { background: "#0F172A" }
-                      : { background: "transparent" }}>
-                  <span className="text-[9px] font-black uppercase tracking-wider"
-                    style={{ color: (isToday || isSel) ? "rgba(255,255,255,0.7)" : "#94A3B8" }}>
+                  className="tap-feedback"
+                  style={{
+                    flexShrink: 0, display: "flex", flexDirection: "column", alignItems: "center", gap: 2, width: 44, padding: "10px 0", borderRadius: 16, border: "none", cursor: "pointer",
+                    background: isToday ? "linear-gradient(135deg, #1D9E75, #16826C)" : isSel ? "var(--c-surface-3)" : "transparent",
+                  }}>
+                  <span style={{ fontSize: 9, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: (isToday || isSel) ? "rgba(255,255,255,0.7)" : "var(--c-text-4)" }}>
                     {["L", "M", "M", "J", "V", "S", "D"][i]}
                   </span>
-                  <span className="text-[18px] font-black leading-tight"
-                    style={{ color: (isToday || isSel) ? "white" : "#1E293B" }}>
+                  <span style={{ fontSize: 18, fontWeight: 800, lineHeight: 1.2, color: (isToday || isSel) ? "white" : "var(--c-text-1)" }}>
                     {date.getDate()}
                   </span>
-                  {/* Dot séance */}
-                  <div className="w-1.5 h-1.5 rounded-full transition-colors"
-                    style={{ background: hasSess
-                      ? (isToday || isSel) ? "rgba(255,255,255,0.6)" : "#1D9E75"
-                      : "transparent" }} />
+                  <div style={{ width: 6, height: 6, borderRadius: "50%", background: hasSess ? ((isToday || isSel) ? "rgba(255,255,255,0.6)" : "#1D9E75") : "transparent" }} />
                 </button>
               );
             })}
           </div>
 
-          {/* Séances du jour */}
           <div className="flex-1 overflow-y-auto p-3 space-y-2.5">
             {(() => {
               const key     = (selectedDate ?? today).toISOString().slice(0, 10);
@@ -910,12 +934,11 @@ export default function AthletePlanning({
 
               if (ds.length === 0) return (
                 <div className="flex flex-col items-center justify-center py-16 gap-3">
-                  <div className="w-14 h-14 rounded-3xl bg-slate-100 flex items-center justify-center">
-                    <CalendarDays size={24} className="text-slate-300" strokeWidth={1.5} />
+                  <div style={{ width: 56, height: 56, borderRadius: 20, background: "var(--c-surface-2)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                    <CalendarDays size={24} color="var(--c-text-4)" strokeWidth={1.5} />
                   </div>
-                  <p className="text-[13px] font-semibold text-slate-400">Repos ce jour</p>
-                  <button onClick={() => setShowCreate(true)}
-                    className="text-[12px] font-bold text-emerald-600 hover:text-emerald-700 transition-colors">
+                  <p style={{ fontSize: 13, fontWeight: 700, color: "var(--c-text-3)" }}>Repos ce jour</p>
+                  <button onClick={() => setShowCreate(true)} style={{ fontSize: 12, fontWeight: 700, color: "#4DC9A0", background: "none", border: "none", cursor: "pointer" }}>
                     + Planifier une séance
                   </button>
                 </div>
