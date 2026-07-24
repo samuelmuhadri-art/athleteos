@@ -515,7 +515,11 @@ export default function AthleteApp() {
         <WellnessModal
           athlete={athlete} clubId={clubId}
           onClose={() => setShowWellness(false)}
-          onSaved={(data) => setWellnessToday(data)}
+          onSaved={(data) => {
+            // Un seul batch React : ferme ET met à jour
+            setShowWellness(false);
+            setWellnessToday(data);
+          }}
         />
       )}
     </div>

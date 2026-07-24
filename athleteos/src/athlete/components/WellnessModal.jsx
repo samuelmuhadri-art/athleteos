@@ -48,9 +48,10 @@ const WellnessModal = memo(({ athlete, clubId, onClose, onSaved }) => {
         notes:    notes.trim() || null,
       }, { onConflict: "athlete_id,date" });
       if (error) throw error;
-      // Notifier le parent puis fermer immédiatement
-      onSaved({ ...form, notes: notes.trim() || null, date: today });
-      onClose(); // fermeture garantie
+      const saved = { ...form, notes: notes.trim() || null, date: today };
+      // Fermer D'ABORD, puis notifier le parent
+      onClose();
+      onSaved(saved);
     } catch(e) {
       setErr(e.message ?? "Erreur lors de l'enregistrement");
       setSaving(false);
