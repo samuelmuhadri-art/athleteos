@@ -170,100 +170,104 @@ export default function AthleteMsgerie({
 
   if (loading) return <LoadingState message="Chargement de la messagerie…" />;
 
+  // Sur mobile : sidebar visible si pas de conv active, thread visible si conv active
+  // Sur desktop : les deux visibles côte à côte
+  const showSidebar = !activeId;  // mobile
+  const showThread  =  !!activeId; // mobile
+
   return (
     <div style={{ display: "flex", overflow: "hidden", height: "calc(100vh - 56px)" }}>
 
       {/* ── SIDEBAR CONTACTS ── */}
-      <div className={activeId ? "hidden md:flex" : "flex"}
-        style={{ flexShrink: 0, width: "100%", background: "var(--c-surface)", borderRight: "1px solid var(--c-border)", display: "flex", flexDirection: "column" }}
-        // Desktop toujours w-72
-      >
-        <style>{`@media (min-width:768px) { .sidebar-msg { display:flex !important; width:288px !important; } }`}</style>
-        <div className="sidebar-msg" style={{ flexShrink: 0, background: "var(--c-surface)", borderRight: "1px solid var(--c-border)", display: "flex", flexDirection: "column", height: "100%", width: "100%" }}>
-          {/* Header */}
-          <div style={{ padding: "14px 16px", borderBottom: "1px solid var(--c-border)", flexShrink: 0 }}>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
-              <h2 style={{ fontSize: 15, fontWeight: 500, color: "var(--c-text-1)" }}>Messages</h2>
-              {totalUnread > 0 && (
-                <span style={{ fontSize: 9.5, fontWeight: 600, padding: "2px 8px", borderRadius: 99, background: "#E05252", color: "white" }}>
-                  {totalUnread}
-                </span>
-              )}
-            </div>
-            <div style={{ display: "flex", alignItems: "center", gap: 8, borderRadius: 10, padding: "8px 12px", background: "var(--c-surface-2)", border: "1px solid var(--c-border)" }}>
-              <Search size={12} color="var(--c-text-3)" style={{ flexShrink: 0 }} />
-              <input type="text" placeholder="Rechercher…" value={search} onChange={e => setSearch(e.target.value)}
-                style={{ flex: 1, background: "none", border: "none", outline: "none", fontSize: 12.5, color: "var(--c-text-1)" }} />
-            </div>
-          </div>
+      <div style={{
+        flexShrink: 0,
+        background: "var(--c-surface)",
+        borderRight: "1px solid var(--c-border)",
+        flexDirection: "column",
+        // Tailwind md:flex md:w-72 géré via className
+      }} className={["flex flex-col", activeId ? "hidden md:flex md:w-72" : "flex w-full md:w-72"].join(" ")}>
 
-          {/* Liste */}
-          <div style={{ flex: 1, overflowY: "auto" }}>
-            {filteredConvs.length === 0 ? (
-              <div style={{ padding: "40px 16px", textAlign: "center" }}>
-                <MessageSquare size={22} color="var(--c-text-4)" strokeWidth={1.5} style={{ margin: "0 auto 10px" }} />
-                <p style={{ fontSize: 12, color: "var(--c-text-3)" }}>Aucun contact disponible</p>
-              </div>
-            ) : filteredConvs.map(conv => {
-              const contact   = contacts.find(c => c.id === conv.contactId);
-              const isActive  = conv.contactId === activeId;
-              const lastMsg   = conv.lastMsg;
-              const isLastOwn = lastMsg?.senderId === athleteUserId;
-              return (
-                <button key={conv.contactId} onClick={() => selectContact(conv.contactId)}
-                  style={{
-                    width: "100%", textAlign: "left", padding: "12px 16px",
-                    display: "flex", alignItems: "center", gap: 10,
-                    background: isActive ? "rgba(29,158,117,0.08)" : "transparent",
-                    borderLeft: `3px solid ${isActive ? "#1D9E75" : "transparent"}`,
-                    borderLeft: `3px solid ${isActive ? "#1D9E75" : "transparent"}`,
-                    cursor: "pointer", transition: "all 0.15s ease",
-                  }}>
-                  <div style={{ position: "relative", flexShrink: 0 }}>
-                    <div style={{ width: 40, height: 40, borderRadius: "50%", background: contact?.color ?? "#94a3b8", display: "flex", alignItems: "center", justifyContent: "center", color: "white", fontSize: 11, fontWeight: 600 }}>
-                      {initialsFromName(contact?.name ?? "?")}
-                    </div>
-                    {contact?.type === "coach" && (
-                      <div style={{ position: "absolute", bottom: -1, right: -1, width: 14, height: 14, borderRadius: "50%", background: "#5B8DEF", border: "2px solid var(--c-surface)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 6, color: "white", fontWeight: 700 }}>C</div>
-                    )}
-                    {conv.unread > 0 && (
-                      <div style={{ position: "absolute", top: -3, right: -3, width: 17, height: 17, borderRadius: "50%", background: "#E05252", color: "white", fontSize: 8.5, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", border: "1.5px solid var(--c-surface)" }}>
-                        {conv.unread}
-                      </div>
-                    )}
-                  </div>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 4, marginBottom: 2 }}>
-                      <p style={{ fontSize: 12.5, fontWeight: conv.unread > 0 ? 600 : 400, color: conv.unread > 0 ? "var(--c-text-1)" : "var(--c-text-2)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                        {contact?.name ?? "?"}
-                      </p>
-                      {lastMsg && <span style={{ fontSize: 9.5, color: "var(--c-text-3)", flexShrink: 0 }}>{formatTime(lastMsg.date)}</span>}
-                    </div>
-                    {lastMsg ? (
-                      <p style={{ fontSize: 11, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: conv.unread > 0 ? "var(--c-text-2)" : "var(--c-text-3)", fontWeight: conv.unread > 0 ? 500 : 400 }}>
-                        {isLastOwn && <span style={{ color: "var(--c-text-3)" }}>Moi : </span>}
-                        {lastMsg.content}
-                      </p>
-                    ) : (
-                      <p style={{ fontSize: 11, color: "var(--c-text-4)", fontStyle: "italic" }}>{contact?.subtitle}</p>
-                    )}
-                  </div>
-                </button>
-              );
-            })}
+        {/* Header */}
+        <div style={{ padding: "14px 16px", borderBottom: "1px solid var(--c-border)", flexShrink: 0 }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+            <h2 style={{ fontSize: 15, fontWeight: 500, color: "var(--c-text-1)" }}>Messages</h2>
+            {totalUnread > 0 && (
+              <span style={{ fontSize: 9.5, fontWeight: 600, padding: "2px 8px", borderRadius: 99, background: "#E05252", color: "white" }}>
+                {totalUnread}
+              </span>
+            )}
           </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, borderRadius: 10, padding: "8px 12px", background: "var(--c-surface-2)", border: "1px solid var(--c-border)" }}>
+            <Search size={12} color="var(--c-text-3)" style={{ flexShrink: 0 }} />
+            <input type="text" placeholder="Rechercher…" value={search} onChange={e => setSearch(e.target.value)}
+              style={{ flex: 1, background: "none", border: "none", outline: "none", fontSize: 12.5, color: "var(--c-text-1)" }} />
+          </div>
+        </div>
+
+        {/* Liste contacts */}
+        <div style={{ flex: 1, overflowY: "auto" }}>
+          {filteredConvs.length === 0 ? (
+            <div style={{ padding: "40px 16px", textAlign: "center" }}>
+              <MessageSquare size={22} color="var(--c-text-4)" strokeWidth={1.5} style={{ margin: "0 auto 10px" }} />
+              <p style={{ fontSize: 12, color: "var(--c-text-3)" }}>Aucun contact disponible</p>
+            </div>
+          ) : filteredConvs.map(conv => {
+            const contact   = contacts.find(c => c.id === conv.contactId);
+            const isActive  = conv.contactId === activeId;
+            const lastMsg   = conv.lastMsg;
+            const isLastOwn = lastMsg?.senderId === athleteUserId;
+            return (
+              <button key={conv.contactId} onClick={() => selectContact(conv.contactId)}
+                style={{
+                  width: "100%", textAlign: "left", padding: "12px 16px",
+                  display: "flex", alignItems: "center", gap: 10,
+                  background: isActive ? "rgba(29,158,117,0.08)" : "transparent",
+                  borderLeft: `3px solid ${isActive ? "#1D9E75" : "transparent"}`,
+                  border: "none",
+                  cursor: "pointer", transition: "background 0.15s ease",
+                }}>
+                <div style={{ position: "relative", flexShrink: 0 }}>
+                  <div style={{ width: 40, height: 40, borderRadius: "50%", background: contact?.color ?? "#94a3b8", display: "flex", alignItems: "center", justifyContent: "center", color: "white", fontSize: 11, fontWeight: 600 }}>
+                    {initialsFromName(contact?.name ?? "?")}
+                  </div>
+                  {contact?.type === "coach" && (
+                    <div style={{ position: "absolute", bottom: -1, right: -1, width: 14, height: 14, borderRadius: "50%", background: "#5B8DEF", border: "2px solid var(--c-surface)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 6, color: "white", fontWeight: 700 }}>C</div>
+                  )}
+                  {conv.unread > 0 && (
+                    <div style={{ position: "absolute", top: -3, right: -3, width: 17, height: 17, borderRadius: "50%", background: "#E05252", color: "white", fontSize: 8.5, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", border: "1.5px solid var(--c-surface)" }}>
+                      {conv.unread}
+                    </div>
+                  )}
+                </div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 4, marginBottom: 2 }}>
+                    <p style={{ fontSize: 12.5, fontWeight: conv.unread > 0 ? 600 : 400, color: conv.unread > 0 ? "var(--c-text-1)" : "var(--c-text-2)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      {contact?.name ?? "?"}
+                    </p>
+                    {lastMsg && <span style={{ fontSize: 9.5, color: "var(--c-text-3)", flexShrink: 0 }}>{formatTime(lastMsg.date)}</span>}
+                  </div>
+                  {lastMsg ? (
+                    <p style={{ fontSize: 11, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: conv.unread > 0 ? "var(--c-text-2)" : "var(--c-text-3)", fontWeight: conv.unread > 0 ? 500 : 400 }}>
+                      {isLastOwn && <span style={{ color: "var(--c-text-3)" }}>Moi : </span>}
+                      {lastMsg.content}
+                    </p>
+                  ) : (
+                    <p style={{ fontSize: 11, color: "var(--c-text-4)", fontStyle: "italic" }}>{contact?.subtitle}</p>
+                  )}
+                </div>
+              </button>
+            );
+          })}
         </div>
       </div>
 
       {/* ── THREAD ── */}
-      <div className={!activeId ? "hidden md:flex" : "flex"}
-        style={{ flex: 1, flexDirection: "column", overflow: "hidden", display: "flex" }}>
+      <div className={["flex flex-col flex-1 overflow-hidden", !activeId ? "hidden md:flex" : "flex"].join(" ")}>
 
         {activeConv && activeContact ? (
           <>
-            {/* Header — bouton retour TOUJOURS en premier, bien visible */}
+            {/* Header — bouton retour toujours visible */}
             <div style={{ flexShrink: 0, padding: "10px 14px", borderBottom: "1px solid var(--c-border)", background: "var(--c-surface)", display: "flex", alignItems: "center", gap: 10 }}>
-              {/* Bouton retour mobile — grand, bien visible */}
               <button onClick={() => setActiveId(null)}
                 className="md:hidden tap-feedback"
                 style={{ width: 36, height: 36, borderRadius: 10, flexShrink: 0, background: "var(--c-surface-2)", border: "1px solid var(--c-border)", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: "var(--c-text-1)" }}>
