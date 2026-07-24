@@ -62,7 +62,7 @@ function GoalProgress({ pr, target }) {
     <div className="mt-3">
       <div className="flex items-center justify-between text-[10px] font-bold text-slate-400 mb-1.5">
         <span>PR {pr}</span>
-        <span className="text-emerald-600">{pct}%</span>
+        <span className="#1D9E75">{pct}%</span>
         <span>Objectif {target}</span>
       </div>
       <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
@@ -117,7 +117,7 @@ function AddPerfModal({ disciplines, perfForm, setPerfForm, onClose, onSubmit, s
                     className="px-2.5 py-1 rounded-xl text-[10.5px] font-bold border-2 transition-all tap-feedback"
                     style={perfForm.discipline === d
                       ? { background: discColor(d), color: "white", borderColor: discColor(d) }
-                      : { background: "white", color: "#64748B", borderColor: "#E2E8F0" }}>
+                      : { background: "white", color: "var(--c-text-3)", borderColor: "#E2E8F0" }}>
                     {d}
                   </button>
                 ))}
@@ -209,7 +209,7 @@ function AddGoalModal({ disciplines, goalForm, setGoalForm, onClose, onSubmit, s
                     className="px-2.5 py-1 rounded-xl text-[10.5px] font-bold border-2 transition-all tap-feedback"
                     style={goalForm.discipline === d
                       ? { background: "#F59E0B", color: "white", borderColor: "#F59E0B" }
-                      : { background: "white", color: "#64748B", borderColor: "#E2E8F0" }}>
+                      : { background: "white", color: "var(--c-text-3)", borderColor: "#E2E8F0" }}>
                     {d}
                   </button>
                 ))}
@@ -364,44 +364,41 @@ export default function AthletePerfs({ athlete, competitions, myPerformances, my
       setLocalPerfs(prev => [...prev, data]);
 
       // ── Mise à jour automatique PR / SB ──────────────────────────────────
-      // Comparer avec le record existant et upsert si amélioration
       const disc    = perfForm.discipline;
-      const hib     = getDiscHib(disc); // true = plus grand est mieux (hauteur, longueur, lancers)
+      const hib     = getDiscHib(disc);
       const newVal  = parsePerf(perfForm.value);
       const curRec  = athlete.records?.[disc];
       const curPR   = curRec ? parsePerf(curRec.pr) : null;
       const curSB   = curRec ? parsePerf(curRec.sb) : null;
       const thisYear = new Date().getFullYear().toString();
-      const perfYear = perfForm.performance_date.slice(0, 4);
-      const isThisYear = perfYear === thisYear;
+      const isThisYear = perfForm.performance_date.slice(0, 4) === thisYear;
 
       if (newVal.value) {
         const isPR = !curPR?.value || (hib ? newVal.value >= curPR.value : newVal.value <= curPR.value);
         const isSB = isThisYear && (!curSB?.value || (hib ? newVal.value >= curSB.value : newVal.value <= curSB.value));
-
         if (isPR || isSB) {
-          const updateData = {};
-          if (isPR) {
-            updateData.pr      = perfForm.value;
-            updateData.pr_date = perfForm.performance_date;
-          }
-          if (isSB) {
-            updateData.sb = perfForm.value;
-          }
-          // Upsert dans la table records
           await supabase.from("records").upsert({
-            athlete_id:  athlete.id,
-            discipline:  disc,
-            ...updateData,
-            ...((!curPR?.value) ? { pr: perfForm.value, pr_date: perfForm.performance_date, sb: perfForm.value } : {}),
+            athlete_id: athlete.id,
+            discipline: disc,
+            ...(isPR ? { pr: perfForm.value, pr_date: perfForm.performance_date } : {}),
+            ...(isSB ? { sb: perfForm.value } : {}),
+            ...(!curPR?.value ? { pr: perfForm.value, pr_date: perfForm.performance_date, sb: perfForm.value } : {}),
           }, { onConflict: "athlete_id,discipline" });
+          // Mettre à jour athlete.records localement sans refresh complet
+          if (athlete.records) {
+            athlete.records[disc] = {
+              ...curRec,
+              ...(isPR ? { pr: perfForm.value, prDate: perfForm.performance_date } : {}),
+              ...(isSB ? { sb: perfForm.value } : {}),
+            };
+          }
         }
       }
       // ─────────────────────────────────────────────────────────────────────
 
       setPerfForm({ discipline: perfForm.discipline, value: "", performance_date: today.toISOString().slice(0, 10), context: "" });
       setShowAddPerf(false);
-      onRefresh?.(); // recharge athlete.records depuis Supabase
+      // PAS de onRefresh() — on évite le rechargement complet de la page
     } catch (e) {
       console.error("Erreur ajout perf:", e);
     } finally {
@@ -453,7 +450,7 @@ export default function AthletePerfs({ athlete, competitions, myPerformances, my
   const handleDeletePerf = async (perfId) => {
     setLocalPerfs(prev => prev.filter(p => p.id !== perfId));
     await supabase.from("athlete_performances").delete().eq("id", perfId);
-    onRefresh?.();
+    // Pas de onRefresh — état local déjà mis à jour
   };
 
   // ── Ajouter une compétition ───────────────────────────────────────────────
@@ -512,8 +509,8 @@ export default function AthletePerfs({ athlete, competitions, myPerformances, my
       {/* ── HEADER ─────────────────────────────────────────────────────────── */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <h2 className="text-[20px] font-black text-slate-800">Mes performances</h2>
-          <p className="text-[12px] text-slate-400 mt-0.5">
+          <h2 className="text-[20px] font-semibold" style={{ color: "var(--c-text-1)", letterSpacing: "-0.02em" }}>Mes performances</h2>
+          <p className="text-[11px]" style={{ color: "var(--c-text-3)", marginTop: 2 }}>
             {disciplines.length} épreuve{disciplines.length !== 1 ? "s" : ""}
             {" · "}
             {localPerfs.length} mesure{localPerfs.length !== 1 ? "s" : ""}
@@ -526,13 +523,13 @@ export default function AthletePerfs({ athlete, competitions, myPerformances, my
       </div>
 
       {/* ── TAB BAR pill premium ─────────────────────────────────────────── */}
-      <div className="flex gap-1 bg-white rounded-2xl border border-slate-100 shadow-card p-1.5 overflow-x-auto">
+      <div className="flex gap-1 rounded-2xl p-1.5 overflow-x-auto" style={{ background: "var(--c-surface)", border: "1px solid var(--c-border)" }}>
         {PERF_TABS.map(tab => (
           <button key={tab.id} onClick={() => setActiveTab(tab.id)}
             className="flex-1 px-3 py-2 rounded-xl text-[12px] font-bold whitespace-nowrap transition-all text-center tap-feedback"
             style={activeTab === tab.id
               ? { background: "#1D9E75", color: "white", boxShadow: "0 2px 8px rgba(29,158,117,0.25)" }
-              : { color: "#64748B" }}>
+              : { color: "var(--c-text-3)" }}>
             {tab.label}
           </button>
         ))}
@@ -545,11 +542,11 @@ export default function AthletePerfs({ athlete, competitions, myPerformances, my
         <div className="space-y-4">
           {disciplines.length === 0 ? (
             <div className="card p-12 text-center">
-              <div className="w-16 h-16 rounded-3xl bg-slate-100 flex items-center justify-center mx-auto mb-4">
-                <Trophy size={28} className="text-slate-300" strokeWidth={1.5} />
+              <div className="w-16 h-16 rounded-3xl flex items-center justify-center mx-auto mb-4" style={{ background: "var(--c-surface-2)" }}>
+                <Trophy size={28} className="var(--c-text-4)" strokeWidth={1.5} />
               </div>
-              <p className="text-[14px] font-bold text-slate-400">Aucun record enregistré</p>
-              <p className="text-[12px] text-slate-300 mt-1">Ton coach les ajoutera après tes premières compétitions</p>
+              <p className="text-[13px] font-medium" style={{ color: "var(--c-text-3)" }}>Aucun record enregistré</p>
+              <p className="text-[11px]" style={{ color: "var(--c-text-4)", marginTop: 4 }}>Ton coach les ajoutera après tes premières compétitions</p>
             </div>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -570,7 +567,7 @@ export default function AthletePerfs({ athlete, competitions, myPerformances, my
                             style={{ background: col + "15" }}>
                             <div className="w-3 h-3 rounded-full" style={{ background: col }} />
                           </div>
-                          <p className="text-[14px] font-black text-slate-800">{disc}</p>
+                          <p className="text-[13.5px] font-semibold" style={{ color: "var(--c-text-1)" }}>{disc}</p>
                         </div>
                         <button
                           onClick={() => { setSelectedDisc(disc); setActiveTab("evolution"); }}
@@ -615,7 +612,7 @@ export default function AthletePerfs({ athlete, competitions, myPerformances, my
                             <>
                               <span className="text-slate-200">·</span>
                               <span>
-                                Dernière : <strong className="text-slate-600">{stats.last.raw}</strong>
+                                Dernière : <strong className="var(--c-text-2)">{stats.last.raw}</strong>
                               </span>
                             </>
                           )}
@@ -630,8 +627,8 @@ export default function AthletePerfs({ athlete, competitions, myPerformances, my
 
           {/* Dernières compétitions en bas des records */}
           {compHistory.length > 0 && (
-            <div className="card overflow-hidden">
-              <div className="px-5 py-4 border-b border-slate-50 flex items-center justify-between">
+            <div className="card overflow-hidden" style={{ background: "var(--c-surface)" }}>
+              <div className="px-5 py-4 flex items-center justify-between" style={{ borderBottom: "1px solid var(--c-border)" }}>
                 <div className="flex items-center gap-2">
                   <div className="w-7 h-7 rounded-xl bg-amber-50 flex items-center justify-center">
                     <Trophy size={13} color="#EF9F27" />
@@ -652,7 +649,7 @@ export default function AthletePerfs({ athlete, competitions, myPerformances, my
                     <div className="flex-1 min-w-0">
                       <p className="text-[12.5px] font-bold text-slate-700 truncate">{comp.name}</p>
                       <p className="text-[11px] text-slate-400">
-                        {result.event} · <strong className="text-emerald-600">{result.result}</strong>
+                        {result.event} · <strong className="#1D9E75">{result.result}</strong>
                       </p>
                     </div>
                     <span className="text-[10.5px] text-slate-400 flex-shrink-0">
@@ -683,7 +680,7 @@ export default function AthletePerfs({ athlete, competitions, myPerformances, my
                     className="px-3 py-1.5 rounded-xl text-[12px] font-bold border-2 transition-all tap-feedback"
                     style={sel
                       ? { background: col, color: "white", borderColor: col, boxShadow: `0 2px 8px ${col}40` }
-                      : { background: "white", color: "#64748B", borderColor: "#E2E8F0" }}>
+                      : { background: "white", color: "var(--c-text-3)", borderColor: "#E2E8F0" }}>
                     {disc}
                   </button>
                 );
@@ -709,7 +706,7 @@ export default function AthletePerfs({ athlete, competitions, myPerformances, my
             {chartData.length < 2 ? (
               <div className="h-[180px] flex flex-col items-center justify-center gap-2">
                 <div className="w-12 h-12 rounded-2xl bg-slate-100 flex items-center justify-center">
-                  <BarChart2 size={22} className="text-slate-300" strokeWidth={1.5} />
+                  <BarChart2 size={22} className="var(--c-text-4)" strokeWidth={1.5} />
                 </div>
                 <p className="text-[12px] text-slate-400 text-center">
                   Minimum 2 mesures pour afficher le graphique
@@ -730,8 +727,8 @@ export default function AthletePerfs({ athlete, competitions, myPerformances, my
                       </linearGradient>
                     </defs>
                     <CartesianGrid strokeDasharray="3 3" stroke="#F1F5F9" />
-                    <XAxis dataKey="label" tick={{ fontSize: 10, fill: "#94a3b8" }} axisLine={false} tickLine={false} />
-                    <YAxis tick={{ fontSize: 10, fill: "#94a3b8" }} axisLine={false} tickLine={false} width={45}
+                    <XAxis dataKey="label" tick={{ fontSize: 10, fill: "var(--c-text-4)" }} axisLine={false} tickLine={false} />
+                    <YAxis tick={{ fontSize: 10, fill: "var(--c-text-4)" }} axisLine={false} tickLine={false} width={45}
                       domain={([min, max]) => {
                         const padding = (max - min) * 0.1 || 0.5;
                         return [Math.floor((min - padding) * 100) / 100, Math.ceil((max + padding) * 100) / 100];
@@ -749,11 +746,11 @@ export default function AthletePerfs({ athlete, competitions, myPerformances, my
                 {/* Footer PR / SB / delta */}
                 {selectedDisc && athlete.records?.[selectedDisc] && (
                   <div className="flex items-center gap-4 mt-3 pt-3 border-t border-slate-50 text-[12px] flex-wrap">
-                    <span className="text-slate-400">
+                    <span className="var(--c-text-3)">
                       PR <strong className="text-emerald-600 text-[14px]">{athlete.records[selectedDisc].pr}</strong>
                     </span>
-                    <span className="text-slate-400">
-                      SB <strong className="text-slate-600">{athlete.records[selectedDisc].sb}</strong>
+                    <span className="var(--c-text-3)">
+                      SB <strong className="var(--c-text-2)">{athlete.records[selectedDisc].sb}</strong>
                     </span>
                     {chartData.length >= 2 && (() => {
                       const diff = chartData[chartData.length - 1].value - chartData[0].value;
@@ -774,8 +771,8 @@ export default function AthletePerfs({ athlete, competitions, myPerformances, my
 
           {/* Tableau de toutes les mesures */}
           {chartData.length > 0 && (
-            <div className="card overflow-hidden">
-              <div className="px-5 py-4 border-b border-slate-50 flex items-center justify-between">
+            <div className="card overflow-hidden" style={{ background: "var(--c-surface)" }}>
+              <div className="px-5 py-4 flex items-center justify-between" style={{ borderBottom: "1px solid var(--c-border)" }}>
                 <h3 className="text-[13px] font-bold text-slate-800">
                   Toutes les mesures — {selectedDisc}
                 </h3>
@@ -783,9 +780,9 @@ export default function AthletePerfs({ athlete, competitions, myPerformances, my
               </div>
               <div className="divide-y divide-slate-50 max-h-64 overflow-y-auto">
                 {[...localPerfs].filter(p => p.discipline === selectedDisc).sort((a,b) => b.performance_date.localeCompare(a.performance_date)).map((p) => (
-                  <div key={p.id} className="px-5 py-3 flex items-center justify-between hover:bg-slate-50/50 transition-colors group">
+                  <div key={p.id} className="px-5 py-3 flex items-center justify-between transition-colors group" style={{ borderTop: "1px solid var(--c-border)" }}>
                     <div>
-                      <p className="text-[15px] font-semibold" style={{ color: "#1D9E75" }}>{p.value}</p>
+                      <p className="text-[15px] font-semibold" style={{ color: "var(--c-accent)" }}>{p.value}</p>
                       {p.context && <p className="text-[11px] text-slate-400 italic">{p.context}</p>}
                     </div>
                     <div className="flex items-center gap-3">
@@ -823,8 +820,8 @@ export default function AthletePerfs({ athlete, competitions, myPerformances, my
               <div className="w-16 h-16 rounded-3xl bg-amber-50 flex items-center justify-center mx-auto mb-4">
                 <Target size={28} color="#EF9F27" strokeWidth={1.5} />
               </div>
-              <p className="text-[14px] font-bold text-slate-400">Aucun objectif défini</p>
-              <p className="text-[12px] text-slate-300 mt-1">Fixe-toi des objectifs pour rester motivé</p>
+              <p className="text-[13px] font-medium" style={{ color: "var(--c-text-3)" }}>Aucun objectif défini</p>
+              <p className="text-[11px]" style={{ color: "var(--c-text-4)", marginTop: 4 }}>Fixe-toi des objectifs pour rester motivé</p>
               <button onClick={() => setShowAddGoal(true)} className="mt-5 btn-primary mx-auto">
                 <Plus size={14} /> Définir un objectif
               </button>
@@ -845,7 +842,7 @@ export default function AthletePerfs({ athlete, competitions, myPerformances, my
                     const col      = discColor(g.discipline);
 
                     return (
-                      <div key={g.id} className="card overflow-hidden">
+                      <div key={g.id} className="card overflow-hidden" style={{ background: "var(--c-surface)" }}>
                         {/* Liseré haut coloré */}
                         <div className="h-1 w-full"
                           style={{ background: isUrgent ? "#F59E0B" : col }} />
@@ -858,7 +855,7 @@ export default function AthletePerfs({ athlete, competitions, myPerformances, my
                                   <span className="text-[10px] font-bold px-2 py-0.5 rounded-full"
                                     style={isUrgent
                                       ? { background: "#FEF3C7", color: "#B45309" }
-                                      : { background: "#F1F5F9", color: "#64748B" }}>
+                                      : { background: "#F1F5F9", color: "var(--c-text-3)" }}>
                                     {daysLeft > 0 ? `J-${daysLeft}` : daysLeft === 0 ? "Aujourd'hui !" : "Échu"}
                                   </span>
                                 )}
@@ -907,12 +904,12 @@ export default function AthletePerfs({ athlete, competitions, myPerformances, my
                     Atteints 🏆 ({achievedGoals.length})
                   </p>
                   {achievedGoals.map(g => (
-                    <div key={g.id} className="card p-4 flex items-center gap-3 opacity-60">
-                      <div className="w-8 h-8 rounded-xl bg-emerald-50 flex items-center justify-center flex-shrink-0">
+                    <div key={g.id} className="card p-4 flex items-center gap-3 opacity-50" style={{ background: "var(--c-surface)" }}>
+                      <div className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: "rgba(29,158,117,0.10)" }}>
                         <CheckCircle size={16} color="#1D9E75" />
                       </div>
                       <div className="flex-1">
-                        <p className="text-[12.5px] font-bold text-slate-600">
+                        <p className="text-[12px] font-medium" style={{ color: "var(--c-text-2)" }}>
                           {g.discipline} — {g.target_value}
                         </p>
                         {g.notes && <p className="text-[11px] text-slate-400">{g.notes}</p>}
@@ -941,38 +938,37 @@ export default function AthletePerfs({ athlete, competitions, myPerformances, my
               <div className="w-16 h-16 rounded-3xl bg-amber-50 flex items-center justify-center mx-auto mb-4">
                 <Trophy size={28} color="#EF9F27" strokeWidth={1.5} />
               </div>
-              <p className="text-[14px] font-bold text-slate-400">Aucune compétition enregistrée</p>
+              <p className="text-[13px] font-medium" style={{ color: "var(--c-text-3)" }}>Aucune compétition enregistrée</p>
             </div>
           ) : (
             compHistory.map(({ comp, result }, i) => (
-              <div key={i} className="card p-5 card-hover">
+              <div key={i} className="card p-5 card-hover" style={{ background: "var(--c-surface)" }}>
                 <div className="flex items-start gap-4">
                   <div className="w-12 h-12 rounded-2xl bg-amber-50 flex items-center justify-center flex-shrink-0 shadow-sm">
                     <Trophy size={20} color="#EF9F27" />
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap mb-1">
-                      <p className="text-[14px] font-black text-slate-800">{comp.name}</p>
-                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-500">
+                      <p className="text-[13.5px] font-semibold" style={{ color: "var(--c-text-1)" }}>{comp.name}</p>
+                      <span className="chip chip-neutral">
                         {comp.type}
                       </span>
                     </div>
-                    <p className="text-[12px] text-slate-400 mb-3">
+                    <p className="text-[11px] mb-3" style={{ color: "var(--c-text-3)" }}>
                       {comp.location && `📍 ${comp.location} · `}
                       {new Date(comp.date).toLocaleDateString("fr-BE", { day: "numeric", month: "long", year: "numeric" })}
                     </p>
                     {/* Résultat mis en avant */}
-                    <div className="inline-block rounded-2xl px-4 py-3"
-                      style={{ background: "linear-gradient(135deg, #E8F7F2, #D1F0E6)" }}>
-                      <p className="text-[10px] font-black uppercase tracking-wider text-emerald-600 mb-0.5">
+                    <div className="inline-block rounded-2xl px-4 py-3" style={{ background: "rgba(29,158,117,0.12)", border: "1px solid rgba(29,158,117,0.20)" }}>
+                      <p className="text-[9.5px] font-semibold uppercase tracking-wider mb-1" style={{ color: "var(--c-accent)" }}>
                         {result.event}
                       </p>
-                      <p className="text-[24px] font-black text-emerald-700 leading-tight">
+                      <p className="text-[22px] font-semibold leading-tight" style={{ color: "var(--c-accent)", letterSpacing: "-0.02em" }}>
                         {result.result}
                       </p>
                     </div>
                     {result.context && (
-                      <p className="text-[11.5px] text-slate-400 italic mt-2">{result.context}</p>
+                      <p className="text-[11px] italic mt-2" style={{ color: "var(--c-text-3)" }}>{result.context}</p>
                     )}
                   </div>
                 </div>
