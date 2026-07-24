@@ -1,9 +1,10 @@
 // ============================================================
 // AthleteOS — src/athlete/components/FormeDetailPanel.jsx
+// ★ DARK MODE — fix mobile (z-index + portal sur body)
 // ============================================================
 
 import { useMemo, memo } from "react";
-import { createPortal } from "react-dom"; // <-- La solution magique est ici
+import { createPortal } from "react-dom";
 import { X, Zap } from "lucide-react";
 import { getISOWeek, METRIC_SCIENCE } from "../shared";
 
@@ -36,130 +37,197 @@ const FormeDetailPanel = memo(({ metricKey, metrics, sessions, weeklyCharge, ath
         week:  w.week,
         label: `S${w.week}`,
         load:  w.rawLoad,
-        color: w.rawLoad > 500 ? "#E24B4A" : w.rawLoad > 350 ? "#EF9F27" : "#1D9E75",
+        color: w.rawLoad > 500 ? "#E05252" : w.rawLoad > 350 ? "#E8A020" : "#1D9E75",
       }));
   }, [weeklyCharge, athlete.id, currentWeek]);
 
   const maxLoad = Math.max(...recentCharge.map(w => w.load), 1);
 
-  // <-- createPortal permet d'afficher la modale tout devant l'écran, sans bug
   return createPortal(
     <div
-      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4 modal-backdrop"
+      style={{
+        position: "fixed", inset: 0, zIndex: 9999,
+        display: "flex", alignItems: "flex-end", justifyContent: "center",
+        background: "rgba(0,0,0,0.72)",
+        backdropFilter: "blur(10px)",
+        WebkitBackdropFilter: "blur(10px)",
+      }}
       onClick={e => e.target === e.currentTarget && onClose()}
     >
-      <div className="bg-white rounded-t-3xl sm:rounded-3xl shadow-2xl w-full max-w-lg max-h-[92vh] flex flex-col overflow-hidden modal-content">
+      <div style={{
+        background: "var(--c-surface)",
+        borderRadius: "20px 20px 0 0",
+        border: "1px solid var(--c-border)",
+        borderBottom: "none",
+        width: "100%",
+        maxWidth: 560,
+        maxHeight: "92dvh",
+        display: "flex",
+        flexDirection: "column",
+        overflow: "hidden",
+        boxShadow: "0 -8px 40px rgba(0,0,0,0.50)",
+        animation: "sheet-up 0.32s cubic-bezier(0.16,1,0.3,1) both",
+      }}>
 
-        <div className="flex justify-center pt-3 pb-1 sm:hidden flex-shrink-0">
-          <div className="w-10 h-1 rounded-full bg-slate-200" />
+        {/* Poignée */}
+        <div style={{ display: "flex", justifyContent: "center", paddingTop: 10, paddingBottom: 4, flexShrink: 0 }}>
+          <div style={{ width: 32, height: 3, borderRadius: 99, background: "var(--c-border-strong)" }} />
         </div>
 
-        <div className="px-6 py-5 flex items-start justify-between gap-4 flex-shrink-0"
-          style={{ background: `linear-gradient(135deg, ${color}18, ${color}08)`, borderBottom: `2px solid ${color}30` }}>
-          <div className="flex items-center gap-4">
-            <div className="w-16 h-16 rounded-2xl flex items-center justify-center flex-shrink-0 shadow-sm"
-              style={{ background: `${color}15` }}>
-              <span className="text-[28px]">{science.icon}</span>
+        {/* Header coloré */}
+        <div style={{
+          padding: "16px 20px 16px",
+          display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12,
+          background: `linear-gradient(135deg, ${color}12, ${color}05)`,
+          borderBottom: `1px solid ${color}20`,
+          flexShrink: 0,
+        }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+            {/* Icône */}
+            <div style={{
+              width: 52, height: 52, borderRadius: 14,
+              background: `${color}14`, border: `1px solid ${color}20`,
+              display: "flex", alignItems: "center", justifyContent: "center",
+              flexShrink: 0, fontSize: 24,
+            }}>
+              {science.icon}
             </div>
             <div>
-              <p className="text-[11px] font-bold uppercase tracking-widest mb-1" style={{ color }}>
+              <p style={{ fontSize: 9, fontWeight: 500, letterSpacing: "0.09em", textTransform: "uppercase", color: color, marginBottom: 3 }}>
                 État de forme
               </p>
-              <h2 className="text-[20px] font-black text-slate-800 leading-tight">{science.label}</h2>
-              <div className="flex items-center gap-2 mt-1">
-                <span className="text-[32px] font-black leading-none" style={{ color }}>{value}</span>
+              <h2 style={{ fontSize: 18, fontWeight: 600, color: "var(--c-text-1)", letterSpacing: "-0.02em", lineHeight: 1.2 }}>
+                {science.label}
+              </h2>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 5 }}>
+                <span style={{ fontSize: 28, fontWeight: 700, color, fontVariantNumeric: "tabular-nums", letterSpacing: "-0.03em", lineHeight: 1 }}>
+                  {value}
+                </span>
                 <div>
-                  <p className="text-[10px] text-slate-400 font-medium">{science.unit}</p>
-                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full"
-                    style={{ background: `${threshold.color}15`, color: threshold.color }}>
+                  <p style={{ fontSize: 9.5, color: "var(--c-text-3)" }}>{science.unit}</p>
+                  <span style={{
+                    fontSize: 9.5, fontWeight: 500, padding: "1px 7px", borderRadius: 4,
+                    background: `${threshold.color}14`, color: threshold.color,
+                    display: "inline-block", marginTop: 2,
+                  }}>
                     {threshold.label}
                   </span>
                 </div>
               </div>
             </div>
           </div>
-          <button onClick={onClose} className="p-2 rounded-xl hover:bg-slate-100 flex-shrink-0 transition-colors">
-            <X size={18} className="text-slate-500" />
+          <button onClick={onClose}
+            style={{ padding: 8, borderRadius: 10, background: "var(--c-surface-2)", border: "none", cursor: "pointer", color: "var(--c-text-3)", flexShrink: 0 }}>
+            <X size={16} />
           </button>
         </div>
 
-        <div className="flex-1 overflow-y-auto px-6 py-5 space-y-5">
+        {/* Corps scrollable */}
+        <div style={{ flex: 1, overflowY: "auto", padding: "16px 20px", display: "flex", flexDirection: "column", gap: 14 }}>
 
           {/* Jauge */}
           <div>
-            <div className="flex items-center justify-between text-[10px] text-slate-400 mb-2">
+            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 9, color: "var(--c-text-3)", marginBottom: 6 }}>
               <span>{science.inverted ? "Optimal" : "Faible"}</span>
-              <span className="font-bold" style={{ color }}>Optimal : {science.optimal}</span>
+              <span style={{ color, fontWeight: 500 }}>Optimal : {science.optimal}</span>
               <span>{science.inverted ? "Critique" : "Optimal"}</span>
             </div>
-            <div className="relative h-4 rounded-full overflow-hidden bg-slate-100">
-              <div className="h-full rounded-full transition-all duration-700"
-                style={{ width: `${value}%`, background: `linear-gradient(90deg, ${color}80, ${color})` }} />
-              <div className="absolute top-0 h-full w-0.5 bg-white/80"
-                style={{ left: science.inverted ? "30%" : "75%" }} />
+            <div style={{ position: "relative", height: 8, borderRadius: 99, background: "var(--c-surface-2)", overflow: "hidden" }}>
+              <div style={{
+                height: "100%", borderRadius: 99,
+                width: `${value}%`,
+                background: `linear-gradient(90deg, ${color}60, ${color})`,
+                transition: "width 0.7s cubic-bezier(0.16,1,0.3,1)",
+              }} />
+              <div style={{
+                position: "absolute", top: 0, height: "100%", width: 1.5,
+                background: "rgba(255,255,255,0.20)",
+                left: science.inverted ? "30%" : "75%",
+              }} />
             </div>
-            <div className="flex justify-between text-[9px] text-slate-300 mt-1">
+            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 8.5, color: "var(--c-text-4)", marginTop: 4 }}>
               <span>0</span><span>25</span><span>50</span><span>75</span><span>100</span>
             </div>
           </div>
 
           {/* Conseil */}
-          <div className="rounded-2xl p-4"
-            style={{ background: `${threshold.color}10`, border: `1.5px solid ${threshold.color}25` }}>
-            <div className="flex items-center gap-2 mb-2">
-              <div className="w-6 h-6 rounded-lg flex items-center justify-center" style={{ background: threshold.color }}>
-                <Zap size={12} color="white" />
+          <div style={{
+            borderRadius: 12, padding: "12px 14px",
+            background: `${threshold.color}10`,
+            border: `1px solid ${threshold.color}20`,
+          }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 7 }}>
+              <div style={{ width: 22, height: 22, borderRadius: 7, background: threshold.color, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                <Zap size={11} color="white" />
               </div>
-              <p className="text-[11px] font-bold uppercase tracking-wider" style={{ color: threshold.color }}>
+              <p style={{ fontSize: 9.5, fontWeight: 500, letterSpacing: "0.08em", textTransform: "uppercase", color: threshold.color }}>
                 Conseil du jour
               </p>
             </div>
-            <p className="text-[13px] text-slate-700 leading-relaxed font-medium">{threshold.advice}</p>
+            <p style={{ fontSize: 12.5, color: "var(--c-text-2)", lineHeight: 1.55, fontWeight: 400 }}>
+              {threshold.advice}
+            </p>
           </div>
 
           {/* Ce que ça mesure */}
-          <div className="card p-4">
-            <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2">Ce que mesure ce score</p>
-            <p className="text-[13px] text-slate-600 leading-relaxed">{science.what}</p>
+          <div className="card" style={{ padding: "12px 14px" }}>
+            <p style={{ fontSize: 9.5, fontWeight: 500, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--c-text-3)", marginBottom: 6 }}>
+              Ce que mesure ce score
+            </p>
+            <p style={{ fontSize: 12.5, color: "var(--c-text-2)", lineHeight: 1.55 }}>{science.what}</p>
           </div>
 
           {/* Formule */}
-          <div className="rounded-2xl border border-slate-200 overflow-hidden">
-            <div className="px-4 py-3 bg-slate-50 border-b border-slate-100">
-              <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">🔢 Formule de calcul</p>
+          <div style={{ borderRadius: 12, overflow: "hidden", border: "1px solid var(--c-border)" }}>
+            <div style={{ padding: "9px 14px", background: "var(--c-surface-2)", borderBottom: "1px solid var(--c-border)" }}>
+              <p style={{ fontSize: 9.5, fontWeight: 500, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--c-text-3)" }}>
+                Formule de calcul
+              </p>
             </div>
-            <div className="px-4 py-3">
-              <p className="text-[12.5px] text-slate-600 leading-relaxed font-mono bg-slate-50 rounded-xl px-3 py-2">
+            <div style={{ padding: "10px 14px", background: "var(--c-surface)" }}>
+              <p style={{
+                fontSize: 12, color: "var(--c-text-2)", lineHeight: 1.6,
+                fontFamily: "monospace", background: "var(--c-surface-2)",
+                borderRadius: 8, padding: "8px 12px",
+              }}>
                 {science.formula}
               </p>
             </div>
           </div>
 
-          {/* Séances ayant contribué */}
+          {/* Séances */}
           {weekSessions.length > 0 && (
-            <div className="card overflow-hidden">
-              <div className="px-4 py-3.5 border-b border-slate-50">
-                <p className="text-[13px] font-bold text-slate-800">Séances ayant contribué</p>
-                <p className="text-[11px] text-slate-400 mt-0.5">2 dernières semaines · RPE validé</p>
+            <div className="card" style={{ overflow: "hidden" }}>
+              <div style={{ padding: "10px 14px", borderBottom: "1px solid var(--c-border)" }}>
+                <p style={{ fontSize: 12.5, fontWeight: 500, color: "var(--c-text-1)" }}>Séances ayant contribué</p>
+                <p style={{ fontSize: 10.5, color: "var(--c-text-3)", marginTop: 1 }}>2 dernières semaines · RPE validé</p>
               </div>
-              <div className="divide-y divide-slate-50">
-                {weekSessions.slice(0, 6).map(s => {
+              <div>
+                {weekSessions.slice(0, 6).map((s, idx) => {
                   const rpe    = s.validation?.rpe ?? 0;
                   const load   = (s.durationMinutes ?? 60) * rpe;
-                  const rpeCol = rpe <= 3 ? "#1D9E75" : rpe <= 6 ? "#EF9F27" : "#E24B4A";
+                  const rpeCol = rpe <= 3 ? "#1D9E75" : rpe <= 6 ? "#E8A020" : "#E05252";
                   return (
-                    <div key={s.id} className="px-4 py-3.5 flex items-center gap-3">
-                      <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 text-[11px] font-black text-white"
-                        style={{ background: rpeCol }}>
+                    <div key={s.id} style={{
+                      padding: "10px 14px", display: "flex", alignItems: "center", gap: 10,
+                      borderTop: idx > 0 ? "1px solid var(--c-border)" : "none",
+                    }}>
+                      <div style={{
+                        width: 32, height: 32, borderRadius: 9, flexShrink: 0,
+                        background: rpeCol + "18", border: `1px solid ${rpeCol}30`,
+                        display: "flex", alignItems: "center", justifyContent: "center",
+                        fontSize: 12, fontWeight: 600, color: rpeCol,
+                        fontVariantNumeric: "tabular-nums",
+                      }}>
                         {rpe}
                       </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-[12.5px] font-bold text-slate-700 truncate">{s.title}</p>
-                        <p className="text-[11px] text-slate-400">{s.day} · S{s.week} · {s.durationMinutes ?? 60} min</p>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <p style={{ fontSize: 12, fontWeight: 500, color: "var(--c-text-1)" }} className="truncate">{s.title}</p>
+                        <p style={{ fontSize: 10.5, color: "var(--c-text-3)" }}>{s.day} · S{s.week} · {s.durationMinutes ?? 60} min</p>
                       </div>
-                      <div className="text-right flex-shrink-0">
-                        <p className="text-[13px] font-black" style={{ color: rpeCol }}>{load}</p>
-                        <p className="text-[9px] text-slate-300 font-medium">charge</p>
+                      <div style={{ textAlign: "right", flexShrink: 0 }}>
+                        <p style={{ fontSize: 13, fontWeight: 600, color: rpeCol, fontVariantNumeric: "tabular-nums" }}>{load}</p>
+                        <p style={{ fontSize: 9, color: "var(--c-text-4)" }}>charge</p>
                       </div>
                     </div>
                   );
@@ -170,82 +238,102 @@ const FormeDetailPanel = memo(({ metricKey, metrics, sessions, weeklyCharge, ath
 
           {/* Charge hebdo */}
           {recentCharge.length > 0 && (
-            <div className="card p-4">
-              <p className="text-[13px] font-bold text-slate-800 mb-1">Charge hebdomadaire</p>
-              <p className="text-[11px] text-slate-400 mb-4">4 dernières semaines (méthode session-RPE · Foster 2001)</p>
-              <div className="flex items-end gap-2 h-20">
+            <div className="card" style={{ padding: "12px 14px" }}>
+              <p style={{ fontSize: 12.5, fontWeight: 500, color: "var(--c-text-1)", marginBottom: 2 }}>Charge hebdomadaire</p>
+              <p style={{ fontSize: 10.5, color: "var(--c-text-3)", marginBottom: 12 }}>
+                4 dernières semaines · méthode session-RPE
+              </p>
+              <div style={{ display: "flex", alignItems: "flex-end", gap: 6, height: 80 }}>
                 {recentCharge.map((w, i) => {
                   const pct       = (w.load / maxLoad) * 100;
                   const isCurrent = w.week === currentWeek;
                   return (
-                    <div key={i} className="flex-1 flex flex-col items-center gap-1">
-                      <div className="w-full flex items-end" style={{ height: "64px" }}>
-                        <div className="w-full rounded-t-xl transition-all"
-                          style={{ height: `${Math.max(pct, 5)}%`, background: isCurrent ? w.color : w.color + "60",
-                            outline: isCurrent ? `2px solid ${w.color}` : "none", outlineOffset: "1px" }} />
+                    <div key={i} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 4, height: "100%" }}>
+                      <div style={{ flex: 1, width: "100%", display: "flex", alignItems: "flex-end" }}>
+                        <div style={{
+                          width: "100%", height: `${Math.max(pct, 5)}%`,
+                          borderRadius: "4px 4px 2px 2px",
+                          background: isCurrent ? w.color + "55" : "rgba(255,255,255,0.05)",
+                          borderTop: `2px solid ${w.color}${isCurrent ? "CC" : "40"}`,
+                          transition: "height 0.6s cubic-bezier(0.16,1,0.3,1)",
+                        }} />
                       </div>
-                      <p className="text-[9px] text-slate-400 font-medium">{w.label}</p>
-                      <p className="text-[9px] font-black" style={{ color: w.color }}>{w.load}</p>
+                      <p style={{ fontSize: 8, color: isCurrent ? "var(--c-text-2)" : "var(--c-text-4)", fontWeight: isCurrent ? 500 : 400 }}>
+                        {w.label}
+                      </p>
+                      <p style={{ fontSize: 8.5, fontWeight: 600, color: w.color, fontVariantNumeric: "tabular-nums" }}>
+                        {w.load}
+                      </p>
                     </div>
                   );
                 })}
               </div>
-              <p className="text-[10px] text-slate-300 mt-3">
+              <p style={{ fontSize: 9.5, color: "var(--c-text-4)", marginTop: 10 }}>
                 Charge = durée (min) × RPE · Foster et al. (2001)
               </p>
             </div>
           )}
 
           {/* Sources */}
-          <div className="rounded-2xl border border-slate-100 overflow-hidden">
-            <div className="px-4 py-3 bg-slate-50 border-b border-slate-100">
-              <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">📚 Sources scientifiques</p>
+          <div style={{ borderRadius: 12, overflow: "hidden", border: "1px solid var(--c-border)" }}>
+            <div style={{ padding: "9px 14px", background: "var(--c-surface-2)", borderBottom: "1px solid var(--c-border)" }}>
+              <p style={{ fontSize: 9.5, fontWeight: 500, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--c-text-3)" }}>
+                Sources scientifiques
+              </p>
             </div>
-            <div className="divide-y divide-slate-50">
+            <div>
               {science.sources.map((src, i) => (
-                <div key={i} className="px-4 py-3">
-                  <p className="text-[12px] font-bold text-slate-700">{src.ref}</p>
-                  <p className="text-[11px] text-slate-400 mt-0.5 italic">{src.detail}</p>
+                <div key={i} style={{ padding: "10px 14px", borderTop: i > 0 ? "1px solid var(--c-border)" : "none" }}>
+                  <p style={{ fontSize: 11.5, fontWeight: 500, color: "var(--c-text-1)" }}>{src.ref}</p>
+                  <p style={{ fontSize: 10.5, color: "var(--c-text-3)", marginTop: 2, fontStyle: "italic" }}>{src.detail}</p>
                 </div>
               ))}
-              <div className="px-4 py-3 bg-amber-50/50">
-                <p className="text-[10.5px] text-amber-700 leading-relaxed">
-                  ⚠️ Les coefficients de pondération sont des conventions de coaching AthleteOS, pas des standards publiés.
+              <div style={{ padding: "9px 14px", background: "rgba(232,160,32,0.07)", borderTop: "1px solid var(--c-border)" }}>
+                <p style={{ fontSize: 10.5, color: "#E8A020", lineHeight: 1.5 }}>
+                  Les coefficients de pondération sont des conventions de coaching AthleteOS, pas des standards publiés.
                 </p>
               </div>
             </div>
           </div>
 
           {/* Grille d'interprétation */}
-          <div className="space-y-2">
-            <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Grille d'interprétation</p>
-            {science.thresholds.map((t, i) => (
-              <div key={i}
-                className={["rounded-2xl px-4 py-3.5 flex items-center gap-3 border",
-                  value >= t.min && value <= t.max ? "border-2" : "border-slate-100"].join(" ")}
-                style={value >= t.min && value <= t.max
-                  ? { background: `${t.color}10`, borderColor: t.color }
-                  : { background: "white" }}>
-                <div className="w-3 h-3 rounded-full flex-shrink-0" style={{ background: t.color }} />
-                <div className="flex-1">
-                  <div className="flex items-center gap-2">
-                    <p className="text-[12.5px] font-bold" style={{ color: t.color }}>{t.label}</p>
-                    <span className="text-[10px] text-slate-400">{t.min}–{t.max}</span>
-                    {value >= t.min && value <= t.max && (
-                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full text-white" style={{ background: t.color }}>
-                        Tu es ici
-                      </span>
-                    )}
+          <div style={{ display: "flex", flexDirection: "column", gap: 6, paddingBottom: 8 }}>
+            <p style={{ fontSize: 9.5, fontWeight: 500, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--c-text-3)", marginBottom: 2 }}>
+              Grille d'interprétation
+            </p>
+            {science.thresholds.map((t, i) => {
+              const isActive = value >= t.min && value <= t.max;
+              return (
+                <div key={i} style={{
+                  borderRadius: 10, padding: "10px 12px",
+                  display: "flex", alignItems: "center", gap: 10,
+                  background: isActive ? `${t.color}10` : "var(--c-surface-2)",
+                  border: `${isActive ? 1.5 : 1}px solid ${isActive ? t.color + "30" : "var(--c-border)"}`,
+                }}>
+                  <div style={{ width: 8, height: 8, borderRadius: "50%", background: t.color, flexShrink: 0 }} />
+                  <div style={{ flex: 1 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 3 }}>
+                      <p style={{ fontSize: 12, fontWeight: 500, color: t.color }}>{t.label}</p>
+                      <span style={{ fontSize: 9.5, color: "var(--c-text-3)" }}>{t.min}–{t.max}</span>
+                      {isActive && (
+                        <span style={{
+                          fontSize: 9, fontWeight: 600, padding: "1px 6px", borderRadius: 4,
+                          background: t.color, color: "white",
+                        }}>
+                          Tu es ici
+                        </span>
+                      )}
+                    </div>
+                    <p style={{ fontSize: 11.5, color: "var(--c-text-2)", lineHeight: 1.5 }}>{t.advice}</p>
                   </div>
-                  <p className="text-[11.5px] text-slate-500 mt-0.5 leading-relaxed">{t.advice}</p>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       </div>
     </div>,
-    document.body // <-- Fin de la magie
+    document.body
   );
 });
 
