@@ -7,7 +7,7 @@
 import { useState, useCallback, useEffect, useRef } from "react";
 import {
   LayoutDashboard, CalendarDays, TrendingUp, MessageSquare,
-  Zap, LogOut, Users, Bell,
+  Zap, LogOut, Users, Bell, X,
 } from "lucide-react";
 import { supabase }  from "./utils/supabaseClient";
 import { useAuth }   from "./context/AuthContext";
@@ -462,6 +462,11 @@ export default function AthleteApp() {
                       Tout lire
                     </button>
                   )}
+                  {/* Bouton fermer — toujours visible */}
+                  <button onClick={() => setShowNotifs(false)}
+                    style={{ width: 30, height: 30, borderRadius: 8, background: "var(--c-surface-2)", border: "1px solid var(--c-border)", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: "var(--c-text-2)", flexShrink: 0 }}>
+                    <X size={14} />
+                  </button>
                 </div>
               </div>
               <div className="flex-1 overflow-y-auto">
