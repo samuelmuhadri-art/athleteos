@@ -30,7 +30,7 @@ import {
   getStatusLabel,
 } from "../utils/chargeCalculations";
 import { computeSessionLoad } from "../utils/trainingLoad";
-import { checkUpcomingCompetitions } from "../utils/notifications";
+import { checkUpcomingCompetitions, checkAndAlertACWR, notifyAthleteCompetitionReminder } from "../utils/notifications";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -327,11 +327,12 @@ function Dashboard({ onNavigate }) {
         });
       });
 
-      setAthletes(athletesRes.data.map(a => ({
+      const mappedAthletes = athletesRes.data.map(a => ({
         id: a.id, name: a.name, mainDiscipline: a.main_discipline,
         avatar: a.profile_data?.avatar ?? initialsFromName(a.name),
         group: a.group_name,
-      })));
+      }));
+      setAthletes(mappedAthletes);
       setWeeklyCharge(charge);
       setSessions(mappedSessions);
       setAlerts(alertsRes.data ?? []);
@@ -344,7 +345,18 @@ function Dashboard({ onNavigate }) {
       setInjuries(injuriesRes.data ?? []);
       setGoals(goalsRes.data ?? []);
 
-      if (mappedComps.length > 0) await checkUpcomingCompetitions(clubId, mappedComps);
+      if (mappedComps.length > 0) {
+        await checkUpcomingCompetitions(clubId, mappedComps);
+        const in7days = new Date(Date.now() + 7 * 86400000);
+        for (const comp of mappedComps) {
+          if (new Date(comp.date) <= in7days) {
+            await notifyAthleteCompetitionReminder(clubId, comp);
+          }
+        }
+      }
+      if (mappedAthletes.length > 0 && charge.length > 0) {
+        await checkAndAlertACWR(clubId, mappedAthletes, charge, currentWeek);
+      }
     } catch (err) {
       setError(err.message ?? "Erreur inconnue");
     } finally { setLoading(false); }

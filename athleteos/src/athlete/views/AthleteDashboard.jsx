@@ -125,6 +125,7 @@ const BadgeItem = memo(({ badge }) => (
 export default function AthleteDashboard({
   athlete, weeklyCharge, sessions, competitions, lastMessages,
   coachName, myPerformances, onNavigate, wellnessToday, onOpenWellness,
+  onOpenInjuryReport,
 }) {
   const today       = new Date();
   const currentWeek = getISOWeek(today);
@@ -761,12 +762,21 @@ export default function AthleteDashboard({
           )}
 
           {/* Blessures */}
-          {activeInjuries.length > 0 && (
-            <div style={{ borderRadius: 14, padding: "14px", background: "var(--c-surface-2)", border: "1px solid rgba(232,160,32,0.15)" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 10 }}>
+          <div style={{ borderRadius: 14, padding: "14px", background: "var(--c-surface-2)", border: "1px solid rgba(232,160,32,0.15)" }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
                 <HeartPulse size={13} color="#C8890A" strokeWidth={2} />
                 <p style={{ fontSize: 12.5, fontWeight: 500, color: "var(--c-dim-alerte)" }}>Blessures en cours</p>
               </div>
+              {onOpenInjuryReport && (
+                <button onClick={onOpenInjuryReport} style={{ fontSize: 10.5, fontWeight: 500, color: "#E8A020", background: "none", border: "none", cursor: "pointer", padding: 0 }}>
+                  + Signaler
+                </button>
+              )}
+            </div>
+            {activeInjuries.length === 0 ? (
+              <p style={{ fontSize: 11.5, color: "var(--c-text-3)" }}>Aucune blessure signalée. Tant mieux !</p>
+            ) : (
               <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
                 {activeInjuries.map(inj => (
                   <div key={inj.id} style={{ borderRadius: 10, padding: "10px 12px", background: "var(--c-surface-3)", border: "1px solid rgba(200,137,10,0.08)" }}>
@@ -786,8 +796,8 @@ export default function AthleteDashboard({
                   </div>
                 ))}
               </div>
-            </div>
-          )}
+            )}
+          </div>
 
           {/* Messages coach */}
           {lastMessages.length > 0 && (

@@ -192,12 +192,26 @@ export async function notifyAthleteCompetitionReminder(clubId, competition) {
   const days        = Math.round((new Date(competition.date) - new Date()) / 86400000);
   const title       = `🏟️ ${competition.name} dans ${days} jour${days>1?"s":""}`;
   const description = `La compétition a lieu le ${new Date(competition.date).toLocaleDateString("fr-BE", { weekday:"long", day:"numeric", month:"long" })}. Reste concentré !`;
-  const rows = competition.athleteIds.map(athleteId => ({
+
+  // Pas de rappel en double pour la même compétition dans les dernières 24h
+  // (le coach peut recharger le dashboard plusieurs fois par jour, ce qui
+  // redéclenche cette vérification à chaque fois).
+  const { data: existing } = await supabase.from("athlete_notifications")
+    .select("athlete_id")
+    .eq("club_id", clubId).eq("type", "competition_reminder")
+    .ilike("title", `%${competition.name}%`)
+    .in("athlete_id", competition.athleteIds)
+    .gte("created_at", new Date(Date.now() - 86400000).toISOString());
+  const alreadyNotified = new Set((existing ?? []).map(r => r.athlete_id));
+  const targetIds = competition.athleteIds.filter(id => !alreadyNotified.has(id));
+  if (!targetIds.length) return;
+
+  const rows = targetIds.map(athleteId => ({
     athlete_id: athleteId, club_id: clubId, type: "competition_reminder",
     title, description, is_read: false,
   }));
   await supabase.from("athlete_notifications").insert(rows);
-  await sendWebPush(competition.athleteIds, { title, body: description, tag: `comp-${competition.id}` });
+  await sendWebPush(targetIds, { title, body: description, tag: `comp-${competition.id}` });
 }
 
 // <-- AJOUT POUR LES PHOTOS BEREAL DU CLUB

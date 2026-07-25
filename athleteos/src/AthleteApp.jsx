@@ -22,6 +22,7 @@ import AthletePerfs     from "./athlete/views/AthletePerfs";
 import AthleteMsgerie   from "./athlete/views/AthleteMsgerie";
 import AthleteClub      from "./athlete/views/AthleteClub";
 import WellnessModal    from "./athlete/components/WellnessModal";
+import InjuryReportModal from "./athlete/components/InjuryReportModal";
 
 const NAV_ITEMS = [
   { id: "dashboard",    label: "Tableau de bord", shortLabel: "Accueil",  icon: LayoutDashboard },
@@ -51,6 +52,7 @@ export default function AthleteApp() {
   const [error,          setError]          = useState(null);
   const [wellnessToday,  setWellnessToday]  = useState(null);
   const [showWellness,   setShowWellness]   = useState(false);
+  const [showInjuryReport, setShowInjuryReport] = useState(false);
   const [viewKey,        setViewKey]        = useState(0);
 
   const { subscribed, subscribe, permissionState, swReady } = usePushNotifications(
@@ -370,6 +372,7 @@ export default function AthleteApp() {
                 competitions={competitions} lastMessages={lastMessages} coachName={coachName}
                 myPerformances={myPerformances} onNavigate={navigate}
                 wellnessToday={wellnessToday} onOpenWellness={() => setShowWellness(true)}
+                onOpenInjuryReport={() => setShowInjuryReport(true)}
               />
             )}
             {activeView === "planning" && (
@@ -528,6 +531,14 @@ export default function AthleteApp() {
             setShowWellness(false);
             setWellnessToday(data);
           }}
+        />
+      )}
+
+      {showInjuryReport && athlete && (
+        <InjuryReportModal
+          athlete={athlete} clubId={clubId}
+          onClose={() => setShowInjuryReport(false)}
+          onSaved={() => { setShowInjuryReport(false); fetchAll(); }}
         />
       )}
     </div>

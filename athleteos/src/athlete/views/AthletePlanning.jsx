@@ -19,7 +19,7 @@ import {
   FileText, Users, AlertCircle, CheckCircle, Zap,
 } from "lucide-react";
 import { supabase } from "../../utils/supabaseClient";
-import { notifyCoachMessage } from "../../utils/notifications";
+import { notifyCoachMessage, alertAthleteSession } from "../../utils/notifications";
 import {
   DAYS_SHORT, MONTHS_FR, CATEGORIES,
   isSameDay, dateToISOWeek, dateToDayName,
@@ -123,12 +123,7 @@ const CreateSessionModal = memo(({ athlete, allAthletes, clubId, createdBy, coac
       await supabase.from("session_athletes").insert(
         allIds.map(id => ({ session_id: ns.id, athlete_id: id, status: null }))
       );
-      await supabase.from("alerts").insert({
-        club_id: clubId, athlete_id: athlete.id, type: "absence",
-        title: `Séance proposée par ${athlete.name}`,
-        description: `${athlete.name} a planifié "${form.title}" (${catLabel}) le ${new Date(form.sessionDate).toLocaleDateString("fr-BE", { day: "numeric", month: "long" })}.`,
-        severity: "légère", is_read: false,
-      });
+      await alertAthleteSession(clubId, athlete, { title: form.title, sessionDate: form.sessionDate });
       if (coachUserId) notifyCoachMessage(coachUserId, athlete.name,
         `${athlete.name} a planifié "${form.title}" le ${new Date(form.sessionDate).toLocaleDateString("fr-BE", { day: "numeric", month: "long" })}`
       ).catch(console.warn);

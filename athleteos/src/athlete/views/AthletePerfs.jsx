@@ -21,6 +21,7 @@ import {
 } from "recharts";
 import { supabase } from "../../utils/supabaseClient";
 import { getDiscHib, parsePerf } from "../shared";
+import { notifyGoalAchieved } from "../../utils/notifications";
 
 // ─── Couleurs par discipline (accents vifs, faits pour fond sombre) ──────────
 const DISC_COLORS = {
@@ -492,8 +493,10 @@ export default function AthletePerfs({ athlete, competitions, myPerformances, my
   };
 
   const handleMarkGoalDone = async (goalId) => {
+    const goal = localGoals.find(g => g.id === goalId);
     setLocalGoals(prev => prev.map(g => g.id === goalId ? { ...g, achieved: true } : g));
     await supabase.from("athlete_goals").update({ achieved: true }).eq("id", goalId);
+    if (goal) notifyGoalAchieved(clubId, athlete.id, goal.discipline, goal.target_value).catch(console.warn);
     onRefresh?.();
   };
 
