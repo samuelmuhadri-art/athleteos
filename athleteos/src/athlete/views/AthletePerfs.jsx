@@ -18,7 +18,7 @@ import {
 import {
   AreaChart, Area, XAxis, YAxis, Tooltip,
   CartesianGrid, ResponsiveContainer,
-  ScatterChart, Scatter, ZAxis, ReferenceLine,
+  ScatterChart, Scatter, ZAxis, ReferenceArea,
 } from "recharts";
 import { supabase } from "../../utils/supabaseClient";
 import { getDiscHib, parsePerf, toLocalDateStr, getISOWeek } from "../shared";
@@ -814,12 +814,14 @@ export default function AthletePerfs({ athlete, competitions, myPerformances, my
               </p>
               <ResponsiveContainer width="100%" height={220}>
                 <ScatterChart margin={{ top: 10, right: 14, bottom: 10, left: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
+                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
                   <XAxis dataKey="x" type="number" domain={[0.4, 1.8]} tick={{ fontSize: 10, fill: "rgba(255,255,255,0.35)" }} axisLine={false} tickLine={false} />
                   <YAxis dataKey="y" type="number" domain={[70, 105]} tick={{ fontSize: 10, fill: "rgba(255,255,255,0.35)" }} axisLine={false} tickLine={false} width={36} />
                   <ZAxis range={[90, 90]} />
-                  <ReferenceLine x={0.8} stroke="#1D9E75" strokeDasharray="4 3" strokeWidth={1.5} />
-                  <ReferenceLine x={1.3} stroke="#E8A020" strokeDasharray="4 3" strokeWidth={1.5} />
+                  {/* Zone optimale infusée en fond plutôt que des lignes pointillées
+                      — même esprit que la réglette ACWR du hero (bande de couleur,
+                      pas de traits techniques) */}
+                  <ReferenceArea x1={0.8} x2={1.3} fill="#1D9E75" fillOpacity={0.08} stroke="none" />
                   <Tooltip content={({ active, payload }) => {
                     if (!active || !payload?.length) return null;
                     const d = payload[0].payload;
@@ -835,13 +837,18 @@ export default function AthletePerfs({ athlete, competitions, myPerformances, my
                   <Scatter data={chargeVsPerfData} fill="#1D9E75" shape={(props) => {
                     const { cx, cy, payload } = props;
                     const col = payload.y >= 95 ? "#1D9E75" : payload.y >= 85 ? "#E8A020" : "#E05252";
-                    return <circle cx={cx} cy={cy} r={7} fill={col} fillOpacity={0.75} stroke={col} strokeWidth={1.5} />;
+                    return (
+                      <g>
+                        <circle cx={cx} cy={cy} r={14} fill={col} fillOpacity={0.14} />
+                        <circle cx={cx} cy={cy} r={8} fill={col} fillOpacity={0.9} stroke={col} strokeWidth={1} />
+                      </g>
+                    );
                   }} />
                 </ScatterChart>
               </ResponsiveContainer>
-              <div style={{ display: "flex", alignItems: "center", gap: 12, marginTop: 8, fontSize: 9.5, color: "var(--c-text-3)", flexWrap: "wrap" }}>
-                <span style={{ display: "flex", alignItems: "center", gap: 5 }}><span style={{ width: 8, height: 8, borderRadius: "50%", background: "#1D9E75" }} />0.80 — zone optimale</span>
-                <span style={{ display: "flex", alignItems: "center", gap: 5 }}><span style={{ width: 8, height: 8, borderRadius: "50%", background: "#E8A020" }} />1.30 — surcharge</span>
+              <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 10, fontSize: 9.5, color: "var(--c-text-3)" }}>
+                <span style={{ width: 10, height: 10, borderRadius: 3, background: "rgba(29,158,117,0.16)", border: "1px solid rgba(29,158,117,0.35)" }} />
+                <span>Zone de charge optimale (0.80 – 1.30)</span>
               </div>
             </div>
           )}

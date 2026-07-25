@@ -8,7 +8,7 @@
 // ============================================================
 
 import { useState, useEffect, useMemo, useCallback, useRef, memo } from "react";
-import { Plus, X, Camera, Send, MessageSquare, Heart, Image, ChevronDown, Trophy, Target, Users as UsersIcon } from "lucide-react";
+import { Plus, X, Camera, Send, MessageSquare, Heart, Image, ChevronDown, Trophy, Target, Users as UsersIcon, Award } from "lucide-react";
 import { supabase } from "../../utils/supabaseClient";
 import { initialsFromName, colorsFor, getISOWeek } from "../shared";
 import { notifyClubNewPost } from "../../utils/notifications";
@@ -315,8 +315,8 @@ const QuickPostModal = memo(({ session, athlete, allAthletes, clubId, onClose, o
 
 // ─── Card post Instagram ──────────────────────────────────────────────────────
 const AUTO_CELEBRATION_CONFIG = {
-  record: { icon: Trophy, color: "#E8A020", label: "Nouveau record personnel" },
-  goal:   { icon: Target, color: "#7C67C8", label: "Objectif atteint" },
+  record: { icon: Trophy, color: "#E8A020", label: "Nouveau record personnel", gradient: "linear-gradient(135deg, #7B5104 0%, #9A6800 50%, #C8890A 100%)" },
+  goal:   { icon: Target, color: "#7C67C8", label: "Objectif atteint",         gradient: "linear-gradient(135deg, #362A5C 0%, #4A3780 50%, #7C67C8 100%)" },
 };
 
 const PostCard = memo(({ post, athlete, allAthletes, sessions, onComment, onReact, onDelete, commentCount }) => {
@@ -341,18 +341,25 @@ const PostCard = memo(({ post, athlete, allAthletes, sessions, onComment, onReac
           (record battu / objectif atteint), pour qu'ils se distinguent
           visuellement des photos partagées manuellement */}
       {autoCfg ? (
-        <div style={{ padding:"12px 14px", display:"flex", alignItems:"center", gap:10, background:`${autoCfg.color}12`, borderBottom:`1px solid ${autoCfg.color}22` }}>
-          <div style={{ width:36, height:36, borderRadius:10, background:`${autoCfg.color}22`, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
-            <autoCfg.icon size={17} color={autoCfg.color} strokeWidth={2} />
+        <div className="animate-scale-in" style={{ position:"relative", overflow:"hidden", padding:"18px 16px 16px", background:autoCfg.gradient }}>
+          {/* Halo décoratif — même langage que les cards héro du dashboard */}
+          <div style={{ position:"absolute", right:-22, top:-22, width:110, height:110, borderRadius:"50%", background:"rgba(255,255,255,0.08)", pointerEvents:"none" }} />
+          <div style={{ position:"relative", display:"flex", alignItems:"flex-start", justifyContent:"space-between", gap:12 }}>
+            <div style={{ display:"flex", alignItems:"center", gap:12 }}>
+              <div style={{ width:42, height:42, borderRadius:12, background:"rgba(255,255,255,0.14)", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
+                <autoCfg.icon size={19} color="white" strokeWidth={1.8} />
+              </div>
+              <div>
+                <p style={{ fontSize:8.5, fontWeight:600, letterSpacing:"0.09em", textTransform:"uppercase", color:"rgba(255,255,255,0.55)" }}>{autoCfg.label}</p>
+                <p style={{ fontSize:13.5, fontWeight:600, color:"white", marginTop:3 }}>{postAthlete?.name ?? "Athlète"}</p>
+              </div>
+            </div>
+            {isOwn && (
+              <button onClick={onDelete} style={{ padding:5, background:"rgba(255,255,255,0.10)", border:"none", borderRadius:8, cursor:"pointer", color:"rgba(255,255,255,0.7)", flexShrink:0 }}><X size={13}/></button>
+            )}
           </div>
-          <div style={{ flex:1, minWidth:0 }}>
-            <p style={{ fontSize:9, fontWeight:600, letterSpacing:"0.07em", textTransform:"uppercase", color:autoCfg.color }}>{autoCfg.label}</p>
-            <p style={{ fontSize:13, color:"var(--c-text-1)", marginTop:3, lineHeight:1.4 }}>{post.content}</p>
-            <p style={{ fontSize:10, color:"var(--c-text-3)", marginTop:4 }}>{timeAgo}</p>
-          </div>
-          {isOwn && (
-            <button onClick={onDelete} style={{ padding:4, background:"none", border:"none", cursor:"pointer", color:"var(--c-text-4)", flexShrink:0 }}><X size={13}/></button>
-          )}
+          <p style={{ position:"relative", fontSize:15, fontWeight:500, color:"white", marginTop:14, lineHeight:1.4 }}>{post.content}</p>
+          <p style={{ position:"relative", fontSize:10.5, color:"rgba(255,255,255,0.45)", marginTop:8 }}>{timeAgo}</p>
         </div>
       ) : (
         <div style={{ padding:"10px 14px", display:"flex", alignItems:"center", gap:10 }}>
@@ -604,21 +611,43 @@ export default function AthleteClub({ athlete, allAthletes, clubId, sessions, pr
               </div>
             </div>
             <div style={{ textAlign:"right", flexShrink:0 }}>
-              <p style={{ fontSize:20, fontWeight:700, lineHeight:1, color: squadStats.pct >= 75 ? "#1D9E75" : squadStats.pct >= 50 ? "#E8A020" : "#E05252" }}>
+              <p style={{ fontSize:20, fontWeight:700, lineHeight:1, color: squadStats.pct >= 70 ? "#1D9E75" : squadStats.pct >= 40 ? "#E8A020" : "#E05252" }}>
                 {squadStats.pct}%
               </p>
               <p style={{ fontSize:9, color:"var(--c-text-4)", marginTop:3 }}>{squadStats.done}/{squadStats.total} séances</p>
             </div>
           </div>
           {squadStats.ranking.length > 0 && (
-            <div style={{ display:"flex", gap:7, overflowX:"auto", marginTop:11, paddingTop:11, borderTop:"1px solid var(--c-border)", scrollbarWidth:"none" }}>
-              {squadStats.ranking.map((a, i) => (
-                <div key={a.id} style={{ display:"flex", alignItems:"center", gap:6, padding:"5px 10px", borderRadius:99, background:"var(--c-surface-2)", flexShrink:0 }}>
-                  <span style={{ fontSize:10, fontWeight:700, color: i===0 ? "#E8A020" : "var(--c-text-3)" }}>{i+1}</span>
-                  <span style={{ fontSize:11, fontWeight:500, color:"var(--c-text-2)" }}>{a.name.split(" ")[0]}</span>
-                  <span style={{ fontSize:10, fontWeight:600, color:"#1D9E75" }}>{a.done}/{a.total}</span>
-                </div>
-              ))}
+            <div style={{ marginTop:14, paddingTop:14, borderTop:"1px solid var(--c-border)" }}>
+              <p style={{ fontSize:9, fontWeight:600, letterSpacing:"0.08em", textTransform:"uppercase", color:"var(--c-text-4)", marginBottom:12, textAlign:"center" }}>
+                Les plus réguliers
+              </p>
+              <div style={{ display:"flex", alignItems:"flex-end", justifyContent:"center", gap:18 }}>
+                {[1, 0, 2].filter(idx => squadStats.ranking[idx]).map(idx => {
+                  const a      = squadStats.ranking[idx];
+                  const rank   = idx + 1;
+                  const medal  = rank===1 ? "#E8A020" : rank===2 ? "#B8C4D0" : "#C87F3A";
+                  const size   = rank===1 ? 46 : 38;
+                  return (
+                    <div key={a.id} style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:6, marginBottom: rank===1 ? 8 : 0 }}>
+                      <div style={{ position:"relative" }}>
+                        <div style={{
+                          width:size, height:size, borderRadius:"50%", background:avatarColor(allAthletes, a.id),
+                          display:"flex", alignItems:"center", justifyContent:"center", color:"white",
+                          fontSize: rank===1 ? 13 : 11, fontWeight:600, border:`2px solid ${medal}`,
+                        }}>
+                          {initialsFromName(a.name)}
+                        </div>
+                        <div style={{ position:"absolute", bottom:-3, right:-3, width:18, height:18, borderRadius:"50%", background:medal, display:"flex", alignItems:"center", justifyContent:"center", border:"2px solid var(--c-surface)" }}>
+                          <Award size={9} color="white" strokeWidth={2.5} />
+                        </div>
+                      </div>
+                      <p style={{ fontSize:10.5, fontWeight:500, color:"var(--c-text-2)" }}>{a.name.split(" ")[0]}</p>
+                      <p style={{ fontSize:11.5, fontWeight:700, color:medal }}>{a.done}/{a.total}</p>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           )}
         </div>
