@@ -27,6 +27,7 @@ import {
   getStatusLabel,
   computePerformanceStability,
 } from "../utils/chargeCalculations";
+import { computeSessionLoad } from "../utils/trainingLoad";
 
 // ─── Constantes ───────────────────────────────────────────────────────────────
 
@@ -1266,7 +1267,9 @@ function AthleteList({ onNavigate }) {
         (sessionAthletesRes.data ?? []).filter(r => r.session_id === s.id).forEach(r => {
           if (r.rpe == null) return;
           const key = `${r.athlete_id}-${s.week}`;
-          byAthleteWeek[key] = (byAthleteWeek[key] ?? 0) + (s.duration_minutes ?? 60) * r.rpe;
+          const load = computeSessionLoad(s.duration_minutes ?? 60, r.rpe, s.category);
+          if (load == null) return;
+          byAthleteWeek[key] = (byAthleteWeek[key] ?? 0) + load;
         });
       });
       const remappedCharge = Object.entries(byAthleteWeek).map(([key, rawLoad]) => {

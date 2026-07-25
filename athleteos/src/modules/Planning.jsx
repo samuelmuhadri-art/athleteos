@@ -805,7 +805,7 @@ function Planning() {
   const selectedDaySessions = useMemo(() => {
     if (!selectedDate) return [];
     return (sessionsByDate[selectedDate.toISOString().slice(0, 10)] ?? [])
-      .sort((a, b) => a.time.localeCompare(b.time));
+      .sort((a, b) => (a.time ?? "").localeCompare(b.time ?? ""));
   }, [selectedDate, sessionsByDate]);
 
   const weekDays = useMemo(() => {
@@ -966,7 +966,7 @@ function Planning() {
             <div className="p-3 md:p-4 space-y-2">
               {weekDays.map((date, i) => {
                 const key     = date.toISOString().slice(0, 10);
-                const ds      = (sessionsByDate[key] ?? []).sort((a, b) => a.time.localeCompare(b.time));
+                const ds      = (sessionsByDate[key] ?? []).sort((a, b) => (a.time ?? "").localeCompare(b.time ?? ""));
                 const isToday = isSameDay(date, today);
                 const isPast  = date < new Date(today.toISOString().slice(0, 10));
 

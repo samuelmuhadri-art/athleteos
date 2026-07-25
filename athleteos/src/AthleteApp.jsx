@@ -12,6 +12,7 @@ import {
 import { supabase }  from "./utils/supabaseClient";
 import { useAuth }   from "./context/AuthContext";
 import { getAthleteMetricsForWeek } from "./utils/chargeCalculations";
+import { computeSessionLoad } from "./utils/trainingLoad";
 import { usePushNotifications, PushToggleButton } from "./hooks/usePushNotifications";
 import { initialsFromName } from "./athlete/shared";
 
@@ -142,7 +143,9 @@ export default function AthleteApp() {
       allSessions.forEach(s=>{
         const sa = (saRes.data??[]).find(r=>r.session_id===s.id);
         if(!sa?.rpe) return;
-        byWeek[s.week] = (byWeek[s.week]??0) + (s.durationMinutes??60)*sa.rpe;
+        const load = computeSessionLoad(s.durationMinutes??60, sa.rpe, s.category);
+        if (load == null) return;
+        byWeek[s.week] = (byWeek[s.week]??0) + load;
       });
       const charge = Object.entries(byWeek).map(([week,rawLoad])=>({athleteId,week:Number(week),rawLoad}));
 

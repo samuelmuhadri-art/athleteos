@@ -142,7 +142,7 @@ export default function AthleteDashboard({
   [competitions, athlete.id]);
 
   const weekSessions = useMemo(() =>
-    sessions.filter(s => s.week === currentWeek).sort((a, b) => a.time.localeCompare(b.time)),
+    sessions.filter(s => s.week === currentWeek).sort((a, b) => (a.time ?? "").localeCompare(b.time ?? "")),
   [sessions, currentWeek]);
 
   const topRecords     = Object.entries(athlete.records ?? {}).slice(0, 4);
@@ -389,8 +389,8 @@ export default function AthleteDashboard({
                 </div>
                 {chargeTrend !== null && (
                   <div style={{ display: "flex", alignItems: "center", gap: 4, padding: "3px 9px", borderRadius: 8, flexShrink: 0,
-                    background: chargeTrend > 15 ? "rgba(192,57,43,0.07)" : chargeTrend > 0 ? "rgba(200,137,10,0.07)" : "rgba(29,158,117,0.07)",
-                    color: chargeTrend > 15 ? "#922B21" : chargeTrend > 0 ? "#9A6800" : "#16826C",
+                    background: chargeTrend > 15 ? "rgba(224,82,82,0.15)" : chargeTrend > 0 ? "rgba(232,160,32,0.15)" : "rgba(29,158,117,0.15)",
+                    color: chargeTrend > 15 ? "#E05252" : chargeTrend > 0 ? "#E8A020" : "#4DC9A0",
                     fontSize: 10.5, fontWeight: 500,
                   }}>
                     {chargeTrend > 0 ? <TrendingUp size={10} /> : chargeTrend < 0 ? <TrendingDown size={10} /> : <Minus size={10} />}
@@ -425,7 +425,7 @@ export default function AthleteDashboard({
                             // Passé : fond très léger, couleur en bg + bordure top colorée
                             background: isCurrent
                               ? w.color
-                              : "rgba(0,0,0,0.045)",
+                              : "rgba(255,255,255,0.07)",
                             // Barre de couleur en haut pour les passées — indique la zone
                             borderTop: isCurrent ? "none" : `2px solid ${w.color}55`,
                             transition: "height 0.6s cubic-bezier(0.16,1,0.3,1)",
@@ -435,7 +435,7 @@ export default function AthleteDashboard({
                         {/* Label semaine */}
                         <span style={{
                           fontSize: 8, lineHeight: 1, paddingTop: 5, paddingBottom: 2,
-                          color: isCurrent ? "#5A5A54" : "#C4C2BC",
+                          color: isCurrent ? "var(--c-text-2)" : "var(--c-text-4)",
                           fontWeight: isCurrent ? 500 : 400,
                           textAlign: "center", display: "block",
                         }}>
@@ -526,11 +526,11 @@ export default function AthleteDashboard({
                         </div>
                         <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
                           <span style={{ fontSize: 14, fontWeight: 600, color: col, fontVariantNumeric: "tabular-nums", letterSpacing: "-0.02em" }}>{val}</span>
-                          <ChevronRight size={11} color="#C4C2BC" />
+                          <ChevronRight size={11} color="var(--c-text-4)" />
                         </div>
                       </div>
                       {/* Barre 3px */}
-                      <div style={{ height: 3, background: "rgba(0,0,0,0.06)", borderRadius: 99, overflow: "hidden" }}>
+                      <div style={{ height: 3, background: "rgba(255,255,255,0.07)", borderRadius: 99, overflow: "hidden" }}>
                         <div style={{ height: "100%", width: `${val}%`, background: col, borderRadius: 99, transition: "width 0.8s cubic-bezier(0.16,1,0.3,1)" }} />
                       </div>
                     </button>
@@ -556,7 +556,7 @@ export default function AthleteDashboard({
             </div>
             {weekSessions.length === 0 ? (
               <div style={{ padding: "32px 16px", textAlign: "center" }}>
-                <CalendarDays size={20} color="#C4C2BC" strokeWidth={1.5} style={{ margin: "0 auto 8px" }} />
+                <CalendarDays size={20} color="var(--c-text-4)" strokeWidth={1.5} style={{ margin: "0 auto 8px" }} />
                 <p style={{ fontSize: 12, color: "var(--c-text-3)" }}>Aucune séance cette semaine</p>
               </div>
             ) : weekSessions.map((s, idx) => {
@@ -564,11 +564,11 @@ export default function AthleteDashboard({
               const val = s.validations?.find(v => v.athleteId === athlete.id);
               const st  = val?.status ?? "future";
               const stCfg = {
-                done:    { label: "Fait",    bg: "rgba(29,158,117,0.07)",  color: "#16826C" },
-                partial: { label: "Partiel", bg: "rgba(200,137,10,0.07)",  color: "#9A6800" },
-                none:    { label: "Absent",  bg: "rgba(192,57,43,0.07)",   color: "#922B21" },
-                future:  { label: "À venir", bg: "rgba(0,0,0,0.04)",       color: "var(--c-text-3)" },
-              }[st] ?? { label: "À venir", bg: "rgba(0,0,0,0.04)", color: "var(--c-text-3)" };
+                done:    { label: "Fait",    bg: "rgba(29,158,117,0.15)",  color: "#4DC9A0" },
+                partial: { label: "Partiel", bg: "rgba(232,160,32,0.15)",  color: "#E8A020" },
+                none:    { label: "Absent",  bg: "rgba(224,82,82,0.15)",   color: "#E05252" },
+                future:  { label: "À venir", bg: "rgba(255,255,255,0.08)", color: "var(--c-text-3)" },
+              }[st] ?? { label: "À venir", bg: "rgba(255,255,255,0.08)", color: "var(--c-text-3)" };
               return (
                 <div key={s.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 16px", borderTop: idx > 0 ? "1px solid var(--c-border)" : "none" }}>
                   {/* Liseré catégorie 2px */}
@@ -583,7 +583,7 @@ export default function AthleteDashboard({
                   </div>
                   {s.pdfUrl && (
                     <a href={s.pdfUrl} target="_blank" rel="noopener noreferrer"
-                      style={{ display: "flex", alignItems: "center", gap: 3, padding: "2px 6px", borderRadius: 5, background: "rgba(75,123,219,0.07)", color: "#2E5FA8", fontSize: 9.5, fontWeight: 500, flexShrink: 0, textDecoration: "none" }}>
+                      style={{ display: "flex", alignItems: "center", gap: 3, padding: "2px 6px", borderRadius: 5, background: "rgba(91,141,239,0.15)", color: "#5B8DEF", fontSize: 9.5, fontWeight: 500, flexShrink: 0, textDecoration: "none" }}>
                       <FileText size={9} />PDF
                     </a>
                   )}
@@ -667,7 +667,7 @@ export default function AthleteDashboard({
             </div>
             {unlockedBadges.length === 0 ? (
               <div style={{ textAlign: "center", padding: "24px 0" }}>
-                <Trophy size={22} color="#C4C2BC" strokeWidth={1.5} style={{ margin: "0 auto 8px" }} />
+                <Trophy size={22} color="var(--c-text-4)" strokeWidth={1.5} style={{ margin: "0 auto 8px" }} />
                 <p style={{ fontSize: 12, color: "var(--c-text-3)" }}>Commence à t'entraîner pour débloquer tes premiers badges</p>
               </div>
             ) : (
@@ -772,7 +772,7 @@ export default function AthleteDashboard({
                   <div key={inj.id} style={{ borderRadius: 10, padding: "10px 12px", background: "var(--c-surface-3)", border: "1px solid rgba(200,137,10,0.08)" }}>
                     <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
                       <p style={{ fontSize: 12, fontWeight: 500, color: "var(--c-text-1)" }}>{inj.name}</p>
-                      <span style={{ fontSize: 9.5, fontWeight: 500, padding: "1px 6px", borderRadius: 5, background: "rgba(200,137,10,0.08)", color: "#9A6800" }}>
+                      <span style={{ fontSize: 9.5, fontWeight: 500, padding: "1px 6px", borderRadius: 5, background: "rgba(232,160,32,0.15)", color: "#E8A020" }}>
                         {inj.intensity}/10
                       </span>
                     </div>

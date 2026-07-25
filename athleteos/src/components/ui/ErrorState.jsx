@@ -14,19 +14,23 @@ import { AlertTriangle, RefreshCw } from "lucide-react";
 function ErrorState({ message = "Une erreur est survenue.", onRetry }) {
   return (
     <div className="p-6 max-w-4xl mx-auto">
-      <div className="bg-red-50 border border-red-100 rounded-xl p-5">
+      <div
+        className="rounded-xl p-5"
+        style={{ background: "rgba(224,82,82,0.08)", border: "1px solid rgba(224,82,82,0.20)" }}
+      >
         <div className="flex items-start gap-3">
-          <AlertTriangle size={20} className="text-red-500 flex-shrink-0 mt-0.5" />
+          <AlertTriangle size={20} className="flex-shrink-0 mt-0.5" style={{ color: "var(--c-dim-danger)" }} />
           <div className="flex-1 min-w-0">
-            <h3 className="text-[14px] font-semibold text-red-800 mb-1">
+            <h3 className="text-[14px] font-semibold mb-1" style={{ color: "var(--c-text-1)" }}>
               Impossible de charger les données
             </h3>
-            <p className="text-[12px] text-red-600">{message}</p>
+            <p className="text-[12px]" style={{ color: "var(--c-text-2)" }}>{message}</p>
           </div>
           {onRetry && (
             <button
               onClick={onRetry}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-100 text-red-700 text-[12px] font-medium hover:bg-red-200 transition-colors flex-shrink-0"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-medium transition-colors flex-shrink-0 hover:bg-[rgba(224,82,82,0.22)]"
+              style={{ background: "rgba(224,82,82,0.14)", color: "var(--c-dim-danger)" }}
             >
               <RefreshCw size={13} />
               Réessayer

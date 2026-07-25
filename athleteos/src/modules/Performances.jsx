@@ -21,6 +21,7 @@ import { useAuth }                    from "../context/AuthContext";
 import LoadingState                   from "../components/ui/LoadingState";
 import ErrorState                     from "../components/ui/ErrorState";
 import { getAthleteMetricsForWeek }   from "../utils/chargeCalculations";
+import { computeSessionLoad }         from "../utils/trainingLoad";
 
 // ─── Constantes ───────────────────────────────────────────────────────────────
 
@@ -89,7 +90,7 @@ function rankAthletes(athletes, discipline) {
 }
 
 function pctColor(pct) {
-  if (pct === null) return "#94a3b8";
+  if (pct === null) return "var(--c-text-3)";
   if (pct >= 97)   return "#1D9E75";
   if (pct >= 90)   return "#EF9F27";
   return "#E24B4A";
@@ -121,16 +122,16 @@ const ScatterTooltip = ({ active, payload, currentWeek }) => {
   const d = payload[0]?.payload;
   if (!d) return null;
   return (
-    <div className="bg-white border border-slate-100 rounded-xl shadow-lg px-3 py-3 text-[12px] min-w-[170px]">
+    <div className="rounded-xl shadow-lg px-3 py-3 text-[12px] min-w-[170px]" style={{ background: "var(--c-surface-2)", border: "1px solid var(--c-border-strong)" }}>
       <div className="flex items-center gap-2 mb-2">
         <div className="w-6 h-6 rounded-full flex items-center justify-center text-white text-[8px] font-bold" style={{ background: d.color }}>{d.avatar}</div>
-        <span className="font-bold text-slate-700">{d.name}</span>
+        <span className="font-bold" style={{ color: "var(--c-text-1)" }}>{d.name}</span>
       </div>
-      <div className="space-y-0.5 text-slate-500">
-        <p>Charge S{currentWeek} : <strong className="text-slate-700">{d.x} u</strong></p>
+      <div className="space-y-0.5" style={{ color: "var(--c-text-2)" }}>
+        <p>Charge S{currentWeek} : <strong style={{ color: "var(--c-text-1)" }}>{d.x} u</strong></p>
         <p>% PR atteint : <strong style={{ color: pctColor(d.y) }}>{d.y}%</strong></p>
-        <p>SB : <strong className="text-slate-700">{d.sb}</strong></p>
-        <p>PR : <strong className="text-emerald-600">{d.pr}</strong></p>
+        <p>SB : <strong style={{ color: "var(--c-text-1)" }}>{d.sb}</strong></p>
+        <p>PR : <strong style={{ color: "#4DC9A0" }}>{d.pr}</strong></p>
       </div>
     </div>
   );
@@ -140,11 +141,11 @@ const LineTooltip = ({ active, payload, label }) => {
   if (!active || !payload?.length) return null;
   const d = payload[0].payload;
   return (
-    <div className="bg-white border border-slate-100 rounded-xl shadow-lg px-3 py-3 text-[12px] min-w-[150px]">
-      <p className="font-bold text-slate-700 mb-1">{d.compName}</p>
-      <p className="text-slate-500 text-[10px] mb-2">{label}</p>
-      <p className="text-[14px] font-bold text-emerald-600">{d.resultStr}</p>
-      {d.context && <p className="text-slate-400 text-[11px] mt-1 italic">"{d.context}"</p>}
+    <div className="rounded-xl shadow-lg px-3 py-3 text-[12px] min-w-[150px]" style={{ background: "var(--c-surface-2)", border: "1px solid var(--c-border-strong)" }}>
+      <p className="font-bold mb-1" style={{ color: "var(--c-text-1)" }}>{d.compName}</p>
+      <p className="text-[10px] mb-2" style={{ color: "var(--c-text-2)" }}>{label}</p>
+      <p className="text-[14px] font-bold" style={{ color: "#4DC9A0" }}>{d.resultStr}</p>
+      {d.context && <p className="text-[11px] mt-1 italic" style={{ color: "var(--c-text-3)" }}>"{d.context}"</p>}
     </div>
   );
 };
@@ -152,9 +153,9 @@ const LineTooltip = ({ active, payload, label }) => {
 const Podium = memo(({ ranked }) => {
   const top3 = ranked.slice(0, 3);
   const podiumConfig = [
-    { data: top3[1], height: 80,  rank: 2, medal: "🥈", bg: "#E2E8F0", border: "#94A3B8" },
-    { data: top3[0], height: 110, rank: 1, medal: "🥇", bg: "#FEF9C3", border: "#EF9F27" },
-    { data: top3[2], height: 60,  rank: 3, medal: "🥉", bg: "#FEE2E2", border: "#F97316" },
+    { data: top3[1], height: 80,  rank: 2, medal: "🥈", bg: "rgba(148,163,184,0.16)", border: "#94A3B8" },
+    { data: top3[0], height: 110, rank: 1, medal: "🥇", bg: "rgba(239,159,39,0.18)", border: "#EF9F27" },
+    { data: top3[2], height: 60,  rank: 3, medal: "🥉", bg: "rgba(249,115,22,0.16)", border: "#F97316" },
   ].filter((p) => p.data);
   if (ranked.length === 0) return null;
   return (
@@ -165,8 +166,8 @@ const Podium = memo(({ ranked }) => {
             <div className="w-12 h-12 rounded-2xl flex items-center justify-center text-white text-[13px] font-bold mx-auto mb-1.5 shadow-sm" style={{ background: ATHLETE_COLORS[data.colorIdx] }}>
               {data.athlete.avatar}
             </div>
-            <p className="text-[12px] font-bold text-slate-700 leading-tight">{data.athlete.name.split(" ")[0]}</p>
-            <p className="text-[11px] font-bold text-slate-500 mt-0.5">{data.rec.sb}</p>
+            <p className="text-[12px] font-bold leading-tight" style={{ color: "var(--c-text-1)" }}>{data.athlete.name.split(" ")[0]}</p>
+            <p className="text-[11px] font-bold mt-0.5" style={{ color: "var(--c-text-2)" }}>{data.rec.sb}</p>
             {data.pct !== null && <p className="text-[10px] font-semibold mt-0.5" style={{ color: pctColor(data.pct) }}>{data.pct}% PR</p>}
           </div>
           <div className="w-full rounded-t-xl flex items-start justify-center pt-3 border-t-4" style={{ height, background: bg, borderColor: border }}>
@@ -225,7 +226,9 @@ function Performances() {
             saRes.data.filter((r) => r.session_id === s.id).forEach((r) => {
               if (r.rpe == null) return;
               const key = `${r.athlete_id}-${s.week}`;
-              byAthleteWeek[key] = (byAthleteWeek[key] ?? 0) + (s.duration_minutes ?? 60) * r.rpe;
+              const load = computeSessionLoad(s.duration_minutes ?? 60, r.rpe, s.category);
+              if (load == null) return;
+              byAthleteWeek[key] = (byAthleteWeek[key] ?? 0) + load;
             });
           });
           weeklyChargeComputed = Object.entries(byAthleteWeek).map(([key, rawLoad]) => {
@@ -298,13 +301,13 @@ function Performances() {
     return (
       <div className="p-6 max-w-7xl mx-auto space-y-6">
         <div>
-          <h2 className="text-[22px] font-bold text-slate-800 tracking-tight">Performances</h2>
-          <p className="text-[13px] text-slate-400 mt-0.5">Classement du groupe par épreuve · Season Best</p>
+          <h2 className="text-[22px] font-bold tracking-tight" style={{ color: "var(--c-text-1)" }}>Performances</h2>
+          <p className="text-[13px] mt-0.5" style={{ color: "var(--c-text-3)" }}>Classement du groupe par épreuve · Season Best</p>
         </div>
-        <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-16 text-center">
-          <Trophy size={40} className="mx-auto mb-3 text-slate-200" />
-          <p className="text-[15px] font-semibold text-slate-400">Aucun record enregistré pour l'instant</p>
-          <p className="text-[12px] text-slate-300 mt-1 max-w-sm mx-auto">Dès que les athlètes auront ajouté leurs records, les classements apparaîtront ici.</p>
+        <div className="card p-16 text-center">
+          <Trophy size={40} className="mx-auto mb-3" style={{ color: "var(--c-text-4)" }} />
+          <p className="text-[15px] font-semibold" style={{ color: "var(--c-text-2)" }}>Aucun record enregistré pour l'instant</p>
+          <p className="text-[12px] mt-1 max-w-sm mx-auto" style={{ color: "var(--c-text-3)" }}>Dès que les athlètes auront ajouté leurs records, les classements apparaîtront ici.</p>
         </div>
       </div>
     );
@@ -314,27 +317,27 @@ function Performances() {
     <div className="p-6 max-w-7xl mx-auto space-y-6">
 
       {/* ── En-tête ──────────────────────────────────────────────────────── */}
-      <div className="flex items-start justify-between flex-wrap gap-4 bg-white p-3 rounded-xl border border-slate-200 shadow-sm">
+      <div className="card flex items-start justify-between flex-wrap gap-4 p-3">
         <div className="flex gap-2">
-          <button onClick={() => setViewMode("group")} className={`px-4 py-2 rounded-lg text-[13px] font-semibold transition-colors flex items-center gap-2 ${viewMode === "group" ? "bg-emerald-50 text-emerald-700" : "text-slate-500 hover:bg-slate-50"}`}>
+          <button onClick={() => setViewMode("group")} className={`px-4 py-2 rounded-lg text-[13px] font-semibold transition-colors flex items-center gap-2 ${viewMode === "group" ? "bg-[rgba(29,158,117,0.15)] text-[#4DC9A0]" : "text-[var(--c-text-3)] hover:bg-[var(--c-surface-3)]"}`}>
             <Users size={16} /> Classement Groupe
           </button>
-          <button onClick={() => setViewMode("evolution")} className={`px-4 py-2 rounded-lg text-[13px] font-semibold transition-colors flex items-center gap-2 ${viewMode === "evolution" ? "bg-emerald-50 text-emerald-700" : "text-slate-500 hover:bg-slate-50"}`}>
+          <button onClick={() => setViewMode("evolution")} className={`px-4 py-2 rounded-lg text-[13px] font-semibold transition-colors flex items-center gap-2 ${viewMode === "evolution" ? "bg-[rgba(29,158,117,0.15)] text-[#4DC9A0]" : "text-[var(--c-text-3)] hover:bg-[var(--c-surface-3)]"}`}>
             <TrendingUp size={16} /> Évolution Individuelle
           </button>
         </div>
 
         <div className="relative">
-          <button onClick={() => setDropdownOpen((v) => !v)} className="flex items-center gap-2.5 bg-slate-50 border border-slate-200 rounded-lg px-4 py-2 text-[13px] font-semibold text-slate-700 shadow-sm hover:border-slate-300 transition-all min-w-[200px] justify-between">
+          <button onClick={() => setDropdownOpen((v) => !v)} className="flex items-center gap-2.5 bg-[var(--c-surface-2)] border border-[var(--c-border)] rounded-lg px-4 py-2 text-[13px] font-semibold text-[var(--c-text-1)] shadow-sm hover:border-[var(--c-border-strong)] transition-all min-w-[200px] justify-between">
             <span className="flex items-center gap-2"><Trophy size={15} color="#EF9F27" />{selectedDisc}</span>
-            <ChevronDown size={15} className={`text-slate-400 transition-transform ${dropdownOpen ? "rotate-180" : ""}`} />
+            <ChevronDown size={15} className={`text-[var(--c-text-3)] transition-transform ${dropdownOpen ? "rotate-180" : ""}`} />
           </button>
           {dropdownOpen && (
-            <div className="absolute top-full right-0 mt-1.5 bg-white border border-slate-100 rounded-xl shadow-xl z-20 overflow-hidden min-w-[220px]">
+            <div className="absolute top-full right-0 mt-1.5 rounded-xl shadow-xl z-20 overflow-hidden min-w-[220px]" style={{ background: "var(--c-surface-2)", border: "1px solid var(--c-border-strong)" }}>
               <div className="max-h-64 overflow-y-auto py-1">
                 {allDisciplines.map((d) => (
                   <button key={d} onClick={() => { setSelectedDisc(d); setDropdownOpen(false); }}
-                    className={["w-full text-left px-4 py-2 text-[13px] transition-colors", selectedDisc === d ? "bg-emerald-50 text-emerald-700 font-semibold" : "text-slate-600 hover:bg-slate-50"].join(" ")}>
+                    className={["w-full text-left px-4 py-2 text-[13px] transition-colors", selectedDisc === d ? "bg-[rgba(29,158,117,0.15)] text-[#4DC9A0] font-semibold" : "text-[var(--c-text-2)] hover:bg-[var(--c-surface-3)]"].join(" ")}>
                     {d}
                   </button>
                 ))}
@@ -349,66 +352,66 @@ function Performances() {
         <div className="space-y-6">
           <div className="grid grid-cols-3 gap-4">
             {[
-              { icon: Users, bg: "bg-amber-50", color: "#EF9F27", label: "Athlètes", value: ranked.length, sub: `pratiquent ${selectedDisc}` },
-              { icon: TrendingUp, bg: "bg-emerald-50", color: "#1D9E75", label: "Meilleur SB", value: ranked[0]?.rec.sb ?? "—", sub: ranked[0]?.athlete.name.split(" ")[0] ?? "—", valueColor: "#1D9E75" },
-              { icon: Zap, bg: "bg-blue-50", color: "#378ADD", label: "% PR moyen groupe", value: avgPct !== null ? `${avgPct}%` : "—", sub: "de leurs records personnels", valueColor: pctColor(avgPct) },
+              { icon: Users, bg: "bg-[rgba(239,159,39,0.15)]", color: "#EF9F27", label: "Athlètes", value: ranked.length, sub: `pratiquent ${selectedDisc}` },
+              { icon: TrendingUp, bg: "bg-[rgba(29,158,117,0.15)]", color: "#1D9E75", label: "Meilleur SB", value: ranked[0]?.rec.sb ?? "—", sub: ranked[0]?.athlete.name.split(" ")[0] ?? "—", valueColor: "#1D9E75" },
+              { icon: Zap, bg: "bg-[rgba(55,138,221,0.15)]", color: "#378ADD", label: "% PR moyen groupe", value: avgPct !== null ? `${avgPct}%` : "—", sub: "de leurs records personnels", valueColor: pctColor(avgPct) },
             ].map((card) => (
-              <div key={card.label} className="bg-white rounded-xl border border-slate-100 shadow-sm p-4 flex items-center gap-3">
+              <div key={card.label} className="card p-4 flex items-center gap-3">
                 <div className={`w-10 h-10 rounded-xl ${card.bg} flex items-center justify-center flex-shrink-0`}>
                   <card.icon size={18} color={card.color} />
                 </div>
                 <div>
-                  <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">{card.label}</p>
-                  <p className="text-[22px] font-bold leading-tight" style={{ color: card.valueColor ?? "#1e293b" }}>{card.value}</p>
-                  <p className="text-[10px] text-slate-400">{card.sub}</p>
+                  <p className="text-[11px] font-semibold uppercase tracking-wider" style={{ color: "var(--c-text-3)" }}>{card.label}</p>
+                  <p className="text-[22px] font-bold leading-tight" style={{ color: card.valueColor ?? "var(--c-text-1)" }}>{card.value}</p>
+                  <p className="text-[10px]" style={{ color: "var(--c-text-3)" }}>{card.sub}</p>
                 </div>
               </div>
             ))}
           </div>
 
           {ranked.length === 0 ? (
-            <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-16 text-center">
-              <Trophy size={40} className="mx-auto mb-3 text-slate-200" />
-              <p className="text-[15px] font-semibold text-slate-400">Aucun athlète n'a de record pour « {selectedDisc} »</p>
+            <div className="card p-16 text-center">
+              <Trophy size={40} className="mx-auto mb-3" style={{ color: "var(--c-text-4)" }} />
+              <p className="text-[15px] font-semibold" style={{ color: "var(--c-text-2)" }}>Aucun athlète n'a de record pour « {selectedDisc} »</p>
             </div>
           ) : (
             <>
               <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
-                <div className="lg:col-span-2 bg-white rounded-xl border border-slate-100 shadow-sm p-5">
-                  <h3 className="text-[14px] font-semibold text-slate-700 mb-4">Podium — {selectedDisc}</h3>
+                <div className="lg:col-span-2 card p-5">
+                  <h3 className="text-[14px] font-semibold mb-4" style={{ color: "var(--c-text-1)" }}>Podium — {selectedDisc}</h3>
                   {ranked.length >= 2 ? <Podium ranked={ranked} /> : (
                     <div className="flex flex-col items-center justify-center py-8 gap-3">
                       <div className="w-16 h-16 rounded-2xl flex items-center justify-center text-white text-[18px] font-bold shadow-sm" style={{ background: ATHLETE_COLORS[ranked[0].colorIdx] }}>{ranked[0].athlete.avatar}</div>
                       <div className="text-center">
-                        <p className="text-[15px] font-bold text-slate-700">{ranked[0].athlete.name}</p>
-                        <p className="text-[18px] font-bold text-emerald-600 mt-1">{ranked[0].rec.sb}</p>
-                        <p className="text-[11px] text-slate-400 mt-0.5">Seul pratiquant dans le groupe</p>
+                        <p className="text-[15px] font-bold" style={{ color: "var(--c-text-1)" }}>{ranked[0].athlete.name}</p>
+                        <p className="text-[18px] font-bold mt-1" style={{ color: "#4DC9A0" }}>{ranked[0].rec.sb}</p>
+                        <p className="text-[11px] mt-0.5" style={{ color: "var(--c-text-3)" }}>Seul pratiquant dans le groupe</p>
                       </div>
                     </div>
                   )}
                 </div>
 
-                <div className="lg:col-span-3 bg-white rounded-xl border border-slate-100 shadow-sm overflow-hidden">
-                  <div className="px-5 py-4 border-b border-slate-50">
-                    <h3 className="text-[14px] font-semibold text-slate-700">Classement complet</h3>
+                <div className="lg:col-span-3 card overflow-hidden">
+                  <div className="px-5 py-4 border-b" style={{ borderColor: "var(--c-border)" }}>
+                    <h3 className="text-[14px] font-semibold" style={{ color: "var(--c-text-1)" }}>Classement complet</h3>
                   </div>
-                  <div className="divide-y divide-slate-50 max-h-[300px] overflow-y-auto">
+                  <div className="divide-y divide-[var(--c-border)] max-h-[300px] overflow-y-auto">
                     {ranked.map((r, i) => (
                       <div key={r.athlete.id} className="px-5 py-3.5 flex items-center gap-3">
-                        <span className={["w-7 h-7 rounded-full flex items-center justify-center text-[12px] font-bold flex-shrink-0", i === 0 ? "bg-amber-100 text-amber-700" : i === 1 ? "bg-slate-200 text-slate-600" : i === 2 ? "bg-orange-100 text-orange-600" : "bg-slate-100 text-slate-400"].join(" ")}>{i + 1}</span>
+                        <span className={["w-7 h-7 rounded-full flex items-center justify-center text-[12px] font-bold flex-shrink-0", i === 0 ? "bg-[rgba(239,159,39,0.15)] text-[#EF9F27]" : i === 1 ? "bg-[rgba(255,255,255,0.08)] text-[var(--c-text-2)]" : i === 2 ? "bg-[rgba(249,115,22,0.15)] text-[#F97316]" : "bg-[rgba(255,255,255,0.08)] text-[var(--c-text-2)]"].join(" ")}>{i + 1}</span>
                         <div className="w-8 h-8 rounded-full flex items-center justify-center text-white text-[10px] font-bold flex-shrink-0" style={{ background: ATHLETE_COLORS[r.colorIdx] }}>{r.athlete.avatar}</div>
                         <div className="flex-1 min-w-0">
-                          <p className="text-[13px] font-semibold text-slate-700 truncate">{r.athlete.name}</p>
-                          <p className="text-[10px] text-slate-400 truncate">{r.athlete.mainDiscipline ?? "—"}</p>
+                          <p className="text-[13px] font-semibold truncate" style={{ color: "var(--c-text-1)" }}>{r.athlete.name}</p>
+                          <p className="text-[10px] truncate" style={{ color: "var(--c-text-3)" }}>{r.athlete.mainDiscipline ?? "—"}</p>
                         </div>
                         <div className="text-right flex-shrink-0 w-20">
-                          <p className="text-[14px] font-bold text-slate-700">{r.rec.sb}</p>
-                          <p className="text-[10px] text-slate-400">PR : {r.rec.pr}</p>
+                          <p className="text-[14px] font-bold" style={{ color: "var(--c-text-1)" }}>{r.rec.sb}</p>
+                          <p className="text-[10px]" style={{ color: "var(--c-text-3)" }}>PR : {r.rec.pr}</p>
                         </div>
                         {r.pct !== null && (
                           <div className="w-16 text-right flex-shrink-0">
                             <p className="text-[12px] font-bold" style={{ color: pctColor(r.pct) }}>{r.pct}%</p>
-                            <p className="text-[9px] text-slate-400">du PR</p>
+                            <p className="text-[9px]" style={{ color: "var(--c-text-3)" }}>du PR</p>
                           </div>
                         )}
                       </div>
@@ -418,19 +421,19 @@ function Performances() {
               </div>
 
               {scatterData.length >= 2 && (
-                <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-5">
+                <div className="card p-5">
                   <div className="mb-4">
-                    <h3 className="text-[14px] font-semibold text-slate-700">Charge vs Performance — {selectedDisc}</h3>
-                    <p className="text-[11px] text-slate-400 mt-0.5">Charge S{CURRENT_WEEK} (axe X) · % du PR atteint (axe Y) · Chaque point = un athlète</p>
+                    <h3 className="text-[14px] font-semibold" style={{ color: "var(--c-text-1)" }}>Charge vs Performance — {selectedDisc}</h3>
+                    <p className="text-[11px] mt-0.5" style={{ color: "var(--c-text-3)" }}>Charge S{CURRENT_WEEK} (axe X) · % du PR atteint (axe Y) · Chaque point = un athlète</p>
                   </div>
                   <ResponsiveContainer width="100%" height={280}>
                     <ScatterChart margin={{ top: 20, right: 30, bottom: 20, left: 20 }}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-                      <XAxis dataKey="x" name="Charge" type="number" tick={{ fontSize: 10, fill: "#94a3b8" }} axisLine={false} tickLine={false}>
-                        <Label value="Charge (unités)" position="insideBottom" offset={-10} style={{ fontSize: 10, fill: "#94a3b8" }} />
+                      <CartesianGrid strokeDasharray="3 3" stroke="var(--c-border)" />
+                      <XAxis dataKey="x" name="Charge" type="number" tick={{ fontSize: 10, fill: "var(--c-text-3)" }} axisLine={false} tickLine={false}>
+                        <Label value="Charge (unités)" position="insideBottom" offset={-10} style={{ fontSize: 10, fill: "var(--c-text-3)" }} />
                       </XAxis>
-                      <YAxis dataKey="y" name="% PR" type="number" domain={[70, 105]} tick={{ fontSize: 10, fill: "#94a3b8" }} axisLine={false} tickLine={false}>
-                        <Label value="% PR" angle={-90} position="insideLeft" style={{ fontSize: 10, fill: "#94a3b8" }} />
+                      <YAxis dataKey="y" name="% PR" type="number" domain={[70, 105]} tick={{ fontSize: 10, fill: "var(--c-text-3)" }} axisLine={false} tickLine={false}>
+                        <Label value="% PR" angle={-90} position="insideLeft" style={{ fontSize: 10, fill: "var(--c-text-3)" }} />
                       </YAxis>
                       <ZAxis range={[80, 80]} />
                       <Tooltip content={<ScatterTooltip currentWeek={CURRENT_WEEK} />} />
@@ -450,14 +453,14 @@ function Performances() {
                 </div>
               )}
 
-              <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-5">
+              <div className="card p-5">
                 <div className="flex items-center gap-2 mb-4">
                   <Zap size={15} color="#EF9F27" />
-                  <h3 className="text-[14px] font-semibold text-slate-700">Analyse du groupe — {selectedDisc}</h3>
-                  <span className="text-[10px] bg-slate-100 text-slate-400 px-2 py-0.5 rounded-full font-medium ml-1">Règles JS · sans IA</span>
+                  <h3 className="text-[14px] font-semibold" style={{ color: "var(--c-text-1)" }}>Analyse du groupe — {selectedDisc}</h3>
+                  <span className="text-[10px] bg-[rgba(255,255,255,0.08)] text-[var(--c-text-2)] px-2 py-0.5 rounded-full font-medium ml-1">Règles JS · sans IA</span>
                 </div>
                 <div className="space-y-2">
-                  {analysis.map((line, i) => <p key={i} className="text-[13px] text-slate-600 bg-slate-50 rounded-lg px-4 py-3 leading-relaxed">{line}</p>)}
+                  {analysis.map((line, i) => <p key={i} className="text-[13px] bg-[var(--c-surface-2)] rounded-lg px-4 py-3 leading-relaxed" style={{ color: "var(--c-text-2)" }}>{line}</p>)}
                 </div>
               </div>
             </>
@@ -468,26 +471,26 @@ function Performances() {
       {/* ── Vue évolution individuelle ────────────────────────────────────── */}
       {viewMode === "evolution" && (
         <div className="space-y-6">
-          <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-5">
-            <label className="block text-[11px] font-semibold text-slate-400 mb-1 uppercase tracking-wide">Sélectionner un athlète</label>
+          <div className="card p-5">
+            <label className="block text-[11px] font-semibold mb-1 uppercase tracking-wide" style={{ color: "var(--c-text-3)" }}>Sélectionner un athlète</label>
             <div className="relative">
-              <select value={selectedAthleteId ?? ""} onChange={(e) => setSelectedAthleteId(Number(e.target.value))} className="w-full bg-slate-50 border border-slate-200 text-slate-700 text-[14px] py-2.5 pl-10 pr-4 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500">
+              <select value={selectedAthleteId ?? ""} onChange={(e) => setSelectedAthleteId(Number(e.target.value))} className="w-full bg-[var(--c-surface-2)] border border-[var(--c-border)] text-[var(--c-text-1)] text-[14px] py-2.5 pl-10 pr-4 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500">
                 {athletes.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
               </select>
-              <User size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+              <User size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--c-text-3)]" />
             </div>
           </div>
 
-          <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-5">
+          <div className="card p-5">
             <div className="mb-6 flex justify-between items-start">
               <div>
-                <h3 className="text-[16px] font-bold text-slate-800">Historique des compétitions</h3>
-                <p className="text-[13px] text-slate-400">Progression sur l'épreuve : {selectedDisc}</p>
+                <h3 className="text-[16px] font-bold" style={{ color: "var(--c-text-1)" }}>Historique des compétitions</h3>
+                <p className="text-[13px]" style={{ color: "var(--c-text-3)" }}>Progression sur l'épreuve : {selectedDisc}</p>
               </div>
               {evolutionData.length > 0 && (
                 <div className="text-right">
-                  <p className="text-[11px] text-slate-400 uppercase font-semibold">Meilleur résultat</p>
-                  <p className="text-[20px] font-bold text-emerald-600">
+                  <p className="text-[11px] uppercase font-semibold" style={{ color: "var(--c-text-3)" }}>Meilleur résultat</p>
+                  <p className="text-[20px] font-bold" style={{ color: "#4DC9A0" }}>
                     {isTimeEvent ? Math.min(...evolutionData.map((d) => d.resultNum)) : Math.max(...evolutionData.map((d) => d.resultNum))}
                   </p>
                 </div>
@@ -495,7 +498,7 @@ function Performances() {
             </div>
 
             {evolutionData.length < 2 ? (
-              <div className="h-[300px] flex flex-col items-center justify-center text-slate-400 bg-slate-50 rounded-lg border border-dashed border-slate-200">
+              <div className="h-[300px] flex flex-col items-center justify-center rounded-lg border border-dashed" style={{ color: "var(--c-text-3)", background: "var(--c-surface-2)", borderColor: "var(--c-border)" }}>
                 <Calendar size={32} className="mb-2 opacity-50" />
                 <p className="text-[14px] font-medium">Pas assez de données</p>
                 <p className="text-[12px]">Au moins 2 compétitions sur cette épreuve sont nécessaires.</p>
@@ -504,11 +507,11 @@ function Performances() {
               <div className="h-[350px]">
                 <ResponsiveContainer width="100%" height="100%">
                   <LineChart data={evolutionData} margin={{ top: 20, right: 30, left: 0, bottom: 10 }}>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                    <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: "#64748b" }} dy={10} />
-                    <YAxis domain={["dataMin", "dataMax"]} axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: "#64748b" }} reversed={isTimeEvent} tickFormatter={(val) => isTimeEvent && val > 60 ? `${Math.floor(val / 60)}:${(val % 60).toString().padStart(2, "0")}` : val} />
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--c-border)" />
+                    <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: "var(--c-text-3)" }} dy={10} />
+                    <YAxis domain={["dataMin", "dataMax"]} axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: "var(--c-text-3)" }} reversed={isTimeEvent} tickFormatter={(val) => isTimeEvent && val > 60 ? `${Math.floor(val / 60)}:${(val % 60).toString().padStart(2, "0")}` : val} />
                     <Tooltip content={<LineTooltip />} />
-                    <Line type="monotone" dataKey="resultNum" stroke="#1D9E75" strokeWidth={3} dot={{ r: 5, fill: "#1D9E75", strokeWidth: 2, stroke: "#fff" }} activeDot={{ r: 7, strokeWidth: 0, fill: "#059669" }} animationDuration={800} />
+                    <Line type="monotone" dataKey="resultNum" stroke="#1D9E75" strokeWidth={3} dot={{ r: 5, fill: "#1D9E75", strokeWidth: 2, stroke: "var(--c-surface)" }} activeDot={{ r: 7, strokeWidth: 0, fill: "#1D9E75" }} animationDuration={800} />
                   </LineChart>
                 </ResponsiveContainer>
               </div>

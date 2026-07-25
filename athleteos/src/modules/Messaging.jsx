@@ -122,18 +122,18 @@ const MessageBubble = memo(({ msg, isOwn, contact, contacts }) => {
           className="px-4 py-2.5 rounded-2xl text-[13px] leading-relaxed shadow-sm"
           style={
             isOwn
-              ? { background: "#1D9E75", color: "white",   borderBottomRightRadius: "4px" }
-              : { background: "#F1F5F9", color: "#334155", borderBottomLeftRadius: "4px"  }
+              ? { background: "#1D9E75", color: "white", borderBottomRightRadius: "4px" }
+              : { background: "var(--c-surface)", color: "var(--c-text-1)", border: "1px solid var(--c-border)", borderBottomLeftRadius: "4px" }
           }
         >
           {msg.content}
         </div>
-        <div className="flex items-center gap-1 text-[10px] text-slate-400 px-1">
+        <div className="flex items-center gap-1 text-[10px] px-1" style={{ color: "var(--c-text-3)" }}>
           <span>{formatTime(msg.date)}</span>
           {isOwn && (
             msg.isRead
               ? <CheckCheck size={11} color="#1D9E75" />
-              : <Check      size={11} color="#94a3b8" />
+              : <Check      size={11} color="var(--c-text-3)" />
           )}
         </div>
       </div>
@@ -143,11 +143,11 @@ const MessageBubble = memo(({ msg, isOwn, contact, contacts }) => {
 
 const DateSeparator = ({ date }) => (
   <div className="flex items-center gap-3 my-4">
-    <div className="flex-1 h-px bg-slate-100" />
-    <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider px-2 bg-white rounded-full border border-slate-100 py-0.5">
+    <div className="flex-1 h-px bg-[var(--c-border)]" />
+    <span className="text-[10px] font-semibold uppercase tracking-wider px-2 rounded-full border border-[var(--c-border)] py-0.5" style={{ color: "var(--c-text-3)", background: "var(--c-surface-2)" }}>
       {formatDateHeader(date)}
     </span>
-    <div className="flex-1 h-px bg-slate-100" />
+    <div className="flex-1 h-px bg-[var(--c-border)]" />
   </div>
 );
 
@@ -160,8 +160,8 @@ const ConvItem = memo(({ conv, contact, contacts, isActive, onClick, coachUserId
     <button
       onClick={() => onClick(conv.contactId)}
       className={[
-        "w-full text-left px-4 py-3.5 flex items-center gap-3 transition-all hover:bg-slate-50 focus:outline-none",
-        isActive ? "bg-emerald-50 border-r-2 border-emerald-500" : "",
+        "w-full text-left px-4 py-3.5 flex items-center gap-3 transition-all hover:bg-[var(--c-surface-3)] focus:outline-none",
+        isActive ? "bg-[rgba(29,158,117,0.12)] border-r-2 border-[#1D9E75]" : "",
       ].join(" ")}
     >
       {/* Avatar */}
@@ -174,7 +174,7 @@ const ConvItem = memo(({ conv, contact, contacts, isActive, onClick, coachUserId
         </div>
         {/* Badge type coach */}
         {contact?.type === "coach" && (
-          <div className="absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full bg-blue-500 border-2 border-white flex items-center justify-center">
+          <div className="absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full bg-blue-500 border-2 border-[var(--c-surface)] flex items-center justify-center">
             <User size={8} color="white" />
           </div>
         )}
@@ -192,28 +192,28 @@ const ConvItem = memo(({ conv, contact, contacts, isActive, onClick, coachUserId
       <div className="flex-1 min-w-0">
         <div className="flex items-center justify-between gap-1 mb-0.5">
           <div className="flex items-center gap-1.5 min-w-0">
-            <p className={`text-[13px] truncate ${conv.unread > 0 ? "font-bold text-slate-800" : "font-semibold text-slate-700"}`}>
+            <p className={`text-[13px] truncate ${conv.unread > 0 ? "font-bold text-[var(--c-text-1)]" : "font-semibold text-[var(--c-text-2)]"}`}>
               {contact?.name ?? "Contact"}
             </p>
             {/* Badge rôle */}
             {contact?.type === "coach" && (
-              <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-blue-50 text-blue-600 flex-shrink-0">
+              <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-[rgba(91,141,239,0.15)] text-[#5B8DEF] flex-shrink-0">
                 Coach
               </span>
             )}
           </div>
           {lastMsg && (
-            <span className="text-[10px] text-slate-400 flex-shrink-0">
+            <span className="text-[10px] text-[var(--c-text-3)] flex-shrink-0">
               {formatTime(lastMsg.date)}
             </span>
           )}
         </div>
         {lastMsg ? (
-          <p className={`text-[11.5px] truncate ${conv.unread > 0 ? "text-slate-600 font-medium" : "text-slate-400"}`}>
+          <p className={`text-[11.5px] truncate ${conv.unread > 0 ? "text-[var(--c-text-2)] font-medium" : "text-[var(--c-text-3)]"}`}>
             {isLastFromCoach ? "Vous : " : ""}{lastMsg.content}
           </p>
         ) : (
-          <p className="text-[11.5px] text-slate-300 italic">{contact?.subtitle ?? "Aucun message"}</p>
+          <p className="text-[11.5px] text-[var(--c-text-4)] italic">{contact?.subtitle ?? "Aucun message"}</p>
         )}
       </div>
     </button>
@@ -246,7 +246,7 @@ const ChatThread = memo(({ conv, contact, contacts, onSend, coachUserId }) => {
   return (
     <div className="flex flex-col h-full">
       {/* Header thread */}
-      <div className="flex-shrink-0 px-5 py-4 border-b border-slate-100 bg-white flex items-center gap-3">
+      <div className="flex-shrink-0 px-5 py-4 border-b border-[var(--c-border)] bg-[var(--c-surface)] flex items-center gap-3">
         <div
           className="w-10 h-10 rounded-full flex items-center justify-center text-white text-[11px] font-bold flex-shrink-0"
           style={{ background: color }}
@@ -255,21 +255,21 @@ const ChatThread = memo(({ conv, contact, contacts, onSend, coachUserId }) => {
         </div>
         <div>
           <div className="flex items-center gap-2">
-            <p className="text-[14px] font-bold text-slate-800">{contact?.name ?? "Contact"}</p>
+            <p className="text-[14px] font-bold text-[var(--c-text-1)]">{contact?.name ?? "Contact"}</p>
             {contact?.type === "coach" && (
-              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-50 text-blue-600">
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-[rgba(91,141,239,0.15)] text-[#5B8DEF]">
                 Coach
               </span>
             )}
           </div>
-          <p className="text-[11px] text-slate-400">{contact?.subtitle ?? ""}</p>
+          <p className="text-[11px] text-[var(--c-text-3)]">{contact?.subtitle ?? ""}</p>
         </div>
       </div>
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto px-5 py-4 space-y-3" style={{ background: "#FAFAFA" }}>
+      <div className="flex-1 overflow-y-auto px-5 py-4 space-y-3" style={{ background: "var(--c-bg)" }}>
         {grouped.length === 0 ? (
-          <div className="h-full flex flex-col items-center justify-center text-slate-300 gap-2">
+          <div className="h-full flex flex-col items-center justify-center gap-2 text-[var(--c-text-4)]">
             <MessageSquare size={28} strokeWidth={1.5} />
             <p className="text-[12.5px]">Aucun message — écris le premier !</p>
           </div>
@@ -290,10 +290,10 @@ const ChatThread = memo(({ conv, contact, contacts, onSend, coachUserId }) => {
       </div>
 
       {/* Input */}
-      <div className="flex-shrink-0 px-4 py-3 border-t border-slate-100 bg-white flex items-end gap-2">
-        <div className="flex-1 bg-slate-100 rounded-2xl px-4 py-2.5">
+      <div className="flex-shrink-0 px-4 py-3 border-t border-[var(--c-border)] bg-[var(--c-surface)] flex items-end gap-2">
+        <div className="flex-1 bg-[var(--c-surface-2)] rounded-2xl px-4 py-2.5">
           <textarea
-            className="w-full bg-transparent resize-none text-[13px] text-slate-700 placeholder-slate-400 focus:outline-none max-h-28 min-h-[20px]"
+            className="w-full bg-transparent resize-none text-[13px] text-[var(--c-text-1)] placeholder-[var(--c-text-3)] focus:outline-none max-h-28 min-h-[20px]"
             rows={1}
             placeholder={`Message à ${contact?.name?.split(" ")[0] ?? "…"}…`}
             value={input}
@@ -316,10 +316,10 @@ const ChatThread = memo(({ conv, contact, contacts, onSend, coachUserId }) => {
 });
 
 const EmptyConvState = () => (
-  <div className="flex-1 flex flex-col items-center justify-center gap-3 text-slate-400 bg-slate-50">
+  <div className="flex-1 flex flex-col items-center justify-center gap-3 text-[var(--c-text-3)] bg-[var(--c-bg)]">
     <MessageSquare size={40} strokeWidth={1.5} />
     <p className="text-[14px] font-semibold">Sélectionnez une conversation</p>
-    <p className="text-[12px] text-slate-300 text-center max-w-[200px]">
+    <p className="text-[12px] text-[var(--c-text-4)] text-center max-w-[200px]">
       Cliquez sur un athlète ou un coach pour démarrer
     </p>
   </div>
@@ -551,12 +551,12 @@ function Messaging() {
     <div className="flex h-full overflow-hidden" style={{ height: "calc(100vh - 64px)" }}>
 
       {/* ── Panneau gauche ─────────────────────────────────────────────── */}
-      <div className="w-72 flex-shrink-0 bg-white border-r border-slate-100 flex flex-col">
+      <div className="w-72 flex-shrink-0 bg-[var(--c-surface)] border-r border-[var(--c-border)] flex flex-col">
 
         {/* Header */}
-        <div className="px-4 py-4 border-b border-slate-100 flex-shrink-0">
+        <div className="px-4 py-4 border-b border-[var(--c-border)] flex-shrink-0">
           <div className="flex items-center justify-between mb-3">
-            <h2 className="text-[15px] font-bold text-slate-800">Messagerie</h2>
+            <h2 className="text-[15px] font-bold text-[var(--c-text-1)]">Messagerie</h2>
             {totalUnread > 0 && (
               <span
                 className="text-[10px] font-bold px-2 py-0.5 rounded-full text-white"
@@ -568,19 +568,19 @@ function Messaging() {
           </div>
 
           {/* Recherche */}
-          <div className="flex items-center gap-2 bg-slate-100 rounded-xl px-3 py-2 mb-3">
-            <Search size={13} className="text-slate-400 flex-shrink-0" />
+          <div className="flex items-center gap-2 bg-[var(--c-surface-2)] rounded-xl px-3 py-2 mb-3">
+            <Search size={13} className="text-[var(--c-text-3)] flex-shrink-0" />
             <input
               type="text"
               placeholder="Rechercher…"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="flex-1 bg-transparent text-[12.5px] text-slate-700 placeholder-slate-400 focus:outline-none"
+              className="flex-1 bg-transparent text-[12.5px] text-[var(--c-text-1)] placeholder-[var(--c-text-3)] focus:outline-none"
             />
           </div>
 
           {/* Onglets filtre */}
-          <div className="flex rounded-xl border border-slate-200 overflow-hidden text-[11px] font-semibold">
+          <div className="flex rounded-xl border border-[var(--c-border)] overflow-hidden text-[11px] font-semibold">
             {[
               { id: "tous",     label: `Tous (${athleteCount + coachCount})` },
               { id: "athletes", label: `Athlètes (${athleteCount})`          },
@@ -592,8 +592,8 @@ function Messaging() {
                 className={[
                   "flex-1 py-1.5 transition-colors text-center",
                   activeTab === tab.id
-                    ? "bg-slate-800 text-white"
-                    : "bg-white text-slate-500 hover:bg-slate-50",
+                    ? "bg-[#1D9E75] text-[#0A150F]"
+                    : "bg-transparent text-[var(--c-text-3)] hover:bg-[var(--c-surface-3)]",
                 ].join(" ")}
               >
                 {tab.label}
@@ -603,7 +603,7 @@ function Messaging() {
         </div>
 
         {/* Coach connecté */}
-        <div className="px-4 py-3 border-b border-slate-50 flex items-center gap-2.5 flex-shrink-0 bg-slate-50">
+        <div className="px-4 py-3 border-b border-[var(--c-border)] flex items-center gap-2.5 flex-shrink-0 bg-[var(--c-surface-2)]">
           <div
             className="w-7 h-7 rounded-full flex items-center justify-center text-white text-[9px] font-bold flex-shrink-0"
             style={{ background: "#378ADD" }}
@@ -611,16 +611,16 @@ function Messaging() {
             {initialsFromName(profile?.name ?? "")}
           </div>
           <div>
-            <p className="text-[11.5px] font-semibold text-slate-700">{profile?.name ?? "Coach"}</p>
-            <p className="text-[10px] text-slate-400">Connecté · Head coach</p>
+            <p className="text-[11.5px] font-semibold text-[var(--c-text-1)]">{profile?.name ?? "Coach"}</p>
+            <p className="text-[10px] text-[var(--c-text-3)]">Connecté · {profile?.role === "head_coach" ? "Head coach" : "Coach"}</p>
           </div>
           <div className="ml-auto w-2 h-2 rounded-full bg-emerald-400 flex-shrink-0" />
         </div>
 
         {/* Avertissement athlètes sans compte */}
         {unlinkedAthletes.length > 0 && (
-          <div className="px-4 py-2 bg-amber-50 border-b border-amber-100 flex-shrink-0">
-            <p className="text-[10.5px] text-amber-700 leading-relaxed">
+          <div className="px-4 py-2 bg-[rgba(232,160,32,0.1)] border-b border-[rgba(232,160,32,0.2)] flex-shrink-0">
+            <p className="text-[10.5px] text-[#E8A020] leading-relaxed">
               ⚠️ {unlinkedAthletes.length} athlète{unlinkedAthletes.length > 1 ? "s" : ""} sans compte —
               {" "}{unlinkedAthletes.map((a) => a.name.split(" ")[0]).join(", ")}
             </p>
@@ -628,11 +628,11 @@ function Messaging() {
         )}
 
         {/* Liste conversations */}
-        <div className="flex-1 overflow-y-auto divide-y divide-slate-50">
+        <div className="flex-1 overflow-y-auto divide-y divide-[var(--c-border)]">
           {filteredConvs.length === 0 ? (
             <div className="px-4 py-8 text-center">
-              <Users size={24} className="mx-auto mb-2 text-slate-200" />
-              <p className="text-[12px] text-slate-300">
+              <Users size={24} className="mx-auto mb-2 text-[var(--c-text-4)]" />
+              <p className="text-[12px] text-[var(--c-text-4)]">
                 {search ? "Aucun résultat" : "Aucune conversation"}
               </p>
             </div>

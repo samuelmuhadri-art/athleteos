@@ -201,7 +201,10 @@ function CoachShell({ user, profile, clubId, signOut }) {
                   />
                   {/* Badge rouge sur l'icône quand sidebar réduite */}
                   {!sidebarOpen && showBadge && (
-                    <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-red-500 border-2 border-white animate-bounce-in" />
+                    <span
+                      className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full animate-bounce-in"
+                      style={{ background: "var(--c-dim-danger)", border: "2px solid var(--c-surface)" }}
+                    />
                   )}
                 </div>
 

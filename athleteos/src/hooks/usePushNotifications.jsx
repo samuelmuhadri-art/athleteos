@@ -137,10 +137,13 @@ export function PushToggleButton({ subscribed, onToggle, permissionState }) {
       disabled={subscribed}
       className={[
         "flex items-center gap-2 px-3 py-2 rounded-xl text-[12px] font-semibold border transition-all",
-        subscribed
-          ? "bg-emerald-50 border-emerald-300 text-emerald-700 cursor-default"
-          : "bg-white border-slate-200 text-slate-600 hover:border-slate-300",
+        subscribed ? "cursor-default" : "hover:border-[var(--c-border-strong)]",
       ].join(" ")}
+      style={
+        subscribed
+          ? { background: "rgba(29,158,117,0.12)", borderColor: "rgba(29,158,117,0.30)", color: "#4DC9A0" }
+          : { background: "var(--c-surface-2)", borderColor: "var(--c-border)", color: "var(--c-text-2)" }
+      }
     >
       <span>{subscribed ? "🔔" : "🔕"}</span>
       <span>{subscribed ? "Notifs actives" : "Activer les notifs"}</span>

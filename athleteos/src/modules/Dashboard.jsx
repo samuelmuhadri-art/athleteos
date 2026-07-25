@@ -29,6 +29,7 @@ import {
   getAthleteMetricsForWeek,
   getStatusLabel,
 } from "../utils/chargeCalculations";
+import { computeSessionLoad } from "../utils/trainingLoad";
 import { checkUpcomingCompetitions } from "../utils/notifications";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -135,16 +136,16 @@ function MetricCard({ icon: Icon, label, value, sub, color, badge, onClick }) {
             </span>
           )}
         </div>
-        <p className="text-[9.5px] font-bold text-slate-400 uppercase tracking-[0.09em] mt-1">
+        <p className="text-[9.5px] font-bold uppercase tracking-[0.09em] mt-1" style={{ color: "var(--c-text-3)" }}>
           {label}
         </p>
         {sub && (
-          <p className="text-[10.5px] text-slate-300 mt-0.5 font-medium">{sub}</p>
+          <p className="text-[10.5px] mt-0.5 font-medium" style={{ color: "var(--c-text-3)" }}>{sub}</p>
         )}
       </div>
 
       {onClick && (
-        <ArrowUpRight size={14} className="text-slate-200 flex-shrink-0" />
+        <ArrowUpRight size={14} className="flex-shrink-0" style={{ color: "var(--c-text-3)" }} />
       )}
     </div>
   );
@@ -191,10 +192,10 @@ function AthleteStatusCard({ athlete, weeklyCharge, currentWeek, injuries, sessi
           {initialsFromName(athlete.name)}
         </div>
         <div className="flex-1 min-w-0">
-          <p className="text-[12.5px] font-semibold text-slate-800 truncate leading-tight">
+          <p className="text-[12.5px] font-semibold truncate leading-tight" style={{ color: "var(--c-text-1)" }}>
             {athlete.name.split(" ")[0]}
           </p>
-          <p className="text-[10px] text-slate-400 truncate">{athlete.mainDiscipline ?? "—"}</p>
+          <p className="text-[10px] truncate" style={{ color: "var(--c-text-3)" }}>{athlete.mainDiscipline ?? "—"}</p>
         </div>
         {/* Dot statut */}
         <div
@@ -211,17 +212,17 @@ function AthleteStatusCard({ athlete, weeklyCharge, currentWeek, injuries, sessi
             { lbl: "ACWR",    val: metrics.acwr.toFixed(2), col: acwrCol,   pct: Math.min(100, (metrics.acwr / 2) * 100) },
             { lbl: "Fatigue", val: metrics.fatigue,         col: fatCol,    pct: metrics.fatigue },
           ].map(s => (
-            <div key={s.lbl} className="bg-slate-50 rounded-xl px-1.5 py-2 text-center">
+            <div key={s.lbl} className="bg-[var(--c-surface-2)] rounded-xl px-1.5 py-2 text-center">
               <p
                 className="text-[14px] font-bold leading-none"
                 style={{ color: s.col, fontVariantNumeric: "tabular-nums" }}
               >
                 {s.val}
               </p>
-              <p className="text-[7.5px] font-bold text-slate-400 uppercase tracking-wider mt-1">
+              <p className="text-[7.5px] font-bold uppercase tracking-wider mt-1" style={{ color: "var(--c-text-3)" }}>
                 {s.lbl}
               </p>
-              <div className="mt-1.5 h-0.5 bg-slate-200 rounded-full overflow-hidden">
+              <div className="mt-1.5 h-0.5 bg-[var(--c-surface-3)] rounded-full overflow-hidden">
                 <div
                   className="h-full rounded-full transition-all duration-500"
                   style={{ width: `${Math.max(3, s.pct)}%`, background: s.col, opacity: 0.75 }}
@@ -231,8 +232,8 @@ function AthleteStatusCard({ athlete, weeklyCharge, currentWeek, injuries, sessi
           ))}
         </div>
       ) : (
-        <div className="bg-slate-50 rounded-xl px-3 py-2 text-center">
-          <p className="text-[10px] text-slate-300 font-medium">Pas encore de données</p>
+        <div className="bg-[var(--c-surface-2)] rounded-xl px-3 py-2 text-center">
+          <p className="text-[10px] font-medium" style={{ color: "var(--c-text-3)" }}>Pas encore de données</p>
         </div>
       )}
 
@@ -240,12 +241,18 @@ function AthleteStatusCard({ athlete, weeklyCharge, currentWeek, injuries, sessi
       {(activeInj.length > 0 || weekSess.length > 0) && (
         <div className="flex items-center gap-1.5 flex-wrap">
           {activeInj.length > 0 && (
-            <span className="flex items-center gap-1 text-[9.5px] font-bold text-amber-700 bg-amber-50 border border-amber-100 px-2 py-0.5 rounded-full">
+            <span
+              className="flex items-center gap-1 text-[9.5px] font-bold border px-2 py-0.5 rounded-full"
+              style={{ color: "#F0CB61", background: "rgba(239,159,39,0.15)", borderColor: "#EF9F27" }}
+            >
               <HeartPulse size={8} /> {activeInj.length} blessure{activeInj.length > 1 ? "s" : ""}
             </span>
           )}
           {weekSess.length > 0 && (
-            <span className="flex items-center gap-1 text-[9.5px] font-semibold text-slate-500 bg-slate-50 border border-slate-100 px-2 py-0.5 rounded-full">
+            <span
+              className="flex items-center gap-1 text-[9.5px] font-semibold border px-2 py-0.5 rounded-full"
+              style={{ color: "var(--c-text-2)", background: "var(--c-surface-3)", borderColor: "var(--c-border)" }}
+            >
               <CheckCircle size={9} /> {doneCount}/{weekSess.length}
             </span>
           )}
@@ -311,7 +318,9 @@ function Dashboard({ onNavigate }) {
         mappedSessions.forEach(s => {
           const sa = (chargeRes.data ?? []).find(r => r.session_id === s.id && r.athlete_id === aid);
           if (!sa?.rpe) return;
-          weeks[s.week] = (weeks[s.week] ?? 0) + (s.durationMinutes ?? 60) * sa.rpe;
+          const load = computeSessionLoad(s.durationMinutes ?? 60, sa.rpe, s.category);
+          if (load == null) return;
+          weeks[s.week] = (weeks[s.week] ?? 0) + load;
         });
         Object.entries(weeks).forEach(([week, rawLoad]) => {
           charge.push({ athleteId: aid, week: Number(week), rawLoad });
@@ -498,10 +507,10 @@ function Dashboard({ onNavigate }) {
                 <Activity size={16} color="#E24B4A" strokeWidth={2} />
               </div>
               <div>
-                <p className="text-[13px] font-semibold text-slate-800">
+                <p className="text-[13px] font-semibold" style={{ color: "var(--c-text-1)" }}>
                   {metrics.overloaded.length} en surcharge · ACWR &gt; 1.3
                 </p>
-                <p className="text-[11.5px] text-slate-400 mt-0.5 font-medium">
+                <p className="text-[11.5px] mt-0.5 font-medium" style={{ color: "var(--c-text-3)" }}>
                   {metrics.overloaded.map(a => a.name.split(" ")[0]).join(", ")}
                 </p>
               </div>
@@ -516,10 +525,10 @@ function Dashboard({ onNavigate }) {
                 <HeartPulse size={16} color="#EF9F27" strokeWidth={2} />
               </div>
               <div>
-                <p className="text-[13px] font-semibold text-slate-800">
+                <p className="text-[13px] font-semibold" style={{ color: "var(--c-text-1)" }}>
                   {metrics.injured} athlète{metrics.injured > 1 ? "s" : ""} blessé{metrics.injured > 1 ? "s" : ""}
                 </p>
-                <p className="text-[11.5px] text-slate-400 mt-0.5 font-medium">
+                <p className="text-[11.5px] mt-0.5 font-medium" style={{ color: "var(--c-text-3)" }}>
                   {[...new Set(injuries.map(i => i.athleteId))]
                     .map(id => athletes.find(a => a.id === id)?.name?.split(" ")[0])
                     .filter(Boolean)
@@ -563,10 +572,10 @@ function Dashboard({ onNavigate }) {
         <div className="xl:col-span-2 space-y-3">
           <div className="flex items-center justify-between">
             <div>
-              <h3 className="text-[15px] font-semibold text-slate-800 tracking-tight">
+              <h3 className="text-[15px] font-semibold tracking-tight" style={{ color: "var(--c-text-1)" }}>
                 État du groupe
               </h3>
-              <p className="text-[11px] text-slate-400 mt-0.5">
+              <p className="text-[11px] mt-0.5" style={{ color: "var(--c-text-3)" }}>
                 Semaine {currentWeek} · données en temps réel
               </p>
             </div>
@@ -580,8 +589,8 @@ function Dashboard({ onNavigate }) {
 
           {athletes.length === 0 ? (
             <div className="card p-10 text-center">
-              <Users size={32} className="mx-auto mb-3 text-slate-200" strokeWidth={1.5} />
-              <p className="text-[13px] font-semibold text-slate-400">Aucun athlète enregistré</p>
+              <Users size={32} className="mx-auto mb-3" strokeWidth={1.5} style={{ color: "var(--c-text-4)" }} />
+              <p className="text-[13px] font-semibold" style={{ color: "var(--c-text-2)" }}>Aucun athlète enregistré</p>
             </div>
           ) : (
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
@@ -606,8 +615,8 @@ function Dashboard({ onNavigate }) {
           {/* Prochaines compétitions */}
           {competitions.length > 0 && (
             <div className="card overflow-hidden">
-              <div className="px-5 py-4 border-b border-slate-50 flex items-center justify-between">
-                <h3 className="text-[14px] font-semibold text-slate-800">Compétitions</h3>
+              <div className="px-5 py-4 border-b border-[color:var(--c-border)] flex items-center justify-between">
+                <h3 className="text-[14px] font-semibold" style={{ color: "var(--c-text-1)" }}>Compétitions</h3>
                 <button
                   onClick={() => onNavigate("competitions")}
                   className="text-[11px] font-semibold text-emerald-600 hover:text-emerald-700 transition-colors flex items-center gap-1"
@@ -615,12 +624,12 @@ function Dashboard({ onNavigate }) {
                   Voir tout <ArrowUpRight size={11} />
                 </button>
               </div>
-              <div className="divide-y divide-slate-50">
+              <div className="divide-y divide-[color:var(--c-border)]">
                 {competitions.map(c => {
                   const days = Math.round((new Date(c.date) - today) / (1000 * 60 * 60 * 24));
                   const isUrgent = days <= 7;
                   return (
-                    <div key={c.id} className="px-5 py-3.5 flex items-center gap-3 hover:bg-slate-50/50 transition-colors">
+                    <div key={c.id} className="px-5 py-3.5 flex items-center gap-3 hover:bg-[var(--c-surface-2)] transition-colors">
                       <div
                         className="w-10 h-10 rounded-2xl flex items-center justify-center flex-shrink-0"
                         style={{ background: isUrgent ? "rgba(226,75,74,0.08)" : "rgba(29,158,117,0.08)" }}
@@ -628,8 +637,8 @@ function Dashboard({ onNavigate }) {
                         <Trophy size={15} color={isUrgent ? "#E24B4A" : "#1D9E75"} strokeWidth={2} />
                       </div>
                       <div className="flex-1 min-w-0">
-                        <p className="text-[12.5px] font-semibold text-slate-700 truncate">{c.name}</p>
-                        <p className="text-[10.5px] text-slate-400 mt-0.5">
+                        <p className="text-[12.5px] font-semibold truncate" style={{ color: "var(--c-text-1)" }}>{c.name}</p>
+                        <p className="text-[10.5px] mt-0.5" style={{ color: "var(--c-text-3)" }}>
                           {new Date(c.date).toLocaleDateString("fr-BE", { day: "numeric", month: "short" })}
                           {" · "}{c.athleteIds.length} athlète{c.athleteIds.length > 1 ? "s" : ""}
                         </p>
@@ -637,7 +646,7 @@ function Dashboard({ onNavigate }) {
                       <span
                         className="text-[11px] font-bold px-2.5 py-1 rounded-xl flex-shrink-0"
                         style={{
-                          background: isUrgent ? "#FFF1F2" : "#F0FDF4",
+                          background: isUrgent ? "rgba(224,82,82,0.15)" : "rgba(29,158,117,0.15)",
                           color:      isUrgent ? "#E24B4A" : "#1D9E75",
                         }}
                       >
@@ -653,31 +662,31 @@ function Dashboard({ onNavigate }) {
           {/* Objectifs saison */}
           {goals.length > 0 && (
             <div className="card overflow-hidden">
-              <div className="px-5 py-4 border-b border-slate-50 flex items-center justify-between">
-                <h3 className="text-[14px] font-semibold text-slate-800">Objectifs saison</h3>
+              <div className="px-5 py-4 border-b border-[color:var(--c-border)] flex items-center justify-between">
+                <h3 className="text-[14px] font-semibold" style={{ color: "var(--c-text-1)" }}>Objectifs saison</h3>
                 <span className="text-[9.5px] font-bold px-2 py-0.5 rounded-full chip chip-success">
                   {goals.length} actif{goals.length > 1 ? "s" : ""}
                 </span>
               </div>
-              <div className="divide-y divide-slate-50">
+              <div className="divide-y divide-[color:var(--c-border)]">
                 {goals.slice(0, 5).map(g => {
                   const athlete  = athletes.find(a => a.id === g.athlete_id);
                   const daysLeft = g.deadline ? Math.round((new Date(g.deadline) - today) / (1000 * 60 * 60 * 24)) : null;
                   return (
-                    <div key={g.id} className="px-5 py-3.5 flex items-center gap-3 hover:bg-slate-50/50 transition-colors">
-                      <div className="w-10 h-10 rounded-2xl bg-emerald-50 flex items-center justify-center flex-shrink-0">
+                    <div key={g.id} className="px-5 py-3.5 flex items-center gap-3 hover:bg-[var(--c-surface-2)] transition-colors">
+                      <div className="w-10 h-10 rounded-2xl flex items-center justify-center flex-shrink-0" style={{ background: "rgba(29,158,117,0.08)" }}>
                         <Target size={15} color="#1D9E75" strokeWidth={2} />
                       </div>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-1.5 mb-0.5">
-                          <p className="text-[12px] font-semibold text-slate-700">{athlete?.name?.split(" ")[0] ?? "?"}</p>
-                          <span className="text-slate-300 text-[10px]">·</span>
-                          <p className="text-[11px] text-slate-500 truncate">{g.discipline}</p>
+                          <p className="text-[12px] font-semibold" style={{ color: "var(--c-text-1)" }}>{athlete?.name?.split(" ")[0] ?? "?"}</p>
+                          <span className="text-[10px]" style={{ color: "var(--c-text-3)" }}>·</span>
+                          <p className="text-[11px] truncate" style={{ color: "var(--c-text-2)" }}>{g.discipline}</p>
                         </div>
                         <p className="text-[15px] font-bold text-emerald-600 leading-tight">{g.target_value}</p>
                       </div>
                       {daysLeft !== null && (
-                        <span className="text-[10px] font-semibold text-slate-400 flex-shrink-0">
+                        <span className="text-[10px] font-semibold flex-shrink-0" style={{ color: "var(--c-text-3)" }}>
                           {daysLeft > 0 ? `J-${daysLeft}` : "Échu"}
                         </span>
                       )}
@@ -691,13 +700,13 @@ function Dashboard({ onNavigate }) {
           {/* Feedbacks récents */}
           {recentFeedbacks.length > 0 && (
             <div className="card overflow-hidden">
-              <div className="px-5 py-4 border-b border-slate-50">
-                <h3 className="text-[14px] font-semibold text-slate-800">Feedbacks récents</h3>
-                <p className="text-[11px] text-slate-400 mt-0.5">{recentFeedbacks.length} retour{recentFeedbacks.length > 1 ? "s" : ""} athlète</p>
+              <div className="px-5 py-4 border-b border-[color:var(--c-border)]">
+                <h3 className="text-[14px] font-semibold" style={{ color: "var(--c-text-1)" }}>Feedbacks récents</h3>
+                <p className="text-[11px] mt-0.5" style={{ color: "var(--c-text-3)" }}>{recentFeedbacks.length} retour{recentFeedbacks.length > 1 ? "s" : ""} athlète</p>
               </div>
-              <div className="divide-y divide-slate-50">
+              <div className="divide-y divide-[color:var(--c-border)]">
                 {recentFeedbacks.map(({ session, validation, athlete }, i) => (
-                  <div key={i} className="px-5 py-3.5 flex items-start gap-3 hover:bg-slate-50/50 transition-colors">
+                  <div key={i} className="px-5 py-3.5 flex items-start gap-3 hover:bg-[var(--c-surface-2)] transition-colors">
                     {/* Avatar avec dégradé */}
                     <div
                       className="w-8 h-8 rounded-full flex items-center justify-center text-white text-[10px] font-bold flex-shrink-0 shadow-sm"
@@ -707,8 +716,8 @@ function Dashboard({ onNavigate }) {
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap mb-1">
-                        <span className="text-[12px] font-semibold text-slate-700">{athlete.name.split(" ")[0]}</span>
-                        <span className="text-[10.5px] text-slate-400 truncate max-w-[100px]">{session.title}</span>
+                        <span className="text-[12px] font-semibold" style={{ color: "var(--c-text-1)" }}>{athlete.name.split(" ")[0]}</span>
+                        <span className="text-[10.5px] truncate max-w-[100px]" style={{ color: "var(--c-text-3)" }}>{session.title}</span>
                         <ValidationBadge status={validation.status} />
                       </div>
                       {validation.feeling != null && (
@@ -717,17 +726,17 @@ function Dashboard({ onNavigate }) {
                             <Star
                               key={j} size={10}
                               fill={j < validation.feeling ? "#EF9F27" : "none"}
-                              color={j < validation.feeling ? "#EF9F27" : "#e2e8f0"}
+                              color={j < validation.feeling ? "#EF9F27" : "rgba(255,255,255,0.18)"}
                             />
                           ))}
                         </div>
                       )}
                       {validation.comment && (
-                        <p className="text-[11px] text-slate-400 italic truncate">« {validation.comment} »</p>
+                        <p className="text-[11px] italic truncate" style={{ color: "var(--c-text-3)" }}>« {validation.comment} »</p>
                       )}
                     </div>
                     {validation.rpe != null && (
-                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-lg bg-slate-100 text-slate-600 flex-shrink-0">
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-lg flex-shrink-0" style={{ background: "var(--c-surface-3)", color: "var(--c-text-2)" }}>
                         RPE {validation.rpe}
                       </span>
                     )}
@@ -740,9 +749,9 @@ function Dashboard({ onNavigate }) {
           {/* État vide */}
           {competitions.length === 0 && goals.length === 0 && recentFeedbacks.length === 0 && (
             <div className="card p-8 text-center">
-              <BarChart2 size={28} className="mx-auto mb-3 text-slate-200" strokeWidth={1.5} />
-              <p className="text-[12px] font-semibold text-slate-400">Les données apparaîtront ici</p>
-              <p className="text-[11px] text-slate-300 mt-1">
+              <BarChart2 size={28} className="mx-auto mb-3" strokeWidth={1.5} style={{ color: "var(--c-text-4)" }} />
+              <p className="text-[12px] font-semibold" style={{ color: "var(--c-text-2)" }}>Les données apparaîtront ici</p>
+              <p className="text-[11px] mt-1" style={{ color: "var(--c-text-3)" }}>
                 Compétitions, objectifs et feedbacks s'afficheront au fur et à mesure.
               </p>
             </div>

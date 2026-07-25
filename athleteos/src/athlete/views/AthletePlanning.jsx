@@ -305,7 +305,7 @@ const CreateSessionModal = memo(({ athlete, allAthletes, clubId, createdBy, coac
 // ═══════════════════════════════════════════════════════════════════════════════
 // MODAL DÉTAIL SÉANCE
 // ═══════════════════════════════════════════════════════════════════════════════
-const SessionDetailModal = memo(({ session, athlete, onClose, onSetStatus, onSetRpe, onSetFeeling, onSetComment }) => {
+const SessionDetailModal = memo(({ session, athlete, allAthletes, onClose, onSetStatus, onSetRpe, onSetFeeling, onSetComment }) => {
   const c   = cat(session.category);
   const val = session.validations?.find(v => v.athleteId === athlete.id);
   const [comment, setComment] = useState(val?.comment ?? "");
@@ -412,16 +412,17 @@ const SessionDetailModal = memo(({ session, athlete, onClose, onSetStatus, onSet
             ) : (
               <div className="space-y-2">
                 {session.athleteIds.map(id => {
-                  const a  = { id }; // rendu minimal, tu peux enrichir avec ta liste d'athlètes si dispo
+                  const a  = allAthletes?.find(x => x.id === id);
                   const v  = session.validations?.find(val => val.athleteId === id);
                   const st = v?.status ?? "future";
                   return (
                     <div key={id} className="card" style={{ display: "flex", alignItems: "flex-start", gap: 12, padding: 14 }}>
                       <div style={{ width: 36, height: 36, borderRadius: 10, background: c.border, display: "flex", alignItems: "center", justifyContent: "center", color: "#0A150F", fontSize: 11, fontWeight: 800, flexShrink: 0 }}>
-                        #{id}
+                        {a?.avatar ?? "?"}
                       </div>
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 4 }}>
+                          <span style={{ fontSize: 13, fontWeight: 700, color: "var(--c-text-1)" }}>{a?.name ?? `Athlète #${id}`}</span>
                           <StatusBadge status={st} />
                           {v?.rpe != null && (
                             <span style={{ fontSize: 10, fontWeight: 700, padding: "2px 8px", borderRadius: 99, background: "var(--c-surface-3)", color: "var(--c-text-2)" }}>
@@ -806,7 +807,7 @@ export default function AthletePlanning({
                       </div>
                     </div>
                     <div style={{ marginLeft: 16, paddingLeft: 44, borderLeft: "2px solid var(--c-border)" }} className="space-y-2.5">
-                      {ds.sort((a, b) => a.time.localeCompare(b.time)).map(s => (
+                      {ds.sort((a, b) => (a.time ?? "").localeCompare(b.time ?? "")).map(s => (
                         <SessionCard key={s.id} s={s} isPast={isPast} />
                       ))}
                     </div>
@@ -878,7 +879,7 @@ export default function AthletePlanning({
 
           {selectedDate && (() => {
             const key = selectedDate.toISOString().slice(0, 10);
-            const ds  = (sessionsByDate[key] ?? []).sort((a, b) => a.time.localeCompare(b.time));
+            const ds  = (sessionsByDate[key] ?? []).sort((a, b) => (a.time ?? "").localeCompare(b.time ?? ""));
             if (!ds.length) return null;
             const isPast = selectedDate < new Date(today.toISOString().slice(0, 10));
             return (
@@ -928,7 +929,7 @@ export default function AthletePlanning({
           <div className="flex-1 overflow-y-auto p-3 space-y-2.5">
             {(() => {
               const key     = (selectedDate ?? today).toISOString().slice(0, 10);
-              const ds      = (sessionsByDate[key] ?? []).sort((a, b) => a.time.localeCompare(b.time));
+              const ds      = (sessionsByDate[key] ?? []).sort((a, b) => (a.time ?? "").localeCompare(b.time ?? ""));
               const dateObj = selectedDate ?? today;
               const isPast  = dateObj < new Date(today.toISOString().slice(0, 10));
 
@@ -955,6 +956,7 @@ export default function AthletePlanning({
         <SessionDetailModal
           session={liveActive}
           athlete={athlete}
+          allAthletes={allAthletes}
           onClose={() => setActiveSession(null)}
           onSetStatus={onStatusChange}
           onSetRpe={onRpeChange}

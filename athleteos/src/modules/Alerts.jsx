@@ -21,25 +21,25 @@ import Modal           from "../components/ui/Modal";
 // ─── Config UI statique ───────────────────────────────────────────────────────
 
 const TYPE_CONFIG = {
-  surcharge:   { label: "Surcharge",   icon: Activity,      color: "#E24B4A", bg: "#FEF2F2" },
-  blessure:    { label: "Blessure",    icon: AlertTriangle, color: "#EF9F27", bg: "#FFFBEB" },
-  absence:     { label: "Absence",     icon: Users,         color: "#378ADD", bg: "#EFF6FF" },
-  performance: { label: "Performance", icon: TrendingUp,    color: "#1D9E75", bg: "#F0FDF4" },
+  surcharge:   { label: "Surcharge",   icon: Activity,      color: "#E24B4A", bg: "rgba(226,75,74,0.15)" },
+  blessure:    { label: "Blessure",    icon: AlertTriangle, color: "#EF9F27", bg: "rgba(239,159,39,0.15)" },
+  absence:     { label: "Absence",     icon: Users,         color: "#378ADD", bg: "rgba(55,138,221,0.15)" },
+  performance: { label: "Performance", icon: TrendingUp,    color: "#1D9E75", bg: "rgba(29,158,117,0.15)" },
 };
 
 const SEVERITY_CONFIG = {
-  critique: { cls: "bg-red-100 text-red-700",     label: "Critique" },
-  modérée:  { cls: "bg-amber-100 text-amber-700", label: "Modérée"  },
-  légère:   { cls: "bg-slate-100 text-slate-500", label: "Légère"   },
-  info:     { cls: "bg-blue-50 text-blue-700",    label: "Info"     },
+  critique: { cls: "bg-[rgba(224,82,82,0.15)] text-[#E05252]",     label: "Critique" },
+  modérée:  { cls: "bg-[rgba(232,160,32,0.15)] text-[#E8A020]",    label: "Modérée"  },
+  légère:   { cls: "bg-[rgba(255,255,255,0.08)] text-[var(--c-text-2)]", label: "Légère" },
+  info:     { cls: "bg-[rgba(91,141,239,0.15)] text-[#5B8DEF]",    label: "Info"     },
 };
 
 const EMPTY_FORM = {
   type: "surcharge", athleteId: "", title: "", description: "", severity: "modérée",
 };
 
-const inputCls = "w-full border border-slate-200 rounded-lg px-3 py-2 text-[13px] text-slate-700 focus:outline-none focus:ring-2 focus:ring-emerald-400 bg-white";
-const labelCls = "block text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1";
+const inputCls = "w-full border border-[var(--c-border-strong)] rounded-lg px-3 py-2 text-[13px] text-[var(--c-text-1)] focus:outline-none focus:ring-2 focus:ring-emerald-400 bg-[var(--c-surface-2)]";
+const labelCls = "block text-[11px] font-semibold text-[var(--c-text-3)] uppercase tracking-wider mb-1";
 
 function formatDate(dateStr) {
   if (!dateStr) return "—";
@@ -58,7 +58,7 @@ function initialsFromName(name) {
 const AlertFormContent = memo(({ form, set, athletes, saveError }) => (
   <div className="space-y-4">
     {saveError && (
-      <div className="bg-red-50 border border-red-100 rounded-lg px-3 py-2.5 text-[12px] text-red-700">
+      <div className="bg-[rgba(224,82,82,0.12)] border border-[rgba(224,82,82,0.25)] rounded-lg px-3 py-2.5 text-[12px] text-[#F19A9A]">
         {saveError}
       </div>
     )}
@@ -114,8 +114,8 @@ const AlertFormContent = memo(({ form, set, athletes, saveError }) => (
             className={[
               "flex-1 px-2 py-1.5 rounded-lg text-[12px] font-semibold transition-all border",
               form.severity === key
-                ? "border-slate-800 bg-slate-800 text-white"
-                : "border-slate-200 text-slate-500 hover:border-slate-300",
+                ? "border-[var(--c-accent)] bg-[var(--c-accent)] text-white"
+                : "border-[var(--c-border)] text-[var(--c-text-2)] hover:border-[var(--c-border-strong)]",
             ].join(" ")}
           >
             {c.label}
@@ -277,8 +277,8 @@ function Alerts() {
       {/* ── En-tête ──────────────────────────────────────────────────────── */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <h2 className="text-[22px] font-bold text-slate-800 tracking-tight">Alertes</h2>
-          <p className="text-[13px] text-slate-400 mt-0.5">
+          <h2 className="text-[22px] font-bold text-[var(--c-text-1)] tracking-tight">Alertes</h2>
+          <p className="text-[13px] text-[var(--c-text-3)] mt-0.5">
             {unreadCount > 0
               ? `${unreadCount} alerte${unreadCount > 1 ? "s" : ""} non lue${unreadCount > 1 ? "s" : ""}`
               : "Tout est à jour"}
@@ -288,7 +288,7 @@ function Alerts() {
           {unreadCount > 0 && (
             <button
               onClick={markAllRead}
-              className="flex items-center gap-1.5 text-[12px] font-medium text-emerald-600 hover:text-emerald-700 border border-emerald-200 bg-emerald-50 px-3 py-1.5 rounded-lg transition-colors"
+              className="flex items-center gap-1.5 text-[12px] font-medium text-[#4DC9A0] hover:text-white border border-[rgba(29,158,117,0.3)] bg-[var(--c-accent-light)] px-3 py-1.5 rounded-lg transition-colors"
             >
               <CheckCheck size={14} />
               Tout marquer comme lu
@@ -306,33 +306,33 @@ function Alerts() {
       </div>
 
       {/* ── Filtres ──────────────────────────────────────────────────────── */}
-      <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-4 space-y-3">
+      <div className="card p-4 space-y-3">
         <div className="flex items-center gap-2 flex-wrap">
-          <Filter size={13} className="text-slate-400" />
-          <span className="text-[12px] font-semibold text-slate-400 uppercase tracking-wider mr-2">Type</span>
+          <Filter size={13} className="text-[var(--c-text-3)]" />
+          <span className="text-[12px] font-semibold text-[var(--c-text-3)] uppercase tracking-wider mr-2">Type</span>
           {["tous", "surcharge", "blessure", "absence", "performance"].map((t) => (
             <button
               key={t}
               onClick={() => setFilterType(t)}
               className={[
                 "px-3 py-1 rounded-full text-[12px] font-medium transition-all",
-                filterType === t ? "bg-slate-800 text-white" : "bg-slate-100 text-slate-500 hover:bg-slate-200",
+                filterType === t ? "bg-[var(--c-accent)] text-white" : "bg-[var(--c-surface-2)] text-[var(--c-text-2)] hover:bg-[var(--c-surface-3)]",
               ].join(" ")}
             >
               {t === "tous" ? "Tous" : TYPE_CONFIG[t]?.label ?? t}
             </button>
           ))}
 
-          <div className="w-px h-5 bg-slate-200 mx-1" />
+          <div className="w-px h-5 bg-[var(--c-border-strong)] mx-1" />
 
-          <span className="text-[12px] font-semibold text-slate-400 uppercase tracking-wider mr-2">Statut</span>
+          <span className="text-[12px] font-semibold text-[var(--c-text-3)] uppercase tracking-wider mr-2">Statut</span>
           {[{ id: "tous", label: "Tous" }, { id: "non_lues", label: "Non lues" }, { id: "lues", label: "Lues" }].map((f) => (
             <button
               key={f.id}
               onClick={() => setFilterRead(f.id)}
               className={[
                 "px-3 py-1 rounded-full text-[12px] font-medium transition-all",
-                filterRead === f.id ? "bg-slate-800 text-white" : "bg-slate-100 text-slate-500 hover:bg-slate-200",
+                filterRead === f.id ? "bg-[var(--c-accent)] text-white" : "bg-[var(--c-surface-2)] text-[var(--c-text-2)] hover:bg-[var(--c-surface-3)]",
               ].join(" ")}
             >
               {f.label}
@@ -341,12 +341,12 @@ function Alerts() {
         </div>
 
         {athletes.length > 0 && (
-          <div className="flex items-center gap-2 flex-wrap pt-2 border-t border-slate-50">
-            <span className="text-[12px] font-semibold text-slate-400 uppercase tracking-wider mr-2">Athlète</span>
+          <div className="flex items-center gap-2 flex-wrap pt-2 border-t border-[var(--c-border)]">
+            <span className="text-[12px] font-semibold text-[var(--c-text-3)] uppercase tracking-wider mr-2">Athlète</span>
             <select
               value={filterAthlete}
               onChange={(e) => setFilterAthlete(e.target.value)}
-              className="text-[12px] font-medium bg-slate-100 text-slate-600 rounded-full px-3 py-1 border-none focus:outline-none focus:ring-2 focus:ring-emerald-400"
+              className="text-[12px] font-medium bg-[var(--c-surface-2)] text-[var(--c-text-2)] rounded-full px-3 py-1 border-none focus:outline-none focus:ring-2 focus:ring-emerald-400"
             >
               <option value="tous">Tous les athlètes</option>
               {athletes.map((a) => (
@@ -359,13 +359,13 @@ function Alerts() {
 
       {/* ── Liste des alertes ────────────────────────────────────────────── */}
       {filtered.length === 0 ? (
-        <div className="bg-white rounded-xl border border-slate-100 p-12 flex flex-col items-center gap-3 text-slate-400">
+        <div className="card p-12 flex flex-col items-center gap-3 text-[var(--c-text-3)]">
           <Bell size={32} strokeWidth={1.5} />
           <p className="text-[14px] font-medium">
             {alertList.length === 0 ? "Aucune alerte pour l'instant" : "Aucune alerte pour ce filtre"}
           </p>
           {alertList.length === 0 && (
-            <p className="text-[12px] text-slate-300 text-center max-w-xs">
+            <p className="text-[12px] text-[var(--c-text-4)] text-center max-w-xs">
               Les alertes automatiques apparaîtront ici, ou crée-en une manuellement.
             </p>
           )}
@@ -373,7 +373,7 @@ function Alerts() {
       ) : (
         <div className="space-y-3">
           {filtered.map((alert) => {
-            const typeConf = TYPE_CONFIG[alert.type] ?? { label: alert.type, icon: Bell, color: "#94a3b8", bg: "#f8fafc" };
+            const typeConf = TYPE_CONFIG[alert.type] ?? { label: alert.type, icon: Bell, color: "var(--c-text-3)", bg: "var(--c-surface-3)" };
             const Icon     = typeConf.icon;
             const sevConf  = SEVERITY_CONFIG[alert.severity] ?? SEVERITY_CONFIG.légère;
             const athlete  = athletes.find((a) => a.id === alert.athleteId);
@@ -382,8 +382,8 @@ function Alerts() {
               <div
                 key={alert.id}
                 className={[
-                  "bg-white rounded-xl border shadow-sm transition-all overflow-hidden group",
-                  alert.isRead ? "border-slate-100" : "border-l-4",
+                  "card transition-all overflow-hidden group",
+                  alert.isRead ? "" : "border-l-4",
                 ].join(" ")}
                 style={!alert.isRead ? { borderLeftColor: typeConf.color } : {}}
               >
@@ -398,7 +398,7 @@ function Alerts() {
                   <div className="flex-1 min-w-0">
                     <div className="flex items-start justify-between gap-2 flex-wrap">
                       <div className="flex items-center gap-2 flex-wrap">
-                        <h4 className="text-[14px] font-semibold text-slate-800">{alert.title}</h4>
+                        <h4 className="text-[14px] font-semibold text-[var(--c-text-1)]">{alert.title}</h4>
                         {!alert.isRead && (
                           <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: typeConf.color }} />
                         )}
@@ -411,7 +411,7 @@ function Alerts() {
                         {!alert.isRead && (
                           <button
                             onClick={() => markRead(alert.id)}
-                            className="text-[11px] text-slate-400 hover:text-emerald-600 flex items-center gap-1 transition-colors"
+                            className="text-[11px] text-[var(--c-text-3)] hover:text-emerald-600 flex items-center gap-1 transition-colors"
                           >
                             <CheckCheck size={13} />
                             Marquer lu
@@ -419,7 +419,7 @@ function Alerts() {
                         )}
                         <button
                           onClick={() => deleteAlert(alert.id)}
-                          className="text-slate-300 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100"
+                          className="text-[var(--c-text-4)] hover:text-[#E05252] transition-colors opacity-0 group-hover:opacity-100"
                           title="Supprimer l'alerte"
                         >
                           <Trash2 size={14} />
@@ -427,7 +427,7 @@ function Alerts() {
                       </div>
                     </div>
 
-                    <p className="text-[12.5px] text-slate-500 mt-1.5 leading-relaxed">
+                    <p className="text-[12.5px] text-[var(--c-text-2)] mt-1.5 leading-relaxed">
                       {alert.description || "Aucune description."}
                     </p>
 
@@ -440,12 +440,12 @@ function Alerts() {
                           >
                             {athlete.avatar}
                           </div>
-                          <span className="text-[11px] font-medium text-slate-600">{athlete.name}</span>
+                          <span className="text-[11px] font-medium text-[var(--c-text-2)]">{athlete.name}</span>
                         </div>
                       )}
-                      <span className="text-slate-300">·</span>
-                      <span className="text-[11px] text-slate-400">{formatDate(alert.date)}</span>
-                      <span className="text-slate-300">·</span>
+                      <span className="text-[var(--c-text-4)]">·</span>
+                      <span className="text-[11px] text-[var(--c-text-3)]">{formatDate(alert.date)}</span>
+                      <span className="text-[var(--c-text-4)]">·</span>
                       <span
                         className="text-[11px] font-medium px-2 py-0.5 rounded-full"
                         style={{ background: typeConf.bg, color: typeConf.color }}
@@ -454,8 +454,8 @@ function Alerts() {
                       </span>
                       {alert.isRead && (
                         <>
-                          <span className="text-slate-300">·</span>
-                          <span className="text-[11px] text-slate-300 flex items-center gap-1">
+                          <span className="text-[var(--c-text-4)]">·</span>
+                          <span className="text-[11px] text-[var(--c-text-4)] flex items-center gap-1">
                             <CheckCheck size={11} /> Lue
                           </span>
                         </>

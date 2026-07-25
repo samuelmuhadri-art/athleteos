@@ -40,17 +40,23 @@ function Modal({
       style={{ background: "rgba(15,23,42,0.45)" }}
       onClick={(e) => e.target === e.currentTarget && !disabled && onClose()}
     >
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md max-h-[90vh] flex flex-col overflow-hidden">
+      <div
+        className="rounded-2xl shadow-2xl w-full max-w-md max-h-[90vh] flex flex-col overflow-hidden"
+        style={{ background: "var(--c-surface)", border: "1px solid var(--c-border)" }}
+      >
 
         {/* ── Header ─────────────────────────────────────────────────── */}
-        <div className="px-6 py-5 border-b border-slate-100 flex items-center justify-between flex-shrink-0">
-          <h3 className="text-[16px] font-bold text-slate-800">{title}</h3>
+        <div
+          className="px-6 py-5 flex items-center justify-between flex-shrink-0"
+          style={{ borderBottom: "1px solid var(--c-border)" }}
+        >
+          <h3 className="text-[16px] font-bold" style={{ color: "var(--c-text-1)" }}>{title}</h3>
           <button
             onClick={onClose}
             disabled={disabled}
-            className="p-1.5 rounded-lg hover:bg-slate-100 transition-colors disabled:opacity-40"
+            className="p-1.5 rounded-lg transition-colors disabled:opacity-40 hover:bg-[var(--c-surface-3)]"
           >
-            <X size={18} className="text-slate-500" />
+            <X size={18} style={{ color: "var(--c-text-3)" }} />
           </button>
         </div>
 
@@ -61,11 +67,15 @@ function Modal({
 
         {/* ── Footer ─────────────────────────────────────────────────── */}
         {onConfirm && (
-          <div className="px-6 py-4 border-t border-slate-100 flex items-center justify-between gap-3 flex-shrink-0">
+          <div
+            className="px-6 py-4 flex items-center justify-between gap-3 flex-shrink-0"
+            style={{ borderTop: "1px solid var(--c-border)" }}
+          >
             <button
               onClick={onClose}
               disabled={disabled}
-              className="px-4 py-2 rounded-lg bg-slate-100 text-slate-600 text-[13px] font-medium hover:bg-slate-200 transition-colors disabled:opacity-40"
+              className="px-4 py-2 rounded-lg text-[13px] font-medium transition-colors disabled:opacity-40 hover:bg-[var(--c-surface-3)]"
+              style={{ background: "var(--c-surface-2)", color: "var(--c-text-2)" }}
             >
               Annuler
             </button>

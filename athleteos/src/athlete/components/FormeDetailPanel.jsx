@@ -26,7 +26,7 @@ const FormeDetailPanel = memo(({ metricKey, metrics, sessions, weeklyCharge, ath
         return { ...s, validation: val };
       })
       .filter(s => s.validation?.rpe != null)
-      .sort((a, b) => b.week - a.week || a.day?.localeCompare(b.day ?? ""));
+      .sort((a, b) => b.week - a.week || new Date(b.sessionDate ?? 0) - new Date(a.sessionDate ?? 0));
   }, [sessions, athlete.id, currentWeek]);
 
   const recentCharge = useMemo(() => {
