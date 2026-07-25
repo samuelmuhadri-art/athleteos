@@ -9,7 +9,7 @@
 //   - fond #F5F5F2, cards #FDFDFB — contraste visible mais doux
 // ============================================================
 
-import { useState, useMemo, memo } from "react";
+import { useState, useMemo, useEffect, memo } from "react";
 import {
   CalendarDays, TrendingUp, TrendingDown, Zap, CheckCircle,
   Activity, FileText, HeartPulse, Trophy, ChevronRight, Minus,
@@ -119,6 +119,40 @@ const BadgeItem = memo(({ badge }) => (
     <p style={{ fontSize: 8.5, color: "var(--c-text-3)", lineHeight: 1.2 }}>{badge.desc}</p>
   </div>
 ));
+// Ring héro readiness — se remplit de 0 à sa valeur au montage, façon
+// Whoop/Oura : c'est ce petit détail (l'anneau qui "arrive" plutôt que
+// d'apparaître déjà rempli) qui donne l'effet waouh à la première ouverture.
+const ReadinessRing = memo(({ value, color, size = 128 }) => {
+  const [animated, setAnimated] = useState(0);
+  useEffect(() => {
+    const t = setTimeout(() => setAnimated(value), 150);
+    return () => clearTimeout(t);
+  }, [value]);
+  const stroke = 10;
+  const r = (size - stroke) / 2;
+  const circ = 2 * Math.PI * r;
+  const dash = (Math.max(0, Math.min(100, animated)) / 100) * circ;
+  return (
+    <div style={{ position: "relative", width: size, height: size, flexShrink: 0 }}>
+      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} style={{ filter: `drop-shadow(0 0 14px ${color}40)` }}>
+        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="rgba(255,255,255,0.07)" strokeWidth={stroke} />
+        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke={color} strokeWidth={stroke}
+          strokeDasharray={`${dash} ${circ}`} strokeLinecap="round"
+          transform={`rotate(-90 ${size / 2} ${size / 2})`}
+          style={{ transition: "stroke-dasharray 1.1s cubic-bezier(0.16,1,0.3,1)" }} />
+      </svg>
+      <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
+        <span style={{ fontSize: Math.round(size * 0.27), fontWeight: 700, color, lineHeight: 1, letterSpacing: "-0.03em", fontVariantNumeric: "tabular-nums" }}>
+          {value}
+        </span>
+        <span style={{ fontSize: 9, fontWeight: 500, letterSpacing: "0.10em", textTransform: "uppercase", color: "rgba(255,255,255,0.30)", marginTop: 3 }}>
+          Readiness
+        </span>
+      </div>
+    </div>
+  );
+});
+
 // ═══════════════════════════════════════════════════════════════════════════════
 // COMPOSANT PRINCIPAL
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -208,6 +242,10 @@ export default function AthleteDashboard({
 
   const acwrPct = Math.min(94, Math.max(2, (metrics.acwr / 2) * 100));
 
+  const readinessThreshold = METRIC_SCIENCE.readiness.thresholds.find(
+    t => metrics.readiness >= t.min && metrics.readiness <= t.max
+  );
+
   // ── Séparateur de section ──────────────────────────────────────────────────
   const SectionDivider = ({ label, action, onAction }) => (
     <div className="flex items-center justify-between mb-3 mt-5 first:mt-0">
@@ -273,36 +311,46 @@ export default function AthleteDashboard({
             </div>
           </div>
 
-          {/* Métriques 4 blocs */}
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 8 }}>
-            {[
-              { key: "readiness", label: "Readiness", value: metrics.readiness,       unit: "",     pct: metrics.readiness },
-              { key: "fatigue",   label: "Fatigue",   value: metrics.fatigue,          unit: "",     pct: metrics.fatigue },
-              { key: "acwr",      label: "ACWR",      value: metrics.acwr.toFixed(2),  unit: "",     pct: Math.min(100,(metrics.acwr/2)*100) },
-              { key: "streak",    label: "Streak",    value: streak,                   unit: " sem", pct: Math.min(100,streak*10) },
-            ].map(s => {
-              const col = dimColor(s.key, s.key === "acwr" ? metrics.acwr : Number(s.value));
-              return (
-                <div key={s.key} style={{
-                  background: "rgba(255,255,255,0.03)", border: "0.5px solid rgba(255,255,255,0.055)",
-                  borderRadius: 10, padding: "10px 8px", textAlign: "center",
-                }}>
-                  <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "center", gap: 2, marginBottom: 4 }}>
-                    <span style={{ fontSize: 19, fontWeight: 600, color: col, fontVariantNumeric: "tabular-nums", letterSpacing: "-0.03em", lineHeight: 1 }}>
-                      {s.value}
-                    </span>
-                    {s.unit && <span style={{ fontSize: 7.5, color: "rgba(255,255,255,0.18)", fontWeight: 400, marginBottom: 1 }}>{s.unit}</span>}
-                  </div>
-                  <p style={{ fontSize: 7.5, fontWeight: 500, letterSpacing: "0.10em", textTransform: "uppercase", color: "rgba(255,255,255,0.20)" }}>
-                    {s.label}
-                  </p>
-                  {/* Barre 1.5px */}
-                  <div style={{ height: 1.5, background: "rgba(255,255,255,0.05)", borderRadius: 99, marginTop: 6, overflow: "hidden" }}>
-                    <div style={{ height: "100%", width: `${Math.max(3,s.pct)}%`, background: col, borderRadius: 99, opacity: 0.65, transition: "width 0.8s cubic-bezier(0.16,1,0.3,1)" }} />
-                  </div>
-                </div>
-              );
-            })}
+          {/* Ring héro — readiness, LE chiffre qui compte le plus, avec le
+              reste (fatigue/ACWR/streak) en soutien à côté */}
+          <div style={{ display: "flex", alignItems: "center", gap: 18, flexWrap: "wrap" }}>
+            <ReadinessRing value={metrics.readiness} color={dimColor("readiness", metrics.readiness)} />
+
+            <div style={{ flex: 1, minWidth: 190 }}>
+              {readinessThreshold && (
+                <p style={{ fontSize: 12.5, color: "rgba(255,255,255,0.78)", lineHeight: 1.45, marginBottom: 13 }}>
+                  {readinessThreshold.advice}
+                </p>
+              )}
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 8 }}>
+                {[
+                  { key: "fatigue", label: "Fatigue", value: metrics.fatigue,         unit: "",     pct: metrics.fatigue },
+                  { key: "acwr",    label: "ACWR",     value: metrics.acwr.toFixed(2),unit: "",     pct: Math.min(100,(metrics.acwr/2)*100) },
+                  { key: "streak",  label: "Streak",   value: streak,                  unit: " sem", pct: Math.min(100,streak*10) },
+                ].map(s => {
+                  const col = dimColor(s.key, s.key === "acwr" ? metrics.acwr : Number(s.value));
+                  return (
+                    <div key={s.key} style={{
+                      background: "rgba(255,255,255,0.03)", border: "0.5px solid rgba(255,255,255,0.055)",
+                      borderRadius: 10, padding: "10px 8px", textAlign: "center",
+                    }}>
+                      <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "center", gap: 2, marginBottom: 4 }}>
+                        <span style={{ fontSize: 17, fontWeight: 600, color: col, fontVariantNumeric: "tabular-nums", letterSpacing: "-0.03em", lineHeight: 1 }}>
+                          {s.value}
+                        </span>
+                        {s.unit && <span style={{ fontSize: 7.5, color: "rgba(255,255,255,0.18)", fontWeight: 400, marginBottom: 1 }}>{s.unit}</span>}
+                      </div>
+                      <p style={{ fontSize: 7.5, fontWeight: 500, letterSpacing: "0.10em", textTransform: "uppercase", color: "rgba(255,255,255,0.20)" }}>
+                        {s.label}
+                      </p>
+                      <div style={{ height: 1.5, background: "rgba(255,255,255,0.05)", borderRadius: 99, marginTop: 6, overflow: "hidden" }}>
+                        <div style={{ height: "100%", width: `${Math.max(3,s.pct)}%`, background: col, borderRadius: 99, opacity: 0.65, transition: "width 0.8s cubic-bezier(0.16,1,0.3,1)" }} />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
           </div>
         </div>
       </div>
