@@ -51,7 +51,23 @@ serve(async (req) => {
     const failed = results.filter(r => r.status === "rejected").length;
     console.log("Résultat:", sent, "envoyés,", failed, "échoués");
 
-    return new Response(JSON.stringify({ sent, failed }), {
+    // ── Nettoyage : un abonnement en 404/410 est mort côté navigateur
+    // (permission révoquée, service worker désinstallé...) — on le retire
+    // de la base pour ne plus essayer de lui envoyer de notifs.
+    const deadEndpoints = results
+      .map((r: PromiseSettledResult<unknown>, i: number) => ({ r, endpoint: subs?.[i]?.endpoint }))
+      .filter(({ r }: { r: PromiseSettledResult<unknown> }) =>
+        r.status === "rejected" && [404, 410].includes((r as PromiseRejectedResult).reason?.statusCode)
+      )
+      .map(({ endpoint }: { endpoint: string | undefined }) => endpoint)
+      .filter(Boolean);
+
+    if (deadEndpoints.length) {
+      await supabase.from("push_subscriptions").delete().in("endpoint", deadEndpoints);
+      console.log("Abonnements expirés supprimés:", deadEndpoints.length);
+    }
+
+    return new Response(JSON.stringify({ sent, failed, cleaned: deadEndpoints.length }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (err) {
