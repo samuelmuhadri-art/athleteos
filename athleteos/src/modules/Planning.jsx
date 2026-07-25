@@ -79,6 +79,13 @@ function parseLocalDate(s) {
 function dateToISOWeek(s) { return getISOWeek(parseLocalDate(s)); }
 function dateToDayName(s) { return DAYS_FR[(parseLocalDate(s).getDay()+6)%7]; }
 
+// Convertit un Date en clé "YYYY-MM-DD" locale (jamais .toISOString() sur un
+// Date local : ça convertit en UTC et décale le jour d'un cran dès que le
+// fuseau est positif, ex. Belgique — une séance du 25 ressortait le 26).
+function toLocalDateStr(d) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
 function isSameDay(a, b) {
   return a.getFullYear() === b.getFullYear()
     && a.getMonth() === b.getMonth()
@@ -426,7 +433,7 @@ const SessionModal = memo(({ session, athletes, onClose, onSetRpe, onSetStatus, 
 
 const AddSessionModal = memo(({ athletes, initialData, onClose, onAdd }) => {
   const isEdit = !!initialData;
-  const today  = new Date().toISOString().split("T")[0];
+  const today  = toLocalDateStr(new Date());
   const [form, setForm]             = useState(initialData ?? { ...EMPTY_FORM, sessionDate: today });
   const [saving, setSaving]         = useState(false);
   const [pdfFile, setPdfFile]       = useState(null);
@@ -804,7 +811,7 @@ function Planning() {
 
   const selectedDaySessions = useMemo(() => {
     if (!selectedDate) return [];
-    return (sessionsByDate[selectedDate.toISOString().slice(0, 10)] ?? [])
+    return (sessionsByDate[toLocalDateStr(selectedDate)] ?? [])
       .sort((a, b) => (a.time ?? "").localeCompare(b.time ?? ""));
   }, [selectedDate, sessionsByDate]);
 
@@ -965,10 +972,10 @@ function Planning() {
           {viewMode === "week" && (
             <div className="p-3 md:p-4 space-y-2">
               {weekDays.map((date, i) => {
-                const key     = date.toISOString().slice(0, 10);
+                const key     = toLocalDateStr(date);
                 const ds      = (sessionsByDate[key] ?? []).sort((a, b) => (a.time ?? "").localeCompare(b.time ?? ""));
                 const isToday = isSameDay(date, today);
-                const isPast  = date < new Date(today.toISOString().slice(0, 10));
+                const isPast  = toLocalDateStr(date) < toLocalDateStr(today);
 
                 return (
                   <div
@@ -1120,7 +1127,7 @@ function Planning() {
 
               <div className="grid grid-cols-7 gap-0.5 md:gap-1">
                 {calendarDays.map(({ date, isCurrentMonth }, idx) => {
-                  const key         = date.toISOString().slice(0, 10);
+                  const key         = toLocalDateStr(date);
                   const daySessions = sessionsByDate[key] ?? [];
                   const isToday     = isSameDay(date, today);
                   const isSelected  = selectedDate && isSameDay(date, selectedDate);

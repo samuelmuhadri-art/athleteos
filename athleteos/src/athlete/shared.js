@@ -196,6 +196,16 @@ export function parseLocalDate(s) {
   return new Date(y, m - 1, d);
 }
 
+// Inverse de parseLocalDate : Date -> "YYYY-MM-DD" en heure LOCALE.
+// Ne jamais utiliser .toISOString() sur un Date local ici : ça convertit
+// en UTC et décale le jour d'un cran dans les fuseaux positifs (ex.
+// Belgique) — une séance créée pour le 25 s'affichait le 26 dans le
+// calendrier/la liste alors que la notif (qui lit la string brute en
+// base) montrait bien le 25.
+export function toLocalDateStr(d) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
 export function dateToISOWeek(s) { return getISOWeek(parseLocalDate(s)); }
 export function dateToDayName(s) { return DAYS_FR[(parseLocalDate(s).getDay()+6)%7]; }
 export function colorsFor(cat) { return SESSION_COLORS[cat] ?? SESSION_COLORS.technique; }

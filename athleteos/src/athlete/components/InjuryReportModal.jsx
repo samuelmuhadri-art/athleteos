@@ -9,6 +9,7 @@ import { useState, memo } from "react";
 import { X, AlertTriangle, HeartPulse } from "lucide-react";
 import { supabase } from "../../utils/supabaseClient";
 import { alertNewInjury } from "../../utils/notifications";
+import { toLocalDateStr } from "../shared";
 
 const InjuryReportModal = memo(({ athlete, clubId, onClose, onSaved }) => {
   const [form, setForm] = useState({ name: "", location: "", intensity: 5, notes: "" });
@@ -27,7 +28,7 @@ const InjuryReportModal = memo(({ athlete, clubId, onClose, onSaved }) => {
         location: form.location.trim() || null,
         intensity: form.intensity,
         status: "actif",
-        start_date: new Date().toISOString().slice(0, 10),
+        start_date: toLocalDateStr(new Date()),
         notes: form.notes.trim() || null,
       }).select().single();
       if (error) throw error;

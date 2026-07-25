@@ -40,6 +40,12 @@ function initialsFromName(name) {
   return ((parts[0]?.[0] ?? "") + (parts[1]?.[0] ?? "")).toUpperCase();
 }
 
+// Date -> "YYYY-MM-DD" en heure locale (pas .toISOString(), qui convertit en
+// UTC et peut faire tomber la date un jour trop tôt/tard selon le fuseau).
+function toLocalDateStr(d) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
 function getISOWeek(date) {
   const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
   d.setUTCDate(d.getUTCDate() - (d.getUTCDay() + 6) % 7 + 3);
@@ -288,7 +294,7 @@ function Dashboard({ onNavigate }) {
         supabase.from("athletes").select("id, name, main_discipline, profile_data, group_name").eq("club_id", clubId),
         supabase.from("sessions").select("*, session_athletes(*)").eq("club_id", clubId),
         supabase.from("alerts").select("id, is_read, severity, type").eq("club_id", clubId),
-        supabase.from("competitions").select("id, name, date, competition_athletes(athlete_id)").eq("club_id", clubId).gte("date", today.toISOString().slice(0, 10)).order("date").limit(3),
+        supabase.from("competitions").select("id, name, date, competition_athletes(athlete_id)").eq("club_id", clubId).gte("date", toLocalDateStr(today)).order("date").limit(3),
         supabase.from("injuries").select("id, athlete_id, name, intensity, status, location").eq("status", "actif"),
         supabase.from("athlete_goals").select("*").eq("club_id", clubId).eq("achieved", false),
       ]);

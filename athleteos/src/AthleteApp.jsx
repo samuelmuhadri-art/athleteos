@@ -14,7 +14,7 @@ import { useAuth }   from "./context/AuthContext";
 import { getAthleteMetricsForWeek } from "./utils/chargeCalculations";
 import { computeSessionLoad } from "./utils/trainingLoad";
 import { usePushNotifications, PushToggleButton } from "./hooks/usePushNotifications";
-import { initialsFromName } from "./athlete/shared";
+import { initialsFromName, toLocalDateStr } from "./athlete/shared";
 
 import AthleteDashboard from "./athlete/views/AthleteDashboard";
 import AthletePlanning  from "./athlete/views/AthletePlanning";
@@ -72,7 +72,7 @@ export default function AthleteApp() {
         setLoading(false); return;
       }
       const a = athleteRes.data; const athleteId = a.id;
-      const todayStr = new Date().toISOString().split("T")[0];
+      const todayStr = toLocalDateStr(new Date());
 
       const [recordsRes,injuriesRes,perfHistRes,sessionsRes,compsRes,coachRes,allAthletesRes,myPerfsRes,goalsRes,notifsRes,wellnessRes] = await Promise.all([
         supabase.from("records").select("*").eq("athlete_id",athleteId),
@@ -168,7 +168,7 @@ export default function AthleteApp() {
     // Si déjà rempli aujourd'hui -> jamais afficher
     if (wellnessToday) return;
     // Clé unique par jour — évite le réaffichage au rechargement de page
-    const today = new Date().toISOString().split("T")[0];
+    const today = toLocalDateStr(new Date());
     const ssKey = `wellness_shown_${athlete.id}_${today}`;
     if (sessionStorage.getItem(ssKey)) return;
     if (wellnessShownRef.current) return;

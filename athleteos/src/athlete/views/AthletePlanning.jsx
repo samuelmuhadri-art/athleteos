@@ -22,7 +22,7 @@ import { supabase } from "../../utils/supabaseClient";
 import { notifyCoachMessage, alertAthleteSession } from "../../utils/notifications";
 import {
   DAYS_SHORT, MONTHS_FR, CATEGORIES,
-  isSameDay, dateToISOWeek, dateToDayName,
+  isSameDay, dateToISOWeek, dateToDayName, toLocalDateStr,
 } from "../shared";
 
 // ─── Palette catégories — accents vifs + fond rgba dark-safe ────────────────
@@ -77,7 +77,7 @@ function rpeColor(i) {
 // MODAL CRÉATION DE SÉANCE
 // ═══════════════════════════════════════════════════════════════════════════════
 const CreateSessionModal = memo(({ athlete, allAthletes, clubId, createdBy, coachUserId, onClose, onCreated }) => {
-  const today = new Date().toISOString().split("T")[0];
+  const today = toLocalDateStr(new Date());
   const [form, setForm] = useState({
     title: "", category: "technique", time: "10:00", durationMinutes: 60,
     description: "", sessionDate: today, invitedAthletes: [],
@@ -776,7 +776,7 @@ export default function AthletePlanning({
               {groupedAgenda.map(({ date, sessions: ds }) => {
                 const dateObj = new Date(date);
                 const isToday = isSameDay(dateObj, today);
-                const isPast  = dateObj < new Date(today.toISOString().slice(0, 10));
+                const isPast  = toLocalDateStr(dateObj) < toLocalDateStr(today);
                 return (
                   <div key={date}>
                     <div className="flex items-center gap-3 mb-3">
@@ -829,7 +829,7 @@ export default function AthletePlanning({
 
           <div className="grid grid-cols-7 gap-0.5 md:gap-1">
             {calDays.map(({ date, cur }, idx) => {
-              const key     = date.toISOString().slice(0, 10);
+              const key     = toLocalDateStr(date);
               const ds      = sessionsByDate[key] ?? [];
               const isToday = isSameDay(date, today);
               const isSel   = selectedDate && isSameDay(date, selectedDate);
@@ -873,10 +873,10 @@ export default function AthletePlanning({
           </div>
 
           {selectedDate && (() => {
-            const key = selectedDate.toISOString().slice(0, 10);
+            const key = toLocalDateStr(selectedDate);
             const ds  = (sessionsByDate[key] ?? []).sort((a, b) => (a.time ?? "").localeCompare(b.time ?? ""));
             if (!ds.length) return null;
-            const isPast = selectedDate < new Date(today.toISOString().slice(0, 10));
+            const isPast = toLocalDateStr(selectedDate) < toLocalDateStr(today);
             return (
               <div className="mt-5 space-y-2">
                 <p style={{ fontSize: 12, fontWeight: 700, color: "var(--c-text-2)", marginBottom: 10, display: "flex", alignItems: "center", gap: 8 }}>
@@ -901,7 +901,7 @@ export default function AthletePlanning({
             {weekDays.map((date, i) => {
               const isToday = isSameDay(date, today);
               const isSel   = isSameDay(date, selectedDate ?? today);
-              const hasSess = (sessionsByDate[date.toISOString().slice(0, 10)] ?? []).length > 0;
+              const hasSess = (sessionsByDate[toLocalDateStr(date)] ?? []).length > 0;
               return (
                 <button key={i} onClick={() => setSelectedDate(date)}
                   className="tap-feedback"
@@ -923,10 +923,10 @@ export default function AthletePlanning({
 
           <div className="flex-1 overflow-y-auto p-3 space-y-2.5">
             {(() => {
-              const key     = (selectedDate ?? today).toISOString().slice(0, 10);
+              const key     = toLocalDateStr(selectedDate ?? today);
               const ds      = (sessionsByDate[key] ?? []).sort((a, b) => (a.time ?? "").localeCompare(b.time ?? ""));
               const dateObj = selectedDate ?? today;
-              const isPast  = dateObj < new Date(today.toISOString().slice(0, 10));
+              const isPast  = toLocalDateStr(dateObj) < toLocalDateStr(today);
 
               if (ds.length === 0) return (
                 <div className="flex flex-col items-center justify-center py-16 gap-3">

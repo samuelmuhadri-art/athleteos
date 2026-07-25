@@ -7,7 +7,7 @@ import { useState, useMemo, memo } from "react";
 import { X, CheckCircle, AlertTriangle, Activity } from "lucide-react";
 import { supabase } from "../../utils/supabaseClient";
 import { computeWellnessScore } from "../../utils/chargeCalculations";
-import { WELLNESS_QUESTIONS } from "../shared";
+import { WELLNESS_QUESTIONS, toLocalDateStr } from "../shared";
 
 const WellnessModal = memo(({ athlete, clubId, onClose, onSaved }) => {
   const [form, setForm] = useState({
@@ -35,7 +35,7 @@ const WellnessModal = memo(({ athlete, clubId, onClose, onSaved }) => {
     if (!allAnswered) return;
     setSaving(true); setErr(null);
     try {
-      const today = new Date().toISOString().split("T")[0];
+      const today = toLocalDateStr(new Date());
       const { error } = await supabase.from("athlete_wellness").upsert({
         athlete_id: athlete.id,
         club_id:    clubId,

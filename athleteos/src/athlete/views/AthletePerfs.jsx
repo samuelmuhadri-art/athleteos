@@ -20,7 +20,7 @@ import {
   CartesianGrid, ResponsiveContainer,
 } from "recharts";
 import { supabase } from "../../utils/supabaseClient";
-import { getDiscHib, parsePerf } from "../shared";
+import { getDiscHib, parsePerf, toLocalDateStr } from "../shared";
 import { notifyGoalAchieved } from "../../utils/notifications";
 
 // ─── Couleurs par discipline (accents vifs, faits pour fond sombre) ──────────
@@ -338,12 +338,12 @@ export default function AthletePerfs({ athlete, competitions, myPerformances, my
   const [showAddComp,  setShowAddComp]  = useState(false);
   const [savingComp,   setSavingComp]   = useState(false);
   const [compForm,     setCompForm]     = useState({
-    name: "", date: new Date().toISOString().slice(0, 10),
+    name: "", date: toLocalDateStr(new Date()),
     location: "", type: "Régionale", event: "", result: "", context: "",
   });
 
   const [perfForm, setPerfForm] = useState({
-    discipline: "", value: "", performance_date: today.toISOString().slice(0, 10), context: "",
+    discipline: "", value: "", performance_date: toLocalDateStr(today), context: "",
   });
   const [goalForm, setGoalForm] = useState({
     discipline: "", target_value: "", deadline: "", notes: "",
@@ -455,7 +455,7 @@ export default function AthletePerfs({ athlete, competitions, myPerformances, my
         }
       }
 
-      setPerfForm({ discipline: perfForm.discipline, value: "", performance_date: today.toISOString().slice(0, 10), context: "" });
+      setPerfForm({ discipline: perfForm.discipline, value: "", performance_date: toLocalDateStr(today), context: "" });
       setShowAddPerf(false);
     } catch (e) {
       console.error("Erreur ajout perf:", e);
@@ -538,7 +538,7 @@ export default function AthletePerfs({ athlete, competitions, myPerformances, my
         context:        compForm.context || null,
       });
 
-      setCompForm({ name: "", date: new Date().toISOString().slice(0, 10), location: "", type: "Régionale", event: "", result: "", context: "" });
+      setCompForm({ name: "", date: toLocalDateStr(new Date()), location: "", type: "Régionale", event: "", result: "", context: "" });
       setShowAddComp(false);
       onRefresh?.();
     } catch (e) {
