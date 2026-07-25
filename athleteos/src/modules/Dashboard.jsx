@@ -30,7 +30,7 @@ import {
   getStatusLabel,
 } from "../utils/chargeCalculations";
 import { computeSessionLoad } from "../utils/trainingLoad";
-import { checkUpcomingCompetitions, checkAndAlertACWR, notifyAthleteCompetitionReminder } from "../utils/notifications";
+import { checkUpcomingCompetitions, checkAndAlertACWR, notifyAthleteCompetitionReminder, checkWeeklyRecap } from "../utils/notifications";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -362,6 +362,9 @@ function Dashboard({ onNavigate }) {
       }
       if (mappedAthletes.length > 0 && charge.length > 0) {
         await checkAndAlertACWR(clubId, mappedAthletes, charge, currentWeek);
+      }
+      if (mappedAthletes.length > 0) {
+        await checkWeeklyRecap(clubId, mappedAthletes, mappedSessions, currentWeek, profile?.id ?? null);
       }
     } catch (err) {
       setError(err.message ?? "Erreur inconnue");

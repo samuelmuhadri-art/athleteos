@@ -10,7 +10,7 @@
 import { memo, useState, useMemo, useEffect, useCallback } from "react";
 import {
   Bell, Activity, AlertTriangle, Users,
-  TrendingUp, CheckCheck, Filter, Plus, Trash2, Trophy,
+  TrendingUp, CheckCheck, Filter, Plus, Trash2, Trophy, BarChart2,
 } from "lucide-react";
 import { supabase }    from "../utils/supabaseClient";
 import { useAuth }     from "../context/AuthContext";
@@ -29,6 +29,7 @@ const TYPE_CONFIG = {
   absence:     { label: "Absence",     icon: Users,         color: "#378ADD", bg: "rgba(55,138,221,0.15)" },
   performance: { label: "Performance", icon: TrendingUp,    color: "#1D9E75", bg: "rgba(29,158,117,0.15)" },
   competition: { label: "Compétition", icon: Trophy,        color: "#9B84F0", bg: "rgba(155,132,240,0.15)" },
+  recap:       { label: "Récap semaine", icon: BarChart2,   color: "#5B8DEF", bg: "rgba(91,141,239,0.15)" },
 };
 
 const SEVERITY_CONFIG = {
@@ -314,7 +315,7 @@ function Alerts() {
         <div className="flex items-center gap-2 flex-wrap">
           <Filter size={13} className="text-[var(--c-text-3)]" />
           <span className="text-[12px] font-semibold text-[var(--c-text-3)] uppercase tracking-wider mr-2">Type</span>
-          {["tous", "charge", "blessure", "absence", "performance", "competition"].map((t) => (
+          {["tous", "charge", "blessure", "absence", "performance", "competition", "recap"].map((t) => (
             <button
               key={t}
               onClick={() => setFilterType(t)}

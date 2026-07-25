@@ -214,6 +214,89 @@ export async function notifyAthleteCompetitionReminder(clubId, competition) {
   await sendWebPush(targetIds, { title, body: description, tag: `comp-${competition.id}` });
 }
 
+// ── Récap hebdomadaire (lundi → samedi, envoyé le samedi soir) ─────────────
+// Déclenché côté client (dans fetchAll du dashboard coach et de l'appli
+// athlète) — pas de vrai cron serveur pour l'instant, donc ça part dès que
+// quelqu'un ouvre l'app entre samedi 18h et dimanche minuit. Le dédoublonnage
+// se fait sur le numéro de semaine dans le titre.
+function isRecapWindow() {
+  const now = new Date();
+  const day = now.getDay(); // 0 = dimanche, 6 = samedi
+  return (day === 6 && now.getHours() >= 18) || day === 0;
+}
+
+function computeWeeklyStats(athleteId, sessions) {
+  const relevant = (sessions ?? []).filter(s => s.athleteIds?.includes(athleteId) && s.day !== "Dimanche");
+  let done = 0, partial = 0, none = 0;
+  relevant.forEach(s => {
+    const v = s.validations?.find(x => x.athleteId === athleteId);
+    if (v?.status === "done") done++;
+    else if (v?.status === "partial") partial++;
+    else if (v?.status === "none") none++;
+  });
+  return { total: relevant.length, done, partial, none };
+}
+
+// Notif individuelle — utilisée à la fois par le récap coach (en boucle,
+// un par athlète) et par l'appli athlète elle-même (au cas où le coach n'a
+// pas ouvert son dashboard le samedi soir).
+export async function notifyAthleteWeeklyRecap(clubId, athlete, sessions, currentWeek) {
+  if (!isRecapWindow()) return;
+  const stats = computeWeeklyStats(athlete.id, sessions);
+  if (stats.total === 0) return;
+
+  const { data: existing } = await supabase.from("athlete_notifications").select("id")
+    .eq("athlete_id", athlete.id).eq("type", "weekly_recap")
+    .ilike("title", `%S${currentWeek}%`).limit(1);
+  if (existing?.length) return;
+
+  const title = `📊 Ta semaine — S${currentWeek}`;
+  const description = `${stats.done}/${stats.total} séance${stats.total > 1 ? "s" : ""} réalisée${stats.done > 1 ? "s" : ""}` +
+    (stats.partial ? `, ${stats.partial} partielle${stats.partial > 1 ? "s" : ""}` : "") +
+    (stats.none ? `, ${stats.none} manquée${stats.none > 1 ? "s" : ""}` : "") + ".";
+
+  await supabase.from("athlete_notifications").insert({
+    athlete_id: athlete.id, club_id: clubId, type: "weekly_recap", title, description, is_read: false,
+  });
+  await sendWebPush([athlete.id], { title, body: description, tag: `recap-${currentWeek}` });
+}
+
+// Récap squad-wide pour le coach — une alerte + push, plus le récap
+// individuel de chaque athlète (déjà en boucle ici, pas besoin que chacun
+// ouvre son appli pour recevoir le sien).
+export async function checkWeeklyRecap(clubId, athletes, sessions, currentWeek, coachUserId) {
+  if (!isRecapWindow()) return;
+
+  const { data: existing } = await supabase.from("alerts").select("id")
+    .eq("club_id", clubId).eq("type", "recap")
+    .ilike("title", `%semaine ${currentWeek}%`).limit(1);
+
+  if (!existing?.length) {
+    let totalAll = 0, doneAll = 0;
+    const concerns = [];
+    athletes.forEach(a => {
+      const s = computeWeeklyStats(a.id, sessions);
+      totalAll += s.total; doneAll += s.done;
+      if (s.total > 0 && (s.partial > 0 || s.none > 0)) concerns.push(`${a.name.split(" ")[0]} (${s.done}/${s.total})`);
+    });
+    if (totalAll > 0) {
+      const pct   = Math.round((doneAll / totalAll) * 100);
+      const title = `📊 Récap semaine ${currentWeek}`;
+      const description = `${doneAll}/${totalAll} séances réalisées (${pct}%).` +
+        (concerns.length ? ` À suivre : ${concerns.join(", ")}.` : " Toute l'équipe est à jour.");
+      await supabase.from("alerts").insert({
+        club_id: clubId, athlete_id: null, type: "recap", title, description,
+        severity: concerns.length ? "modérée" : "info", is_read: false,
+      });
+      if (coachUserId) await sendWebPush([], { title, body: description, tag: `recap-${currentWeek}` }, [coachUserId]);
+    }
+  }
+
+  for (const a of athletes) {
+    await notifyAthleteWeeklyRecap(clubId, a, sessions, currentWeek);
+  }
+}
+
 // <-- AJOUT POUR LES PHOTOS BEREAL DU CLUB
 export async function notifyClubNewPost(clubId, authorName, allAthleteIds) {
   if (!allAthleteIds?.length) return;
