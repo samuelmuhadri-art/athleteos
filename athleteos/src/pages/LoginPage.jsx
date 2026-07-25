@@ -6,7 +6,7 @@ import { useState } from "react";
 import { Zap, Mail, Lock, AlertCircle } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 
-export default function LoginPage() {
+export default function LoginPage({ onSignupClick }) {
   const { signIn } = useAuth();
 
   const [email,    setEmail]    = useState("");
@@ -139,9 +139,16 @@ export default function LoginPage() {
           </button>
         </form>
 
-        <p className="text-center text-[11px] mt-6" style={{ color: "var(--c-text-4)" }}>
-          Accès réservé aux membres — contacte ton coach ou ton club pour un compte.
-        </p>
+        {onSignupClick ? (
+          <button onClick={onSignupClick} className="block text-center text-[12px] mt-6 mx-auto tap-feedback"
+            style={{ color: "var(--c-accent)", background: "none", border: "none", cursor: "pointer" }}>
+            Pas encore de compte ? Créer mon club ou rejoindre avec un code →
+          </button>
+        ) : (
+          <p className="text-center text-[11px] mt-6" style={{ color: "var(--c-text-4)" }}>
+            Accès réservé aux membres — contacte ton coach ou ton club pour un compte.
+          </p>
+        )}
       </div>
     </div>
   );

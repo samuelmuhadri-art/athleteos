@@ -7,11 +7,13 @@ import {
   LayoutDashboard, CalendarDays, Users, TrendingUp,
   Activity, Trophy, Bell, MessageSquare,
   ChevronLeft, ChevronRight, Menu, X, Zap, LogOut,
+  UserPlus, Copy, Check,
 } from "lucide-react";
 
 import { supabase }   from "./utils/supabaseClient";
 import { useAuth }    from "./context/AuthContext";
 import LoginPage      from "./pages/LoginPage";
+import SignupPage     from "./pages/SignupPage";
 import AthleteApp     from "./AthleteApp";
 import { usePushNotifications, PushToggleButton } from "./hooks/usePushNotifications";
 
@@ -100,12 +102,30 @@ function CoachShell({ user, profile, clubId, signOut }) {
   const [mobileOpen,   setMobileOpen]   = useState(false);
   const [unreadAlerts, setUnreadAlerts] = useState(0);
   const [viewKey, setViewKey] = useState(0);
+  const [showInvite, setShowInvite] = useState(false);
+  const [clubName, setClubName]     = useState("");
+  const [inviteCode, setInviteCode] = useState(null);
+  const [copied, setCopied]         = useState(false);
 
   const { subscribed, subscribe, permissionState } = usePushNotifications(
     null,
     clubId,
     profile.id
   );
+
+  useEffect(() => {
+    if (!clubId) return;
+    supabase.from("clubs").select("name, invite_code").eq("id", clubId).single()
+      .then(({ data }) => { if (data) { setClubName(data.name ?? ""); setInviteCode(data.invite_code ?? null); } });
+  }, [clubId]);
+
+  const copyInviteCode = () => {
+    if (!inviteCode) return;
+    navigator.clipboard?.writeText(inviteCode).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  };
 
   const fetchUnreadCount = useCallback(async () => {
     if (!clubId) return;
@@ -336,6 +356,16 @@ function CoachShell({ user, profile, clubId, signOut }) {
 
           <div className="flex-1" />
 
+          {/* Inviter un athlète */}
+          <button
+            onClick={() => setShowInvite(true)}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-[12px] font-semibold transition-all tap-feedback"
+            style={{ background: "rgba(29,158,117,0.10)", border: "1px solid rgba(29,158,117,0.20)", color: "#4DC9A0" }}
+          >
+            <UserPlus size={13} />
+            <span className="hidden sm:inline">Inviter</span>
+          </button>
+
           {/* Push toggle */}
           <PushToggleButton
             subscribed={subscribed}
@@ -363,6 +393,47 @@ function CoachShell({ user, profile, clubId, signOut }) {
           </div>
         </main>
       </div>
+
+      {/* ── Modal invitation ─────────────────────────────────────────────── */}
+      {showInvite && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 modal-backdrop"
+          onClick={e => e.target === e.currentTarget && setShowInvite(false)}>
+          <div className="rounded-2xl shadow-2xl w-full max-w-sm modal-content overflow-hidden"
+            style={{ background: "var(--c-surface)", border: "1px solid var(--c-border)" }}>
+            <div className="px-6 py-5 flex items-center justify-between" style={{ borderBottom: "1px solid var(--c-border)" }}>
+              <div>
+                <h3 className="text-[15px] font-bold" style={{ color: "var(--c-text-1)" }}>Inviter un athlète</h3>
+                <p className="text-[11.5px] mt-0.5" style={{ color: "var(--c-text-3)" }}>{clubName || "Ton club"}</p>
+              </div>
+              <button onClick={() => setShowInvite(false)} className="p-1.5 rounded-lg hover:bg-[var(--c-surface-3)] transition-colors">
+                <X size={16} style={{ color: "var(--c-text-3)" }} />
+              </button>
+            </div>
+            <div className="px-6 py-6">
+              <p className="text-[12.5px] mb-4" style={{ color: "var(--c-text-2)" }}>
+                Partage ce code — chaque athlète qui s'inscrit avec sera automatiquement rattaché à ton club, sans rien faire de ton côté.
+              </p>
+              {inviteCode ? (
+                <div className="flex items-center gap-2">
+                  <div className="flex-1 rounded-xl px-4 py-3 text-center"
+                    style={{ background: "var(--c-surface-2)", border: "1px solid var(--c-border-strong)" }}>
+                    <span className="text-[22px] font-bold" style={{ color: "var(--c-text-1)", letterSpacing: "0.12em" }}>
+                      {inviteCode}
+                    </span>
+                  </div>
+                  <button onClick={copyInviteCode}
+                    className="flex items-center justify-center w-12 h-12 rounded-xl flex-shrink-0 transition-all tap-feedback"
+                    style={{ background: copied ? "rgba(29,158,117,0.15)" : "var(--c-surface-2)", border: "1px solid var(--c-border-strong)" }}>
+                    {copied ? <Check size={16} color="#1D9E75" /> : <Copy size={15} style={{ color: "var(--c-text-2)" }} />}
+                  </button>
+                </div>
+              ) : (
+                <p className="text-[12px]" style={{ color: "var(--c-text-4)" }}>Chargement…</p>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -370,9 +441,14 @@ function CoachShell({ user, profile, clubId, signOut }) {
 // ─── App root ─────────────────────────────────────────────────────────────────
 export default function App() {
   const { user, profile, clubId, loading: authLoading, signOut } = useAuth();
+  const [showSignup, setShowSignup] = useState(false);
 
   if (authLoading) return <AuthLoader />;
-  if (!user)       return <LoginPage />;
+  if (!user) {
+    return showSignup
+      ? <SignupPage onBack={() => setShowSignup(false)} />
+      : <LoginPage onSignupClick={() => setShowSignup(true)} />;
+  }
   if (profile?.role === "athlete") return <AthleteApp />;
   if (!profile) return <AuthLoader />;
 
