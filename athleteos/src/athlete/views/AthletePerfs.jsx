@@ -637,6 +637,10 @@ export default function AthletePerfs({ athlete, competitions, myPerformances, my
         ))}
       </div>
 
+      {/* key={activeTab} force un remount à chaque changement d'onglet, ce qui
+          déclenche .view-transition (fondu+glissement) au lieu d'un switch
+          instantané — évite l'effet "ça saute" en cliquant sur les tabs. */}
+      <div key={activeTab} className="view-transition">
       {/* ══════════════════════════════════════════════════════════════════════
           ONGLET RECORDS
          ══════════════════════════════════════════════════════════════════════ */}
@@ -1041,6 +1045,7 @@ export default function AthletePerfs({ athlete, competitions, myPerformances, my
           )}
         </div>
       )}
+      </div>
 
       {/* ── MODALS ───────────────────────────────────────────────────────────── */}
       {showAddPerf && (
