@@ -7,13 +7,15 @@ import {
   LayoutDashboard, CalendarDays, Users, TrendingUp,
   Activity, Trophy, Bell, MessageSquare,
   ChevronLeft, ChevronRight, Menu, X, Zap, LogOut,
-  UserPlus, Copy, Check,
+  UserPlus, Copy, Check, Settings,
 } from "lucide-react";
 
 import { supabase }   from "./utils/supabaseClient";
 import { useAuth }    from "./context/AuthContext";
 import LoginPage      from "./pages/LoginPage";
 import SignupPage     from "./pages/SignupPage";
+import ResetPasswordPage from "./pages/ResetPasswordPage";
+import AccountSettingsModal from "./components/ui/AccountSettingsModal";
 import AthleteApp     from "./AthleteApp";
 import { usePushNotifications, PushToggleButton } from "./hooks/usePushNotifications";
 
@@ -103,6 +105,7 @@ function CoachShell({ user, profile, clubId, signOut }) {
   const [unreadAlerts, setUnreadAlerts] = useState(0);
   const [viewKey, setViewKey] = useState(0);
   const [showInvite, setShowInvite] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
   const [clubName, setClubName]     = useState("");
   const [inviteCode, setInviteCode] = useState(null);
   const [copied, setCopied]         = useState(false);
@@ -274,6 +277,16 @@ function CoachShell({ user, profile, clubId, signOut }) {
                 </div>
               </div>
               <button
+                onClick={() => setShowSettings(true)}
+                title="Réglages du compte"
+                className="p-1.5 rounded-lg transition-all flex-shrink-0"
+                style={{ color: "var(--c-text-3)" }}
+                onMouseEnter={e => { e.currentTarget.style.color = "var(--c-text-1)"; e.currentTarget.style.background = "var(--c-surface-2)"; }}
+                onMouseLeave={e => { e.currentTarget.style.color = "var(--c-text-3)"; e.currentTarget.style.background = "transparent"; }}
+              >
+                <Settings size={14} />
+              </button>
+              <button
                 onClick={signOut}
                 title="Se déconnecter"
                 className="p-1.5 rounded-lg transition-all flex-shrink-0 ml-1"
@@ -434,16 +447,21 @@ function CoachShell({ user, profile, clubId, signOut }) {
           </div>
         </div>
       )}
+
+      {showSettings && <AccountSettingsModal onClose={() => setShowSettings(false)} />}
     </div>
   );
 }
 
 // ─── App root ─────────────────────────────────────────────────────────────────
 export default function App() {
-  const { user, profile, clubId, loading: authLoading, signOut } = useAuth();
+  const { user, profile, clubId, loading: authLoading, signOut, passwordRecovery } = useAuth();
   const [showSignup, setShowSignup] = useState(false);
 
   if (authLoading) return <AuthLoader />;
+  // Priorité absolue : tant qu'un nouveau mot de passe n'est pas défini après
+  // un clic sur le lien de réinitialisation, on ne route jamais ailleurs.
+  if (passwordRecovery) return <ResetPasswordPage />;
   if (!user) {
     return showSignup
       ? <SignupPage onBack={() => setShowSignup(false)} />

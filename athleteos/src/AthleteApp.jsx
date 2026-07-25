@@ -7,7 +7,7 @@
 import { useState, useCallback, useEffect, useRef } from "react";
 import {
   LayoutDashboard, CalendarDays, TrendingUp, MessageSquare,
-  Zap, LogOut, Users, Bell, X,
+  Zap, LogOut, Users, Bell, X, Settings
 } from "lucide-react";
 import { supabase }  from "./utils/supabaseClient";
 import { useAuth }   from "./context/AuthContext";
@@ -317,6 +317,11 @@ export default function AthleteApp() {
                   {unreadCount}
                 </span>
               )}
+            </button>
+            <button onClick={() => setShowSettings(true)}
+              className="tap-feedback"
+              style={{ padding: 6, borderRadius: 8, background: "none", border: "none", cursor: "pointer", color: "var(--c-text-3)", flexShrink: 0 }}>
+              <Settings size={13} />
             </button>
             <button onClick={signOut}
               className="tap-feedback"

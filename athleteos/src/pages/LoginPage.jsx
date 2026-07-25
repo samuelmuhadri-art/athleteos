@@ -3,16 +3,18 @@
 // ============================================================
 
 import { useState } from "react";
-import { Zap, Mail, Lock, AlertCircle } from "lucide-react";
+import { Zap, Mail, Lock, AlertCircle, CheckCircle } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 
 export default function LoginPage({ onSignupClick }) {
-  const { signIn } = useAuth();
+  const { signIn, sendPasswordReset } = useAuth();
 
+  const [mode,     setMode]     = useState("login"); // "login" | "forgot"
   const [email,    setEmail]    = useState("");
   const [password, setPassword] = useState("");
   const [loading,  setLoading]  = useState(false);
   const [error,    setError]    = useState(null);
+  const [resetSent, setResetSent] = useState(false);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -33,6 +35,17 @@ export default function LoginPage({ onSignupClick }) {
       setError(msg);
       setLoading(false);
     }
+  };
+
+  const handleForgotSubmit = async (e) => {
+    e.preventDefault();
+    if (!email.trim()) return;
+    setLoading(true);
+    setError(null);
+    const { error: resetError } = await sendPasswordReset(email.trim());
+    setLoading(false);
+    if (resetError) { setError(resetError.message); return; }
+    setResetSent(true);
   };
 
   const inputCls = [
@@ -57,10 +70,71 @@ export default function LoginPage({ onSignupClick }) {
           </div>
           <div className="text-center">
             <h1 className="text-[24px] font-bold tracking-tight" style={{ color: "var(--c-text-1)" }}>AthleteOS</h1>
-            <p className="text-[13px] mt-0.5" style={{ color: "var(--c-text-3)" }}>Connecte-toi pour accéder à ton espace</p>
+            <p className="text-[13px] mt-0.5" style={{ color: "var(--c-text-3)" }}>
+              {mode === "forgot" ? "Récupère l'accès à ton compte" : "Connecte-toi pour accéder à ton espace"}
+            </p>
           </div>
         </div>
 
+        {/* ── Mot de passe oublié ──────────────────────────────────────── */}
+        {mode === "forgot" ? (
+          <form
+            onSubmit={handleForgotSubmit}
+            className="rounded-2xl shadow-sm p-6 space-y-4"
+            style={{ background: "var(--c-surface)", border: "1px solid var(--c-border)" }}
+          >
+            {error && (
+              <div className="flex items-start gap-2.5 rounded-lg px-3.5 py-3" style={{ background: "rgba(226,75,74,0.1)", border: "1px solid rgba(226,75,74,0.2)" }}>
+                <AlertCircle size={15} color="#F19A9A" className="flex-shrink-0 mt-0.5" />
+                <p className="text-[13px]" style={{ color: "#F19A9A" }}>{error}</p>
+              </div>
+            )}
+            {resetSent ? (
+              <div className="flex items-start gap-2.5 rounded-lg px-3.5 py-3" style={{ background: "rgba(29,158,117,0.1)", border: "1px solid rgba(29,158,117,0.2)" }}>
+                <CheckCircle size={15} color="#4DC9A0" className="flex-shrink-0 mt-0.5" />
+                <p className="text-[13px]" style={{ color: "#4DC9A0" }}>
+                  Email envoyé à {email} — clique sur le lien qu'il contient pour choisir un nouveau mot de passe.
+                </p>
+              </div>
+            ) : (
+              <>
+                <div className="space-y-1.5">
+                  <label className="block text-[11px] font-bold uppercase tracking-wider" style={{ color: "var(--c-text-3)" }}>
+                    Email
+                  </label>
+                  <div className="relative">
+                    <Mail size={15} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: "var(--c-text-4)" }} />
+                    <input
+                      type="email" autoComplete="email" placeholder="coach@club.be"
+                      value={email} onChange={(e) => setEmail(e.target.value)}
+                      className={inputCls}
+                      style={{ background: "var(--c-surface-2)", borderColor: "var(--c-border-strong)", color: "var(--c-text-1)" }}
+                      required disabled={loading}
+                    />
+                  </div>
+                </div>
+                <button
+                  type="submit"
+                  disabled={loading || !email.trim()}
+                  className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg text-[14px] font-semibold text-white transition-all tap-feedback disabled:opacity-50 disabled:cursor-not-allowed"
+                  style={{ background: "linear-gradient(135deg, #1D9E75, #16826C)", boxShadow: "0 2px 8px rgba(29,158,117,0.25)" }}
+                >
+                  {loading ? (
+                    <>
+                      <div className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
+                      Envoi…
+                    </>
+                  ) : "Envoyer le lien de réinitialisation"}
+                </button>
+              </>
+            )}
+            <button type="button" onClick={() => { setMode("login"); setError(null); setResetSent(false); }}
+              className="block text-center text-[12px] w-full tap-feedback" style={{ color: "var(--c-text-3)", background: "none", border: "none", cursor: "pointer" }}>
+              ← Retour à la connexion
+            </button>
+          </form>
+        ) : (
+        <>
         {/* ── Formulaire ───────────────────────────────────────────────── */}
         <form
           onSubmit={handleSubmit}
@@ -115,6 +189,10 @@ export default function LoginPage({ onSignupClick }) {
                 disabled={loading}
               />
             </div>
+            <button type="button" onClick={() => { setMode("forgot"); setError(null); }}
+              className="block text-[11.5px] tap-feedback" style={{ color: "var(--c-text-3)", background: "none", border: "none", cursor: "pointer" }}>
+              Mot de passe oublié ?
+            </button>
           </div>
 
           {/* Submit */}
@@ -148,6 +226,8 @@ export default function LoginPage({ onSignupClick }) {
           <p className="text-center text-[11px] mt-6" style={{ color: "var(--c-text-4)" }}>
             Accès réservé aux membres — contacte ton coach ou ton club pour un compte.
           </p>
+        )}
+        </>
         )}
       </div>
     </div>

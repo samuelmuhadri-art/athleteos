@@ -24,6 +24,10 @@ export function AuthProvider({ children }) {
   const [user,    setUser]    = useState(null);   // objet supabase.auth.user
   const [profile, setProfile] = useState(null);   // ligne table users
   const [loading, setLoading] = useState(true);   // vrai jusqu'à la 1ère résolution
+  // true entre le moment où on clique le lien "mot de passe oublié" reçu par
+  // email et le moment où un nouveau mot de passe est effectivement défini —
+  // pendant ce laps de temps il ne faut PAS router vers le dashboard normal.
+  const [passwordRecovery, setPasswordRecovery] = useState(false);
 
   // ─── Charge le profil métier depuis la table `users` ─────────────────────────
   // Appelé à chaque changement de session (connexion, refresh, déconnexion).
@@ -68,6 +72,7 @@ export function AuthProvider({ children }) {
     // SIGNED_IN, SIGNED_OUT, TOKEN_REFRESHED, USER_UPDATED, PASSWORD_RECOVERY
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (_event, session) => {
+        if (_event === "PASSWORD_RECOVERY") setPasswordRecovery(true);
         const authUser = session?.user ?? null;
         setUser(authUser);
         await loadProfile(authUser);
@@ -91,6 +96,19 @@ export function AuthProvider({ children }) {
     // onAuthStateChange va déclencher setUser(null) + setProfile(null) automatiquement
   }, []);
 
+  const sendPasswordReset = useCallback(async (email) => {
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: window.location.origin,
+    });
+    return { error };
+  }, []);
+
+  const updatePassword = useCallback(async (newPassword) => {
+    const { error } = await supabase.auth.updateUser({ password: newPassword });
+    if (!error) setPasswordRecovery(false);
+    return { error };
+  }, []);
+
   // ─── Valeur du contexte ───────────────────────────────────────────────────────
   const value = {
     user,
@@ -98,8 +116,11 @@ export function AuthProvider({ children }) {
     // clubId est le raccourci critique : remplace partout `.eq("club_id", 1)`
     clubId: profile?.club_id ?? null,
     loading,
+    passwordRecovery,
     signIn,
     signOut,
+    sendPasswordReset,
+    updatePassword,
   };
 
   return (
