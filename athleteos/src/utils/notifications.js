@@ -297,6 +297,16 @@ export async function checkWeeklyRecap(clubId, athletes, sessions, currentWeek, 
   }
 }
 
+// ── Post auto-généré dans le fil du club (record battu / objectif atteint) ──
+// Donne du contenu au fil "Mon club" même quand personne ne partage de photo
+// manuellement. auto_type distingue ces posts des posts manuels côté UI.
+export async function postClubCelebration(clubId, athleteId, autoType, content) {
+  await supabase.from("social_posts").insert({
+    athlete_id: athleteId, club_id: clubId, session_id: null,
+    content, image_url: null, auto_type: autoType,
+  });
+}
+
 // <-- AJOUT POUR LES PHOTOS BEREAL DU CLUB
 export async function notifyClubNewPost(clubId, authorName, allAthleteIds) {
   if (!allAthleteIds?.length) return;

@@ -393,7 +393,7 @@ export default function AthleteApp() {
               <AthletePerfs
                 athlete={athlete} competitions={competitions}
                 myPerformances={myPerformances} myGoals={myGoals}
-                clubId={clubId} onRefresh={fetchAll}
+                clubId={clubId} weeklyCharge={weeklyCharge} onRefresh={fetchAll}
               />
             )}
             {activeView === "messagerie" && (

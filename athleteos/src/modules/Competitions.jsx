@@ -18,7 +18,7 @@ import { useAuth }                  from "../context/AuthContext";
 import LoadingState                 from "../components/ui/LoadingState";
 import ErrorState                   from "../components/ui/ErrorState";
 import { getAthleteMetricsForWeek } from "../utils/chargeCalculations";
-import { alertNewRecord, notifyAthleteResult } from "../utils/notifications";
+import { alertNewRecord, notifyAthleteResult, postClubCelebration } from "../utils/notifications";
 
 // ─── Config types de compétition (UI statique) ────────────────────────────────
 
@@ -938,6 +938,8 @@ function Competitions() {
       // ✅ Système centralisé : alerte coach + notif athlète
       await alertNewRecord(clubId, athlete, form.event, form.result, competition?.name);
       await notifyAthleteResult(clubId, athleteId, form.event, form.result, competition?.name ?? "");
+      await postClubCelebration(clubId, athleteId, "record",
+        `${athlete?.name?.split(" ")[0] ?? "Un athlète"} a battu son record en ${form.event} : ${form.result} !`);
     } else {
       // Notif athlète même sans record
       await notifyAthleteResult(clubId, athleteId, form.event, form.result, competition?.name ?? "");

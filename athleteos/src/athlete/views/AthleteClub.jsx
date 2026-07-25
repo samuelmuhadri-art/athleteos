@@ -8,7 +8,7 @@
 // ============================================================
 
 import { useState, useEffect, useMemo, useCallback, useRef, memo } from "react";
-import { Plus, X, Camera, Send, MessageSquare, Heart, Image, ChevronDown } from "lucide-react";
+import { Plus, X, Camera, Send, MessageSquare, Heart, Image, ChevronDown, Trophy, Target, Users as UsersIcon } from "lucide-react";
 import { supabase } from "../../utils/supabaseClient";
 import { initialsFromName, colorsFor, getISOWeek } from "../shared";
 import { notifyClubNewPost } from "../../utils/notifications";
@@ -314,6 +314,11 @@ const QuickPostModal = memo(({ session, athlete, allAthletes, clubId, onClose, o
 });
 
 // ─── Card post Instagram ──────────────────────────────────────────────────────
+const AUTO_CELEBRATION_CONFIG = {
+  record: { icon: Trophy, color: "#E8A020", label: "Nouveau record personnel" },
+  goal:   { icon: Target, color: "#7C67C8", label: "Objectif atteint" },
+};
+
 const PostCard = memo(({ post, athlete, allAthletes, sessions, onComment, onReact, onDelete, commentCount }) => {
   const postAthlete = allAthletes.find(a => a.id===post.athlete_id);
   const isOwn       = post.athlete_id===athlete.id;
@@ -321,6 +326,7 @@ const PostCard = memo(({ post, athlete, allAthletes, sessions, onComment, onReac
   const myReaction  = post.social_reactions?.find(r => r.athlete_id===athlete.id);
   const totalLikes  = (post.social_reactions ?? []).length;
   const color       = avatarColor(allAthletes, post.athlete_id);
+  const autoCfg     = AUTO_CELEBRATION_CONFIG[post.auto_type] ?? null;
 
   const diff    = (Date.now() - new Date(post.created_at)) / 1000;
   const timeAgo = diff<60?"À l'instant":diff<3600?`${Math.floor(diff/60)}min`:diff<86400?`${Math.floor(diff/3600)}h`:`${Math.floor(diff/86400)}j`;
@@ -331,33 +337,51 @@ const PostCard = memo(({ post, athlete, allAthletes, sessions, onComment, onReac
 
   return (
     <div style={{ background:"var(--c-surface)", borderBottom:"1px solid var(--c-border)" }}>
-      {/* Header auteur */}
-      <div style={{ padding:"10px 14px", display:"flex", alignItems:"center", gap:10 }}>
-        <div style={{ width:34, height:34, borderRadius:"50%", background:color, display:"flex", alignItems:"center", justifyContent:"center", color:"white", fontSize:11, fontWeight:600, flexShrink:0, border:isOwn?"2px solid #1D9E75":"none" }}>
-          {initialsFromName(postAthlete?.name ?? "?")}
-        </div>
-        <div style={{ flex:1, minWidth:0 }}>
-          <div style={{ display:"flex", alignItems:"center", gap:6 }}>
-            <p style={{ fontSize:13, fontWeight:600, color:"var(--c-text-1)" }}>{postAthlete?.name ?? "Athlète"}</p>
-            {isOwn && <span style={{ fontSize:9, fontWeight:500, padding:"1px 5px", borderRadius:4, background:"rgba(29,158,117,0.12)", color:"#1D9E75" }}>Moi</span>}
+      {/* Header auteur — traitement distinct pour les posts auto-générés
+          (record battu / objectif atteint), pour qu'ils se distinguent
+          visuellement des photos partagées manuellement */}
+      {autoCfg ? (
+        <div style={{ padding:"12px 14px", display:"flex", alignItems:"center", gap:10, background:`${autoCfg.color}12`, borderBottom:`1px solid ${autoCfg.color}22` }}>
+          <div style={{ width:36, height:36, borderRadius:10, background:`${autoCfg.color}22`, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
+            <autoCfg.icon size={17} color={autoCfg.color} strokeWidth={2} />
           </div>
-          <div style={{ display:"flex", alignItems:"center", gap:5, marginTop:1 }}>
-            <p style={{ fontSize:10, color:"var(--c-text-3)" }}>{timeAgo}</p>
-            {linkedSess && (
-              <>
-                <span style={{ color:"var(--c-text-4)", fontSize:10 }}>·</span>
-                <div style={{ display:"flex", alignItems:"center", gap:3 }}>
-                  <div style={{ width:5, height:5, borderRadius:"50%", background:colorsFor(linkedSess.category).border }}/>
-                  <p style={{ fontSize:10, color:"var(--c-text-3)", maxWidth:120, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{linkedSess.title}</p>
-                </div>
-              </>
-            )}
+          <div style={{ flex:1, minWidth:0 }}>
+            <p style={{ fontSize:9, fontWeight:600, letterSpacing:"0.07em", textTransform:"uppercase", color:autoCfg.color }}>{autoCfg.label}</p>
+            <p style={{ fontSize:13, color:"var(--c-text-1)", marginTop:3, lineHeight:1.4 }}>{post.content}</p>
+            <p style={{ fontSize:10, color:"var(--c-text-3)", marginTop:4 }}>{timeAgo}</p>
           </div>
+          {isOwn && (
+            <button onClick={onDelete} style={{ padding:4, background:"none", border:"none", cursor:"pointer", color:"var(--c-text-4)", flexShrink:0 }}><X size={13}/></button>
+          )}
         </div>
-        {isOwn && (
-          <button onClick={onDelete} style={{ padding:4, background:"none", border:"none", cursor:"pointer", color:"var(--c-text-4)" }}><X size={13}/></button>
-        )}
-      </div>
+      ) : (
+        <div style={{ padding:"10px 14px", display:"flex", alignItems:"center", gap:10 }}>
+          <div style={{ width:34, height:34, borderRadius:"50%", background:color, display:"flex", alignItems:"center", justifyContent:"center", color:"white", fontSize:11, fontWeight:600, flexShrink:0, border:isOwn?"2px solid #1D9E75":"none" }}>
+            {initialsFromName(postAthlete?.name ?? "?")}
+          </div>
+          <div style={{ flex:1, minWidth:0 }}>
+            <div style={{ display:"flex", alignItems:"center", gap:6 }}>
+              <p style={{ fontSize:13, fontWeight:600, color:"var(--c-text-1)" }}>{postAthlete?.name ?? "Athlète"}</p>
+              {isOwn && <span style={{ fontSize:9, fontWeight:500, padding:"1px 5px", borderRadius:4, background:"rgba(29,158,117,0.12)", color:"#1D9E75" }}>Moi</span>}
+            </div>
+            <div style={{ display:"flex", alignItems:"center", gap:5, marginTop:1 }}>
+              <p style={{ fontSize:10, color:"var(--c-text-3)" }}>{timeAgo}</p>
+              {linkedSess && (
+                <>
+                  <span style={{ color:"var(--c-text-4)", fontSize:10 }}>·</span>
+                  <div style={{ display:"flex", alignItems:"center", gap:3 }}>
+                    <div style={{ width:5, height:5, borderRadius:"50%", background:colorsFor(linkedSess.category).border }}/>
+                    <p style={{ fontSize:10, color:"var(--c-text-3)", maxWidth:120, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{linkedSess.title}</p>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+          {isOwn && (
+            <button onClick={onDelete} style={{ padding:4, background:"none", border:"none", cursor:"pointer", color:"var(--c-text-4)" }}><X size={13}/></button>
+          )}
+        </div>
+      )}
 
       {/* Photo */}
       {post.image_url && (
@@ -366,8 +390,9 @@ const PostCard = memo(({ post, athlete, allAthletes, sessions, onComment, onReac
         </div>
       )}
 
-      {/* Légende */}
-      {post.content && (
+      {/* Légende (posts manuels uniquement — le texte des posts auto est déjà
+          affiché dans le header ci-dessus) */}
+      {!autoCfg && post.content && (
         <div style={{ padding:"8px 14px 4px" }}>
           <p style={{ fontSize:13, color:"var(--c-text-1)", lineHeight:1.5 }}>
             <span style={{ fontWeight:600, color:"var(--c-text-1)", marginRight:5 }}>{postAthlete?.name?.split(" ")[0]}</span>
@@ -437,6 +462,38 @@ export default function AthleteClub({ athlete, allAthletes, clubId, sessions, pr
 
   const currentWeek  = getISOWeek(new Date());
   const sevenDaysAgo = useMemo(() => { const d=new Date(); d.setDate(d.getDate()-7); return d.toISOString(); }, []);
+  const [squadStats, setSquadStats] = useState(null);
+
+  // ── Récap du groupe cette semaine ────────────────────────────────────────
+  // `sessions` (prop) ne contient que les séances de l'athlète connecté —
+  // il faut une requête dédiée pour avoir la vue squad-wide (lundi→samedi).
+  useEffect(() => {
+    if (!clubId || allAthletes.length === 0) return;
+    let cancelled = false;
+    (async () => {
+      const { data: sess } = await supabase.from("sessions").select("id, day").eq("club_id", clubId).eq("week", currentWeek);
+      const ids = (sess ?? []).filter(s => s.day !== "Dimanche").map(s => s.id);
+      const perAthlete = {};
+      allAthletes.forEach(a => { perAthlete[a.id] = { done: 0, total: 0 }; });
+      let total = 0, done = 0;
+      if (ids.length > 0) {
+        const { data: rows } = await supabase.from("session_athletes").select("session_id, athlete_id, status").in("session_id", ids);
+        (rows ?? []).forEach(r => {
+          if (!perAthlete[r.athlete_id]) return;
+          perAthlete[r.athlete_id].total++; total++;
+          if (r.status === "done") { perAthlete[r.athlete_id].done++; done++; }
+        });
+      }
+      if (cancelled) return;
+      const ranking = allAthletes
+        .map(a => ({ ...a, ...perAthlete[a.id] }))
+        .filter(a => a.total > 0)
+        .sort((a, b) => (b.done / b.total) - (a.done / a.total) || b.done - a.done)
+        .slice(0, 3);
+      setSquadStats({ total, done, pct: total > 0 ? Math.round((done / total) * 100) : null, ranking });
+    })();
+    return () => { cancelled = true; };
+  }, [clubId, currentWeek, allAthletes]);
 
   // ── Fetch posts ────────────────────────────────────────────────────────────
   const fetchPosts = useCallback(async () => {
@@ -532,6 +589,40 @@ export default function AthleteClub({ athlete, allAthletes, clubId, sessions, pr
           <Camera size={13}/> Partager
         </button>
       </div>
+
+      {/* ── RÉCAP SQUAD DE LA SEMAINE ── */}
+      {squadStats && squadStats.total > 0 && (
+        <div style={{ margin:"10px 14px 0", borderRadius:14, padding:"12px 14px", background:"var(--c-surface)", border:"1px solid var(--c-border)", flexShrink:0 }}>
+          <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between" }}>
+            <div style={{ display:"flex", alignItems:"center", gap:9 }}>
+              <div style={{ width:30, height:30, borderRadius:9, background:"rgba(91,141,239,0.14)", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
+                <UsersIcon size={14} color="#5B8DEF" />
+              </div>
+              <div>
+                <p style={{ fontSize:12.5, fontWeight:600, color:"var(--c-text-1)" }}>Semaine du groupe</p>
+                <p style={{ fontSize:10, color:"var(--c-text-3)" }}>S{currentWeek} · lundi → samedi</p>
+              </div>
+            </div>
+            <div style={{ textAlign:"right", flexShrink:0 }}>
+              <p style={{ fontSize:20, fontWeight:700, lineHeight:1, color: squadStats.pct >= 75 ? "#1D9E75" : squadStats.pct >= 50 ? "#E8A020" : "#E05252" }}>
+                {squadStats.pct}%
+              </p>
+              <p style={{ fontSize:9, color:"var(--c-text-4)", marginTop:3 }}>{squadStats.done}/{squadStats.total} séances</p>
+            </div>
+          </div>
+          {squadStats.ranking.length > 0 && (
+            <div style={{ display:"flex", gap:7, overflowX:"auto", marginTop:11, paddingTop:11, borderTop:"1px solid var(--c-border)", scrollbarWidth:"none" }}>
+              {squadStats.ranking.map((a, i) => (
+                <div key={a.id} style={{ display:"flex", alignItems:"center", gap:6, padding:"5px 10px", borderRadius:99, background:"var(--c-surface-2)", flexShrink:0 }}>
+                  <span style={{ fontSize:10, fontWeight:700, color: i===0 ? "#E8A020" : "var(--c-text-3)" }}>{i+1}</span>
+                  <span style={{ fontSize:11, fontWeight:500, color:"var(--c-text-2)" }}>{a.name.split(" ")[0]}</span>
+                  <span style={{ fontSize:10, fontWeight:600, color:"#1D9E75" }}>{a.done}/{a.total}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* ── PROMPT POST (si séance validée & pas encore posté) ── */}
       {lastValidatedSession && !postedToday && (

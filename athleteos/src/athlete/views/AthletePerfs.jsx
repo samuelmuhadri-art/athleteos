@@ -18,10 +18,12 @@ import {
 import {
   AreaChart, Area, XAxis, YAxis, Tooltip,
   CartesianGrid, ResponsiveContainer,
+  ScatterChart, Scatter, ZAxis, ReferenceLine,
 } from "recharts";
 import { supabase } from "../../utils/supabaseClient";
-import { getDiscHib, parsePerf, toLocalDateStr } from "../shared";
-import { notifyGoalAchieved } from "../../utils/notifications";
+import { getDiscHib, parsePerf, toLocalDateStr, getISOWeek } from "../shared";
+import { notifyGoalAchieved, postClubCelebration } from "../../utils/notifications";
+import { getAthleteMetricsForWeek } from "../../utils/chargeCalculations";
 
 // ─── Couleurs par discipline (accents vifs, faits pour fond sombre) ──────────
 const DISC_COLORS = {
@@ -326,7 +328,7 @@ function AddGoalModal({ disciplines, goalForm, setGoalForm, onClose, onSubmit, s
 // ═══════════════════════════════════════════════════════════════════════════════
 // COMPOSANT PRINCIPAL
 // ═══════════════════════════════════════════════════════════════════════════════
-export default function AthletePerfs({ athlete, competitions, myPerformances, myGoals, clubId, onRefresh }) {
+export default function AthletePerfs({ athlete, competitions, myPerformances, myGoals, clubId, weeklyCharge, onRefresh }) {
   const today = new Date();
 
   const [activeTab,    setActiveTab]    = useState("records");
@@ -387,6 +389,31 @@ export default function AthletePerfs({ athlete, competitions, myPerformances, my
     return all.sort((a, b) => new Date(b.comp.date) - new Date(a.comp.date));
   }, [competitions, athlete.id]);
 
+  // Charge (ACWR) au moment de chaque compétition vs % du PR réalisé —
+  // permet de voir si les bonnes performances arrivent en zone de charge
+  // optimale (0.8–1.3) ou plutôt en surcharge/sous-charge.
+  const chargeVsPerfData = useMemo(() => {
+    if (!selectedDisc || !weeklyCharge?.length) return [];
+    const rec = athlete.records?.[selectedDisc];
+    if (!rec?.pr) return [];
+    const prP = parsePerf(rec.pr);
+    if (prP.value == null) return [];
+    const hib = getDiscHib(selectedDisc);
+    return compHistory
+      .filter(({ result }) => result.event === selectedDisc)
+      .map(({ comp, result }) => {
+        const resP = parsePerf(result.result);
+        if (resP.value == null || prP.value === 0) return null;
+        const pct = hib
+          ? Math.min(105, Math.round((resP.value / prP.value) * 1000) / 10)
+          : Math.min(105, Math.round((prP.value / resP.value) * 1000) / 10);
+        const week    = getISOWeek(new Date(comp.date));
+        const metrics = getAthleteMetricsForWeek(athlete.id, weeklyCharge, week);
+        return { x: metrics.acwr, y: pct, compName: comp.name, date: comp.date, resultStr: result.result };
+      })
+      .filter(Boolean);
+  }, [compHistory, selectedDisc, athlete.records, weeklyCharge]);
+
   const disciplineStats = useMemo(() => {
     const map = {};
     localPerfs.forEach(p => {
@@ -438,19 +465,32 @@ export default function AthletePerfs({ athlete, competitions, myPerformances, my
         const isPR = !curPR?.value || (hib ? newVal.value >= curPR.value : newVal.value <= curPR.value);
         const isSB = isThisYear && (!curSB?.value || (hib ? newVal.value >= curSB.value : newVal.value <= curSB.value));
         if (isPR || isSB) {
-          await supabase.from("records").upsert({
-            athlete_id: athlete.id,
-            discipline: disc,
+          // Pas de contrainte UNIQUE(athlete_id,discipline) en base — un
+          // .upsert(onConflict:...) échoue silencieusement en 400 ici
+          // (record jamais sauvé). On vérifie l'existence nous-mêmes et on
+          // update/insert explicitement, comme le fait déjà Competitions.jsx.
+          const { data: existingRow } = await supabase.from("records").select("id")
+            .eq("athlete_id", athlete.id).eq("discipline", disc).maybeSingle();
+          const patch = {
             ...(isPR ? { pr: perfForm.value, pr_date: perfForm.performance_date } : {}),
             ...(isSB ? { sb: perfForm.value } : {}),
             ...(!curPR?.value ? { pr: perfForm.value, pr_date: perfForm.performance_date, sb: perfForm.value } : {}),
-          }, { onConflict: "athlete_id,discipline" });
+          };
+          if (existingRow) {
+            await supabase.from("records").update(patch).eq("id", existingRow.id);
+          } else {
+            await supabase.from("records").insert({ athlete_id: athlete.id, discipline: disc, ...patch });
+          }
           if (athlete.records) {
             athlete.records[disc] = {
               ...curRec,
               ...(isPR ? { pr: perfForm.value, prDate: perfForm.performance_date } : {}),
               ...(isSB ? { sb: perfForm.value } : {}),
             };
+          }
+          if (isPR) {
+            postClubCelebration(clubId, athlete.id, "record",
+              `${athlete.name.split(" ")[0]} a battu son record en ${disc} : ${perfForm.value} !`).catch(console.warn);
           }
         }
       }
@@ -496,7 +536,11 @@ export default function AthletePerfs({ athlete, competitions, myPerformances, my
     const goal = localGoals.find(g => g.id === goalId);
     setLocalGoals(prev => prev.map(g => g.id === goalId ? { ...g, achieved: true } : g));
     await supabase.from("athlete_goals").update({ achieved: true }).eq("id", goalId);
-    if (goal) notifyGoalAchieved(clubId, athlete.id, goal.discipline, goal.target_value).catch(console.warn);
+    if (goal) {
+      notifyGoalAchieved(clubId, athlete.id, goal.discipline, goal.target_value).catch(console.warn);
+      postClubCelebration(clubId, athlete.id, "goal",
+        `${athlete.name.split(" ")[0]} a atteint son objectif en ${goal.discipline} : ${goal.target_value} !`).catch(console.warn);
+    }
     onRefresh?.();
   };
 
@@ -761,6 +805,46 @@ export default function AthletePerfs({ athlete, competitions, myPerformances, my
               </>
             )}
           </div>
+
+          {chargeVsPerfData.length >= 2 && (
+            <div className="card p-4">
+              <p style={{ fontSize: 14, fontWeight: 600, color: "var(--c-text-1)" }}>Charge vs performance</p>
+              <p style={{ fontSize: 11, color: "var(--c-text-3)", marginTop: 2, marginBottom: 14 }}>
+                ACWR au moment de chaque compétition (axe X) · % du PR réalisé (axe Y) — {selectedDisc}
+              </p>
+              <ResponsiveContainer width="100%" height={220}>
+                <ScatterChart margin={{ top: 10, right: 14, bottom: 10, left: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
+                  <XAxis dataKey="x" type="number" domain={[0.4, 1.8]} tick={{ fontSize: 10, fill: "rgba(255,255,255,0.35)" }} axisLine={false} tickLine={false} />
+                  <YAxis dataKey="y" type="number" domain={[70, 105]} tick={{ fontSize: 10, fill: "rgba(255,255,255,0.35)" }} axisLine={false} tickLine={false} width={36} />
+                  <ZAxis range={[90, 90]} />
+                  <ReferenceLine x={0.8} stroke="#1D9E75" strokeDasharray="4 3" strokeWidth={1.5} />
+                  <ReferenceLine x={1.3} stroke="#E8A020" strokeDasharray="4 3" strokeWidth={1.5} />
+                  <Tooltip content={({ active, payload }) => {
+                    if (!active || !payload?.length) return null;
+                    const d = payload[0].payload;
+                    return (
+                      <div style={{ background: "var(--c-surface-2)", border: "1px solid var(--c-border-strong)", borderRadius: 12, padding: "10px 12px", minWidth: 140 }}>
+                        <p style={{ fontSize: 11.5, fontWeight: 600, color: "var(--c-text-1)" }}>{d.compName}</p>
+                        <p style={{ fontSize: 10, color: "var(--c-text-3)", marginBottom: 6 }}>{new Date(d.date).toLocaleDateString("fr-BE", { day: "numeric", month: "short", year: "numeric" })}</p>
+                        <p style={{ fontSize: 11, color: "var(--c-text-2)" }}>Résultat : <strong style={{ color: "#4DC9A0" }}>{d.resultStr}</strong></p>
+                        <p style={{ fontSize: 11, color: "var(--c-text-2)" }}>ACWR : <strong>{d.x.toFixed(2)}</strong> · % PR : <strong>{d.y}%</strong></p>
+                      </div>
+                    );
+                  }} />
+                  <Scatter data={chargeVsPerfData} fill="#1D9E75" shape={(props) => {
+                    const { cx, cy, payload } = props;
+                    const col = payload.y >= 95 ? "#1D9E75" : payload.y >= 85 ? "#E8A020" : "#E05252";
+                    return <circle cx={cx} cy={cy} r={7} fill={col} fillOpacity={0.75} stroke={col} strokeWidth={1.5} />;
+                  }} />
+                </ScatterChart>
+              </ResponsiveContainer>
+              <div style={{ display: "flex", alignItems: "center", gap: 12, marginTop: 8, fontSize: 9.5, color: "var(--c-text-3)", flexWrap: "wrap" }}>
+                <span style={{ display: "flex", alignItems: "center", gap: 5 }}><span style={{ width: 8, height: 8, borderRadius: "50%", background: "#1D9E75" }} />0.80 — zone optimale</span>
+                <span style={{ display: "flex", alignItems: "center", gap: 5 }}><span style={{ width: 8, height: 8, borderRadius: "50%", background: "#E8A020" }} />1.30 — surcharge</span>
+              </div>
+            </div>
+          )}
 
           {chartData.length > 0 && (
             <div className="card overflow-hidden">
