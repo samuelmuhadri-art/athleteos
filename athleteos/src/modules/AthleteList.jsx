@@ -1189,8 +1189,8 @@ const AthleteCard = memo(({ athlete, weeklyCharge, onClick }) => {
           {athlete.level ?? "Niveau —"}
         </span>
         {activeInjuries.length > 0 && (
-          <span className="text-[10.5px] font-bold px-2.5 py-1 rounded-full" style={{ background: "rgba(239,159,39,0.15)", color: "#F0CB61", border: "1px solid rgba(239,159,39,0.3)" }}>
-            ⚕ {activeInjuries.length} blessure{activeInjuries.length > 1 ? "s" : ""}
+          <span className="flex items-center gap-1 text-[10.5px] font-bold px-2.5 py-1 rounded-full" style={{ background: "rgba(239,159,39,0.15)", color: "#F0CB61", border: "1px solid rgba(239,159,39,0.3)" }}>
+            <HeartPulse size={11} /> {activeInjuries.length} blessure{activeInjuries.length > 1 ? "s" : ""}
           </span>
         )}
       </div>

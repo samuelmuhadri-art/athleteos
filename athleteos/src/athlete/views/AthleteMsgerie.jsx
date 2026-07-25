@@ -186,7 +186,15 @@ export default function AthleteMsgerie({
   const showThread  =  !!activeId; // mobile
 
   return (
-    <div style={{ display: "flex", overflow: "hidden", height: "calc(100vh - 56px)" }}>
+    // 56px = header, 80px = padding-bottom réservée par <main> (pb-20) pour la
+    // bottom-nav mobile — il ne faut pas re-soustraire la hauteur de la nav en
+    // plus, sinon <main> se retrouve avec un léger surplus scrollable qui la
+    // fait défiler toute seule (via le scrollIntoView du dernier message) et
+    // décale toute la vue sous le header.
+    <div
+      className="h-[calc(100vh-56px-80px)] md:h-[calc(100vh-56px)]"
+      style={{ display: "flex", overflow: "hidden" }}
+    >
 
       {/* ── SIDEBAR CONTACTS ── */}
       <div style={{

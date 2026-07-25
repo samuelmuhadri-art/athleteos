@@ -10,7 +10,7 @@
 import { memo, useState, useMemo, useEffect, useCallback } from "react";
 import {
   Bell, Activity, AlertTriangle, Users,
-  TrendingUp, CheckCheck, Filter, Plus, Trash2,
+  TrendingUp, CheckCheck, Filter, Plus, Trash2, Trophy,
 } from "lucide-react";
 import { supabase }    from "../utils/supabaseClient";
 import { useAuth }     from "../context/AuthContext";
@@ -20,11 +20,15 @@ import Modal           from "../components/ui/Modal";
 
 // ─── Config UI statique ───────────────────────────────────────────────────────
 
+// Les clés doivent correspondre exactement aux valeurs `type` écrites en base
+// (voir src/utils/notifications.js) : "charge" pour surcharge/sous-charge ACWR,
+// pas "surcharge" — sinon l'alerte tombe dans le fallback gris sans couleur.
 const TYPE_CONFIG = {
-  surcharge:   { label: "Surcharge",   icon: Activity,      color: "#E24B4A", bg: "rgba(226,75,74,0.15)" },
+  charge:      { label: "Charge",      icon: Activity,      color: "#E24B4A", bg: "rgba(226,75,74,0.15)" },
   blessure:    { label: "Blessure",    icon: AlertTriangle, color: "#EF9F27", bg: "rgba(239,159,39,0.15)" },
   absence:     { label: "Absence",     icon: Users,         color: "#378ADD", bg: "rgba(55,138,221,0.15)" },
   performance: { label: "Performance", icon: TrendingUp,    color: "#1D9E75", bg: "rgba(29,158,117,0.15)" },
+  competition: { label: "Compétition", icon: Trophy,        color: "#9B84F0", bg: "rgba(155,132,240,0.15)" },
 };
 
 const SEVERITY_CONFIG = {
@@ -35,7 +39,7 @@ const SEVERITY_CONFIG = {
 };
 
 const EMPTY_FORM = {
-  type: "surcharge", athleteId: "", title: "", description: "", severity: "modérée",
+  type: "charge", athleteId: "", title: "", description: "", severity: "modérée",
 };
 
 const inputCls = "w-full border border-[var(--c-border-strong)] rounded-lg px-3 py-2 text-[13px] text-[var(--c-text-1)] focus:outline-none focus:ring-2 focus:ring-emerald-400 bg-[var(--c-surface-2)]";
@@ -310,7 +314,7 @@ function Alerts() {
         <div className="flex items-center gap-2 flex-wrap">
           <Filter size={13} className="text-[var(--c-text-3)]" />
           <span className="text-[12px] font-semibold text-[var(--c-text-3)] uppercase tracking-wider mr-2">Type</span>
-          {["tous", "surcharge", "blessure", "absence", "performance"].map((t) => (
+          {["tous", "charge", "blessure", "absence", "performance", "competition"].map((t) => (
             <button
               key={t}
               onClick={() => setFilterType(t)}
@@ -443,7 +447,7 @@ function Alerts() {
                           <span className="text-[11px] font-medium text-[var(--c-text-2)]">{athlete.name}</span>
                         </div>
                       )}
-                      <span className="text-[var(--c-text-4)]">·</span>
+                      {athlete && <span className="text-[var(--c-text-4)]">·</span>}
                       <span className="text-[11px] text-[var(--c-text-3)]">{formatDate(alert.date)}</span>
                       <span className="text-[var(--c-text-4)]">·</span>
                       <span

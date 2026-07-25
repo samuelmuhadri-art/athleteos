@@ -131,9 +131,9 @@ const BarTooltip = ({ active, payload, label }) => {
 
 const MetricCard = memo(({ icon: Icon, label, value, sub, color, trend }) => (
   <div className="card p-5 flex flex-col gap-3">
-    <div className="flex items-center justify-between">
-      <span className="text-[11px] font-semibold uppercase tracking-wider" style={{ color: "var(--c-text-3)" }}>{label}</span>
-      <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: `${color}18` }}>
+    <div className="flex items-start justify-between gap-2">
+      <span className="text-[11px] font-semibold uppercase tracking-wider leading-snug" style={{ color: "var(--c-text-3)" }}>{label}</span>
+      <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0" style={{ background: `${color}18` }}>
         <Icon size={16} color={color} strokeWidth={2} />
       </div>
     </div>
@@ -336,8 +336,8 @@ function ChargeView() {
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
             <MetricCard icon={BarChart2}   label="Charge moyenne groupe"  value={globalMetrics.avgLoad}              sub="unités"                                color="#378ADD" trend={globalMetrics.trendLoad} />
             <MetricCard icon={Activity}    label="ACWR moyen groupe"      value={globalMetrics.avgACWR.toFixed(2)}   color={globalMetrics.avgACWR > 1.3 ? "#E24B4A" : globalMetrics.avgACWR < 0.8 ? "#378ADD" : "#1D9E75"} />
-            <MetricCard icon={Zap}         label="Athlète le + chargé"    value={globalMetrics.topLoader?.athlete.name.split(" ")[0] ?? "—"} sub={`${globalMetrics.topLoader?.rawLoad ?? 0} u`} color="#EF9F27" />
-            <MetricCard icon={AlertTriangle} label="Fatigue critique (>75)" value={globalMetrics.critFatigue}        sub={`athlète${globalMetrics.critFatigue > 1 ? "s" : ""}`} color={globalMetrics.critFatigue > 0 ? "#E24B4A" : "#1D9E75"} />
+            <MetricCard icon={Zap}         label="Athlète le plus chargé" value={globalMetrics.topLoader?.athlete.name.split(" ")[0] ?? "—"} sub={`${globalMetrics.topLoader?.rawLoad ?? 0} u`} color="#EF9F27" />
+            <MetricCard icon={AlertTriangle} label="Fatigue critique"      value={globalMetrics.critFatigue}        sub={`athlète${globalMetrics.critFatigue > 1 ? "s" : ""} > 75`} color={globalMetrics.critFatigue > 0 ? "#E24B4A" : "#1D9E75"} />
           </div>
 
           {/* ── Tableau charge par athlète ───────────────────────────── */}
@@ -366,7 +366,8 @@ function ChargeView() {
                 Aucun RPE renseigné pour la semaine {CURRENT_WEEK} — va dans Planning pour en saisir un.
               </div>
             ) : (
-              <div className="px-5 py-4 space-y-4">
+              <div className="px-5 py-4 overflow-x-auto">
+                <div className="space-y-4 min-w-[560px]">
                 {sortedByLoad.map(({ athlete, metrics, rawLoad }, i) => {
                   const badge      = chargeLabel(rawLoad);
                   const pct        = maxLoad > 0 ? (rawLoad / maxLoad) * 100 : 0;
@@ -415,6 +416,7 @@ function ChargeView() {
                     </div>
                   );
                 })}
+                </div>
               </div>
             )}
           </div>
