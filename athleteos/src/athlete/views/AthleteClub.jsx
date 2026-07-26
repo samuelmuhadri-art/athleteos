@@ -8,6 +8,7 @@
 // ============================================================
 
 import { useState, useEffect, useMemo, useCallback, useRef, memo } from "react";
+import { createPortal } from "react-dom";
 import { Plus, X, Camera, Send, MessageSquare, Heart, Image, ChevronDown, Trophy, Target, Users as UsersIcon, Award } from "lucide-react";
 import { supabase } from "../../utils/supabaseClient";
 import { initialsFromName, colorsFor, getISOWeek } from "../shared";
@@ -73,7 +74,10 @@ const CommentsModal = memo(({ post, athlete, allAthletes, onClose, onCommentAdde
 
   const postAthlete = allAthletes.find(a => a.id===post.athlete_id);
 
-  return (
+  // Portal sur document.body : sinon, sur mobile, un ancêtre en scroll fait
+  // dériver ce position:fixed hors de l'écran — même bug déjà rencontré et
+  // corrigé sur FormeDetailPanel.jsx.
+  return createPortal(
     <div style={{ position:"fixed", inset:0, zIndex:9999, display:"flex", flexDirection:"column", background:"rgba(0,0,0,0.75)", backdropFilter:"blur(12px)" }}
       onClick={e => e.target===e.currentTarget && onClose()}>
       <div style={{ marginTop:"auto", background:"var(--c-surface)", borderRadius:"20px 20px 0 0", border:"1px solid var(--c-border)", display:"flex", flexDirection:"column", maxHeight:"88dvh" }}>
@@ -155,7 +159,8 @@ const CommentsModal = memo(({ post, athlete, allAthletes, onClose, onCommentAdde
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 });
 
@@ -221,7 +226,11 @@ const QuickPostModal = memo(({ session, athlete, allAthletes, clubId, onClose, o
     }
   };
 
-  return (
+  // Portal sur document.body : même raison que CommentsModal ci-dessus —
+  // sans ça, sur mobile, ce position:fixed dérive avec le scroll du fil et
+  // les boutons "Prendre une photo"/"Choisir dans la galerie" se retrouvent
+  // tout en bas de la page au lieu de rester à l'écran.
+  return createPortal(
     <div style={{ position:"fixed", inset:0, zIndex:9999, display:"flex", flexDirection:"column", background:preview?"#000":"rgba(0,0,0,0.75)", backdropFilter:preview?"none":"blur(12px)" }}
       onClick={e => e.target===e.currentTarget && !posting && onClose()}>
 
@@ -309,7 +318,8 @@ const QuickPostModal = memo(({ session, athlete, allAthletes, clubId, onClose, o
           </div>
         </div>
       )}
-    </div>
+    </div>,
+    document.body
   );
 });
 
