@@ -23,6 +23,7 @@ import AthleteMsgerie   from "./athlete/views/AthleteMsgerie";
 import AthleteClub      from "./athlete/views/AthleteClub";
 import WellnessModal    from "./athlete/components/WellnessModal";
 import InjuryReportModal from "./athlete/components/InjuryReportModal";
+import AccountSettingsModal from "./components/ui/AccountSettingsModal";
 
 const NAV_ITEMS = [
   { id: "dashboard",    label: "Tableau de bord", shortLabel: "Accueil",  icon: LayoutDashboard },
@@ -53,6 +54,7 @@ export default function AthleteApp() {
   const [wellnessToday,  setWellnessToday]  = useState(null);
   const [showWellness,   setShowWellness]   = useState(false);
   const [showInjuryReport, setShowInjuryReport] = useState(false);
+  const [showSettings,   setShowSettings]   = useState(false);
   const [viewKey,        setViewKey]        = useState(0);
 
   const { subscribed, subscribe, permissionState, swReady } = usePushNotifications(
@@ -548,6 +550,8 @@ export default function AthleteApp() {
           onSaved={() => { setShowInjuryReport(false); fetchAll(); }}
         />
       )}
+
+      {showSettings && <AccountSettingsModal onClose={() => setShowSettings(false)} />}
     </div>
   );
 }
