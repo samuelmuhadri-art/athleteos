@@ -378,6 +378,9 @@ export default function AthleteApp() {
                 myPerformances={myPerformances} onNavigate={navigate}
                 wellnessToday={wellnessToday} onOpenWellness={() => setShowWellness(true)}
                 onOpenInjuryReport={() => setShowInjuryReport(true)}
+                allAthletes={allAthletes}
+                onRpeChange={handleRpe} onStatusChange={handleStatus}
+                onFeelingChange={handleFeeling} onCommentChange={handleComment}
               />
             )}
             {activeView === "planning" && (

@@ -13,16 +13,17 @@ import { useState, useMemo, useEffect, memo } from "react";
 import {
   CalendarDays, TrendingUp, TrendingDown, Zap, CheckCircle,
   Activity, FileText, HeartPulse, Trophy, ChevronRight, Minus,
-  Star, MessageSquare,
+  Star, MessageSquare, Clock,
 } from "lucide-react";
 import {
   getAthleteMetricsForWeek, getStatusLabel,
 } from "../../utils/chargeCalculations";
 import {
-  getISOWeek, dimColor, acwrColor, colorsFor, parsePerf,
+  getISOWeek, dimColor, acwrColor, colorsFor, parsePerf, isSameDay, parseLocalDate,
   initialsFromName, getDiscHib, DISC_TYPE_COLORS, WELLNESS_QUESTIONS, METRIC_SCIENCE,
 } from "../shared";
 import FormeDetailPanel from "../components/FormeDetailPanel";
+import { SessionDetailModal } from "./AthletePlanning";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 function getDiscType(discName) {
@@ -179,10 +180,12 @@ const ReadinessRing = memo(({ value, color, size = 128 }) => {
 export default function AthleteDashboard({
   athlete, weeklyCharge, sessions, competitions, lastMessages,
   coachName, myPerformances, onNavigate, wellnessToday, onOpenWellness,
-  onOpenInjuryReport,
+  onOpenInjuryReport, allAthletes, onRpeChange, onStatusChange,
+  onFeelingChange, onCommentChange,
 }) {
   const today       = new Date();
   const currentWeek = getISOWeek(today);
+  const [openTodaySession, setOpenTodaySession] = useState(false);
 
   const metrics = useMemo(() =>
     getAthleteMetricsForWeek(athlete.id, weeklyCharge, currentWeek, wellnessToday ? [wellnessToday] : [], sessions),
@@ -199,6 +202,15 @@ export default function AthleteDashboard({
   const weekSessions = useMemo(() =>
     sessions.filter(s => s.week === currentWeek).sort((a, b) => (a.time ?? "").localeCompare(b.time ?? "")),
   [sessions, currentWeek]);
+
+  // Séance(s) du jour — la plus importante info de l'écran, mise en avant
+  // juste sous le ring plutôt que noyée dans la liste de la semaine.
+  const todaySessions = useMemo(() =>
+    weekSessions.filter(s => s.sessionDate && isSameDay(parseLocalDate(s.sessionDate), today)),
+  [weekSessions]); // eslint-disable-line react-hooks/exhaustive-deps
+  const heroSession = todaySessions[0] ?? null;
+  const heroValidation = heroSession?.validations?.find(v => v.athleteId === athlete.id) ?? null;
+  const heroDone = heroValidation?.status === "done";
 
   const topRecords     = Object.entries(athlete.records ?? {}).slice(0, 4);
   const activeInjuries = (athlete.injuries ?? []).filter(i => i.status !== "résolu");
@@ -374,6 +386,44 @@ export default function AthleteDashboard({
           </div>
         </div>
       </div>
+
+      {/* ══════════════════════════════════════════════════════════════════════
+          SÉANCE DU JOUR — la chose la plus importante à faire aujourd'hui,
+          juste sous le ring, pas noyée dans la liste de la semaine.
+         ══════════════════════════════════════════════════════════════════════ */}
+      {heroSession && (
+        <div className="card p-4" style={heroDone ? undefined : { borderColor: "rgba(29,158,117,0.30)" }}>
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-3 min-w-0">
+              <div style={{
+                width: 40, height: 40, borderRadius: 10, flexShrink: 0,
+                background: heroDone ? "rgba(29,158,117,0.12)" : `${colorsFor(heroSession.category).border}18`,
+                display: "flex", alignItems: "center", justifyContent: "center",
+              }}>
+                {heroDone
+                  ? <CheckCircle size={18} color="#1D9E75" strokeWidth={2} />
+                  : <Clock size={18} color={colorsFor(heroSession.category).border} strokeWidth={2} />}
+              </div>
+              <div className="min-w-0">
+                <p style={{ fontSize: 9, fontWeight: 500, letterSpacing: "0.09em", textTransform: "uppercase", color: "var(--c-text-3)", marginBottom: 2 }}>
+                  Séance du jour{todaySessions.length > 1 ? ` · +${todaySessions.length - 1} autre${todaySessions.length > 2 ? "s" : ""}` : ""}
+                </p>
+                <p style={{ fontSize: 13.5, fontWeight: 600, color: "var(--c-text-1)" }} className="truncate">{heroSession.title}</p>
+                <p style={{ fontSize: 10.5, color: "var(--c-text-3)", marginTop: 1 }}>
+                  {heroSession.time}{heroSession.durationMinutes ? ` · ${heroSession.durationMinutes} min` : ""}
+                </p>
+              </div>
+            </div>
+            {heroDone ? (
+              <span style={{ fontSize: 11, fontWeight: 600, color: "#4DC9A0", flexShrink: 0, whiteSpace: "nowrap" }}>Validée</span>
+            ) : (
+              <button onClick={() => setOpenTodaySession(true)} className="btn-primary" style={{ flexShrink: 0 }}>
+                Valider
+              </button>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* ══════════════════════════════════════════════════════════════════════
           WELLNESS
@@ -902,6 +952,15 @@ export default function AthleteDashboard({
           metricKey={activeMetric} metrics={metrics}
           sessions={sessions} weeklyCharge={weeklyCharge}
           athlete={athlete} onClose={() => setActiveMetric(null)}
+        />
+      )}
+
+      {openTodaySession && heroSession && (
+        <SessionDetailModal
+          session={heroSession} athlete={athlete} allAthletes={allAthletes ?? []}
+          onClose={() => setOpenTodaySession(false)}
+          onSetStatus={onStatusChange} onSetRpe={onRpeChange}
+          onSetFeeling={onFeelingChange} onSetComment={onCommentChange}
         />
       )}
     </div>

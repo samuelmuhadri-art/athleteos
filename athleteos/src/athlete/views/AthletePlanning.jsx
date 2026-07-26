@@ -13,7 +13,7 @@
 //   - StatusBadge, boutons présence/RPE : passage en rgba() dark-safe.
 // ============================================================
 
-import { useState, useMemo, memo, useCallback } from "react";
+import { useState, useMemo, memo, useCallback, useRef } from "react";
 import {
   Plus, ChevronLeft, ChevronRight, X, Clock, Star, CalendarDays,
   FileText, Users, AlertCircle, CheckCircle, Zap,
@@ -300,7 +300,7 @@ const CreateSessionModal = memo(({ athlete, allAthletes, clubId, createdBy, coac
 // ═══════════════════════════════════════════════════════════════════════════════
 // MODAL DÉTAIL SÉANCE
 // ═══════════════════════════════════════════════════════════════════════════════
-const SessionDetailModal = memo(({ session, athlete, allAthletes, onClose, onSetStatus, onSetRpe, onSetFeeling, onSetComment }) => {
+export const SessionDetailModal = memo(({ session, athlete, allAthletes, onClose, onSetStatus, onSetRpe, onSetFeeling, onSetComment }) => {
   const c   = cat(session.category);
   const val = session.validations?.find(v => v.athleteId === athlete.id);
   const [comment, setComment] = useState(val?.comment ?? "");
@@ -642,6 +642,41 @@ export default function AthletePlanning({
     const st  = val?.status ?? "future";
     const rpeNeeded = isPast && val?.rpe == null && st !== "none" && st !== "future";
 
+    // ── Swipe à droite pour valider en un geste, sans ouvrir la modale ──────
+    // Ne capture le geste que sur les cartes non-compactes et non déjà
+    // validées — inutile de re-swiper une séance déjà "faite".
+    const canSwipe = !compact && st !== "done" && st !== "none";
+    const [dragX, setDragX]     = useState(0);
+    const [dragging, setDragging] = useState(false);
+    const touchStartX = useRef(0);
+    const justSwiped  = useRef(false);
+
+    const onTouchStart = (e) => {
+      if (!canSwipe) return;
+      touchStartX.current = e.touches[0].clientX;
+      justSwiped.current = false;
+      setDragging(true);
+    };
+    const onTouchMove = (e) => {
+      if (!canSwipe || !dragging) return;
+      const dx = e.touches[0].clientX - touchStartX.current;
+      if (dx > 0) setDragX(Math.min(dx, 110));
+    };
+    const onTouchEnd = () => {
+      if (!canSwipe) return;
+      setDragging(false);
+      if (dragX > 72) {
+        justSwiped.current = true;
+        onStatusChange(s.id, athlete.id, "done");
+      }
+      setDragX(0);
+    };
+    const onCardClick = () => {
+      // Un swipe qui vient de valider ne doit pas aussi ouvrir la modale.
+      if (justSwiped.current) { justSwiped.current = false; return; }
+      setActiveSession(s);
+    };
+
     if (compact) {
       return (
         <div onClick={e => { e.stopPropagation(); setActiveSession(s); }}
@@ -658,9 +693,26 @@ export default function AthletePlanning({
     }
 
     return (
-      <div onClick={() => setActiveSession(s)}
-        className="card card-hover tap-feedback"
-        style={{ overflow: "hidden", cursor: "pointer", ...(rpeNeeded ? { borderWidth: 2, borderColor: "#EAB308", boxShadow: "0 0 0 3px rgba(234,179,8,0.14)" } : {}) }}>
+      <div style={{ position: "relative" }}>
+        {canSwipe && (
+          <div style={{
+            position: "absolute", inset: 0, borderRadius: 16, display: "flex", alignItems: "center", paddingLeft: 20,
+            background: "linear-gradient(90deg, rgba(29,158,117,0.95), rgba(29,158,117,0.55))",
+            opacity: Math.min(1, dragX / 55), pointerEvents: "none",
+          }}>
+            <CheckCircle size={20} color="white" strokeWidth={2.5} />
+            <span style={{ color: "white", fontWeight: 800, fontSize: 13, marginLeft: 8 }}>Valider</span>
+          </div>
+        )}
+        <div onClick={onCardClick}
+          onTouchStart={onTouchStart} onTouchMove={onTouchMove} onTouchEnd={onTouchEnd}
+          className="card card-hover tap-feedback"
+          style={{
+            overflow: "hidden", cursor: "pointer",
+            transform: dragX ? `translateX(${dragX}px)` : undefined,
+            transition: dragging ? "none" : "transform 0.25s cubic-bezier(0.16,1,0.3,1)",
+            ...(rpeNeeded ? { borderWidth: 2, borderColor: "#EAB308", boxShadow: "0 0 0 3px rgba(234,179,8,0.14)" } : {}),
+          }}>
         {/* En-tête coloré catégorie */}
         <div style={{ padding: "10px 16px", display: "flex", alignItems: "center", justifyContent: "space-between", background: c.bg, borderBottom: `1.5px solid ${c.border}40` }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -697,9 +749,10 @@ export default function AthletePlanning({
             </p>
           )}
         </div>
+        </div>
       </div>
     );
-  }, [athlete.id]);
+  }, [athlete.id, onStatusChange]);
 
   // ══════════════════════════════════════════════════════════════════════════════
   return (
