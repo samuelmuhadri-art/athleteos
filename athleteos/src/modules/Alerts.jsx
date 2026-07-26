@@ -17,6 +17,7 @@ import { useAuth }     from "../context/AuthContext";
 import LoadingState    from "../components/ui/LoadingState";
 import ErrorState      from "../components/ui/ErrorState";
 import Modal           from "../components/ui/Modal";
+import { initialsFromName } from "../utils/helpers.js";
 
 // ─── Config UI statique ───────────────────────────────────────────────────────
 
@@ -51,12 +52,6 @@ function formatDate(dateStr) {
   return new Date(dateStr).toLocaleDateString("fr-BE", {
     weekday: "long", day: "numeric", month: "long",
   });
-}
-
-function initialsFromName(name) {
-  if (!name) return "?";
-  const parts = name.trim().split(" ").filter(Boolean);
-  return ((parts[0]?.[0] ?? "") + (parts[1]?.[0] ?? "")).toUpperCase();
 }
 
 // ─── Contenu du formulaire de création (utilisé dans <Modal>) ────────────────

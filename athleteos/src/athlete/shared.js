@@ -5,6 +5,9 @@
 // ============================================================
 
 import { Moon, Battery, HeartPulse, Smile, Activity } from "lucide-react";
+import { getISOWeek, parseLocalDate, initialsFromName } from "../utils/helpers.js";
+
+export { getISOWeek, parseLocalDate, initialsFromName };
 
 // ─── Nav ──────────────────────────────────────────────────────────────────────
 export const DAYS_SHORT = ["Lun","Mar","Mer","Jeu","Ven","Sam","Dim"];
@@ -154,12 +157,6 @@ export const METRIC_SCIENCE = {
 };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
-export function initialsFromName(name) {
-  if (!name) return "?";
-  const parts = name.trim().split(" ").filter(Boolean);
-  return ((parts[0]?.[0] ?? "") + (parts[1]?.[0] ?? "")).toUpperCase();
-}
-
 export function dimColor(metric, val) {
   switch (metric) {
     case "readiness": case "recuperation": case "forme":
@@ -182,18 +179,6 @@ export function acwrColor(v) {
 
 export function isSameDay(a, b) {
   return a.getFullYear()===b.getFullYear() && a.getMonth()===b.getMonth() && a.getDate()===b.getDate();
-}
-
-export function getISOWeek(date) {
-  const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
-  d.setUTCDate(d.getUTCDate() - (d.getUTCDay()+6)%7 + 3);
-  const jan4 = new Date(Date.UTC(d.getUTCFullYear(),0,4));
-  return 1 + Math.round((d-jan4)/(7*24*60*60*1000));
-}
-
-export function parseLocalDate(s) {
-  const [y, m, d] = s.split("-").map(Number);
-  return new Date(y, m - 1, d);
 }
 
 // Inverse de parseLocalDate : Date -> "YYYY-MM-DD" en heure LOCALE.

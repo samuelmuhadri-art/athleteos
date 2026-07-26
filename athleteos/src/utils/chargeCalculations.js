@@ -55,156 +55,28 @@
 //     pondérations des scores dérivés (readiness, forme, récupération)
 //     sont des CONVENTIONS DE COACHING, pas des valeurs publiées.
 //     Ils sont explicitement séparés des formules scientifiques validées.
+//
+// Les constantes (LOAD_COEFFICIENTS, RECOVERY_HOURS) et les fonctions de
+// calcul de base (EWMA, monotonie/contrainte, wellness, récupération) vivent
+// dans trainingLoad.js — seule source de vérité — et sont ré-exportées ici
+// pour compatibilité avec les modules qui les importent depuis ce fichier.
 // ============================================================
 
-// ─── Coefficients par catégorie (convention coaching, non scientifique) ───────
-// Pondération multiplicative sur la charge session-RPE selon le type de séance.
-// Logique : certaines catégories génèrent une fatigue neuromusculaire plus élevée
-// que ce que le RPE seul capte (ex: force maximale = stress articulaire élevé).
-export const LOAD_COEFFICIENTS = {
-  sprint:       1.2,  // fatigue neuromusculaire élevée, récup 48-72h [7]
-  haies:        1.2,  // similaire sprint avec contrainte technique
-  force:        1.3,  // stress articulaire et neuromusculaire maximal [7]
-  saut:         1.25, // récup neuromusculaire 48h [7]
-  lancer:       1.1,  // charge épaule/dos, moins cardio
-  endurance:    1.0,  // charge cardiovasculaire, bien capturée par RPE [1]
-  technique:    0.8,  // charge cognitive > physique
-  mobilite:     0.6,  // charge minimale
-  recuperation: 0.5,  // intentionnellement faible
-};
+export {
+  LOAD_COEFFICIENTS,
+  RECOVERY_HOURS,
+  computeEWMA,
+  computeMonotonyAndStrain,
+  computeWellnessScore,
+  computeRecoveryStatus,
+} from "./trainingLoad.js";
 
-// ─── Temps de récupération par catégorie (heures) ─────────────────────────────
-// Basé sur [7] : sprint/force = 48-72h, saut = 48h, technique = 24h
-export const RECOVERY_HOURS = {
-  sprint:       72,
-  haies:        72,
-  force:        72,
-  saut:         48,
-  lancer:       48,
-  endurance:    36,
-  technique:    24,
-  mobilite:     12,
-  recuperation: 12,
-};
-
-// ─── Constantes EWMA [4] ──────────────────────────────────────────────────────
-// λ (lambda) = constante de lissage
-// λa = 2/(N+1) avec N=7 jours → 0.25 (charge aiguë, ~1 semaine)
-// λc = 2/(N+1) avec N=28 jours → 0.067 (charge chronique, ~4 semaines)
-// Choix N=7/28 au lieu de 4/12 semaines pour calcul journalier cohérent
-const LAMBDA_ACUTE   = 2 / (7  + 1); // ≈ 0.25
-const LAMBDA_CHRONIC = 2 / (28 + 1); // ≈ 0.067
-
-// ─── Calcul EWMA sur une série de charges journalières ────────────────────────
-// [4] Williams et al. 2017 : l'EWMA pondère les charges récentes davantage
-// que les anciennes, ce qui est plus fidèle à la réalité physiologique.
-//
-// @param dailyLoads : array [{date: "YYYY-MM-DD", load: number}] trié par date croissante
-// @returns { acute, chronic, acwr, ewmaHistory }
-export function computeEWMA(dailyLoads) {
-  if (!dailyLoads?.length) return { acute: 0, chronic: 0, acwr: 1.0, ewmaHistory: [] };
-
-  let ewmaAcute   = dailyLoads[0].load;
-  let ewmaChronic = dailyLoads[0].load;
-  const history   = [];
-
-  for (const { date, load } of dailyLoads) {
-    ewmaAcute   = load * LAMBDA_ACUTE   + ewmaAcute   * (1 - LAMBDA_ACUTE);
-    ewmaChronic = load * LAMBDA_CHRONIC + ewmaChronic * (1 - LAMBDA_CHRONIC);
-    history.push({ date, acute: Math.round(ewmaAcute), chronic: Math.round(ewmaChronic) });
-  }
-
-  const acwr = ewmaChronic > 0 ? ewmaAcute / ewmaChronic : 1.0;
-  return {
-    acute:       Math.round(ewmaAcute),
-    chronic:     Math.round(ewmaChronic),
-    acwr:        Math.round(acwr * 100) / 100,
-    ewmaHistory: history,
-  };
-}
-
-// ─── Monotonie et Contrainte [2] ──────────────────────────────────────────────
-// Foster (1998) :
-//   Monotonie  = charge_moyenne / écart-type
-//   Contrainte = charge_totale × monotonie
-// Un entraînement monotone (même charge chaque jour) est plus risqué
-// qu'un entraînement varié à charge totale égale.
-//
-// @param weeklyDailyLoads : array de charges journalières sur une semaine
-export function computeMonotonyAndStrain(weeklyDailyLoads) {
-  if (!weeklyDailyLoads?.length) return { monotony: 0, strain: 0 };
-
-  const n    = weeklyDailyLoads.length;
-  const mean = weeklyDailyLoads.reduce((a, b) => a + b, 0) / n;
-  const variance = weeklyDailyLoads.reduce((acc, v) => acc + Math.pow(v - mean, 2), 0) / n;
-  const sd   = Math.sqrt(variance);
-
-  const monotony = sd > 0 ? Math.round((mean / sd) * 100) / 100 : 0;
-  const strain   = Math.round(mean * n * monotony);
-
-  return { monotony, strain };
-}
-
-// ─── Score wellness (Hooper Index) [5][6] ─────────────────────────────────────
-// Saw et al. (2016) : les mesures subjectives sont plus sensibles et fiables
-// que les mesures objectives pour refléter les changements de charge.
-// McLean et al. (2010) : Hooper Index = sommeil + énergie + courbatures + stress
-//
-// @param wellness : { sleep, energy, soreness, mood, stress } — chacun 1 à 5
-// @returns score normalisé 0-100 (100 = état optimal)
-export function computeWellnessScore(wellness) {
-  if (!wellness) return null;
-  const { sleep, energy, soreness, mood, stress } = wellness;
-  if ([sleep, energy, soreness, mood, stress].some(v => v == null)) return null;
-
-  // soreness et stress sont inversés (5 = mauvais)
-  const score = (
-    sleep   * 20 +   // 0-100, 5 = excellent
-    energy  * 20 +   // 0-100
-    (6 - soreness) * 20 + // inversé : 5 courbatures = 0 points
-    mood    * 20 +
-    (6 - stress)  * 20    // inversé : 5 stress = 0 points
-  ) / 5;
-
-  return Math.round(Math.max(0, Math.min(100, score)));
-}
-
-// ─── Temps de récupération restant ────────────────────────────────────────────
-// Basé sur [7] : calcule pour chaque système physiologique combien d'heures
-// de récupération restent selon les séances passées.
-//
-// @param sessions : array de séances avec { sessionDate, category, validations }
-// @param athleteId : number
-// @returns { hoursRemaining, fullyRecovered, lastSession }
-export function computeRecoveryStatus(sessions, athleteId) {
-  const now = new Date();
-  let maxHoursRemaining = 0;
-  let lastSession = null;
-
-  const doneSessions = sessions.filter(s =>
-    s.validations?.some(v => v.athleteId === athleteId && v.status === "done") &&
-    s.sessionDate
-  );
-
-  for (const s of doneSessions) {
-    const sessionEnd  = new Date(s.sessionDate);
-    sessionEnd.setHours(20, 0, 0, 0); // on suppose fin de séance à 20h
-    const hoursNeeded = RECOVERY_HOURS[s.category] ?? 36;
-    const hoursElapsed = (now - sessionEnd) / (1000 * 60 * 60);
-    const hoursRemaining = Math.max(0, hoursNeeded - hoursElapsed);
-
-    if (hoursRemaining > maxHoursRemaining) {
-      maxHoursRemaining = hoursRemaining;
-      lastSession = s;
-    }
-  }
-
-  return {
-    hoursRemaining: Math.round(maxHoursRemaining),
-    fullyRecovered: maxHoursRemaining === 0,
-    lastSession,
-  };
-}
+import {
+  computeEWMA,
+  computeMonotonyAndStrain,
+  computeWellnessScore,
+  computeRecoveryStatus,
+} from "./trainingLoad.js";
 
 // ─── Calcul des métriques complètes pour un athlète à une semaine donnée ──────
 // Combine : ACWR (EWMA), monotonie, contrainte, wellness, récupération

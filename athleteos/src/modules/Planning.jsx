@@ -18,6 +18,7 @@ import { useAuth }   from "../context/AuthContext";
 import LoadingState  from "../components/ui/LoadingState";
 import ErrorState    from "../components/ui/ErrorState";
 import { LOAD_COEFFICIENTS } from "../utils/trainingLoad";
+import { getISOWeek, parseLocalDate, initialsFromName } from "../utils/helpers.js";
 import {
   alertSessionAbsence,
   notifyAthleteNewSession,
@@ -65,17 +66,6 @@ const EMPTY_FORM = {
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-function getISOWeek(date) {
-  const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
-  d.setUTCDate(d.getUTCDate() - (d.getUTCDay() + 6) % 7 + 3);
-  const jan4 = new Date(Date.UTC(d.getUTCFullYear(), 0, 4));
-  return 1 + Math.round((d - jan4) / (7 * 24 * 60 * 60 * 1000));
-}
-
-function parseLocalDate(s) {
-  const [y, m, d] = s.split("-").map(Number);
-  return new Date(y, m - 1, d);
-}
 function dateToISOWeek(s) { return getISOWeek(parseLocalDate(s)); }
 function dateToDayName(s) { return DAYS_FR[(parseLocalDate(s).getDay()+6)%7]; }
 
@@ -92,11 +82,6 @@ function isSameDay(a, b) {
     && a.getDate() === b.getDate();
 }
 
-function initialsFromName(name) {
-  if (!name) return "?";
-  const parts = name.trim().split(" ").filter(Boolean);
-  return ((parts[0]?.[0] ?? "") + (parts[1]?.[0] ?? "")).toUpperCase();
-}
 
 function sessionStatus(session) {
   const { validations, athleteIds } = session;

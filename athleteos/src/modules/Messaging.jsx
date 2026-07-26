@@ -18,6 +18,7 @@ import { notifyAthleteMessage }  from "../utils/notifications";
 import { useAuth }               from "../context/AuthContext";
 import LoadingState              from "../components/ui/LoadingState";
 import ErrorState                from "../components/ui/ErrorState";
+import { initialsFromName }      from "../utils/helpers.js";
 
 // ─── Constantes ───────────────────────────────────────────────────────────────
 
@@ -28,12 +29,6 @@ const CONTACT_COLORS = [
 ];
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
-
-function initialsFromName(name) {
-  if (!name) return "?";
-  const parts = name.trim().split(" ").filter(Boolean);
-  return ((parts[0]?.[0] ?? "") + (parts[1]?.[0] ?? "")).toUpperCase();
-}
 
 function contactColor(contact, contacts) {
   if (!contact) return "#94a3b8";

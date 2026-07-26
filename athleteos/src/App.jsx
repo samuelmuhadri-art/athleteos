@@ -18,6 +18,7 @@ import ResetPasswordPage from "./pages/ResetPasswordPage";
 import AccountSettingsModal from "./components/ui/AccountSettingsModal";
 import AthleteApp     from "./AthleteApp";
 import { usePushNotifications, PushToggleButton } from "./hooks/usePushNotifications";
+import { initialsFromName } from "./utils/helpers.js";
 
 // ─── Lazy imports modules coach ───────────────────────────────────────────────
 const Dashboard    = lazy(() => import("./modules/Dashboard"));
@@ -89,12 +90,6 @@ function AuthLoader() {
       </div>
     </div>
   );
-}
-
-function initialsFromName(name) {
-  if (!name) return "?";
-  const parts = name.trim().split(" ").filter(Boolean);
-  return ((parts[0]?.[0] ?? "") + (parts[1]?.[0] ?? "")).toUpperCase();
 }
 
 // ─── CoachShell ───────────────────────────────────────────────────────────────

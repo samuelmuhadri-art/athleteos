@@ -19,6 +19,7 @@ import LoadingState                 from "../components/ui/LoadingState";
 import ErrorState                   from "../components/ui/ErrorState";
 import { getAthleteMetricsForWeek } from "../utils/chargeCalculations";
 import { alertNewRecord, notifyAthleteResult, postClubCelebration } from "../utils/notifications";
+import { initialsFromName } from "../utils/helpers.js";
 
 // ─── Config types de compétition (UI statique) ────────────────────────────────
 
@@ -49,12 +50,6 @@ const ATHLETE_COLORS = [
 
 function getTypeConfig(type) {
   return TYPE_CONFIG[type] ?? TYPE_CONFIG["préparation"];
-}
-
-function initialsFromName(name) {
-  if (!name) return "?";
-  const parts = name.trim().split(" ").filter(Boolean);
-  return ((parts[0]?.[0] ?? "") + (parts[1]?.[0] ?? "")).toUpperCase();
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────

@@ -28,6 +28,7 @@ import {
   computePerformanceStability,
 } from "../utils/chargeCalculations";
 import { computeSessionLoad } from "../utils/trainingLoad";
+import { initialsFromName } from "../utils/helpers.js";
 
 // ─── Constantes ───────────────────────────────────────────────────────────────
 
@@ -57,12 +58,6 @@ function scoreColor(val, inv = false) {
 }
 
 function acwrColor(v) { return v > 1.3 ? "#E24B4A" : v < 0.8 ? "#378ADD" : "#1D9E75"; }
-
-function initialsFromName(name) {
-  if (!name) return "?";
-  const parts = name.trim().split(" ").filter(Boolean);
-  return ((parts[0]?.[0] ?? "") + (parts[1]?.[0] ?? "")).toUpperCase();
-}
 
 // ─── Composants UI partagés ───────────────────────────────────────────────────
 

@@ -22,6 +22,7 @@ import LoadingState                   from "../components/ui/LoadingState";
 import ErrorState                     from "../components/ui/ErrorState";
 import { getAthleteMetricsForWeek }   from "../utils/chargeCalculations";
 import { computeSessionLoad }         from "../utils/trainingLoad";
+import { getISOWeek, initialsFromName } from "../utils/helpers.js";
 
 // ─── Constantes ───────────────────────────────────────────────────────────────
 
@@ -32,20 +33,6 @@ const ATHLETE_COLORS = [
 ];
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
-
-function getISOWeek(date) {
-  const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
-  const dayNum = (d.getUTCDay() + 6) % 7;
-  d.setUTCDate(d.getUTCDate() - dayNum + 3);
-  const firstThursday = new Date(Date.UTC(d.getUTCFullYear(), 0, 4));
-  return 1 + Math.round((d - firstThursday) / (7 * 24 * 60 * 60 * 1000));
-}
-
-function initialsFromName(name) {
-  if (!name) return "?";
-  const parts = name.trim().split(" ").filter(Boolean);
-  return ((parts[0]?.[0] ?? "") + (parts[1]?.[0] ?? "")).toUpperCase();
-}
 
 function getAllDisciplines(athletes) {
   const set = new Set();

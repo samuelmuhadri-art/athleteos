@@ -31,26 +31,14 @@ import {
 } from "../utils/chargeCalculations";
 import { computeSessionLoad } from "../utils/trainingLoad";
 import { checkUpcomingCompetitions, checkAndAlertACWR, notifyAthleteCompetitionReminder, checkWeeklyRecap } from "../utils/notifications";
+import { getISOWeek, initialsFromName } from "../utils/helpers.js";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
-
-function initialsFromName(name) {
-  if (!name) return "?";
-  const parts = name.trim().split(" ").filter(Boolean);
-  return ((parts[0]?.[0] ?? "") + (parts[1]?.[0] ?? "")).toUpperCase();
-}
 
 // Date -> "YYYY-MM-DD" en heure locale (pas .toISOString(), qui convertit en
 // UTC et peut faire tomber la date un jour trop tôt/tard selon le fuseau).
 function toLocalDateStr(d) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-}
-
-function getISOWeek(date) {
-  const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
-  d.setUTCDate(d.getUTCDate() - (d.getUTCDay() + 6) % 7 + 3);
-  const jan4 = new Date(Date.UTC(d.getUTCFullYear(), 0, 4));
-  return 1 + Math.round((d - jan4) / (7 * 24 * 60 * 60 * 1000));
 }
 
 // Système sémantique : couleur = dimension mesurée, pas le statut.
