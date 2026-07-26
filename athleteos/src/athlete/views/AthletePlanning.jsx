@@ -14,6 +14,7 @@
 // ============================================================
 
 import { useState, useMemo, memo, useCallback, useRef } from "react";
+import { createPortal } from "react-dom";
 import {
   Plus, ChevronLeft, ChevronRight, X, Clock, Star, CalendarDays,
   FileText, Users, AlertCircle, CheckCircle, Zap,
@@ -133,7 +134,11 @@ const CreateSessionModal = memo(({ athlete, allAthletes, clubId, createdBy, coac
 
   const others = allAthletes.filter(a => a.id !== athlete.id);
 
-  return (
+  // Portal sur document.body : ce composant est ouvert depuis des pages qui
+  // scrollent (Planning, Dashboard) — sans ça, sur mobile, ce position:fixed
+  // dérive avec le scroll au lieu de rester épinglé à l'écran (même bug déjà
+  // rencontré et corrigé sur FormeDetailPanel.jsx et AthleteClub.jsx).
+  return createPortal(
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4 modal-backdrop"
       onClick={e => e.target === e.currentTarget && !saving && onClose()}>
       <div className="rounded-t-3xl sm:rounded-3xl shadow-2xl w-full sm:max-w-md max-h-[95vh] flex flex-col overflow-hidden modal-content"
@@ -293,7 +298,8 @@ const CreateSessionModal = memo(({ athlete, allAthletes, clubId, createdBy, coac
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 });
 
@@ -321,7 +327,10 @@ export const SessionDetailModal = memo(({ session, athlete, allAthletes, onClose
     { id: "none",    label: "Absent",    activeBg: "rgba(239,107,107,0.16)", activeBorder: "#EF6B6B", activeText: "#F19A9A" },
   ];
 
-  return (
+  // Portal sur document.body — même raison que CreateSessionModal ci-dessus :
+  // ouvert depuis Planning et depuis la carte "Séance du jour" du Dashboard,
+  // toutes deux à l'intérieur du conteneur scrollable <main>.
+  return createPortal(
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4 modal-backdrop"
       onClick={e => e.target === e.currentTarget && onClose()}>
       <div className="rounded-t-3xl sm:rounded-3xl shadow-2xl w-full max-w-lg max-h-[95vh] flex flex-col overflow-hidden modal-content"
@@ -554,7 +563,8 @@ export const SessionDetailModal = memo(({ session, athlete, allAthletes, onClose
           <button onClick={onClose} className="btn-secondary">Fermer</button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 });
 
