@@ -22,6 +22,10 @@ function avatarColor(allAthletes, athleteId) {
   return AVATAR_COLORS[idx % AVATAR_COLORS.length] ?? "#1D9E75";
 }
 
+function isSameCalendarDay(a, b) {
+  return a.getFullYear()===b.getFullYear() && a.getMonth()===b.getMonth() && a.getDate()===b.getDate();
+}
+
 // ─── Toast ────────────────────────────────────────────────────────────────────
 function Toast({ msg, onDismiss }) {
   useEffect(() => { const t = setTimeout(onDismiss, 4000); return () => clearTimeout(t); }, [onDismiss]);
@@ -348,7 +352,7 @@ const PostCard = memo(({ post, athlete, allAthletes, sessions, onComment, onReac
   const topReactions = Object.entries(rxCounts).sort((a,b)=>b[1]-a[1]).slice(0,3);
 
   return (
-    <div style={{ background:"var(--c-surface)", borderBottom:"1px solid var(--c-border)" }}>
+    <div id={`post-${post.id}`} style={{ background:"var(--c-surface)", borderBottom:"1px solid var(--c-border)", scrollMarginTop:60 }}>
       {/* Header auteur — traitement distinct pour les posts auto-générés
           (record battu / objectif atteint), pour qu'ils se distinguent
           visuellement des photos partagées manuellement */}
@@ -404,8 +408,24 @@ const PostCard = memo(({ post, athlete, allAthletes, sessions, onComment, onReac
 
       {/* Photo */}
       {post.image_url && (
-        <div style={{ width:"100%", cursor:"pointer" }} onDoubleClick={() => onReact("❤️")}>
+        <div style={{ width:"100%", position:"relative", cursor:"pointer" }} onDoubleClick={() => onReact("❤️")}>
           <img src={post.image_url} alt="" style={{ width:"100%", maxHeight:400, objectFit:"cover", display:"block" }}/>
+          {/* Réactions en overlay sur la photo (style Instagram) plutôt que sous l'image */}
+          {topReactions.length > 0 && (
+            <div style={{
+              position:"absolute", left:10, bottom:10,
+              display:"flex", alignItems:"center", gap:5,
+              padding:"5px 10px", borderRadius:99,
+              background:"rgba(0,0,0,0.55)", backdropFilter:"blur(6px)", WebkitBackdropFilter:"blur(6px)",
+            }}>
+              <div style={{ display:"flex" }}>
+                {topReactions.map(([emoji], i) => (
+                  <span key={emoji} style={{ fontSize:13, marginLeft:i>0?-2:0 }}>{emoji}</span>
+                ))}
+              </div>
+              <p style={{ fontSize:11, color:"white", fontWeight:600 }}>{totalLikes}</p>
+            </div>
+          )}
         </div>
       )}
 
@@ -422,8 +442,8 @@ const PostCard = memo(({ post, athlete, allAthletes, sessions, onComment, onReac
 
       {/* Actions */}
       <div style={{ padding:"8px 14px 12px" }}>
-        {/* Réactions existantes */}
-        {topReactions.length > 0 && (
+        {/* Réactions existantes — seulement si pas de photo (sinon déjà en overlay dessus) */}
+        {!post.image_url && topReactions.length > 0 && (
           <div style={{ display:"flex", alignItems:"center", gap:6, marginBottom:8 }}>
             <div style={{ display:"flex" }}>
               {topReactions.map(([emoji], i) => (
@@ -681,19 +701,28 @@ export default function AthleteClub({ athlete, allAthletes, clubId, sessions, pr
         </div>
       )}
 
-      {/* ── AVATARS MEMBRES ── */}
+      {/* ── AVATARS MEMBRES — anneau plein + cliquable pour qui a posté */}
+      {/* AUJOURD'HUI (façon stories), anneau discret pour qui a posté dans   */}
+      {/* les 7 jours mais pas aujourd'hui, transparent sinon.               */}
       <div style={{ padding:"10px 14px", display:"flex", alignItems:"center", gap:8, overflowX:"auto", scrollbarWidth:"none", flexShrink:0 }}>
         {allAthletes.map((a, idx) => {
-          const isMe      = a.id===athlete.id;
-          const hasPosted = posts.some(p => p.athlete_id===a.id);
-          const color     = AVATAR_COLORS[idx % AVATAR_COLORS.length];
+          const isMe          = a.id===athlete.id;
+          const postedToday   = posts.some(p => p.athlete_id===a.id && isSameCalendarDay(new Date(p.created_at), new Date()));
+          const postedThisWeek = !postedToday && posts.some(p => p.athlete_id===a.id);
+          const color         = AVATAR_COLORS[idx % AVATAR_COLORS.length];
+          const goToStory = () => {
+            if (!postedToday) return;
+            const mine = posts.filter(p => p.athlete_id===a.id && isSameCalendarDay(new Date(p.created_at), new Date()));
+            document.getElementById(`post-${mine[0]?.id}`)?.scrollIntoView({ behavior:"smooth", block:"start" });
+          };
           return (
-            <div key={a.id} style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:4, flexShrink:0 }}>
-              <div style={{
+            <div key={a.id} onClick={goToStory}
+              style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:4, flexShrink:0, cursor:postedToday?"pointer":"default" }}>
+              <div className={postedToday ? "story-ring-pulse" : undefined} style={{
                 width:44, height:44, borderRadius:"50%", background:color,
                 display:"flex", alignItems:"center", justifyContent:"center", color:"white", fontSize:13, fontWeight:600,
-                border:hasPosted?`2.5px solid #1D9E75`:isMe?`2.5px solid var(--c-border-strong)`:"2.5px solid transparent",
-                boxShadow:hasPosted?"0 0 0 2px rgba(29,158,117,0.20)":"none",
+                border:postedToday?"2.5px solid #1D9E75":postedThisWeek?"2.5px solid rgba(29,158,117,0.35)":isMe?"2.5px solid var(--c-border-strong)":"2.5px solid transparent",
+                boxShadow:postedToday?"0 0 0 2px rgba(29,158,117,0.25)":"none",
               }}>
                 {initialsFromName(a.name)}
               </div>

@@ -438,6 +438,44 @@ select.input-premium {
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════════
+   PULSE D'ALERTE — mini-card KPI (fatigue/ACWR en zone rouge) et carte
+   athlète coach (surcharge) — même langage que pulse-live, en rouge, un
+   battement par seconde environ, discret (pas de scale ni de secousse).
+   ═══════════════════════════════════════════════════════════════════════════════ */
+
+.pulse-danger-card {
+  animation: pulse-danger-ring 1.6s ease-in-out infinite;
+  border-radius: 10px;
+}
+@keyframes pulse-danger-ring {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(224,75,74,0.35); }
+  50%      { box-shadow: 0 0 0 5px rgba(224,75,74,0); }
+}
+
+.pulse-danger-bg {
+  animation: pulse-danger-bg 1.8s ease-in-out infinite;
+}
+@keyframes pulse-danger-bg {
+  0%, 100% { background-color: rgba(224,75,74,0.05); }
+  50%      { background-color: rgba(224,75,74,0.14); }
+}
+
+/* Anneau "stories" — athlète ayant posté aujourd'hui dans le fil du club */
+.story-ring-pulse {
+  animation: story-ring-pulse 2.2s ease-in-out infinite;
+}
+@keyframes story-ring-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(29,158,117,0.35); }
+  50%      { box-shadow: 0 0 0 4px rgba(29,158,117,0); }
+}
+
+/* Confettis — nouveau record personnel (AthletePerfs.jsx) */
+@keyframes confetti-fall {
+  0%   { transform: translate(0, 0) rotate(0deg); opacity: 1; }
+  100% { transform: translate(var(--confetti-drift, 0px), 100vh) rotate(var(--confetti-rotate, 360deg)); opacity: 0; }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════════
    TAP FEEDBACK
    ═══════════════════════════════════════════════════════════════════════════════ */
 

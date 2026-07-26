@@ -18,7 +18,7 @@ import {
 import {
   AreaChart, Area, XAxis, YAxis, Tooltip,
   CartesianGrid, ResponsiveContainer,
-  ScatterChart, Scatter, ZAxis, ReferenceArea,
+  ScatterChart, Scatter, ZAxis, ReferenceArea, ReferenceLine,
 } from "recharts";
 import { supabase } from "../../utils/supabaseClient";
 import { getDiscHib, parsePerf, toLocalDateStr, getISOWeek } from "../shared";
@@ -35,6 +35,41 @@ const DISC_COLORS = {
   "Javelot":    "#FB923C", "Marteau":    "#34D399",
 };
 const discColor = (disc) => DISC_COLORS[disc] ?? "#1D9E75";
+
+// ─── Confettis — célébration d'un nouveau record personnel ───────────────────
+const CONFETTI_COLORS = ["#1D9E75", "#EAB308", "#5B8DEF", "#EC4899", "#38BDF8", "#FB923C"];
+
+function ConfettiBurst({ onDone }) {
+  const particles = useMemo(() => Array.from({ length: 28 }, (_, i) => ({
+    id: i,
+    left: Math.random() * 100,
+    color: CONFETTI_COLORS[i % CONFETTI_COLORS.length],
+    delay: Math.random() * 0.3,
+    duration: 1.3 + Math.random() * 0.7,
+    width: 5 + Math.random() * 5,
+    rotate: Math.round(Math.random() * 360),
+    drift: Math.round((Math.random() - 0.5) * 100),
+  })), []);
+
+  useEffect(() => {
+    const t = setTimeout(onDone, 2100);
+    return () => clearTimeout(t);
+  }, [onDone]);
+
+  return (
+    <div style={{ position: "fixed", inset: 0, zIndex: 10000, pointerEvents: "none", overflow: "hidden" }}>
+      {particles.map(p => (
+        <span key={p.id} style={{
+          position: "absolute", top: -12, left: `${p.left}%`,
+          width: p.width, height: p.width * 0.4, background: p.color, borderRadius: 2,
+          animation: `confetti-fall ${p.duration}s cubic-bezier(0.4,0,0.6,1) ${p.delay}s both`,
+          "--confetti-drift": `${p.drift}px`,
+          "--confetti-rotate": `${p.rotate}deg`,
+        }} />
+      ))}
+    </div>
+  );
+}
 
 // ─── Tooltip graphique (dark) ─────────────────────────────────────────────────
 function PerfTooltip({ active, payload, label }) {
@@ -339,6 +374,7 @@ export default function AthletePerfs({ athlete, competitions, myPerformances, my
   const [savingGoal,   setSavingGoal]   = useState(false);
   const [showAddComp,  setShowAddComp]  = useState(false);
   const [savingComp,   setSavingComp]   = useState(false);
+  const [showConfetti, setShowConfetti] = useState(false);
   const [compForm,     setCompForm]     = useState({
     name: "", date: toLocalDateStr(new Date()),
     location: "", type: "Régionale", event: "", result: "", context: "",
@@ -377,6 +413,23 @@ export default function AthletePerfs({ athlete, competitions, myPerformances, my
         ctx:   p.context,
       }));
   }, [localPerfs, selectedDisc, disciplines]);
+
+  // Zone ombrée entre le PR actuel et l'objectif visé sur la discipline
+  // affichée — visualise d'un coup d'œil l'écart qu'il reste à combler.
+  const goalZone = useMemo(() => {
+    const disc = selectedDisc ?? disciplines[0];
+    if (!disc) return null;
+    const goal = localGoals.find(g => !g.achieved && g.discipline === disc);
+    if (!goal) return null;
+    const targetP = parsePerf(goal.target_value);
+    if (targetP.value == null) return null;
+    const rec   = athlete.records?.[disc];
+    const prP   = rec?.pr ? parsePerf(rec.pr) : null;
+    const prVal = prP?.value ?? null;
+    const y1 = prVal != null ? Math.min(prVal, targetP.value) : targetP.value;
+    const y2 = prVal != null ? Math.max(prVal, targetP.value) : targetP.value;
+    return { target: targetP.value, prVal, y1, y2 };
+  }, [selectedDisc, disciplines, localGoals, athlete.records]);
 
   const compHistory = useMemo(() => {
     const all = [];
@@ -491,6 +544,7 @@ export default function AthletePerfs({ athlete, competitions, myPerformances, my
           if (isPR) {
             postClubCelebration(clubId, athlete.id, "record",
               `${athlete.name.split(" ")[0]} a battu son record en ${disc} : ${perfForm.value} !`).catch(console.warn);
+            setShowConfetti(true);
           }
         }
       }
@@ -772,11 +826,22 @@ export default function AthletePerfs({ athlete, competitions, myPerformances, my
                     <XAxis dataKey="label" tick={{ fontSize: 10, fill: "rgba(255,255,255,0.35)" }} axisLine={false} tickLine={false} />
                     <YAxis tick={{ fontSize: 10, fill: "rgba(255,255,255,0.35)" }} axisLine={false} tickLine={false} width={42}
                       domain={([min, max]) => {
-                        const padding = (max - min) * 0.1 || 0.5;
-                        return [Math.floor((min - padding) * 100) / 100, Math.ceil((max + padding) * 100) / 100];
+                        // Étend l'échelle pour englober l'objectif s'il est hors des données actuelles.
+                        const lo = goalZone ? Math.min(min, goalZone.y1) : min;
+                        const hi = goalZone ? Math.max(max, goalZone.y2) : max;
+                        const padding = (hi - lo) * 0.1 || 0.5;
+                        return [Math.floor((lo - padding) * 100) / 100, Math.ceil((hi + padding) * 100) / 100];
                       }}
                       tickCount={6} />
                     <Tooltip content={<PerfTooltip />} />
+                    {/* Zone entre le PR actuel et l'objectif — l'écart qu'il reste à combler */}
+                    {goalZone && (
+                      <ReferenceArea y1={goalZone.y1} y2={goalZone.y2} fill="#EAB308" fillOpacity={0.08} stroke="none" />
+                    )}
+                    {goalZone && (
+                      <ReferenceLine y={goalZone.target} stroke="#EAB308" strokeDasharray="4 3" strokeWidth={1.5}
+                        label={{ value: "Objectif", position: "insideTopRight", fontSize: 9, fill: "#EAB308" }} />
+                    )}
                     <Area dataKey="value" name={selectedDisc ?? ""}
                       stroke="#1D9E75" fill="url(#gradPerfDark)"
                       strokeWidth={2.5}
@@ -1134,6 +1199,8 @@ export default function AthletePerfs({ athlete, competitions, myPerformances, my
           </div>
         </div>
       )}
+
+      {showConfetti && <ConfettiBurst onDone={() => setShowConfetti(false)} />}
     </div>
   );
 }

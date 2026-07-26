@@ -124,10 +124,30 @@ const BadgeItem = memo(({ badge }) => (
 // d'apparaître déjà rempli) qui donne l'effet waouh à la première ouverture.
 const ReadinessRing = memo(({ value, color, size = 128 }) => {
   const [animated, setAnimated] = useState(0);
+  const [displayValue, setDisplayValue] = useState(0);
   useEffect(() => {
     const t = setTimeout(() => setAnimated(value), 150);
     return () => clearTimeout(t);
   }, [value]);
+
+  // Le chiffre compte de 0 à sa valeur, synchronisé avec le remplissage de
+  // l'anneau ci-dessus (même délai, même durée) — effet "réveil Whoop".
+  useEffect(() => {
+    const delay = 150, duration = 1100;
+    let raf;
+    const startedAt = performance.now();
+    const tick = (now) => {
+      const elapsed = now - startedAt - delay;
+      if (elapsed < 0) { raf = requestAnimationFrame(tick); return; }
+      const t = Math.min(1, elapsed / duration);
+      const eased = 1 - Math.pow(1 - t, 3); // ease-out cubic, proche du spring de l'anneau
+      setDisplayValue(Math.round(eased * value));
+      if (t < 1) raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [value]);
+
   const stroke = 10;
   const r = (size - stroke) / 2;
   const circ = 2 * Math.PI * r;
@@ -143,7 +163,7 @@ const ReadinessRing = memo(({ value, color, size = 128 }) => {
       </svg>
       <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
         <span style={{ fontSize: Math.round(size * 0.27), fontWeight: 700, color, lineHeight: 1, letterSpacing: "-0.03em", fontVariantNumeric: "tabular-nums" }}>
-          {value}
+          {displayValue}
         </span>
         <span style={{ fontSize: 9, fontWeight: 500, letterSpacing: "0.10em", textTransform: "uppercase", color: "rgba(255,255,255,0.30)", marginTop: 3 }}>
           Readiness
@@ -324,13 +344,13 @@ export default function AthleteDashboard({
               )}
               <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 8 }}>
                 {[
-                  { key: "fatigue", label: "Fatigue", value: metrics.fatigue,         unit: "",     pct: metrics.fatigue },
-                  { key: "acwr",    label: "ACWR",     value: metrics.acwr.toFixed(2),unit: "",     pct: Math.min(100,(metrics.acwr/2)*100) },
-                  { key: "streak",  label: "Streak",   value: streak,                  unit: " sem", pct: Math.min(100,streak*10) },
+                  { key: "fatigue", label: "Fatigue", value: metrics.fatigue,         unit: "",     pct: metrics.fatigue,        danger: metrics.fatigue > 70 },
+                  { key: "acwr",    label: "ACWR",     value: metrics.acwr.toFixed(2),unit: "",     pct: Math.min(100,(metrics.acwr/2)*100), danger: metrics.acwr > 1.3 },
+                  { key: "streak",  label: "Streak",   value: streak,                  unit: " sem", pct: Math.min(100,streak*10), danger: false },
                 ].map(s => {
                   const col = dimColor(s.key, s.key === "acwr" ? metrics.acwr : Number(s.value));
                   return (
-                    <div key={s.key} style={{
+                    <div key={s.key} className={s.danger ? "pulse-danger-card" : undefined} style={{
                       background: "rgba(255,255,255,0.03)", border: "0.5px solid rgba(255,255,255,0.055)",
                       borderRadius: 10, padding: "10px 8px", textAlign: "center",
                     }}>

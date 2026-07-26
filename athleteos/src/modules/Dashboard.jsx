@@ -16,6 +16,7 @@
 // ============================================================
 
 import { memo, useState, useMemo, useCallback, useEffect } from "react";
+import { LineChart, Line, ResponsiveContainer } from "recharts";
 import {
   Users, Zap, Bell, CheckCircle, Activity,
   Trophy, Star, ChevronRight, HeartPulse, Target,
@@ -156,6 +157,21 @@ function ValidationBadge({ status }) {
 }
 
 // ─── Carte athlète — avatar dégradé + mini barres de progression ─────────────
+// Mini-courbe des 4-6 dernières semaines de charge — on voit la tendance
+// d'un coup d'œil au lieu d'un seul chiffre statique.
+const MiniSparkline = memo(({ data, color }) => {
+  if (data.length < 2) return null;
+  return (
+    <div style={{ width: "100%", height: 22 }}>
+      <ResponsiveContainer width="100%" height="100%">
+        <LineChart data={data} margin={{ top: 2, right: 2, bottom: 2, left: 2 }}>
+          <Line type="monotone" dataKey="v" stroke={color} strokeWidth={1.5} dot={false} isAnimationActive={false} />
+        </LineChart>
+      </ResponsiveContainer>
+    </div>
+  );
+});
+
 function AthleteStatusCard({ athlete, weeklyCharge, currentWeek, injuries, sessions, onNavigate }) {
   const metrics   = useMemo(
     () => getAthleteMetricsForWeek(athlete.id, weeklyCharge, currentWeek),
@@ -166,14 +182,19 @@ function AthleteStatusCard({ athlete, weeklyCharge, currentWeek, injuries, sessi
   const weekSess  = sessions.filter(s => s.week === currentWeek && s.athleteIds?.includes(athlete.id));
   const doneCount = weekSess.filter(s => s.validations?.find(v => v.athleteId === athlete.id && v.status === "done")).length;
   const hasCharge = weeklyCharge.some(w => w.athleteId === athlete.id);
+  const isAtRisk  = metrics.acwr > 1.3;
 
   const readColor = dimColor("readiness", metrics.readiness);
   const acwrCol   = dimColor("acwr", metrics.acwr);
   const fatCol    = dimColor("fatigue", metrics.fatigue);
 
+  const sparkData = useMemo(() =>
+    weeklyCharge.filter(w => w.athleteId === athlete.id).sort((a, b) => a.week - b.week).slice(-6).map(w => ({ v: w.rawLoad })),
+  [weeklyCharge, athlete.id]);
+
   return (
     <div
-      className="card card-hover tap-feedback p-3.5 flex flex-col gap-2.5 cursor-pointer"
+      className={["card card-hover tap-feedback p-3.5 flex flex-col gap-2.5 cursor-pointer", isAtRisk ? "pulse-danger-bg" : ""].join(" ")}
       onClick={() => onNavigate("athletes")}
     >
       {/* Header avec avatar en dégradé */}
@@ -229,6 +250,9 @@ function AthleteStatusCard({ athlete, weeklyCharge, currentWeek, injuries, sessi
           <p className="text-[10px] font-medium" style={{ color: "var(--c-text-3)" }}>Pas encore de données</p>
         </div>
       )}
+
+      {/* Tendance charge — 6 dernières semaines */}
+      {hasCharge && sparkData.length >= 2 && <MiniSparkline data={sparkData} color={acwrCol} />}
 
       {/* Badges blessure / séances */}
       {(activeInj.length > 0 || weekSess.length > 0) && (
