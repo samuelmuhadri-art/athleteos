@@ -191,19 +191,20 @@ const QuickPostModal = memo(({ session, athlete, allAthletes, clubId, onClose, o
         imageUrl = ud?.publicUrl ?? null;
       }
 
-      await supabase.from("social_posts").insert({
+      const { error: postErr } = await supabase.from("social_posts").insert({
         athlete_id: athlete.id, club_id: clubId,
         session_id: session?.id ?? null,
         content:    caption.trim() || null,
         image_url:  imageUrl,
       });
+      if (postErr) throw new Error(postErr.message);
 
       // Notifier les autres athlètes (pas le coach)
       const otherAthletes = allAthletes.filter(a => a.id !== athlete.id && a.user_id);
       if (otherAthletes.length > 0) {
-        
+
         // 1. Sauvegarde dans ta base de données (Ton Code 2)
-        await supabase.from("athlete_notifications").insert(
+        const { error: notifErr } = await supabase.from("athlete_notifications").insert(
           otherAthletes.map(a => ({
             athlete_id:  a.id,
             club_id:     clubId,
@@ -213,6 +214,7 @@ const QuickPostModal = memo(({ session, athlete, allAthletes, clubId, onClose, o
             is_read:     false,
           }))
         );
+        if (notifErr) throw new Error(notifErr.message);
 
         // 2. L'alerte de notification (Ton Code 1) 👇
         const otherAthleteIds = otherAthletes.map(a => a.id);
