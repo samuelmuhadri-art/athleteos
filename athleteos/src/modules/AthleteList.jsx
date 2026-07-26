@@ -27,7 +27,6 @@ import {
   getStatusLabel,
   computePerformanceStability,
 } from "../utils/chargeCalculations";
-import { computeSessionLoad } from "../utils/trainingLoad";
 import { initialsFromName } from "../utils/helpers.js";
 
 // ─── Constantes ───────────────────────────────────────────────────────────────
@@ -1247,30 +1246,21 @@ function AthleteList({ onNavigate }) {
       const sessionIds     = sessionsRes.data.map(s => s.id);
       const competitionIds = competitionsRes.data.map(c => c.id);
 
-      const [recordsRes,injuriesRes,perfHistRes,sessionAthletesRes,compAthletesRes,compResultsRes] = await Promise.all([
+      const [recordsRes,injuriesRes,perfHistRes,sessionAthletesRes,compAthletesRes,compResultsRes,weeklyChargeRes] = await Promise.all([
         athleteIds.length     ? supabase.from("records").select("*").in("athlete_id", athleteIds)              : Promise.resolve({data:[]}),
         athleteIds.length     ? supabase.from("injuries").select("*").in("athlete_id", athleteIds)             : Promise.resolve({data:[]}),
         athleteIds.length     ? supabase.from("performance_history").select("*").in("athlete_id", athleteIds)  : Promise.resolve({data:[]}),
         sessionIds.length     ? supabase.from("session_athletes").select("*").in("session_id", sessionIds)     : Promise.resolve({data:[]}),
         competitionIds.length ? supabase.from("competition_athletes").select("*").in("competition_id", competitionIds) : Promise.resolve({data:[]}),
         competitionIds.length ? supabase.from("competition_results").select("*").in("competition_id", competitionIds)  : Promise.resolve({data:[]}),
+        // Charge hebdomadaire calculée côté serveur (vue weekly_charge, voir
+        // migration 20260726120000) — plus de recalcul JS à partir des séances.
+        athleteIds.length     ? supabase.from("weekly_charge").select("*").in("athlete_id", athleteIds)         : Promise.resolve({data:[]}),
       ]);
 
-      // Charge depuis session_athletes
-      const byAthleteWeek = {};
-      sessionsRes.data.forEach(s => {
-        (sessionAthletesRes.data ?? []).filter(r => r.session_id === s.id).forEach(r => {
-          if (r.rpe == null) return;
-          const key = `${r.athlete_id}-${s.week}`;
-          const load = computeSessionLoad(s.duration_minutes ?? 60, r.rpe, s.category);
-          if (load == null) return;
-          byAthleteWeek[key] = (byAthleteWeek[key] ?? 0) + load;
-        });
-      });
-      const remappedCharge = Object.entries(byAthleteWeek).map(([key, rawLoad]) => {
-        const [athleteId, week] = key.split("-").map(Number);
-        return { athleteId, week, rawLoad };
-      });
+      const remappedCharge = (weeklyChargeRes.data ?? []).map(c => ({
+        athleteId: c.athlete_id, week: c.week, rawLoad: c.raw_load,
+      }));
 
       setAthletes((athletesRes.data ?? []).map(a => {
         const pd = a.profile_data ?? {};

@@ -22,10 +22,7 @@ import { useAuth }           from "../context/AuthContext";
 import LoadingState          from "../components/ui/LoadingState";
 import ErrorState            from "../components/ui/ErrorState";
 import { getAthleteMetricsForWeek } from "../utils/chargeCalculations";
-import {
-  computeAllWeeklyLoads,
-  computeWeeklyLoadByCategory,
-} from "../utils/trainingLoad";
+import { computeWeeklyLoadByCategory } from "../utils/trainingLoad";
 import { getISOWeek, initialsFromName } from "../utils/helpers.js";
 
 // ─── Constantes ───────────────────────────────────────────────────────────────
@@ -208,10 +205,20 @@ function ChargeView() {
       if (sessionsRes.error) throw sessionsRes.error;
 
       const sessionIds = sessionsRes.data.map((s) => s.id);
-      const sessionAthletesRes = sessionIds.length
-        ? await supabase.from("session_athletes").select("session_id, athlete_id, rpe").in("session_id", sessionIds)
-        : { data: [], error: null };
+      const athleteIds = athletesRes.data.map((a) => a.id);
+      const [sessionAthletesRes, weeklyChargeRes] = await Promise.all([
+        sessionIds.length
+          ? supabase.from("session_athletes").select("session_id, athlete_id, rpe").in("session_id", sessionIds)
+          : Promise.resolve({ data: [], error: null }),
+        // Total hebdomadaire calculé côté serveur (vue weekly_charge, voir
+        // migration 20260726120000). La ventilation par catégorie ci-dessous
+        // reste calculée ici : la vue n'expose que le total par athlète/semaine.
+        athleteIds.length
+          ? supabase.from("weekly_charge").select("*").in("athlete_id", athleteIds)
+          : Promise.resolve({ data: [], error: null }),
+      ]);
       if (sessionAthletesRes.error) throw sessionAthletesRes.error;
+      if (weeklyChargeRes.error) throw weeklyChargeRes.error;
 
       const remappedAthletes = athletesRes.data.map((a) => ({
         id:             a.id,
@@ -233,7 +240,9 @@ function ChargeView() {
       });
 
       setAthletes(remappedAthletes);
-      setWeeklyCharge(computeAllWeeklyLoads(remappedAthletes, enrichedSessions));
+      setWeeklyCharge((weeklyChargeRes.data ?? []).map((c) => ({
+        athleteId: c.athlete_id, week: c.week, rawLoad: c.raw_load,
+      })));
       setSessionsForBreakdown(enrichedSessions);
     } catch (err) {
       console.error("ChargeView — chargement :", err);

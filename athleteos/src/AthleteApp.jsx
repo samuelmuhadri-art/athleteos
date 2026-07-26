@@ -12,7 +12,6 @@ import {
 import { supabase }  from "./utils/supabaseClient";
 import { useAuth }   from "./context/AuthContext";
 import { getAthleteMetricsForWeek } from "./utils/chargeCalculations";
-import { computeSessionLoad } from "./utils/trainingLoad";
 import { usePushNotifications, PushToggleButton } from "./hooks/usePushNotifications";
 import { initialsFromName, toLocalDateStr, getISOWeek } from "./athlete/shared";
 import { notifyAthleteWeeklyRecap } from "./utils/notifications";
@@ -75,7 +74,7 @@ export default function AthleteApp() {
       const a = athleteRes.data; const athleteId = a.id;
       const todayStr = toLocalDateStr(new Date());
 
-      const [recordsRes,injuriesRes,perfHistRes,sessionsRes,compsRes,coachRes,allAthletesRes,myPerfsRes,goalsRes,notifsRes,wellnessRes] = await Promise.all([
+      const [recordsRes,injuriesRes,perfHistRes,sessionsRes,compsRes,coachRes,allAthletesRes,myPerfsRes,goalsRes,notifsRes,wellnessRes,weeklyChargeRes] = await Promise.all([
         supabase.from("records").select("*").eq("athlete_id",athleteId),
         supabase.from("injuries").select("*").eq("athlete_id",athleteId),
         supabase.from("performance_history").select("*").eq("athlete_id",athleteId),
@@ -87,6 +86,9 @@ export default function AthleteApp() {
         supabase.from("athlete_goals").select("*").eq("athlete_id",athleteId).order("created_at",{ascending:false}),
         supabase.from("athlete_notifications").select("*").eq("athlete_id",athleteId).order("created_at",{ascending:false}).limit(20),
         supabase.from("athlete_wellness").select("*").eq("athlete_id",athleteId).eq("date",todayStr).maybeSingle(),
+        // Charge hebdomadaire calculée côté serveur (vue weekly_charge, voir
+        // migration 20260726120000) — plus de recalcul JS à partir des séances.
+        supabase.from("weekly_charge").select("*").eq("athlete_id",athleteId),
       ]);
 
       setMyPerformances(myPerfsRes.data ?? []);
@@ -141,16 +143,7 @@ export default function AthleteApp() {
         results:(c.competition_results??[]).map(r=>({athleteId:r.athlete_id,event:r.event,result:r.result,context:r.context})),
       })).filter(c=>c.athleteIds.includes(athleteId));
 
-      const saRes = await supabase.from("session_athletes").select("session_id,rpe").eq("athlete_id",athleteId);
-      const byWeek = {};
-      allSessions.forEach(s=>{
-        const sa = (saRes.data??[]).find(r=>r.session_id===s.id);
-        if(!sa?.rpe) return;
-        const load = computeSessionLoad(s.durationMinutes??60, sa.rpe, s.category);
-        if (load == null) return;
-        byWeek[s.week] = (byWeek[s.week]??0) + load;
-      });
-      const charge = Object.entries(byWeek).map(([week,rawLoad])=>({athleteId,week:Number(week),rawLoad}));
+      const charge = (weeklyChargeRes.data??[]).map(c=>({athleteId:c.athlete_id,week:c.week,rawLoad:c.raw_load}));
 
       setWeeklyCharge(charge);
       setSessions(allSessions);

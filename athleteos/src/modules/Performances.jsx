@@ -21,7 +21,6 @@ import { useAuth }                    from "../context/AuthContext";
 import LoadingState                   from "../components/ui/LoadingState";
 import ErrorState                     from "../components/ui/ErrorState";
 import { getAthleteMetricsForWeek }   from "../utils/chargeCalculations";
-import { computeSessionLoad }         from "../utils/trainingLoad";
 import { getISOWeek, initialsFromName } from "../utils/helpers.js";
 
 // ─── Constantes ───────────────────────────────────────────────────────────────
@@ -201,27 +200,15 @@ function Performances() {
       if (recordsRes.error)  throw recordsRes.error;
       if (historyRes.error)  throw historyRes.error;
 
-      // Charge calculée depuis sessions (même méthode que ChargeView)
-      const sessionsRes = await supabase.from("sessions").select("id, week, duration_minutes, category").eq("club_id", clubId);
+      // Charge hebdomadaire calculée côté serveur (vue weekly_charge, voir
+      // migration 20260726120000) — plus de recalcul JS à partir des séances.
       let weeklyChargeComputed = [];
-      if (!sessionsRes.error && sessionsRes.data.length) {
-        const sessionIds = sessionsRes.data.map((s) => s.id);
-        const saRes = await supabase.from("session_athletes").select("session_id, athlete_id, rpe").in("session_id", sessionIds);
-        if (!saRes.error) {
-          const byAthleteWeek = {};
-          sessionsRes.data.forEach((s) => {
-            saRes.data.filter((r) => r.session_id === s.id).forEach((r) => {
-              if (r.rpe == null) return;
-              const key = `${r.athlete_id}-${s.week}`;
-              const load = computeSessionLoad(s.duration_minutes ?? 60, r.rpe, s.category);
-              if (load == null) return;
-              byAthleteWeek[key] = (byAthleteWeek[key] ?? 0) + load;
-            });
-          });
-          weeklyChargeComputed = Object.entries(byAthleteWeek).map(([key, rawLoad]) => {
-            const [athleteId, week] = key.split("-").map(Number);
-            return { athleteId, week, rawLoad };
-          });
+      if (athleteIds.length) {
+        const chargeRes = await supabase.from("weekly_charge").select("*").in("athlete_id", athleteIds);
+        if (!chargeRes.error) {
+          weeklyChargeComputed = (chargeRes.data ?? []).map((c) => ({
+            athleteId: c.athlete_id, week: c.week, rawLoad: c.raw_load,
+          }));
         }
       }
 

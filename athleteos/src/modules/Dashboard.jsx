@@ -29,7 +29,6 @@ import {
   getAthleteMetricsForWeek,
   getStatusLabel,
 } from "../utils/chargeCalculations";
-import { computeSessionLoad } from "../utils/trainingLoad";
 import { checkUpcomingCompetitions, checkAndAlertACWR, notifyAthleteCompetitionReminder, checkWeeklyRecap } from "../utils/notifications";
 import { getISOWeek, initialsFromName } from "../utils/helpers.js";
 
@@ -290,8 +289,10 @@ function Dashboard({ onNavigate }) {
       if (athletesRes.error) throw athletesRes.error;
 
       const athleteIds = athletesRes.data.map(a => a.id);
+      // Charge hebdomadaire calculée côté serveur (vue weekly_charge, voir
+      // migration 20260726120000) — plus de recalcul JS à partir des séances.
       const chargeRes  = athleteIds.length
-        ? await supabase.from("session_athletes").select("session_id, athlete_id, rpe").in("athlete_id", athleteIds)
+        ? await supabase.from("weekly_charge").select("*").in("athlete_id", athleteIds)
         : { data: [] };
 
       const mappedSessions = (sessionsRes.data ?? []).map(s => {
@@ -306,20 +307,9 @@ function Dashboard({ onNavigate }) {
         };
       });
 
-      const charge = [];
-      athleteIds.forEach(aid => {
-        const weeks = {};
-        mappedSessions.forEach(s => {
-          const sa = (chargeRes.data ?? []).find(r => r.session_id === s.id && r.athlete_id === aid);
-          if (!sa?.rpe) return;
-          const load = computeSessionLoad(s.durationMinutes ?? 60, sa.rpe, s.category);
-          if (load == null) return;
-          weeks[s.week] = (weeks[s.week] ?? 0) + load;
-        });
-        Object.entries(weeks).forEach(([week, rawLoad]) => {
-          charge.push({ athleteId: aid, week: Number(week), rawLoad });
-        });
-      });
+      const charge = (chargeRes.data ?? []).map(c => ({
+        athleteId: c.athlete_id, week: c.week, rawLoad: c.raw_load,
+      }));
 
       const mappedAthletes = athletesRes.data.map(a => ({
         id: a.id, name: a.name, mainDiscipline: a.main_discipline,
