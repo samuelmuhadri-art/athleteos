@@ -194,7 +194,7 @@ const QuickPostModal = memo(({ session, athlete, allAthletes, clubId, onClose, o
       const { error: postErr } = await supabase.from("social_posts").insert({
         athlete_id: athlete.id, club_id: clubId,
         session_id: session?.id ?? null,
-        content:    caption.trim() || null,
+        content:    caption.trim(), // social_posts.content est NOT NULL — jamais null, "" au pire
         image_url:  imageUrl,
       });
       if (postErr) throw new Error(postErr.message);
