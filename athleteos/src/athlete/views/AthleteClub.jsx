@@ -179,8 +179,8 @@ const QuickPostModal = memo(({ session, athlete, allAthletes, clubId, onClose, o
       let imageUrl = null;
       if (image) {
         const ext  = image.name.split(".").pop() || "jpg";
-        const path = `social-photos/${athlete.id}-${Date.now()}.${ext}`;
-        const { error:ue } = await supabase.storage.from("social-photos").upload(path, image, { upsert:true });
+        const path = `${athlete.id}-${Date.now()}.${ext}`;
+        const { error:ue } = await supabase.storage.from("social-photos").upload(path, image);
         if (ue) throw new Error(ue.message);
         const { data:ud } = supabase.storage.from("social-photos").getPublicUrl(path);
         imageUrl = ud?.publicUrl ?? null;

@@ -442,8 +442,8 @@ const AddSessionModal = memo(({ athletes, initialData, onClose, onAdd }) => {
       if (pdfFile) {
         setUploadingPdf(true);
         const ext  = pdfFile.name.split(".").pop();
-        const path = `session-pdfs/${Date.now()}.${ext}`;
-        const { error: uploadErr } = await supabase.storage.from("session-pdfs").upload(path, pdfFile, { upsert: true });
+        const path = `${Date.now()}.${ext}`;
+        const { error: uploadErr } = await supabase.storage.from("session-pdfs").upload(path, pdfFile);
         if (uploadErr) throw uploadErr;
         const { data: urlData } = supabase.storage.from("session-pdfs").getPublicUrl(path);
         pdfUrl = urlData?.publicUrl ?? null;

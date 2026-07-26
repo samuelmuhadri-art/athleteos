@@ -104,8 +104,8 @@ const CreateSessionModal = memo(({ athlete, allAthletes, clubId, createdBy, coac
       let pdfUrl = null;
       if (pdfFile) {
         const ext  = pdfFile.name.split(".").pop();
-        const path = `session-pdfs/${Date.now()}.${ext}`;
-        const { error: ue } = await supabase.storage.from("session-pdfs").upload(path, pdfFile, { upsert: true });
+        const path = `${Date.now()}.${ext}`;
+        const { error: ue } = await supabase.storage.from("session-pdfs").upload(path, pdfFile);
         if (ue) throw ue;
         const { data: ud } = supabase.storage.from("session-pdfs").getPublicUrl(path);
         pdfUrl = ud?.publicUrl ?? null;
