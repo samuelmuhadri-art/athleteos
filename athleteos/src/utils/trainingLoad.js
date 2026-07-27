@@ -38,15 +38,31 @@
 // couramment utilisé en planification sportive (périodisation) pour
 // refléter que deux séances au même RPE n'ont pas le même impact
 // structurel (ex: une séance de force sollicite davantage le système
-// neuromusculaire qu'une séance technique à ressenti égal). Ces
-// coefficients sont calibrables par le coach selon son groupe.
+// neuromusculaire qu'une séance technique à ressenti égal).
+//
+// ⚠️ SOURCE CANONIQUE (tâche 16) : ces constantes DOIVENT rester identiques
+// à la ligne 'v1' de la table Postgres `charge_model_versions`
+// (migration 20260727040000_charge_model_versioning.sql) — c'est cette
+// table, pas ce fichier, qui fait foi pour le calcul serveur (vue SQL
+// weekly_charge) et pour la reproductibilité historique (chaque ligne
+// session_athletes garde la version active au moment où son RPE a été
+// saisi, jamais recalculée si la version change plus tard). Ce fichier
+// reste une copie JS nécessaire au calcul instantané côté client (avant
+// même l'enregistrement d'un RPE) — la parité entre les deux est vérifiée
+// par test_charge_model_parity.mjs. Changer une valeur ici SANS créer une
+// nouvelle version dans charge_model_versions casse cette parité et doit
+// être considéré comme un bug, pas une simple config.
 // ============================================================
+
+export const CURRENT_MODEL_VERSION = "v1";
 
 /**
  * Coefficients d'ajustement par catégorie de séance.
  * Valeurs par défaut inspirées des pratiques courantes en périodisation
  * (plus élevé = impact structurel/neuromusculaire plus important).
- * Le coach peut les ajuster s'il juge que son groupe répond différemment.
+ * Modifiables uniquement en créant une nouvelle version dans
+ * charge_model_versions (jamais en éditant ces valeurs in-place — voir
+ * l'avertissement "SOURCE CANONIQUE" ci-dessus).
  */
 export const LOAD_COEFFICIENTS = {
   force:        1.3,  // Musculation — forte sollicitation neuromusculaire
@@ -64,6 +80,7 @@ export const LOAD_COEFFICIENTS = {
 // Basé sur Hasegawa et al. (2024) [7] :
 // Sprint/force = récupération neuromusculaire 48-72h
 // Saut = 48h, technique = 24h
+// Même remarque "SOURCE CANONIQUE" que LOAD_COEFFICIENTS ci-dessus.
 export const RECOVERY_HOURS = {
   sprint:       72,
   haies:        72,
