@@ -109,59 +109,80 @@ function ProgressRing({ pct, color, size = 64, label, stroke = 6 }) {
   );
 }
 
-// ─── Card discipline / record — remplace les 2 blocs plats ───────────────────
+// ─── Couleur selon la proximité au PR — même seuils que le classement groupe
+// côté coach (Performances.jsx) : ≥97% optimal, ≥90% correct, en-dessous à
+// travailler.
+function recordStatusColor(pct) {
+  if (pct === null) return null;
+  if (pct >= 97) return "#1D9E75";
+  if (pct >= 90) return "#EF9F27";
+  return "#E24B4A";
+}
+
+// ─── Card discipline / record — façon "carte de crédit sportive" : le PR en
+// typo monumentale (ce qui compte le plus), SB juste en dessous en discret,
+// barre fine SB→PR colorée selon le statut, glow ambiant assorti.
 function RecordCard({ disc, rec, onSeeEvolution, stats }) {
   const col = discColor(disc);
-  const sbN = parseFloat(rec.sb), prN = parseFloat(rec.pr);
-  const pct = !isNaN(sbN) && !isNaN(prN) && prN > 0 ? Math.min(100, Math.round((sbN / prN) * 100)) : null;
+  // hib (higher-is-better) : indispensable pour les disciplines chronométrées
+  // (sprint...) où SB ≥ PR est la norme — sbN/prN donnerait alors toujours
+  // ~100%, peu importe l'écart réel. On raisonne dans le bon sens ici.
+  const hib = getDiscHib(disc);
+  const sbP = parsePerf(rec.sb);
+  const prP = parsePerf(rec.pr);
+  const pct = (sbP.value != null && prP.value != null && prP.value !== 0)
+    ? Math.min(100, Math.max(0, Math.round(hib ? (sbP.value / prP.value) * 100 : (prP.value / sbP.value) * 100)))
+    : null;
+  const statusColor = recordStatusColor(pct) ?? col;
 
   return (
-    <div className="card p-4" style={{ display: "flex", gap: 14, alignItems: "center" }}>
-      <ProgressRing pct={pct} color={col} label="du PR" />
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 6 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0 }}>
-            <span style={{ width: 7, height: 7, borderRadius: "50%", background: col, flexShrink: 0 }} />
-            <p style={{ fontSize: 13, fontWeight: 600, color: "var(--c-text-1)" }} className="truncate">{disc}</p>
-          </div>
-          <button onClick={onSeeEvolution}
-            style={{ fontSize: 10.5, fontWeight: 600, color: col, background: "none", border: "none", cursor: "pointer", flexShrink: 0, display: "flex", alignItems: "center", gap: 2 }}>
-            Évolution <ChevronRight size={11} />
-          </button>
-        </div>
+    <div className="card" style={{ position: "relative", overflow: "hidden", padding: "16px 18px" }}>
+      {/* Glow ambiant — vert si proche du PR, orange/rouge sinon */}
+      <div style={{
+        position: "absolute", right: -34, top: -34, width: 150, height: 150, borderRadius: "50%",
+        background: `radial-gradient(circle, ${statusColor}26 0%, transparent 70%)`, pointerEvents: "none",
+      }} />
 
-        <div style={{ display: "flex", alignItems: "flex-end", gap: 18 }}>
-          <div>
-            <p style={{ fontSize: 22, fontWeight: 700, color: col, letterSpacing: "-0.02em", lineHeight: 1 }}>
-              {rec.pr ?? "—"}
-            </p>
-            <p style={{ fontSize: 8.5, fontWeight: 500, letterSpacing: "0.07em", textTransform: "uppercase", color: "var(--c-text-3)", marginTop: 4 }}>
-              Record perso
-            </p>
-          </div>
-          <div>
-            <p style={{ fontSize: 15, fontWeight: 500, color: "var(--c-text-2)", lineHeight: 1 }}>
-              {rec.sb ?? "—"}
-            </p>
-            <p style={{ fontSize: 8.5, fontWeight: 500, letterSpacing: "0.07em", textTransform: "uppercase", color: "var(--c-text-4)", marginTop: 4 }}>
-              Season best
-            </p>
-          </div>
+      <div style={{ position: "relative", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 16 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 7, minWidth: 0 }}>
+          <span style={{ width: 8, height: 8, borderRadius: "50%", background: col, flexShrink: 0 }} />
+          <p style={{ fontSize: 12, fontWeight: 600, letterSpacing: "0.03em", textTransform: "uppercase", color: "var(--c-text-3)" }} className="truncate">{disc}</p>
         </div>
+        <button onClick={onSeeEvolution}
+          style={{ fontSize: 10.5, fontWeight: 600, color: col, background: "none", border: "none", cursor: "pointer", flexShrink: 0, display: "flex", alignItems: "center", gap: 2 }}>
+          Évolution <ChevronRight size={11} />
+        </button>
+      </div>
 
-        <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8, flexWrap: "wrap" }}>
-          {rec.prDate && (
-            <span style={{ fontSize: 9.5, color: "var(--c-text-4)" }}>
-              {new Date(rec.prDate).toLocaleDateString("fr-BE", { day: "numeric", month: "short", year: "numeric" })}
-            </span>
-          )}
-          {stats?.count > 0 && (
-            <>
-              <span style={{ color: "var(--c-text-4)", fontSize: 9 }}>·</span>
-              <span style={{ fontSize: 9.5, color: "var(--c-text-3)" }}>{stats.count} mesure{stats.count > 1 ? "s" : ""}</span>
-            </>
-          )}
+      <p style={{ position: "relative", fontSize: 34, fontWeight: 700, color: "var(--c-text-1)", letterSpacing: "-0.03em", lineHeight: 1, fontVariantNumeric: "tabular-nums" }}>
+        {rec.pr ?? "—"}
+      </p>
+      <p style={{ position: "relative", fontSize: 9, fontWeight: 500, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--c-text-4)", marginTop: 5 }}>
+        Record personnel
+      </p>
+
+      <p style={{ position: "relative", fontSize: 12.5, color: "var(--c-text-3)", marginTop: 12 }}>
+        SB saison <strong style={{ color: "var(--c-text-2)", fontWeight: 600 }}>{rec.sb ?? "—"}</strong>
+      </p>
+
+      <div style={{ position: "relative", display: "flex", alignItems: "center", gap: 8, marginTop: 8 }}>
+        <div style={{ flex: 1, height: 3, background: "var(--c-surface-3)", borderRadius: 99, overflow: "hidden" }}>
+          <div style={{ height: "100%", width: `${pct ?? 0}%`, background: statusColor, borderRadius: 99, transition: "width 0.7s cubic-bezier(0.16,1,0.3,1)" }} />
         </div>
+        <span style={{ fontSize: 11.5, fontWeight: 700, color: statusColor, flexShrink: 0, minWidth: 30, textAlign: "right" }}>
+          {pct !== null ? `${pct}%` : "—"}
+        </span>
+      </div>
+
+      <div style={{ position: "relative", display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 12 }}>
+        <span style={{ fontSize: 9.5, color: "var(--c-text-4)" }}>
+          {stats?.count > 0 ? `${stats.count} mesure${stats.count > 1 ? "s" : ""}` : ""}
+        </span>
+        {rec.prDate && (
+          <span style={{ fontSize: 9.5, color: "var(--c-text-4)" }}>
+            {new Date(rec.prDate).toLocaleDateString("fr-BE", { day: "numeric", month: "short", year: "numeric" })}
+          </span>
+        )}
       </div>
     </div>
   );
