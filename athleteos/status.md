@@ -6,45 +6,51 @@
 - **Tâche 3** (durcissement `signup`) : terminée, **déployée** (migration + fonction), **9/9 tests automatisés OK en conditions réelles**.
 - **Tâche 15** (langage scientifique prudent) : terminée, commitée (`fee2254`) et poussée.
 - **Tâche 16** (versionnement JS/SQL des coefficients de charge) : terminée, commitée (`10e036c`) et poussée. Migration appliquée et testée avec succès par l'utilisateur.
+- **Tâche 17** (récupération en plage + confiance) : terminée, commitée (`dc9929f`) et poussée. Test pur JS exécuté avec succès (16/16), aucune migration nécessaire.
 
 ## Tâche active
-- Numéro : 17
+- Numéro : 18
 - Branche : main (aucune branche dédiée créée — travail effectué directement, non commité)
-- Objectif : Remplacer l'heure fixe de récupération et l'état binaire "totalement récupéré" par une estimation par plage, modulée par les données disponibles, avec un niveau de confiance et les facteurs contributifs affichés.
-- Risques : Aucun — changement 100% JavaScript côté client, aucune base de données, aucune Edge Function concernée.
+- Objectif : Gouverner le profil de charge à 6 axes — configuration versionnée, contributions par séance, baseline personnelle explicite, qualité de données, "convention AthleteOS" affichée.
+- Risques : Faibles — nouvelle table Postgres additive (même pattern que la tâche 16, déjà éprouvé), aucune modification de données existantes, aucun calcul SQL touché (le profil à 6 axes reste 100% client).
 
 ## Décisions prises
-- **Pas de nouvelle migration.** La récupération est calculée à la volée côté client, jamais stockée ni dupliquée en SQL (contrairement à `weekly_charge`, tâche 16) — donc aucun risque de mutation silencieuse de l'historique à corriger en base. Les plages de base restent versionnées comme convention documentée dans le code (`RECOVERY_HOURS_RANGE`, liée à `CURRENT_MODEL_VERSION`), pas dans une table : il n'y a pas de parité JS/SQL à garantir puisqu'il n'existe aucun second calcul SQL de la récupération.
-- **`RECOVERY_HOURS_RANGE`** remplace le point fixe `RECOVERY_HOURS` par catégorie (ex: sprint 72h → plage 48-96h, centrée sur l'ancienne valeur). `RECOVERY_HOURS` (l'ancien point) est conservé tel quel pour ne rien casser côté compatibilité, mais n'est plus utilisé par le nouveau calcul.
-- **`estimateRecovery()`** (nouvelle fonction, remplace `computeRecoveryStatus`) module la position dans cette plage à partir de : la charge relative de la séance déclenchante vs la moyenne récente de l'athlète, le RPE de cette séance, le wellness le plus récent **si disponible ET récent** (≤36h, sinon ignoré plutôt qu'utilisé comme s'il reflétait l'état actuel), et l'accumulation de séances difficiles sur 7 jours.
-- **Confiance** : score 0-100 construit uniquement à partir des signaux réellement disponibles (séance connue = base ; charge relative calculable ; wellness frais ; historique suffisant) — jamais un chiffre affiché sans lien avec ce qui a pu être évalué.
-- **Correction du vrai problème identifié** : l'ancienne fonction renvoyait `fullyRecovered: true` quand il n'y avait **aucune** séance récente — une certitude fabriquée à partir de rien. `estimateRecovery` renvoie maintenant explicitement `status: "insufficient_data"` (plage `null`), conformément à "prévoir données insuffisantes plutôt qu'inventer".
-- **Ne bloque jamais une séance** : vérifié qu'aucun code existant (`chargeCalculations.js`, seul consommateur) ne conditionne une action bloquante sur la récupération — seulement de l'affichage et un signal composite. Le nouveau format préserve cette propriété (testé explicitement, voir tests).
-- **Affichage des facteurs** : ajouté côté athlète dans `FormeDetailPanel.jsx` (section "Estimation détaillée", visible uniquement pour la carte Récupération) — plage, confiance, et liste des facteurs avec ▲/▼. Côté coach (`AthleteProfileTabs.jsx`), le texte de `generateContextAnalysis` (déjà affiché dans l'onglet Charge) inclut maintenant la plage et la confiance en une phrase — **pas** la liste détaillée des facteurs individuels, pour rester dans un diff raisonnable ; un vrai panneau de détail coach équivalent à celui de l'athlète serait une extension UI à part.
+- **Même architecture que la tâche 16, appliquée à `AXIS_WEIGHTS`** : nouvelle table `axis_model_versions` (version, poids jsonb imbriqué catégorie→axe, une seule version active, bornes [0,1] appliquées par trigger, colonnes d'audit). Portée volontairement identique à la tâche 16 : je construis la couche données gouvernée, pas d'écran coach pour créer une nouvelle version — ce qui satisfait de fait "mode par défaut verrouillé pour les pilotes" (aucun moyen de le déverrouiller sans accès direct à la base).
+- **Pas de table `club_model_settings` séparée** pour une surcharge par club — la Definition of Done de cette tâche ne l'exige pas explicitement (contrairement à "Exécution détaillée" qui l'évoque comme piste), et l'ajouter aurait doublé la complexité de cette tâche pour une fonctionnalité qui a de toute façon besoin d'un écran d'édition inexistant pour être utile.
+- **Baseline personnelle rendue explicite** : `getAthleteAxisProfile` expose maintenant `acute`/`chronic` bruts (pas seulement le ratio/score) — DoD "distinguer charge absolue, ratio à l'habitude". 
+- **Qualité de données** : nouveau champ `dataQuality` (faible/modérée/élevée) basé sur le nombre de semaines d'historique disponibles, mêmes paliers que la confiance de `estimateRecovery` (tâche 17) pour rester cohérent dans toute l'app.
+- **Contributions par séance** : nouvelle fonction `getAxisTopContributors()` — pour un axe donné, les séances des 2 dernières semaines qui y ont le plus contribué, triées. Répond concrètement au DoD "chaque axe explique ses principales contributions".
+- **Affichage** : chaque ligne d'axe dans `AxisRadarCard.jsx` devient dépliable au clic (badge "Convention AthleteOS" + version, baseline, qualité de données, séances contributrices) — sans changer le radar ni la liste sobre par défaut, pour respecter le design existant. Ce composant est **partagé entre l'athlète et le coach** (déjà le cas avant cette tâche) : l'enrichissement profite donc aux deux automatiquement, sans duplication de code.
+- **Export pour validation scientifique future** : satisfait par la table elle-même — n'importe qui avec un accès Supabase peut faire `SELECT * FROM axis_model_versions` et obtenir un JSON exportable avec version/poids/notes/date. Pas de bouton d'export dédié construit (aurait nécessité un écran, hors périmètre).
+- **Bug préexistant corrigé en cours de route** : `loadAxes.js` importait `trainingLoad` sans extension `.js` — toléré par Vite mais pas par le résolveur ESM strict de Node, ce qui empêchait mon script de test de tourner. Corrigé (`./trainingLoad` → `./trainingLoad.js`), sans effet sur le comportement (Vite gère les deux formes identiquement) — vérifié par un rebuild complet après coup.
 
 ## Fichiers modifiés
-- `src/utils/trainingLoad.js` : nouvelle fonction `estimateRecovery()` (remplace `computeRecoveryStatus`), nouvelle constante `RECOVERY_HOURS_RANGE`.
-- `src/utils/chargeCalculations.js` : `getAthleteMetricsForWeek` utilise `estimateRecovery` (avec le wellness déjà chargé) ; le score `recuperation` (0-100) dérive maintenant du milieu de la plage (neutre à 50 si données insuffisantes, jamais un extrême inventé) ; `generateContextAnalysis` affiche la plage + la confiance au lieu d'un chiffre unique et d'un "récupération complète" catégorique.
-- `src/athlete/shared.js` : texte `METRIC_SCIENCE.recuperation` mis à jour (formule, explication, libellés des seuils) pour refléter l'incertitude — "Probablement suffisante" au lieu de "Complète", etc.
-- `src/athlete/components/FormeDetailPanel.jsx` : nouvelle section "Estimation détaillée" (plage, confiance, facteurs) pour la carte Récupération.
-- `test_recovery_estimate.mjs` (créé) : test pur JS, **exécuté avec succès**, aucune base de données requise.
+- `supabase/migrations/20260728010000_axis_model_versioning.sql` (créé) : table `axis_model_versions` + trigger de validation des bornes + version `v1` = copie exacte d'`AXIS_WEIGHTS`.
+- `src/utils/loadAxes.js` : `CURRENT_AXIS_MODEL_VERSION`, `getAthleteAxisProfile` enrichi (acute/chronic/dataQuality/weeksOfData), nouvelle fonction `getAxisTopContributors`, correction de l'import `trainingLoad.js`.
+- `src/components/ui/AxisRadarCard.jsx` : lignes d'axe dépliables (provenance, baseline, qualité, contributions) ; nouvelles props optionnelles `sessions`/`athleteId`/`currentWeek`.
+- `src/athlete/views/AthleteDashboard.jsx` et `src/modules/AthleteProfileTabs.jsx` : passent les nouvelles props à `AxisRadarCard`.
+- `test_axis_profile.mjs` (créé) : test pur JS, **exécuté avec succès (11/11)**.
+- `test_axis_model_parity.mjs` (créé) : test base de données (parité, bornes, version unique, non-mutation de 'v1') — écrit, pas exécuté (nécessite migration + secrets, comme tâche 16).
 
 ## Vérifications exécutées
-- [x] `npm run build` — succès.
-- [ ] `npm run lint` / `npm run typecheck` — toujours aucun script dans le repo (cf. tâche 1).
-- [x] **`node test_recovery_estimate.mjs` — exécuté réellement, 16/16 OK.** Contrairement aux tâches précédentes, ce test ne nécessite ni migration ni secret Supabase (fonction pure) — j'ai donc pu le lancer moi-même et vérifier honnêtement le résultat. Couvre : aucune séance (données insuffisantes, pas de fausse certitude), séance seule sans wellness, même séance avec wellness bon vs mauvais (estimations différentes), wellness ancien (traité comme absent), aucune donnée subjective, valeurs extrêmes (plafonds respectés, confiance bornée [0,100], plage jamais inversée), absence de toute clé de blocage automatique dans le résultat.
-- [x] Recherche de toute référence résiduelle à l'ancien nom `computeRecoveryStatus` dans tout le repo — aucune (hors un commentaire explicatif volontaire).
+- [x] `npm run build` — succès (3 fois : après le JS, après la correction d'import, vérification finale).
+- [ ] `npm run lint` / `npm run typecheck` — toujours aucun script dans le repo.
+- [x] **`node test_axis_profile.mjs` — exécuté réellement, 11/11 OK.** Couvre : bornes et couverture complète des poids, golden dataset (charge par axe d'une séance connue, calculée à la main et vérifiée), baseline insuffisante (<2 semaines → null), reproductibilité (même entrée → même sortie), qualité de données croissante avec l'historique, exposition acute/chronic, tri des séances contributrices.
+- [ ] **`test_axis_model_parity.mjs` — écrit mais PAS exécuté contre la vraie base.** Nécessite `supabase db push` (interdit dans cette tâche) et des secrets Supabase live. Vérifié manuellement par relecture croisée que les poids JS (`AXIS_WEIGHTS`) et le JSON seedé dans la migration sont identiques valeur par valeur.
+- [x] Relecture de la migration SQL (verrouillage, bornes, RLS, grants, contrainte d'unicité partielle) — même schéma déjà validé et exécuté avec succès en tâche 16, donc risque résiduel faible.
 
 ## Résultats et limites
-- **Rien n'a été commité ni poussé.**
-- **Aucune action de déploiement nécessaire après le commit/push** — ni `supabase db push`, ni `supabase functions deploy`. Un simple push suffira, Vercel redéploiera le frontend automatiquement.
-- **Limite assumée** : pas de panneau de détail équivalent côté coach (facteurs individuels) — le coach voit la plage et la confiance via le texte d'analyse contextuelle existant, mais pas la liste à puces ▲/▼. Amélioration possible dans une tâche dédiée à l'UI coach si souhaité.
-- **Bandes larges par construction** (`BAND_WIDTH = 0.4`, soit 40% de l'étendue de la catégorie) : c'est un choix délibéré pour éviter de donner une fausse précision, mais ça peut aussi paraître "flou" à l'usage réel — à ajuster après retour utilisateur si la plage semble trop large ou trop étroite en pratique.
+- **Rien n'a été commité, poussé, ni migré.**
+- **Ordre de déploiement** (identique à la tâche 16) :
+  1. `supabase db push` — crée `axis_model_versions`.
+  2. `node test_axis_model_parity.mjs` (avec `SUPABASE_SERVICE_ROLE_KEY`, comme d'habitude).
+- **Dette assumée** (même nature qu'en tâche 16) : pas d'écran coach pour créer une nouvelle version ou une surcharge par club — nécessite en base directement pour l'instant.
+- **`getAxisTopContributors` suppose `sessions[].athleteIds`/`validations`** (format déjà utilisé partout ailleurs dans l'app) — pas de nouveau format introduit.
 
-## Tests manuels recommandés (à faire par vous)
-- [ ] Sur l'appli, taper sur la carte "Récupération" (état de forme athlète) et vérifier que la plage + confiance + facteurs s'affichent correctement et lisiblement.
-- [ ] Comparer l'affichage un jour avec wellness rempli vs un jour sans, pour confirmer visuellement que la confiance et la plage changent.
-- [ ] Vérifier côté coach (profil athlète, onglet Charge) que la phrase d'analyse contextuelle mentionne bien une plage d'heures, pas un chiffre unique.
+## Tests manuels recommandés (à faire par vous, après migration)
+- [ ] Exécuter `node test_axis_model_parity.mjs` et vérifier que tout est ✅.
+- [ ] Sur l'appli (athlète et coach), taper sur une ligne d'axe dans le "Profil de charge" et vérifier que le détail (convention, baseline, séances contributrices) s'affiche et reste lisible sur mobile.
+- [ ] Vérifier qu'un axe sans assez d'historique (nouvel athlète) n'affiche toujours aucun radar plutôt qu'un score inventé (comportement inchangé, à reconfirmer visuellement).
 
 ## Prochaine tâche autorisée
-Non déterminée ici — arrêt après la tâche 17 comme demandé. Ne pas démarrer la tâche suivante automatiquement.
+Non déterminée ici — arrêt après la tâche 18 comme demandé. Ne pas démarrer la tâche suivante automatiquement.

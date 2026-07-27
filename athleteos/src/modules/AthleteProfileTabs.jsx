@@ -283,7 +283,10 @@ export const TabCharge = memo(({ athlete, metrics, weeklyCharge, competitions, s
       )}
 
       {/* Profil de charge (6 axes) */}
-      <AxisRadarCard profile={axisProfile} title="Profil de charge" subtitle="Comparé aux semaines habituelles de l'athlète" />
+      <AxisRadarCard
+        profile={axisProfile} title="Profil de charge" subtitle="Comparé aux semaines habituelles de l'athlète"
+        sessions={sessions} athleteId={athlete.id} currentWeek={currentWeek}
+      />
 
       {/* Analyse contextuelle */}
       <div className="card p-5">

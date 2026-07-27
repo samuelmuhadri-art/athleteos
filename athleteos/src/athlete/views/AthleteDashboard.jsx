@@ -621,7 +621,10 @@ export default function AthleteDashboard({
           )}
 
           {/* ── Profil de charge (6 axes) ───────────────────────────────────── */}
-          <AxisRadarCard profile={axisProfile} title="Répartition de ta charge" />
+          <AxisRadarCard
+            profile={axisProfile} title="Répartition de ta charge"
+            sessions={sessions} athleteId={athlete.id} currentWeek={currentWeek}
+          />
 
           {/* ── État de forme ───────────────────────────────────────────────── */}
           {hasCharge && (
