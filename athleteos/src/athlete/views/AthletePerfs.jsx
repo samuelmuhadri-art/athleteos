@@ -443,7 +443,7 @@ export default function AthletePerfs({ athlete, competitions, myPerformances, my
   const [showConfetti, setShowConfetti] = useState(false);
   const [compForm,     setCompForm]     = useState({
     name: "", date: toLocalDateStr(new Date()),
-    location: "", type: "Régionale", event: "", result: "", context: "",
+    location: "", type: "Régionale", event: "", result: "", context: "", breakdown: {},
   });
 
   const [perfForm, setPerfForm] = useState({
@@ -715,12 +715,36 @@ export default function AthletePerfs({ athlete, competitions, myPerformances, my
         context:        compForm.context || null,
       });
 
+      // Un résultat de compétition doit aussi apparaître dans l'onglet
+      // Évolution — avant ce fix, seule "Saisir une performance" écrivait
+      // dans athlete_performances, donc les résultats de compétition
+      // (le cas normal pour un décathlon par ex.) n'y apparaissaient jamais.
+      const isCombine = !!COMBINE_EVENTS[compForm.event];
+      const cleanBreakdown = isCombine
+        ? Object.fromEntries(Object.entries(compForm.breakdown).filter(([, v]) => v?.trim()))
+        : null;
+      const { data: perfRow, error: pe } = await supabase
+        .from("athlete_performances")
+        .insert({
+          athlete_id:       athlete.id,
+          club_id:          clubId,
+          discipline:       compForm.event,
+          discipline_type:  compForm.event,
+          value:            compForm.result,
+          performance_date: compForm.date,
+          context:          compForm.name.trim(),
+          breakdown:        cleanBreakdown && Object.keys(cleanBreakdown).length ? cleanBreakdown : null,
+        })
+        .select().single();
+      if (pe) throw pe;
+      setLocalPerfs(prev => [...prev, perfRow]);
+
       // Un résultat de compétition qui bat le PR/SB doit mettre le record à
       // jour tout seul — avant ce fix, seule "Saisir une performance" le
       // faisait, jamais cette modale-ci.
       await maybeUpdateRecord(compForm.event, compForm.result, compForm.date);
 
-      setCompForm({ name: "", date: toLocalDateStr(new Date()), location: "", type: "Régionale", event: "", result: "", context: "" });
+      setCompForm({ name: "", date: toLocalDateStr(new Date()), location: "", type: "Régionale", event: "", result: "", context: "", breakdown: {} });
       setShowAddComp(false);
       onRefresh?.();
     } catch (e) {
@@ -1020,6 +1044,15 @@ export default function AthletePerfs({ athlete, competitions, myPerformances, my
                     <div>
                       <p style={{ fontSize: 15, fontWeight: 700, color: "#1D9E75" }}>{p.value}</p>
                       {p.context && <p style={{ fontSize: 10.5, color: "var(--c-text-4)", fontStyle: "italic" }}>{p.context}</p>}
+                      {p.breakdown && Object.keys(p.breakdown).length > 0 && (
+                        <div style={{ display: "flex", flexWrap: "wrap", gap: "3px 8px", marginTop: 5, maxWidth: 220 }}>
+                          {Object.entries(p.breakdown).map(([ev, val]) => (
+                            <span key={ev} style={{ fontSize: 9.5, color: "var(--c-text-4)" }}>
+                              {ev} <strong style={{ color: "var(--c-text-3)" }}>{val}</strong>
+                            </span>
+                          ))}
+                        </div>
+                      )}
                     </div>
                     <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                       <p style={{ fontSize: 10.5, color: "var(--c-text-3)", fontWeight: 500 }}>
@@ -1240,8 +1273,8 @@ export default function AthletePerfs({ athlete, competitions, myPerformances, my
               {[
                 { key: "name",     label: "Nom de la compétition *", placeholder: "Ex: Championnat provincial" },
                 { key: "location", label: "Lieu",                    placeholder: "Ex: Namur" },
-                { key: "event",    label: "Épreuve *",               placeholder: "Ex: 100m" },
-                { key: "result",   label: "Résultat *",              placeholder: "Ex: 10.94" },
+                { key: "event",    label: "Épreuve *",               placeholder: "Ex: 100m ou Décathlon" },
+                { key: "result",   label: COMBINE_EVENTS[compForm.event] ? "Total (points) *" : "Résultat *", placeholder: "Ex: 10.94" },
                 { key: "context",  label: "Contexte",                placeholder: "Ex: Vent +1.2, finale" },
               ].map(f => (
                 <div key={f.key}>
@@ -1253,6 +1286,23 @@ export default function AthletePerfs({ athlete, competitions, myPerformances, my
                     onChange={e => setCompForm(p => ({ ...p, [f.key]: e.target.value }))} />
                 </div>
               ))}
+              {COMBINE_EVENTS[compForm.event] && (
+                <div>
+                  <label style={{ display: "block", fontSize: 9.5, fontWeight: 600, letterSpacing: "0.06em", textTransform: "uppercase", color: "var(--c-text-3)", marginBottom: 6 }}>
+                    Détail par épreuve (optionnel)
+                  </label>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+                    {COMBINE_EVENTS[compForm.event].map(ev => (
+                      <div key={ev}>
+                        <input className="input-premium" placeholder={ev} style={{ fontSize: 12 }}
+                          value={compForm.breakdown[ev] ?? ""}
+                          onChange={e => setCompForm(f => ({ ...f, breakdown: { ...f.breakdown, [ev]: e.target.value } }))} />
+                        <p style={{ fontSize: 9, color: "var(--c-text-4)", marginTop: 3, marginLeft: 2 }}>{ev}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
                 <div>
                   <label style={{ display: "block", fontSize: 9.5, fontWeight: 600, letterSpacing: "0.06em", textTransform: "uppercase", color: "var(--c-text-3)", marginBottom: 6 }}>Date *</label>
