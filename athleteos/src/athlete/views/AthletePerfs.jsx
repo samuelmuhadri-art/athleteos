@@ -513,7 +513,55 @@ export default function AthletePerfs({ athlete, competitions, myPerformances, my
   const activeGoals   = localGoals.filter(g => !g.achieved);
   const achievedGoals = localGoals.filter(g =>  g.achieved);
 
-  // ── Handlers — logique 100% inchangée ────────────────────────────────────
+  // ── Détection + mise à jour automatique du record (PR/SB) ────────────────
+  // Partagée entre "Saisir une performance" ET "Ajouter une compétition" —
+  // avant ce fix, seule la 1ère mettait le record à jour ; un résultat de
+  // compétition qui battait le PR ne le faisait jamais remonter.
+  const maybeUpdateRecord = async (disc, resultStr, dateStr) => {
+    const newVal = parsePerf(resultStr);
+    if (newVal.value == null) return false;
+    const hib    = getDiscHib(disc);
+    const curRec = athlete.records?.[disc];
+    const curPR  = curRec ? parsePerf(curRec.pr) : null;
+    const curSB  = curRec ? parsePerf(curRec.sb) : null;
+    const isThisYear = dateStr.slice(0, 4) === new Date().getFullYear().toString();
+
+    const isPR = !curPR?.value || (hib ? newVal.value >= curPR.value : newVal.value <= curPR.value);
+    const isSB = isThisYear && (!curSB?.value || (hib ? newVal.value >= curSB.value : newVal.value <= curSB.value));
+    if (!isPR && !isSB) return false;
+
+    // Pas de contrainte UNIQUE(athlete_id,discipline) en base — un
+    // .upsert(onConflict:...) échoue silencieusement en 400 ici (record
+    // jamais sauvé). On vérifie l'existence nous-mêmes et on update/insert
+    // explicitement, comme le fait déjà Competitions.jsx côté coach.
+    const { data: existingRow } = await supabase.from("records").select("id")
+      .eq("athlete_id", athlete.id).eq("discipline", disc).maybeSingle();
+    const patch = {
+      ...(isPR ? { pr: resultStr, pr_date: dateStr } : {}),
+      ...(isSB ? { sb: resultStr } : {}),
+      ...(!curPR?.value ? { pr: resultStr, pr_date: dateStr, sb: resultStr } : {}),
+    };
+    if (existingRow) {
+      await supabase.from("records").update(patch).eq("id", existingRow.id);
+    } else {
+      await supabase.from("records").insert({ athlete_id: athlete.id, discipline: disc, ...patch });
+    }
+    if (athlete.records) {
+      athlete.records[disc] = {
+        ...curRec,
+        ...(isPR ? { pr: resultStr, prDate: dateStr } : {}),
+        ...(isSB ? { sb: resultStr } : {}),
+      };
+    }
+    if (isPR) {
+      postClubCelebration(clubId, athlete.id, "record",
+        `${athlete.name.split(" ")[0]} a battu son record en ${disc} : ${resultStr} !`).catch(console.warn);
+      setShowConfetti(true);
+    }
+    return isPR;
+  };
+
+  // ── Handlers ───────────────────────────────────────────────────────────
   const handleAddPerf = async () => {
     if (!perfForm.discipline.trim() || !perfForm.value.trim()) return;
     setSavingPerf(true);
@@ -533,49 +581,7 @@ export default function AthletePerfs({ athlete, competitions, myPerformances, my
       if (error) throw error;
       setLocalPerfs(prev => [...prev, data]);
 
-      const disc    = perfForm.discipline;
-      const hib     = getDiscHib(disc);
-      const newVal  = parsePerf(perfForm.value);
-      const curRec  = athlete.records?.[disc];
-      const curPR   = curRec ? parsePerf(curRec.pr) : null;
-      const curSB   = curRec ? parsePerf(curRec.sb) : null;
-      const thisYear = new Date().getFullYear().toString();
-      const isThisYear = perfForm.performance_date.slice(0, 4) === thisYear;
-
-      if (newVal.value) {
-        const isPR = !curPR?.value || (hib ? newVal.value >= curPR.value : newVal.value <= curPR.value);
-        const isSB = isThisYear && (!curSB?.value || (hib ? newVal.value >= curSB.value : newVal.value <= curSB.value));
-        if (isPR || isSB) {
-          // Pas de contrainte UNIQUE(athlete_id,discipline) en base — un
-          // .upsert(onConflict:...) échoue silencieusement en 400 ici
-          // (record jamais sauvé). On vérifie l'existence nous-mêmes et on
-          // update/insert explicitement, comme le fait déjà Competitions.jsx.
-          const { data: existingRow } = await supabase.from("records").select("id")
-            .eq("athlete_id", athlete.id).eq("discipline", disc).maybeSingle();
-          const patch = {
-            ...(isPR ? { pr: perfForm.value, pr_date: perfForm.performance_date } : {}),
-            ...(isSB ? { sb: perfForm.value } : {}),
-            ...(!curPR?.value ? { pr: perfForm.value, pr_date: perfForm.performance_date, sb: perfForm.value } : {}),
-          };
-          if (existingRow) {
-            await supabase.from("records").update(patch).eq("id", existingRow.id);
-          } else {
-            await supabase.from("records").insert({ athlete_id: athlete.id, discipline: disc, ...patch });
-          }
-          if (athlete.records) {
-            athlete.records[disc] = {
-              ...curRec,
-              ...(isPR ? { pr: perfForm.value, prDate: perfForm.performance_date } : {}),
-              ...(isSB ? { sb: perfForm.value } : {}),
-            };
-          }
-          if (isPR) {
-            postClubCelebration(clubId, athlete.id, "record",
-              `${athlete.name.split(" ")[0]} a battu son record en ${disc} : ${perfForm.value} !`).catch(console.warn);
-            setShowConfetti(true);
-          }
-        }
-      }
+      await maybeUpdateRecord(perfForm.discipline, perfForm.value, perfForm.performance_date);
 
       setPerfForm({ discipline: perfForm.discipline, value: "", performance_date: toLocalDateStr(today), context: "" });
       setShowAddPerf(false);
@@ -663,6 +669,11 @@ export default function AthletePerfs({ athlete, competitions, myPerformances, my
         result:         compForm.result,
         context:        compForm.context || null,
       });
+
+      // Un résultat de compétition qui bat le PR/SB doit mettre le record à
+      // jour tout seul — avant ce fix, seule "Saisir une performance" le
+      // faisait, jamais cette modale-ci.
+      await maybeUpdateRecord(compForm.event, compForm.result, compForm.date);
 
       setCompForm({ name: "", date: toLocalDateStr(new Date()), location: "", type: "Régionale", event: "", result: "", context: "" });
       setShowAddComp(false);
