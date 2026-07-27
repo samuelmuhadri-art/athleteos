@@ -1,7 +1,10 @@
 // ============================================================
 // AthleteOS — src/components/ui/LoadingState.jsx
-// Spinner de chargement réutilisable.
-// Remplace tous les blocs if (loading) {...} dupliqués.
+// Squelette de chargement réutilisable (remplace l'ancien spinner).
+// Générique à dessein : hero + rangée de KPI + grille de cards, la
+// forme la plus fréquente dans l'app (Dashboard, AthleteList,
+// Competitions, ChargeView…) — donne l'impression que le contenu
+// "apparaît" plutôt que de fixer un rond qui tourne.
 //
 // Usage :
 //   import LoadingState from "../components/ui/LoadingState";
@@ -10,12 +13,35 @@
 
 import { memo } from "react";
 
+function Block({ style }) {
+  return <div className="skeleton" style={style} />;
+}
+
 function LoadingState({ message = "Chargement…" }) {
   return (
-    <div className="flex items-center justify-center min-h-[50vh] p-6">
-      <div className="flex flex-col items-center gap-3" style={{ color: "var(--c-text-3)" }}>
-        <div className="w-8 h-8 rounded-full animate-spin" style={{ border: "2px solid var(--c-surface-3)", borderTopColor: "var(--c-accent)" }} />
-        <p className="text-[13px] font-medium">{message}</p>
+    <div
+      className="p-4 md:p-6 space-y-5 max-w-7xl mx-auto animate-fade-in"
+      role="status"
+      aria-live="polite"
+      aria-busy="true"
+    >
+      <span className="sr-only">{message}</span>
+
+      {/* Hero */}
+      <Block style={{ height: 128, borderRadius: "var(--r-xl)" }} />
+
+      {/* Rangée de KPI */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        {Array.from({ length: 4 }).map((_, i) => (
+          <Block key={i} style={{ height: 84, borderRadius: "var(--r-lg)" }} />
+        ))}
+      </div>
+
+      {/* Grille de cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+        {Array.from({ length: 6 }).map((_, i) => (
+          <Block key={i} style={{ height: 112, borderRadius: "var(--r-lg)" }} />
+        ))}
       </div>
     </div>
   );

@@ -609,7 +609,7 @@ function Dashboard({ onNavigate }) {
       <CoachFeedSection items={coachFeed} onNavigate={onNavigate} />
 
       {/* ── KPIs — icône + liseré + glow au survol ────────────────────────── */}
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         <MetricCard
           icon={Users} label="Athlètes actifs" color="#1D9E75"
           value={metrics.actifs} sub={`/${athletes.length} total`}
@@ -634,10 +634,10 @@ function Dashboard({ onNavigate }) {
       </div>
 
       {/* ── Layout 2 colonnes ─────────────────────────────────────────────── */}
-      <div className="grid grid-cols-1 xl:grid-cols-3 gap-5">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
 
         {/* ── État du groupe ─────────────────────────────────────────────── */}
-        <div className="xl:col-span-2 space-y-3">
+        <div className="lg:col-span-2 space-y-3">
           <div className="flex items-center justify-between">
             <div>
               <h3 className="text-[15px] font-semibold tracking-tight" style={{ color: "var(--c-text-1)" }}>

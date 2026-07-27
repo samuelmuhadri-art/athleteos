@@ -17,12 +17,18 @@
     <meta property="og:description" content="Plateforme de suivi scientifique de la performance athlétique." />
     <meta property="og:type" content="website" />
 
-    <meta name="theme-color" content="#1D9E75" />
+    <meta name="theme-color" content="#09150E" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="AthleteOS" />
     <link rel="manifest" href="/manifest.json" />
     <link rel="apple-touch-icon" href="/icon-192.png" />
+
+    <!-- Fond sombre appliqué avant même le chargement de index.css — sans
+         ça l'écran flashe en blanc (fond par défaut du navigateur) pendant
+         une fraction de seconde à chaque lancement, surtout perceptible en
+         PWA installée ou sur connexion lente. -->
+    <style>html,body{background:#09150E}</style>
 
     <!-- Favicon SVG inline -->
     <link

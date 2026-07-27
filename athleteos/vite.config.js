@@ -16,8 +16,8 @@ export default defineConfig({
         description: 'Plateforme de suivi de performance sportive',
         start_url: '/',
         display: 'standalone',
-        background_color: '#F5F5F2',
-        theme_color: '#1D9E75',
+        background_color: '#09150E',
+        theme_color: '#09150E',
         orientation: 'portrait',
         icons: [
           { src: '/icon-192.png', sizes: '192x192', type: 'image/png', purpose: 'any maskable' },
