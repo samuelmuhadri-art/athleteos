@@ -1,28 +1,201 @@
+// ============================================================
+// AthleteOS — supabase/functions/send-push/index.ts
+//
+// Sécurité (tâche 2) : cette fonction utilise la clé service_role, qui
+// contourne toute RLS — la protection doit donc être entièrement gérée
+// ici, en code applicatif :
+//   - Chemin cron (weekly-cron) : Authorization = Bearer <SERVICE_ROLE_KEY>,
+//     déjà vérifié en amont par weekly-cron/index.ts. Accès total,
+//     inchangé.
+//   - Chemin utilisateur (app) : JWT extrait du header Authorization,
+//     résolu vers users(id, club_id, role) comme le fait déjà
+//     admin-actions/index.ts. Les destinataires (athleteIds/userIds)
+//     envoyés par le client ne sont JAMAIS utilisés tels quels : ils
+//     sont re-résolus côté serveur contre le club de l'appelant.
+//     - athleteIds : toujours limité aux athlètes du club de l'appelant
+//       (coach ou athlete) — un athlète a des cas d'usage légitimes vers
+//       d'autres athlètes de son club (post club diffusé à l'équipe via
+//       notifyClubNewPost, messagerie inter-athlètes via
+//       notifyAthleteMessage) et vers lui-même (récap hebdo). La seule
+//       limite pour ce vecteur est le club, pas le rôle.
+//     - userIds : head_coach/coach peuvent cibler n'importe quel user de
+//       leur club ; athlete uniquement les coachs (head_coach/coach) de
+//       son club (cas du message à son coach) — jamais un autre athlète
+//       par ce vecteur.
+// ============================================================
+
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import webpush from "https://esm.sh/web-push@3.6.6";
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
-};
+const MAX_BODY_BYTES          = 20_000; // taille brute du JSON reçu
+const MAX_TITLE_LEN           = 150;
+const MAX_MESSAGE_LEN         = 500;
+const MAX_TAG_LEN             = 100;
+const MAX_URL_LEN             = 200;
+const MAX_REQUESTED_RECIPIENTS = 300; // largement au-dessus de la taille d'un club réel
+
+// Origines autorisées pour les appels navigateur (CORS). Domaine de
+// production connu inclus par défaut (URL publique, pas un secret) + ports
+// Vite locaux pour le dev. Surchargeable/complétable sans redéploiement via
+// la variable d'env ALLOWED_ORIGINS (liste séparée par des virgules) dans
+// les secrets de la fonction Supabase — utile si un autre domaine
+// (custom domain, preview Vercel...) doit être ajouté plus tard.
+const DEFAULT_ALLOWED_ORIGINS = [
+  "https://athleteos-by-samuelmuhadri.vercel.app",
+  "http://localhost:5173",
+  "http://localhost:4173",
+];
+const configuredOrigins = (Deno.env.get("ALLOWED_ORIGINS") ?? "")
+  .split(",")
+  .map((o) => o.trim())
+  .filter(Boolean);
+// Additif, pas un remplacement : ALLOWED_ORIGINS sert à AJOUTER un domaine
+// (custom domain, preview...), pas à retirer le domaine de prod par défaut.
+const allowedOrigins = [...new Set([...DEFAULT_ALLOWED_ORIGINS, ...configuredOrigins])];
+
+function corsHeaders(origin: string | null): Record<string, string> {
+  const headers: Record<string, string> = {
+    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+    "Access-Control-Allow-Methods": "POST, OPTIONS",
+  };
+  // Pas d'Origin (appel serveur à serveur, ex. weekly-cron) : pas concerné
+  // par CORS, on ne pose pas l'en-tête. Origin présent : on ne l'autorise
+  // que s'il est dans la liste configurée.
+  if (origin && allowedOrigins.includes(origin)) {
+    headers["Access-Control-Allow-Origin"] = origin;
+    headers["Vary"] = "Origin";
+  }
+  return headers;
+}
+
+function json(status: number, origin: string | null, body: Record<string, unknown>) {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { ...corsHeaders(origin), "Content-Type": "application/json" },
+  });
+}
+
+// IDs positifs uniquement, dédupliqués — toute valeur non entière/négative
+// est silencieusement écartée plutôt que de casser la requête .in().
+function toPositiveIntArray(value: unknown): number[] {
+  if (!Array.isArray(value)) return [];
+  const out = new Set<number>();
+  for (const v of value) {
+    const n = Number(v);
+    if (Number.isInteger(n) && n > 0) out.add(n);
+  }
+  return [...out];
+}
 
 serve(async (req) => {
+  const origin = req.headers.get("Origin");
+
   if (req.method === "OPTIONS") {
-    return new Response("ok", { headers: corsHeaders });
+    return new Response("ok", { headers: corsHeaders(origin) });
+  }
+  if (req.method !== "POST") {
+    return json(405, origin, { error: "Méthode non autorisée." });
+  }
+  if (origin && !allowedOrigins.includes(origin)) {
+    return json(403, origin, { error: "Origine non autorisée." });
   }
 
-  try {
-    const body = await req.json();
-    const { title, body: msgBody, url, tag } = body;
-    const athleteIds = (body.athleteIds ?? []).map((id: unknown) => Number(id));
-    const userIds    = (body.userIds ?? []).map((id: unknown) => String(id));
+  const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+  const serviceKey  = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+  const anonKey     = Deno.env.get("SUPABASE_ANON_KEY")!;
+  const admin = createClient(supabaseUrl, serviceKey);
 
-    const supabase = createClient(
-      Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
-    );
+  try {
+    // ── Taille du payload brut, avant tout parsing ──────────────────
+    const rawBody = await req.text();
+    if (rawBody.length > MAX_BODY_BYTES) {
+      return json(413, origin, { error: "Payload trop volumineux." });
+    }
+    let body: Record<string, unknown>;
+    try {
+      body = JSON.parse(rawBody || "{}");
+    } catch {
+      return json(400, origin, { error: "JSON invalide." });
+    }
+
+    const requestedAthleteIds = toPositiveIntArray(body.athleteIds);
+    const requestedUserIds    = toPositiveIntArray(body.userIds);
+
+    if (requestedAthleteIds.length + requestedUserIds.length > MAX_REQUESTED_RECIPIENTS) {
+      return json(413, origin, { error: "Trop de destinataires." });
+    }
+
+    // ── Authentification : cron (secret serveur) ou utilisateur (JWT) ──
+    const authHeader = req.headers.get("Authorization") ?? "";
+    const isCronCall = authHeader === `Bearer ${serviceKey}`;
+
+    let athleteIds: number[] = [];
+    let userIds: number[] = [];
+    let logCaller = "cron";
+
+    if (isCronCall) {
+      // Déjà authentifié via le secret service_role ci-dessus : c'est un
+      // appel serveur (weekly-cron) sur toute la base, pas un client —
+      // les IDs sont pris tels quels.
+      athleteIds = requestedAthleteIds;
+      userIds = requestedUserIds;
+    } else {
+      const callerClient = createClient(supabaseUrl, anonKey, {
+        global: { headers: { Authorization: authHeader } },
+      });
+      const { data: { user: caller } } = await callerClient.auth.getUser();
+      if (!caller) return json(401, origin, { error: "Non authentifié." });
+
+      const { data: callerRow } = await admin
+        .from("users").select("id, club_id, role").eq("auth_uid", caller.id).maybeSingle();
+      if (!callerRow) return json(401, origin, { error: "Profil introuvable." });
+      logCaller = `user:${callerRow.id}(${callerRow.role})`;
+
+      const isCoach = callerRow.role === "head_coach" || callerRow.role === "coach";
+      const isAthlete = callerRow.role === "athlete";
+      if (!isCoach && !isAthlete) {
+        return json(403, origin, { error: "Rôle non autorisé." });
+      }
+
+      // athleteIds : toujours limité au club de l'appelant, coach ET athlete
+      // (un athlète a des usages légitimes vers ses coéquipiers — post club,
+      // messagerie inter-athlètes — et vers lui-même).
+      if (requestedAthleteIds.length) {
+        const { data } = await admin.from("athletes").select("id")
+          .eq("club_id", callerRow.club_id).in("id", requestedAthleteIds);
+        athleteIds = (data ?? []).map((r: { id: number }) => r.id);
+      }
+
+      // userIds : coach peut cibler n'importe quel user de son club ;
+      // athlete uniquement les coachs (head_coach/coach) de son club.
+      if (requestedUserIds.length) {
+        let query = admin.from("users").select("id")
+          .eq("club_id", callerRow.club_id).in("id", requestedUserIds);
+        if (isAthlete) query = query.in("role", ["head_coach", "coach"]);
+        const { data } = await query;
+        userIds = (data ?? []).map((r: { id: number }) => r.id);
+      }
+
+      if (athleteIds.length !== requestedAthleteIds.length || userIds.length !== requestedUserIds.length) {
+        return json(403, origin, { error: "Certains destinataires ne font pas partie de ton club, ou ne sont pas autorisés pour ce rôle." });
+      }
+    }
+
+    if (!athleteIds.length && !userIds.length) {
+      return json(400, origin, { error: "Aucun destinataire." });
+    }
+
+    // ── Validation du contenu de la notification ─────────────────────
+    const title   = typeof body.title === "string" ? body.title.trim() : "";
+    const msgBody = typeof body.body  === "string" ? body.body.trim()  : "";
+    const url     = typeof body.url === "string" && body.url.trim() ? body.url.trim() : "/";
+    const tag     = typeof body.tag === "string" && body.tag.trim() ? body.tag.trim() : "athleteos";
+
+    if (!title || title.length > MAX_TITLE_LEN)     return json(400, origin, { error: "Titre invalide." });
+    if (!msgBody || msgBody.length > MAX_MESSAGE_LEN) return json(400, origin, { error: "Corps du message invalide." });
+    if (!url.startsWith("/") || url.length > MAX_URL_LEN) return json(400, origin, { error: "URL invalide." });
+    if (tag.length > MAX_TAG_LEN)                    return json(400, origin, { error: "Tag invalide." });
 
     webpush.setVapidDetails(
       "mailto:contact@athleteos.app",
@@ -37,20 +210,23 @@ serve(async (req) => {
     // push, silencieusement.
     let subs: { endpoint: string; p256dh: string; auth: string }[] = [];
     if (athleteIds.length) {
-      const { data } = await supabase.from("push_subscriptions").select("*").in("athlete_id", athleteIds);
+      const { data } = await admin.from("push_subscriptions").select("*").in("athlete_id", athleteIds);
       subs = subs.concat(data ?? []);
     }
     if (userIds.length) {
-      const { data } = await supabase.from("push_subscriptions").select("*").in("user_id", userIds);
+      const { data } = await admin.from("push_subscriptions").select("*").in("user_id", userIds);
       subs = subs.concat(data ?? []);
     }
 
-    console.log("Envoi à", subs?.length, "abonnements");
+    // Journalisation : compteurs et identité de l'appelant uniquement,
+    // jamais le titre/corps du message (contenu potentiellement sensible :
+    // messages, blessures, alertes de charge...).
+    console.log("send-push caller=", logCaller, "athletes=", athleteIds.length, "users=", userIds.length, "subs=", subs.length);
 
-    const payload = JSON.stringify({ title, body: msgBody, url: url ?? "/", tag });
+    const payload = JSON.stringify({ title, body: msgBody, url, tag });
 
     const results = await Promise.allSettled(
-      (subs ?? []).map((sub) =>
+      subs.map((sub) =>
         webpush.sendNotification(
           { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } },
           payload
@@ -58,34 +234,31 @@ serve(async (req) => {
       )
     );
 
-    const sent   = results.filter(r => r.status === "fulfilled").length;
-    const failed = results.filter(r => r.status === "rejected").length;
+    const sent   = results.filter((r) => r.status === "fulfilled").length;
+    const failed = results.filter((r) => r.status === "rejected").length;
     console.log("Résultat:", sent, "envoyés,", failed, "échoués");
 
     // ── Nettoyage : un abonnement en 404/410 est mort côté navigateur
     // (permission révoquée, service worker désinstallé...) — on le retire
     // de la base pour ne plus essayer de lui envoyer de notifs.
     const deadEndpoints = results
-      .map((r: PromiseSettledResult<unknown>, i: number) => ({ r, endpoint: subs?.[i]?.endpoint }))
+      .map((r: PromiseSettledResult<unknown>, i: number) => ({ r, endpoint: subs[i]?.endpoint }))
       .filter(({ r }: { r: PromiseSettledResult<unknown> }) =>
         r.status === "rejected" && [404, 410].includes((r as PromiseRejectedResult).reason?.statusCode)
       )
       .map(({ endpoint }: { endpoint: string | undefined }) => endpoint)
-      .filter(Boolean);
+      .filter(Boolean) as string[];
 
     if (deadEndpoints.length) {
-      await supabase.from("push_subscriptions").delete().in("endpoint", deadEndpoints);
+      await admin.from("push_subscriptions").delete().in("endpoint", deadEndpoints);
       console.log("Abonnements expirés supprimés:", deadEndpoints.length);
     }
 
-    return new Response(JSON.stringify({ sent, failed, cleaned: deadEndpoints.length }), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    return json(200, origin, { sent, failed, cleaned: deadEndpoints.length });
   } catch (err) {
-    console.error("Erreur:", err.message);
-    return new Response(JSON.stringify({ error: err.message }), {
-      status: 500,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    // Message générique côté client : on ne renvoie pas err.message (peut
+    // contenir des détails internes), seulement en log serveur.
+    console.error("send-push error:", err instanceof Error ? err.message : err);
+    return json(500, origin, { error: "Erreur serveur." });
   }
 });
