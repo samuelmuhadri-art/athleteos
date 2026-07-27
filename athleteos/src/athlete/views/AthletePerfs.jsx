@@ -628,6 +628,12 @@ export default function AthletePerfs({ athlete, competitions, myPerformances, my
 
       await maybeUpdateRecord(perfForm.discipline, perfForm.value, perfForm.performance_date);
 
+      // Bascule l'onglet Évolution sur la discipline qu'on vient de saisir —
+      // sinon elle reste affichée sur l'ancienne sélection et la nouvelle
+      // discipline ajoutée (ex: Décathlon) semble "ne rien afficher" alors
+      // qu'elle est bien enregistrée, juste pas sélectionnée.
+      setSelectedDisc(perfForm.discipline);
+
       setPerfForm({ discipline: perfForm.discipline, value: "", performance_date: toLocalDateStr(today), context: "", breakdown: {} });
       setShowAddPerf(false);
     } catch (e) {
@@ -743,6 +749,11 @@ export default function AthletePerfs({ athlete, competitions, myPerformances, my
       // jour tout seul — avant ce fix, seule "Saisir une performance" le
       // faisait, jamais cette modale-ci.
       await maybeUpdateRecord(compForm.event, compForm.result, compForm.date);
+
+      // Idem que pour "Saisir une performance" : bascule Évolution sur la
+      // discipline qu'on vient d'ajouter, sinon elle reste sur l'ancienne
+      // sélection et semble vide alors qu'elle est bien enregistrée.
+      setSelectedDisc(compForm.event);
 
       setCompForm({ name: "", date: toLocalDateStr(new Date()), location: "", type: "Régionale", event: "", result: "", context: "", breakdown: {} });
       setShowAddComp(false);
