@@ -8,7 +8,7 @@
 // directement depuis le client via les tables protégées par RLS.
 // ============================================================
 
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { Zap, Mail, Lock, User, Building2, KeyRound, AlertCircle, ArrowLeft } from "lucide-react";
 import { supabase } from "../utils/supabaseClient";
 
@@ -17,6 +17,12 @@ export default function SignupPage({ onBack }) {
   const [form, setForm] = useState({ name: "", email: "", password: "", clubName: "", inviteCode: "" });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  // Anti-bot léger (voir supabase/functions/signup) : "company" est un piège
+  // à bots — invisible et inatteignable au clavier pour un humain, souvent
+  // rempli automatiquement par les bots de spam. formLoadedAt sert à rejeter
+  // les soumissions trop rapides pour être humaines.
+  const [honeypot, setHoneypot] = useState("");
+  const formLoadedAt = useRef(Date.now());
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
@@ -37,11 +43,18 @@ export default function SignupPage({ onBack }) {
           password: form.password,
           clubName: form.clubName.trim(),
           inviteCode: form.inviteCode.trim(),
+          company: honeypot,
+          formLoadedAt: formLoadedAt.current,
         },
       });
       if (fnError) throw fnError;
       if (!data?.success) throw new Error(data?.error ?? "Une erreur est survenue.");
 
+      // Si l'email existait déjà, la fonction répond quand même "success"
+      // (anti-énumération — voir supabase/functions/signup) sans rien créer.
+      // signInWithPassword tranche silencieusement : ça marche si c'était
+      // vraiment le propriétaire du compte avec le bon mot de passe, sinon
+      // échec générique identique à un mauvais mot de passe classique.
       const { error: signInErr } = await supabase.auth.signInWithPassword({
         email: form.email.trim(), password: form.password,
       });
@@ -49,7 +62,18 @@ export default function SignupPage({ onBack }) {
       // AuthContext prend le relais tout seul (onAuthStateChange) et route
       // automatiquement vers l'espace coach ou athlète selon le rôle.
     } catch (err) {
-      setError(err.message ?? "Une erreur est survenue.");
+      let message = err?.message ?? "Une erreur est survenue.";
+      // Depuis la tâche 3, l'Edge Function renvoie de vrais codes HTTP
+      // (400/403/413/429/500) au lieu de toujours 200 — supabase-js lève
+      // alors une FunctionsHttpError dont .context est la Response brute,
+      // pas encore lue : on peut y lire notre message métier directement.
+      if (err?.context?.json) {
+        try {
+          const body = await err.context.json();
+          if (body?.error) message = body.error;
+        } catch { /* corps non-JSON, on garde le message générique */ }
+      }
+      setError(message);
       setLoading(false);
     }
   };
@@ -111,12 +135,20 @@ export default function SignupPage({ onBack }) {
             </div>
           )}
 
+          {/* Piège à bots : invisible et inatteignable au clavier/lecteur
+              d'écran pour un humain (pas display:none — certains bots
+              l'ignorent — mais hors-écran + non focusable + aria-hidden). */}
+          <div style={{ position: "absolute", left: "-9999px", width: "1px", height: "1px", overflow: "hidden" }} aria-hidden="true">
+            <input type="text" name="company" tabIndex={-1} autoComplete="off"
+              value={honeypot} onChange={e => setHoneypot(e.target.value)} />
+          </div>
+
           {mode === "create_club" ? (
             <div className="space-y-1.5">
               <label className={labelCls} style={{ color: "var(--c-text-3)" }}>Nom du club</label>
               <div className="relative">
                 <Building2 size={15} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: "var(--c-text-4)" }} />
-                <input placeholder="Ex: Athletic Club Namur" value={form.clubName}
+                <input placeholder="Ex: Athletic Club Namur" value={form.clubName} maxLength={100}
                   onChange={e => set("clubName", e.target.value)}
                   className={inputCls} style={inputStyle} disabled={loading} required />
               </div>
@@ -126,7 +158,7 @@ export default function SignupPage({ onBack }) {
               <label className={labelCls} style={{ color: "var(--c-text-3)" }}>Code d'invitation</label>
               <div className="relative">
                 <KeyRound size={15} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: "var(--c-text-4)" }} />
-                <input placeholder="Ex: A3F7K9P2" value={form.inviteCode}
+                <input placeholder="Ex: A3F7K9P2" value={form.inviteCode} maxLength={8}
                   onChange={e => set("inviteCode", e.target.value.toUpperCase())}
                   className={inputCls} style={{ ...inputStyle, letterSpacing: "0.08em", fontWeight: 600 }} disabled={loading} required />
               </div>
@@ -138,7 +170,7 @@ export default function SignupPage({ onBack }) {
             <label className={labelCls} style={{ color: "var(--c-text-3)" }}>Ton nom</label>
             <div className="relative">
               <User size={15} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: "var(--c-text-4)" }} />
-              <input placeholder="Prénom Nom" value={form.name}
+              <input placeholder="Prénom Nom" value={form.name} maxLength={100}
                 onChange={e => set("name", e.target.value)}
                 className={inputCls} style={inputStyle} disabled={loading} required />
             </div>
@@ -148,7 +180,7 @@ export default function SignupPage({ onBack }) {
             <label className={labelCls} style={{ color: "var(--c-text-3)" }}>Email</label>
             <div className="relative">
               <Mail size={15} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: "var(--c-text-4)" }} />
-              <input type="email" autoComplete="email" placeholder="toi@exemple.be" value={form.email}
+              <input type="email" autoComplete="email" placeholder="toi@exemple.be" value={form.email} maxLength={254}
                 onChange={e => set("email", e.target.value)}
                 className={inputCls} style={inputStyle} disabled={loading} required />
             </div>
@@ -158,7 +190,7 @@ export default function SignupPage({ onBack }) {
             <label className={labelCls} style={{ color: "var(--c-text-3)" }}>Mot de passe</label>
             <div className="relative">
               <Lock size={15} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: "var(--c-text-4)" }} />
-              <input type="password" autoComplete="new-password" placeholder="8 caractères minimum" value={form.password}
+              <input type="password" autoComplete="new-password" placeholder="8 caractères minimum" value={form.password} maxLength={128}
                 onChange={e => set("password", e.target.value)}
                 className={inputCls} style={inputStyle} disabled={loading} required />
             </div>
