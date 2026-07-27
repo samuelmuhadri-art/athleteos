@@ -262,33 +262,137 @@ export function computeWellnessScore(wellness) {
   return Math.round(Math.max(0, Math.min(100, score)));
 }
 
-// ─── AJOUT v2.0 : Récupération neuromusculaire restante ──────────────────────
-// Hasegawa T, et al. (2024). PeerJ 12:e17443.
-export function computeRecoveryStatus(sessions, athleteId) {
-  const now = new Date();
-  let maxHoursRemaining = 0;
-  let lastSession = null;
+// ─── AJOUT v3.0 (tâche 17) : récupération = plage + confiance, pas un point ──
+// Hasegawa T, et al. (2024). PeerJ 12:e17443, pour l'ordre de grandeur par
+// catégorie. RECOVERY_HOURS_RANGE (ci-dessous) remplace un chiffre unique
+// par une fourchette : personne ne récupère en exactement 72h, ni tout le
+// monde à la même vitesse. Voir l'avertissement "SOURCE CANONIQUE" plus
+// haut dans ce fichier — ces plages sont des paramètres expérimentaux
+// AthleteOS (liés à CURRENT_MODEL_VERSION), pas des bornes publiées.
+//
+// Ancien comportement corrigé : sans séance récente, computeRecoveryStatus
+// renvoyait `fullyRecovered: true` — une certitude fabriquée à partir de
+// rien. estimateRecovery renvoie maintenant explicitement
+// status: "insufficient_data" dans ce cas.
+export const RECOVERY_HOURS_RANGE = {
+  sprint:       { min: 48, max: 96 },  // centre historique 72h
+  haies:        { min: 48, max: 96 },
+  force:        { min: 48, max: 96 },
+  saut:         { min: 32, max: 64 },  // centre historique 48h
+  lancer:       { min: 32, max: 64 },
+  endurance:    { min: 24, max: 48 },  // centre historique 36h
+  technique:    { min: 16, max: 32 },  // centre historique 24h
+  mobilite:     { min: 6,  max: 18 },  // centre historique 12h
+  recuperation: { min: 6,  max: 18 },
+};
 
-  const doneSessions = (sessions ?? []).filter(s =>
-    s.validations?.some(v => v.athleteId === athleteId && v.status === "done") &&
-    s.sessionDate
-  );
+const WELLNESS_FRESH_HOURS = 36; // au-delà, wellness jugé périmé — pas fiable pour "maintenant"
+const BAND_WIDTH = 0.4;          // la plage affichée couvre toujours au moins 40% de l'étendue de la catégorie
 
-  for (const s of doneSessions) {
-    const sessionEnd = new Date(s.sessionDate);
-    sessionEnd.setHours(20, 0, 0, 0);
-    const hoursNeeded   = RECOVERY_HOURS[s.category] ?? 36;
-    const hoursElapsed  = (now - sessionEnd) / (1000 * 60 * 60);
-    const hoursRemaining = Math.max(0, hoursNeeded - hoursElapsed);
-    if (hoursRemaining > maxHoursRemaining) {
-      maxHoursRemaining = hoursRemaining;
-      lastSession = s;
+function clamp01(x) { return Math.max(0, Math.min(1, x)); }
+
+/**
+ * Estimation de récupération neuromusculaire/métabolique après la dernière
+ * séance validée d'un athlète. Renvoie une PLAGE d'heures restantes (jamais
+ * un chiffre unique ni un "totalement récupéré" catégorique), un niveau de
+ * confiance qui baisse quand les données manquent ou sont anciennes, et la
+ * liste des facteurs qui ont fait varier l'estimation — pour que l'athlète
+ * et le coach voient POURQUOI, pas juste un nombre.
+ *
+ * @param sessions  séances mappées (comme ailleurs dans l'app)
+ * @param athleteId number
+ * @param wellness  dernier questionnaire wellness connu ({date, sleep,
+ *                  energy, soreness, mood, stress}) ou null si aucun
+ * @param now       Date — paramétrable pour les tests
+ */
+export function estimateRecovery(sessions, athleteId, wellness = null, now = new Date()) {
+  const doneSessions = (sessions ?? [])
+    .map(s => {
+      const v = s.validations?.find(x => x.athleteId === athleteId);
+      return v?.status === "done" && s.sessionDate ? { ...s, rpe: v.rpe ?? null } : null;
+    })
+    .filter(Boolean)
+    .sort((a, b) => new Date(b.sessionDate) - new Date(a.sessionDate));
+
+  if (!doneSessions.length) {
+    return {
+      status: "insufficient_data", confidence: "faible", confidenceScore: 0,
+      rangeHoursMin: null, rangeHoursMax: null, lastSession: null, factors: [],
+    };
+  }
+
+  const last  = doneSessions[0];
+  const range = RECOVERY_HOURS_RANGE[last.category] ?? RECOVERY_HOURS_RANGE.technique;
+  const sessionEnd = new Date(last.sessionDate);
+  sessionEnd.setHours(20, 0, 0, 0);
+  const hoursElapsed = Math.max(0, (now - sessionEnd) / (1000 * 60 * 60));
+
+  let center = 0.5; // position normalisée dans la plage de la catégorie (0 = borne basse, 1 = borne haute)
+  const factors = [];
+  let confidenceScore = 30; // séance de référence connue (catégorie + date) — toujours acquis ici
+
+  // ── Charge relative : cette séance vs la moyenne récente de l'athlète ──
+  const recentWithLoad = doneSessions
+    .slice(0, 8)
+    .filter(s => s.rpe != null && s.durationMinutes != null)
+    .map(s => ({ ...s, load: s.durationMinutes * s.rpe }));
+  if (recentWithLoad.length >= 2) {
+    const lastLoad = recentWithLoad[0].load;
+    const avgLoad  = recentWithLoad.slice(1).reduce((a, s) => a + s.load, 0) / (recentWithLoad.length - 1);
+    if (avgLoad > 0) {
+      const relLoad = lastLoad / avgLoad;
+      if (relLoad > 1.3)      { center += 0.20; factors.push({ label: "Séance plus dure que d'habitude pour cet athlète", direction: "increase" }); }
+      else if (relLoad < 0.7) { center -= 0.15; factors.push({ label: "Séance plus légère que d'habitude", direction: "decrease" }); }
+      confidenceScore += 20;
     }
   }
 
-  return {
-    hoursRemaining: Math.round(maxHoursRemaining),
-    fullyRecovered: maxHoursRemaining === 0,
-    lastSession,
-  };
+  // ── RPE brut de la séance déclenchante ──
+  if (last.rpe != null) {
+    if (last.rpe >= 8)      { center += 0.15; factors.push({ label: `RPE élevé (${last.rpe}/10)`, direction: "increase" }); }
+    else if (last.rpe <= 3) { center -= 0.10; factors.push({ label: `RPE faible (${last.rpe}/10)`, direction: "decrease" }); }
+  }
+
+  // ── Wellness — uniquement si présent ET récent (sinon on ne l'utilise pas
+  //    silencieusement comme s'il reflétait l'état actuel) ──
+  if (wellness) {
+    const ageHours = wellness.date ? (now - new Date(wellness.date)) / (1000 * 60 * 60) : Infinity;
+    const fresh = ageHours <= WELLNESS_FRESH_HOURS;
+    confidenceScore += fresh ? 25 : 10;
+    if (fresh) {
+      if (wellness.sleep <= 2)      { center += 0.15; factors.push({ label: "Sommeil rapporté mauvais", direction: "increase" }); }
+      else if (wellness.sleep >= 4) { center -= 0.10; factors.push({ label: "Sommeil rapporté bon", direction: "decrease" }); }
+      if (wellness.soreness >= 4)   { center += 0.15; factors.push({ label: "Courbatures importantes rapportées", direction: "increase" }); }
+      if (wellness.stress >= 4)     { center += 0.10; factors.push({ label: "Stress élevé rapporté", direction: "increase" }); }
+    }
+  }
+
+  // ── Accumulation récente : séances difficiles sur les 7 derniers jours ──
+  const sevenDaysAgo   = new Date(now.getTime() - 7 * 86400000);
+  const recentSessions = doneSessions.filter(s => new Date(s.sessionDate) >= sevenDaysAgo);
+  if (recentSessions.length >= 2) {
+    confidenceScore += 25;
+    const hardRecent = recentSessions.filter(s => s.rpe != null && s.rpe >= 7).length;
+    if (hardRecent >= 3) { center += 0.15; factors.push({ label: `${hardRecent} séances difficiles cette semaine`, direction: "increase" }); }
+  }
+
+  center = clamp01(center);
+  const halfBand = BAND_WIDTH / 2;
+  const posMin = clamp01(center - halfBand);
+  const posMax = clamp01(center + halfBand);
+  const estimateMin = range.min + (range.max - range.min) * posMin;
+  const estimateMax = range.min + (range.max - range.min) * posMax;
+
+  const rangeHoursMin = Math.max(0, Math.round(estimateMin - hoursElapsed));
+  const rangeHoursMax = Math.max(0, Math.round(estimateMax - hoursElapsed));
+
+  let status;
+  if (rangeHoursMax === 0)    status = "likely_recovered";
+  else if (rangeHoursMin > 0) status = "recovering";
+  else                        status = "uncertain";
+
+  confidenceScore = Math.max(0, Math.min(100, confidenceScore));
+  const confidence = confidenceScore >= 70 ? "élevée" : confidenceScore >= 40 ? "modérée" : "faible";
+
+  return { status, confidence, confidenceScore, rangeHoursMin, rangeHoursMax, lastSession: last, factors };
 }

@@ -65,10 +65,11 @@
 export {
   LOAD_COEFFICIENTS,
   RECOVERY_HOURS,
+  RECOVERY_HOURS_RANGE,
   computeEWMA,
   computeMonotonyAndStrain,
   computeWellnessScore,
-  computeRecoveryStatus,
+  estimateRecovery,
   computeSessionLoad,
   getRPELabel,
 } from "./trainingLoad.js";
@@ -77,7 +78,7 @@ import {
   computeEWMA,
   computeMonotonyAndStrain,
   computeWellnessScore,
-  computeRecoveryStatus,
+  estimateRecovery,
 } from "./trainingLoad.js";
 
 // ─── Calcul des métriques complètes pour un athlète à une semaine donnée ──────
@@ -99,7 +100,10 @@ export function getAthleteMetricsForWeek(athleteId, weeklyCharge, currentWeek, w
       fatigue: 0, forme: 0, readiness: 0, recuperation: 0, risque: 0,
       monotony: 0, strain: 0,
       wellnessScore: null,
-      recovery: { hoursRemaining: 0, fullyRecovered: true, lastSession: null },
+      recovery: {
+        status: "insufficient_data", confidence: "faible", confidenceScore: 0,
+        rangeHoursMin: null, rangeHoursMax: null, lastSession: null, factors: [],
+      },
       ewmaHistory: [],
     };
   }
@@ -127,8 +131,8 @@ export function getAthleteMetricsForWeek(athleteId, weeklyCharge, currentWeek, w
     .sort((a, b) => new Date(b.date) - new Date(a.date))[0] ?? null;
   const wellnessScore = computeWellnessScore(recentWellness);
 
-  // ── Récupération neuromusculaire [7] ──────────────────────────────────────
-  const recovery = computeRecoveryStatus(sessions, athleteId);
+  // ── Récupération neuromusculaire [7] — plage + confiance (tâche 17) ───────
+  const recovery = estimateRecovery(sessions, athleteId, recentWellness);
 
   // ── Scores dérivés (CONVENTION COACHING — non scientifique) ───────────────
   // Ces formules sont des proxies raisonnables mais leurs pondérations
@@ -143,9 +147,14 @@ export function getAthleteMetricsForWeek(athleteId, weeklyCharge, currentWeek, w
   const maxChronicKnown = Math.max(...myCharge.map(w => w.rawLoad), 1);
   const forme = Math.round(Math.min(100, (chronic / maxChronicKnown) * 100));
 
-  // Récupération (score) : inversement proportionnel aux heures restantes
+  // Récupération (score 0-100, pour la jauge et le composite readiness) :
+  // dérivé du MILIEU de la plage estimée par estimateRecovery (tâche 17),
+  // pas d'un point fixe. Si les données sont insuffisantes pour estimer,
+  // score neutre (50) plutôt qu'un extrême inventé.
   const maxRecoveryHours = 72;
-  const recuperation = Math.round(Math.max(0, (1 - recovery.hoursRemaining / maxRecoveryHours) * 100));
+  const recuperation = recovery.status === "insufficient_data"
+    ? 50
+    : Math.round(Math.max(0, (1 - (recovery.rangeHoursMin + recovery.rangeHoursMax) / 2 / maxRecoveryHours) * 100));
 
   // Readiness : combine forme, récupération, wellness et ACWR [5]
   // Si wellness disponible → intégré à 25%, sinon réparti sur les autres
@@ -171,7 +180,7 @@ export function getAthleteMetricsForWeek(athleteId, weeklyCharge, currentWeek, w
   // blessure mesurée ou validée.
   const acwrRisk    = acwr > 1.3 ? Math.min(100, (acwr - 1.3) * 200) : acwr < 0.8 ? 10 : 0;
   const monotonyRisk = monotony > 2 ? Math.min(50, (monotony - 2) * 25) : 0;
-  const recoveryRisk = recovery.hoursRemaining > 48 ? 20 : 0;
+  const recoveryRisk = recovery.status !== "insufficient_data" && recovery.rangeHoursMax > 48 ? 20 : 0;
   const risque = Math.round(Math.min(100, acwrRisk + monotonyRisk + recoveryRisk));
 
   return {
@@ -250,10 +259,14 @@ export function generateContextAnalysis(metrics, nextComp) {
 
   if (monotony > 2.5) lines.push("⚠️ Monotonie élevée (" + monotony.toFixed(1) + ") : varier les types de séances.");
 
-  if (recovery?.hoursRemaining > 48) {
-    lines.push("⏱️ Récupération incomplète : " + recovery.hoursRemaining + "h restantes. Éviter haute intensité.");
-  } else if (recovery?.fullyRecovered) {
-    lines.push("✅ Récupération complète : athlète physiologiquement disponible.");
+  if (recovery?.status === "insufficient_data") {
+    lines.push("ℹ️ Pas assez de séances récentes pour estimer la récupération.");
+  } else if (recovery?.status === "recovering") {
+    lines.push(`⏱️ Récupération estimée entre ${recovery.rangeHoursMin}h et ${recovery.rangeHoursMax}h restantes (confiance ${recovery.confidence}). Prudent d'éviter la haute intensité en attendant.`);
+  } else if (recovery?.status === "uncertain") {
+    lines.push(`⏱️ Récupération probablement en cours, mais estimation incertaine (confiance ${recovery.confidence}).`);
+  } else if (recovery?.status === "likely_recovered") {
+    lines.push(`✅ Récupération probablement suffisante (confiance ${recovery.confidence}).`);
   }
 
   if (nextComp) {

@@ -174,6 +174,46 @@ const FormeDetailPanel = memo(({ metricKey, metrics, sessions, weeklyCharge, ath
             </p>
           </div>
 
+          {/* Estimation détaillée (tâche 17) — plage + confiance + facteurs,
+              uniquement pour la récupération : jamais un chiffre exact,
+              toujours visible pourquoi l'estimation bouge. */}
+          {metricKey === "recuperation" && metrics.recovery && (
+            <div className="card" style={{ padding: "12px 14px" }}>
+              <p style={{ fontSize: 9.5, fontWeight: 500, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--c-text-3)", marginBottom: 8 }}>
+                Estimation détaillée
+              </p>
+              {metrics.recovery.status === "insufficient_data" ? (
+                <p style={{ fontSize: 12.5, color: "var(--c-text-2)", lineHeight: 1.55 }}>
+                  Pas assez de séances récentes pour estimer une plage de récupération.
+                </p>
+              ) : (
+                <>
+                  <div style={{ display: "flex", alignItems: "baseline", gap: 6, marginBottom: 4 }}>
+                    <span style={{ fontSize: 20, fontWeight: 700, color: "var(--c-text-1)", fontVariantNumeric: "tabular-nums" }}>
+                      {metrics.recovery.rangeHoursMin}–{metrics.recovery.rangeHoursMax}h
+                    </span>
+                    <span style={{ fontSize: 11, color: "var(--c-text-3)" }}>restantes (estimation)</span>
+                  </div>
+                  <p style={{ fontSize: 10.5, color: "var(--c-text-3)", marginBottom: 10 }}>
+                    Confiance : <strong style={{ color: "var(--c-text-2)" }}>{metrics.recovery.confidence}</strong> ({metrics.recovery.confidenceScore}/100) — baisse quand le wellness ou l'historique récent manquent.
+                  </p>
+                  {metrics.recovery.factors.length > 0 && (
+                    <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
+                      {metrics.recovery.factors.map((f, i) => (
+                        <div key={i} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11.5, color: "var(--c-text-2)" }}>
+                          <span style={{ color: f.direction === "increase" ? "#E24B4A" : "#1D9E75", fontWeight: 700 }}>
+                            {f.direction === "increase" ? "▲" : "▼"}
+                          </span>
+                          {f.label}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          )}
+
           {/* Ce que ça mesure */}
           <div className="card" style={{ padding: "12px 14px" }}>
             <p style={{ fontSize: 9.5, fontWeight: 500, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--c-text-3)", marginBottom: 6 }}>

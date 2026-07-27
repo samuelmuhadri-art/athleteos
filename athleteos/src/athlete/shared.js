@@ -159,16 +159,16 @@ export const METRIC_SCIENCE = {
     label: "Récupération", icon: "🌙", evidenceLevel: "convention",
     color: (v) => v >= 70 ? "#1D9E75" : v >= 45 ? "#EF9F27" : "#E24B4A",
     unit: "/100", optimal: "≥ 70",
-    formula: "Basée sur le ratio Forme/Fatigue et les données wellness. Convention coaching AthleteOS.",
-    what: "La récupération estime la capacité neuromusculaire et métabolique à absorber une nouvelle séance.",
+    formula: "Milieu d'une plage d'heures estimée (pas un chiffre unique) à partir de la catégorie de la dernière séance, de la charge relative, du RPE, du wellness récent et de l'accumulation de séances difficiles — voir estimateRecovery() dans trainingLoad.js.",
+    what: "Estimation de la disponibilité neuromusculaire et métabolique, sous forme de plage assortie d'un niveau de confiance — jamais un chiffre exact ni un \"totalement récupéré\" certain. La confiance baisse quand les données (wellness, historique récent) manquent ou sont anciennes ; sans aucune séance récente, l'app dit explicitement qu'elle ne peut pas estimer, plutôt que d'inventer une valeur.",
     sources: [
       { ref: "Hasegawa et al. (2024)", detail: "Recovery monitoring — IJSPP" },
       { ref: "Kellmann et al. (2018)", detail: "Recovery and Stress in Sport — Routledge" },
     ],
     thresholds: [
-      { min: 70, max: 100, label: "Complète",     color: "#1D9E75", advice: "Physiologiquement disponible pour une nouvelle charge." },
-      { min: 45, max: 69,  label: "Partielle",    color: "#EF9F27", advice: "Récupération en cours. Séance technique ou légère recommandée." },
-      { min: 0,  max: 44,  label: "Insuffisante", color: "#E24B4A", advice: "Récupération neuromusculaire incomplète. Priorité au repos." },
+      { min: 70, max: 100, label: "Probablement suffisante", color: "#1D9E75", advice: "Signaux compatibles avec une disponibilité pour une nouvelle charge — reste une estimation." },
+      { min: 45, max: 69,  label: "Probablement partielle",  color: "#EF9F27", advice: "Récupération vraisemblablement en cours. Séance technique ou légère envisageable." },
+      { min: 0,  max: 44,  label: "Probablement insuffisante", color: "#E24B4A", advice: "Signaux de récupération incomplète. Vaut le coup d'en discuter avant une séance intense." },
     ],
   },
   risque: {
