@@ -5,7 +5,7 @@
 import { useState, useCallback, useEffect, Suspense, lazy } from "react";
 import {
   LayoutDashboard, CalendarDays, Users, TrendingUp,
-  Activity, Trophy, Bell, MessageSquare,
+  Activity, Trophy, Bell, MessageSquare, FileText,
   ChevronLeft, ChevronRight, Menu, X, Zap, LogOut,
   UserPlus, Copy, Check, Settings,
 } from "lucide-react";
@@ -29,6 +29,7 @@ const ChargeView   = lazy(() => import("./modules/ChargeView"));
 const Competitions = lazy(() => import("./modules/Competitions"));
 const AlertsView   = lazy(() => import("./modules/Alerts"));
 const Messaging    = lazy(() => import("./modules/Messaging"));
+const Rapports     = lazy(() => import("./modules/Rapports"));
 
 // ─── Config navigation coach ──────────────────────────────────────────────────
 const NAV_ITEMS = [
@@ -37,6 +38,7 @@ const NAV_ITEMS = [
   { id: "athletes",     label: "Athlètes",         icon: Users           },
   { id: "performances", label: "Performances",     icon: TrendingUp      },
   { id: "charge",       label: "Charge & Fatigue", icon: Activity        },
+  { id: "rapports",     label: "Rapports",         icon: FileText        },
   { id: "competitions", label: "Compétitions",     icon: Trophy          },
   { id: "alerts",       label: "Alertes",          icon: Bell            },
   { id: "messaging",    label: "Messagerie",       icon: MessageSquare   },
@@ -50,6 +52,7 @@ function ActiveView({ view, onNavigate }) {
     case "athletes":     return <AthleteList  onNavigate={onNavigate} />;
     case "performances": return <Performances />;
     case "charge":       return <ChargeView   />;
+    case "rapports":     return <Rapports     />;
     case "competitions": return <Competitions />;
     case "alerts":       return <AlertsView   />;
     case "messaging":    return <Messaging    />;

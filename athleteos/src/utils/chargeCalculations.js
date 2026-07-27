@@ -69,6 +69,8 @@ export {
   computeMonotonyAndStrain,
   computeWellnessScore,
   computeRecoveryStatus,
+  computeSessionLoad,
+  getRPELabel,
 } from "./trainingLoad.js";
 
 import {

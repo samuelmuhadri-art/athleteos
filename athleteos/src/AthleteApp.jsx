@@ -14,7 +14,7 @@ import { useAuth }   from "./context/AuthContext";
 import { getAthleteMetricsForWeek } from "./utils/chargeCalculations";
 import { usePushNotifications, PushToggleButton } from "./hooks/usePushNotifications";
 import { initialsFromName, toLocalDateStr, getISOWeek } from "./athlete/shared";
-import { notifyAthleteWeeklyRecap } from "./utils/notifications";
+import { notifyAthleteWeeklyRecap, notifyAthleteWeeklyReport } from "./utils/notifications";
 
 import AthleteDashboard from "./athlete/views/AthleteDashboard";
 import AthletePlanning  from "./athlete/views/AthletePlanning";
@@ -154,6 +154,10 @@ export default function AthleteApp() {
       // Récap perso samedi soir — au cas où le coach n'a pas encore ouvert
       // son dashboard (qui envoie aussi celui-ci en boucle sur tout le club).
       await notifyAthleteWeeklyRecap(clubId, { id: athleteId, name: a.name }, allSessions, getISOWeek(new Date()));
+      // Rapport hebdomadaire — même fallback, au cas où le coach n'a pas
+      // encore ouvert son Dashboard (qui envoie aussi celui-ci pour tout
+      // le club via checkWeeklyReports).
+      await notifyAthleteWeeklyReport(clubId, { id: athleteId, name: a.name }, getISOWeek(new Date()));
     } catch(err) {
       console.error("AthleteApp:", err);
       setError(err.message ?? "Erreur inconnue");
@@ -396,7 +400,7 @@ export default function AthleteApp() {
               <AthletePerfs
                 athlete={athlete} competitions={competitions}
                 myPerformances={myPerformances} myGoals={myGoals}
-                clubId={clubId} weeklyCharge={weeklyCharge} onRefresh={fetchAll}
+                clubId={clubId} weeklyCharge={weeklyCharge} sessions={sessions} onRefresh={fetchAll}
               />
             )}
             {activeView === "messagerie" && (

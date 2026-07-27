@@ -297,6 +297,56 @@ export async function checkWeeklyRecap(clubId, athletes, sessions, currentWeek, 
   }
 }
 
+// ── Rapports hebdomadaires (générés à la volée, pas de table dédiée) ───────
+// Fenêtre de déclenchement dimanche 18h → lundi 6h — distincte de la
+// fenêtre du récap ci-dessus (samedi 18h → dimanche minuit), ce sont deux
+// features séparées avec leurs propres types de notif ("weekly_report" vs
+// "weekly_recap") donc pas de dédoublonnage croisé possible.
+function isReportWindow() {
+  const now = new Date();
+  const day = now.getDay(); // 0 = dimanche, 1 = lundi
+  return (day === 0 && now.getHours() >= 18) || (day === 1 && now.getHours() < 6);
+}
+
+export async function notifyAthleteWeeklyReport(clubId, athlete, currentWeek) {
+  if (!isReportWindow()) return;
+
+  const { data: existing } = await supabase.from("athlete_notifications").select("id")
+    .eq("athlete_id", athlete.id).eq("type", "weekly_report")
+    .ilike("title", `%S${currentWeek}%`).limit(1);
+  if (existing?.length) return;
+
+  const title       = `📄 Ton rapport de la semaine — S${currentWeek}`;
+  const description = "Ton rapport de la semaine est disponible dans Mes performances.";
+  await supabase.from("athlete_notifications").insert({
+    athlete_id: athlete.id, club_id: clubId, type: "weekly_report", title, description, is_read: false,
+  });
+  await sendWebPush([athlete.id], { title, body: description, tag: `report-${currentWeek}` });
+}
+
+// Déclenché côté coach (boucle sur tous les athlètes du club + push perso).
+export async function checkWeeklyReports(clubId, athletes, currentWeek, coachUserId) {
+  if (!isReportWindow()) return;
+
+  const { data: existing } = await supabase.from("alerts").select("id")
+    .eq("club_id", clubId).eq("type", "weekly_report")
+    .ilike("title", `%semaine ${currentWeek}%`).limit(1);
+
+  if (!existing?.length && athletes.length > 0) {
+    const title       = `📄 Rapports semaine ${currentWeek} disponibles — ${athletes.length} athlète${athletes.length > 1 ? "s" : ""}`;
+    const description = "Les rapports hebdomadaires de tous les athlètes sont prêts dans le module Rapports.";
+    await supabase.from("alerts").insert({
+      club_id: clubId, athlete_id: null, type: "weekly_report", title, description,
+      severity: "info", is_read: false,
+    });
+    if (coachUserId) await sendWebPush([], { title, body: description, tag: `report-${currentWeek}` }, [coachUserId]);
+  }
+
+  for (const a of athletes) {
+    await notifyAthleteWeeklyReport(clubId, a, currentWeek);
+  }
+}
+
 // ── Post auto-généré dans le fil du club (record battu / objectif atteint) ──
 // Donne du contenu au fil "Mon club" même quand personne ne partage de photo
 // manuellement. auto_type distingue ces posts des posts manuels côté UI.

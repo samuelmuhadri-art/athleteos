@@ -32,6 +32,7 @@ const COMBINE_EVENTS = {
 };
 import { notifyGoalAchieved, postClubCelebration } from "../../utils/notifications";
 import { getAthleteMetricsForWeek } from "../../utils/chargeCalculations";
+import MesRapports from "./MesRapports";
 
 // ─── Couleurs par discipline (accents vifs, faits pour fond sombre) ──────────
 const DISC_COLORS = {
@@ -429,7 +430,7 @@ function AddGoalModal({ disciplines, goalForm, setGoalForm, onClose, onSubmit, s
 // ═══════════════════════════════════════════════════════════════════════════════
 // COMPOSANT PRINCIPAL
 // ═══════════════════════════════════════════════════════════════════════════════
-export default function AthletePerfs({ athlete, competitions, myPerformances, myGoals, clubId, weeklyCharge, onRefresh }) {
+export default function AthletePerfs({ athlete, competitions, myPerformances, myGoals, clubId, weeklyCharge, sessions, onRefresh }) {
   const today = new Date();
 
   const [activeTab,    setActiveTab]    = useState("records");
@@ -770,6 +771,7 @@ export default function AthletePerfs({ athlete, competitions, myPerformances, my
     { id: "evolution", label: "Évolution" },
     { id: "objectifs", label: activeGoals.length > 0 ? `Objectifs (${activeGoals.length})` : "Objectifs" },
     { id: "comps",     label: "Compétitions" },
+    { id: "rapports",  label: "Rapports" },
   ];
 
   // ══════════════════════════════════════════════════════════════════════════
@@ -1237,6 +1239,13 @@ export default function AthletePerfs({ athlete, competitions, myPerformances, my
             ))
           )}
         </div>
+      )}
+
+      {/* ══════════════════════════════════════════════════════════════════════
+          ONGLET RAPPORTS
+         ══════════════════════════════════════════════════════════════════════ */}
+      {activeTab === "rapports" && (
+        <MesRapports athlete={athlete} sessions={sessions ?? []} weeklyCharge={weeklyCharge ?? []} />
       )}
       </div>
 
