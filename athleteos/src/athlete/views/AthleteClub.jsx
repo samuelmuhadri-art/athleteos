@@ -16,6 +16,7 @@ import { notifyClubNewPost } from "../../utils/notifications";
 
 const AVATAR_COLORS = ["#1D9E75","#5B8DEF","#9B84F0","#E8A020","#E05252","#14B8A6","#F97316","#EC4899"];
 const QUICK_REACTIONS = ["🔥","💪","👏","⚡","🎯","❤️"];
+const POSTS_PAGE_SIZE = 20;
 
 function avatarColor(allAthletes, athleteId) {
   const idx = allAthletes.findIndex(a => a.id === athleteId);
@@ -188,7 +189,9 @@ const QuickPostModal = memo(({ session, athlete, allAthletes, clubId, onClose, o
       let imageUrl = null;
       if (image) {
         const ext  = image.name.split(".").pop() || "jpg";
-        const path = `${athlete.id}-${Date.now()}.${ext}`;
+        // Préfixé par club_id — requis par les policies storage scopées par
+        // club (sinon l'upload est rejeté par RLS).
+        const path = `${clubId}/${athlete.id}-${Date.now()}.${ext}`;
         const { error:ue } = await supabase.storage.from("social-photos").upload(path, image);
         if (ue) throw new Error(ue.message);
         const { data:ud } = supabase.storage.from("social-photos").getPublicUrl(path);
@@ -494,6 +497,8 @@ const PostCard = memo(({ post, athlete, allAthletes, sessions, onComment, onReac
 export default function AthleteClub({ athlete, allAthletes, clubId, sessions, profile }) {
   const [posts,          setPosts]          = useState([]);
   const [loading,        setLoading]        = useState(true);
+  const [loadingMore,    setLoadingMore]    = useState(false);
+  const [hasMorePosts,   setHasMorePosts]   = useState(false);
   const [activeComments, setActiveComments] = useState(null);
   const [quickPost,      setQuickPost]      = useState(null); // session ou true
   const [toast,          setToast]          = useState(null);
@@ -535,25 +540,38 @@ export default function AthleteClub({ athlete, allAthletes, clubId, sessions, pr
   }, [clubId, currentWeek, allAthletes]);
 
   // ── Fetch posts ────────────────────────────────────────────────────────────
-  const fetchPosts = useCallback(async () => {
+  // Pagination par page de POSTS_PAGE_SIZE (au lieu d'un .limit(50) fixe qui
+  // tronquait silencieusement un club actif sans possibilité d'aller plus
+  // loin) — reset=true recharge depuis le début (nouvelle activité live,
+  // changement de club…), reset=false ajoute la page suivante.
+  const fetchPosts = useCallback(async (reset = true) => {
     if (!clubId) return;
+    if (reset) setLoading(true); else setLoadingMore(true);
+    const offset = reset ? 0 : posts.length;
     const { data, error } = await supabase.from("social_posts")
       .select("*, social_reactions(*)")
       .eq("club_id", clubId)
       .gte("created_at", sevenDaysAgo)
       .order("created_at", { ascending:false })
-      .limit(50);
-    if (!error) setPosts(data ?? []);
-    const ids = (data ?? []).map(p => p.id);
-    if (ids.length > 0) {
-      const { data:coms } = await supabase.from("social_comments").select("post_id").in("post_id", ids);
-      const counts = {}; (coms??[]).forEach(c => { counts[c.post_id]=(counts[c.post_id]??0)+1; });
-      setCommentCounts(counts);
+      .range(offset, offset + POSTS_PAGE_SIZE - 1);
+
+    if (!error) {
+      const page = data ?? [];
+      setPosts(prev => reset ? page : [...prev, ...page]);
+      setHasMorePosts(page.length === POSTS_PAGE_SIZE);
+
+      const ids = page.map(p => p.id);
+      if (ids.length > 0) {
+        const { data:coms } = await supabase.from("social_comments").select("post_id").in("post_id", ids);
+        const counts = {}; (coms??[]).forEach(c => { counts[c.post_id]=(counts[c.post_id]??0)+1; });
+        setCommentCounts(prev => reset ? counts : { ...prev, ...counts });
+      }
     }
     setLoading(false);
-  }, [clubId, sevenDaysAgo]);
+    setLoadingMore(false);
+  }, [clubId, sevenDaysAgo, posts.length]);
 
-  useEffect(() => { fetchPosts(); }, [fetchPosts]);
+  useEffect(() => { fetchPosts(true); }, [clubId, sevenDaysAgo]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Realtime ───────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -768,7 +786,15 @@ export default function AthleteClub({ athlete, allAthletes, clubId, sessions, pr
           />
         ))}
 
-        {posts.length>0 && (
+        {posts.length>0 && hasMorePosts && (
+          <div style={{ textAlign:"center", padding:"8px 0 24px" }}>
+            <button onClick={() => fetchPosts(false)} disabled={loadingMore} className="tap-feedback"
+              style={{ fontSize:12, fontWeight:600, color:"#4DC9A0", background:"var(--c-surface-2)", border:"1px solid var(--c-border)", borderRadius:99, padding:"9px 20px", cursor:"pointer" }}>
+              {loadingMore ? <><div className="loader-ring loader-ring-sm" style={{ display:"inline-block", marginRight:6 }}/>Chargement…</> : "Charger plus"}
+            </button>
+          </div>
+        )}
+        {posts.length>0 && !hasMorePosts && (
           <p style={{ textAlign:"center", fontSize:10.5, color:"var(--c-text-4)", padding:"16px 0 24px" }}>
             Posts visibles 7 jours
           </p>

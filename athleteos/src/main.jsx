@@ -9,11 +9,20 @@ import { createRoot } from "react-dom/client";
 import "./index.css";
 import App from "./App";
 import { AuthProvider } from "./context/AuthContext";
+import ErrorBoundary from "./components/ui/ErrorBoundary";
+import { initSentry, captureError } from "./utils/sentry";
+
+initSentry();
+// Les rejets de promesse non gérés (fetch échoué non catché, etc.) ne
+// passent pas par l'ErrorBoundary React — on les capture séparément.
+window.addEventListener("unhandledrejection", (e) => captureError(e.reason));
 
 createRoot(document.getElementById("root")).render(
   <StrictMode>
-    <AuthProvider>
-      <App />
-    </AuthProvider>
+    <ErrorBoundary>
+      <AuthProvider>
+        <App />
+      </AuthProvider>
+    </ErrorBoundary>
   </StrictMode>
 );

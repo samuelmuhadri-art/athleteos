@@ -17,6 +17,7 @@ serve(async (req) => {
     const body = await req.json();
     const { title, body: msgBody, url, tag } = body;
     const athleteIds = (body.athleteIds ?? []).map((id: unknown) => Number(id));
+    const userIds    = (body.userIds ?? []).map((id: unknown) => String(id));
 
     const supabase = createClient(
       Deno.env.get("SUPABASE_URL")!,
@@ -29,10 +30,20 @@ serve(async (req) => {
       Deno.env.get("VAPID_PRIVATE_KEY")!
     );
 
-    const { data: subs } = await supabase
-      .from("push_subscriptions")
-      .select("*")
-      .in("athlete_id", athleteIds);
+    // Bug trouvé en construisant le cron serveur : userIds (notifs coach)
+    // n'était jamais lu ici — seul athleteIds l'était. Toute notif push
+    // destinée au coach (récap, message d'un athlète, rapports dispo...)
+    // créait bien la ligne d'alerte en base mais n'envoyait jamais de vraie
+    // push, silencieusement.
+    let subs: { endpoint: string; p256dh: string; auth: string }[] = [];
+    if (athleteIds.length) {
+      const { data } = await supabase.from("push_subscriptions").select("*").in("athlete_id", athleteIds);
+      subs = subs.concat(data ?? []);
+    }
+    if (userIds.length) {
+      const { data } = await supabase.from("push_subscriptions").select("*").in("user_id", userIds);
+      subs = subs.concat(data ?? []);
+    }
 
     console.log("Envoi à", subs?.length, "abonnements");
 

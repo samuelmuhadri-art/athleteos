@@ -105,7 +105,9 @@ const CreateSessionModal = memo(({ athlete, allAthletes, clubId, createdBy, coac
       let pdfUrl = null;
       if (pdfFile) {
         const ext  = pdfFile.name.split(".").pop();
-        const path = `${Date.now()}.${ext}`;
+        // Préfixé par club_id — requis par les policies storage scopées par
+        // club (sinon l'upload est rejeté par RLS).
+        const path = `${clubId}/${Date.now()}.${ext}`;
         const { error: ue } = await supabase.storage.from("session-pdfs").upload(path, pdfFile);
         if (ue) throw ue;
         const { data: ud } = supabase.storage.from("session-pdfs").getPublicUrl(path);

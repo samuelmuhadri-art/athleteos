@@ -417,6 +417,7 @@ const SessionModal = memo(({ session, athletes, onClose, onSetRpe, onSetStatus, 
 // ─── AddSessionModal premium (dark) ───────────────────────────────────────────
 
 const AddSessionModal = memo(({ athletes, initialData, onClose, onAdd }) => {
+  const { clubId } = useAuth();
   const isEdit = !!initialData;
   const today  = toLocalDateStr(new Date());
   const [form, setForm]             = useState(initialData ?? { ...EMPTY_FORM, sessionDate: today });
@@ -442,7 +443,9 @@ const AddSessionModal = memo(({ athletes, initialData, onClose, onAdd }) => {
       if (pdfFile) {
         setUploadingPdf(true);
         const ext  = pdfFile.name.split(".").pop();
-        const path = `${Date.now()}.${ext}`;
+        // Préfixé par club_id — requis par les policies storage scopées par
+        // club (sinon l'upload est rejeté par RLS).
+        const path = `${clubId}/${Date.now()}.${ext}`;
         const { error: uploadErr } = await supabase.storage.from("session-pdfs").upload(path, pdfFile);
         if (uploadErr) throw uploadErr;
         const { data: urlData } = supabase.storage.from("session-pdfs").getPublicUrl(path);
