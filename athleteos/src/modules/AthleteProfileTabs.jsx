@@ -218,7 +218,7 @@ export const TabCharge = memo(({ athlete, metrics, weeklyCharge, competitions, s
     { label: "Forme",        value: forme,        color: scoreColor(forme),          hint: "> 65 = optimal" },
     { label: "Récupération", value: recuperation, color: scoreColor(recuperation),   hint: "0–100"          },
     { label: "Readiness",    value: readiness,    color: scoreColor(readiness),      hint: "> 75 = optimal" },
-    { label: "Risque",       value: risque,       color: scoreColor(risque, true),   hint: "> 60 = alerte"  },
+    { label: "Signal",       value: risque,       color: scoreColor(risque, true),   hint: "> 60 = à examiner" },
   ];
 
   return (

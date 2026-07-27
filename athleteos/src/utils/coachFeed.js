@@ -37,7 +37,7 @@ export function buildCoachFeed({ athletes, weeklyCharge, sessions, injuries, com
       if (metrics.acwr > 1.5) {
         items.push({
           id: `acwr-crit-${athlete.id}`, priority: "critical", icon: "alert", color: "#E24B4A",
-          sentence: `${name} est en surcharge critique (ACWR ${metrics.acwr.toFixed(2)}) — risque de blessure élevé cette semaine.`,
+          sentence: `${name} est en surcharge critique (ACWR ${metrics.acwr.toFixed(2)}) — hors de la zone habituelle, à examiner cette semaine.`,
         });
       } else if (metrics.acwr > 1.3) {
         items.push({

@@ -165,7 +165,10 @@ export function getAthleteMetricsForWeek(athleteId, weeklyCharge, currentWeek, w
     );
   }
 
-  // Risque blessure : ACWR élevé + monotonie élevée + récupération insuffisante
+  // Signal de charge (nommé "risque" en interne, affiché "Signal de charge"
+  // — voir athlete/shared.js) : combine ACWR élevé + monotonie élevée +
+  // récupération insuffisante. Un signal composite, pas une probabilité de
+  // blessure mesurée ou validée.
   const acwrRisk    = acwr > 1.3 ? Math.min(100, (acwr - 1.3) * 200) : acwr < 0.8 ? 10 : 0;
   const monotonyRisk = monotony > 2 ? Math.min(50, (monotony - 2) * 25) : 0;
   const recoveryRisk = recovery.hoursRemaining > 48 ? 20 : 0;
@@ -232,7 +235,7 @@ export function generateContextAnalysis(metrics, nextComp) {
   const { acwr, fatigue, readiness, monotony, recovery } = metrics;
   const lines = [];
 
-  if (acwr > 1.5)       lines.push("⚠️ ACWR très élevé (" + acwr.toFixed(2) + ") : risque de blessure accru. Réduire la charge immédiatement.");
+  if (acwr > 1.5)       lines.push("⚠️ ACWR très élevé (" + acwr.toFixed(2) + ") : hors de la zone associée à un risque plus faible dans la littérature (Gabbett 2016). Envisage de réduire la charge, à valider avec l'athlète.");
   else if (acwr > 1.3)  lines.push("🟠 ACWR élevé (" + acwr.toFixed(2) + ") : zone de surcharge aiguë. Surveiller la récupération.");
   else if (acwr < 0.8)  lines.push("🔵 ACWR faible (" + acwr.toFixed(2) + ") : sous-charge relative. Augmentation progressive possible.");
   else                  lines.push("🟢 ACWR optimal (" + acwr.toFixed(2) + ") : balance charge aiguë/chronique dans la zone cible (0.8–1.3).");

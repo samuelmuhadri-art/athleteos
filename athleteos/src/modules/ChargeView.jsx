@@ -422,7 +422,7 @@ function ChargeView() {
             <div className="mb-4">
               <h3 className="text-[14px] font-semibold" style={{ color: "var(--c-text-1)" }}>Évolution ACWR du groupe</h3>
               <p className="text-[11px] mt-0.5" style={{ color: "var(--c-text-3)" }}>
-                Une courbe par athlète · Zone optimale : 0.80 – 1.30 · Danger : &gt; 1.50
+                Une courbe par athlète · Zone optimale : 0.80 – 1.30 · Zone à surveiller : &gt; 1.50
               </p>
             </div>
             <div className="flex flex-wrap gap-3 mb-4">
@@ -476,7 +476,7 @@ function ChargeView() {
                 <div className="flex items-center gap-4 mt-3 text-[10px] flex-wrap">
                   <span className="flex items-center gap-1.5"><span className="w-8 h-0.5 inline-block rounded" style={{ background: "#1D9E75", borderTop: "2px dashed #1D9E75" }} /><span style={{ color: "var(--c-text-2)" }}>0.80 — Seuil bas</span></span>
                   <span className="flex items-center gap-1.5"><span className="w-8 h-0.5 inline-block rounded" style={{ background: "#EF9F27", borderTop: "2px dashed #EF9F27" }} /><span style={{ color: "var(--c-text-2)" }}>1.30 — Seuil haut</span></span>
-                  <span className="flex items-center gap-1.5"><span className="w-8 h-0.5 inline-block rounded" style={{ background: "#E24B4A" }} /><span style={{ color: "var(--c-text-2)" }}>1.50 — Zone de danger</span></span>
+                  <span className="flex items-center gap-1.5"><span className="w-8 h-0.5 inline-block rounded" style={{ background: "#E24B4A" }} /><span style={{ color: "var(--c-text-2)" }}>1.50 — Zone à surveiller</span></span>
                 </div>
               </>
             )}
@@ -539,7 +539,7 @@ function ChargeView() {
                   <div key={`a-${athlete.id}`} className="flex items-center gap-3 rounded-lg px-4 py-2.5" style={{ background: "rgba(232,160,32,0.10)", border: "1px solid rgba(232,160,32,0.20)" }}>
                     <Activity size={14} color="#EF9F27" />
                     <span className="text-[12px]" style={{ color: "#E8A020" }}>
-                      <strong>{athlete.name.split(" ")[0]}</strong> — ACWR élevé ({metrics.acwr.toFixed(2)}) — risque de blessure accru
+                      <strong>{athlete.name.split(" ")[0]}</strong> — ACWR élevé ({metrics.acwr.toFixed(2)}) — hors de la zone habituelle, à examiner
                     </span>
                   </div>
                 ))}

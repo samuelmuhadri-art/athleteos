@@ -42,7 +42,7 @@ export async function checkAndAlertACWR(clubId, athletes, weeklyCharge, currentW
         await supabase.from("alerts").insert({
           club_id: clubId, athlete_id: athlete.id, type: "charge",
           title: `⚠️ Surcharge — ${athlete.name}`,
-          description: `ACWR de ${metrics.acwr.toFixed(2)} (seuil 1.30). Risque élevé de blessure. Envisage une récupération.`,
+          description: `ACWR de ${metrics.acwr.toFixed(2)} (seuil 1.30) — hors de la zone habituelle. Vaut le coup d'en discuter avec l'athlète.`,
           severity: "élevée", is_read: false,
         });
       }

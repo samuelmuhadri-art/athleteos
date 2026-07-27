@@ -637,7 +637,7 @@ export default function AthleteDashboard({
                   { key: "forme",        label: "Forme"           },
                   { key: "fatigue",      label: "Fatigue"         },
                   { key: "recuperation", label: "Récupération"    },
-                  { key: "risque",       label: "Risque blessure" },
+                  { key: "risque",       label: "Signal de charge" },
                 ].map(s => {
                   const val    = metrics[s.key];
                   const col    = dimColor(s.key, val);

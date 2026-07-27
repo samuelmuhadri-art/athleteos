@@ -84,13 +84,35 @@ export const EVIDENCE_LEVELS = {
   statistical: { label: "Calcul statistique",       chip: "chip-info"    },
 };
 
+// Taxonomie (tâche 15) : à quel type d'information appartient chaque
+// métrique affichée dans l'app — pour ne jamais laisser un score dériver
+// vers une lecture "diagnostic". Aucun élément de METRIC_SCIENCE n'est de
+// catégorie "alerte médicale" : l'app ne pose aucun diagnostic, seul un
+// professionnel de santé le peut.
+//   - measured      : donnée brute saisie par l'athlète (RPE, wellness)
+//   - estimation     : dérivé calculé à partir de mesures (charge, ACWR)
+//   - signal         : pattern combinant plusieurs estimations, à
+//                       contextualiser par le coach — jamais une
+//                       probabilité ni une prédiction individuelle
+//   - coach_decision : la lecture et la décision finale reviennent
+//                       toujours au coach, jamais à un seuil automatique
+export const METRIC_TAXONOMY = {
+  readiness:    "estimation",
+  forme:        "estimation",
+  fatigue:      "estimation",
+  recuperation: "estimation",
+  risque:       "signal",
+  acwr:         "estimation",
+  wellness:     "measured",
+};
+
 export const METRIC_SCIENCE = {
   readiness: {
     label: "Readiness", icon: "⚡", evidenceLevel: "convention",
     color: (v) => v >= 75 ? "#1D9E75" : v >= 50 ? "#EF9F27" : "#E24B4A",
     unit: "/100", optimal: "≥ 75",
     formula: "Moyenne pondérée : Forme (40%) + Récupération (35%) + Wellness (25%)",
-    what: "Le Readiness mesure ta capacité globale à performer aujourd'hui. Un score élevé signifie que ton corps est physiologiquement prêt à absorber une charge d'entraînement intense.",
+    what: "Le Readiness combine forme, récupération et wellness en un score d'aide à la décision pour la journée. Un score élevé suggère que ton corps est mieux disposé à absorber une charge intense — une estimation, pas une garantie.",
     sources: [
       { ref: "Gabbett (2016)", detail: "Training-injury prevention paradox — BJSM" },
       { ref: "Halson (2014)",  detail: "Monitoring training load — Sports Med" },
@@ -150,20 +172,27 @@ export const METRIC_SCIENCE = {
     ],
   },
   risque: {
-    label: "Risque blessure", icon: "⚠️", inverted: true, evidenceLevel: "convention",
+    // "Signal de charge", pas "Risque blessure" : ce score combine des
+    // variables associées statistiquement à la blessure dans la littérature
+    // (ACWR, monotonie, fatigue), mais ce n'est ni une probabilité de
+    // blessure validée, ni un diagnostic — la relation charge/blessure est
+    // multifactorielle et partiellement débattue (Gabbett lui-même souligne
+    // que d'autres facteurs comptent : sommeil, stress, antécédents,
+    // biomécanique, génétique...). Un score bas ne garantit rien non plus.
+    label: "Signal de charge", icon: "⚠️", inverted: true, evidenceLevel: "convention",
     color: (v) => v > 60 ? "#E24B4A" : v > 30 ? "#EF9F27" : "#1D9E75",
     unit: "/100", optimal: "≤ 30",
-    formula: "Composé de l'ACWR (60%), monotonie (20%) et fatigue (20%). Modèle Gabbett.",
-    what: "Le risque de blessure détecte les patterns dangereux : surcharge aiguë, entraînements monotones, fatigue accumulée.",
+    formula: "Combinaison ACWR (60%) + monotonie (20%) + fatigue estimée (20%) — pondération AthleteOS inspirée des travaux de Gabbett et Foster, pas une formule qu'ils ont eux-mêmes publiée.",
+    what: "Ce signal combine plusieurs indicateurs associés statistiquement à un risque accru dans la littérature sportive (surcharge aiguë, entraînements monotones, fatigue accumulée). Ce n'est PAS une prédiction individuelle de blessure ni un diagnostic — de nombreux facteurs de blessure connus n'y sont pas intégrés (sommeil, stress, antécédents, biomécanique). À interpréter avec ton coach, jamais seul.",
     sources: [
       { ref: "Gabbett (2016)",      detail: "Training-injury prevention paradox — BJSM" },
       { ref: "Hulin et al. (2016)", detail: "Spikes in acute workload — BJSM" },
       { ref: "Foster (1998)",       detail: "Monotony of training — J Strength Cond" },
     ],
     thresholds: [
-      { min: 0,  max: 30,  label: "Faible", color: "#1D9E75", advice: "Aucun signal d'alarme. Continue ton programme normalement." },
-      { min: 31, max: 60,  label: "Modéré", color: "#EF9F27", advice: "ACWR ou monotonie élevés. Varie les intensités." },
-      { min: 61, max: 100, label: "Élevé",  color: "#E24B4A", advice: "Réduis immédiatement la charge. Consulte ton coach." },
+      { min: 0,  max: 30,  label: "Faible", color: "#1D9E75", advice: "Aucun signal notable dans ces indicateurs. Continue ton programme normalement." },
+      { min: 31, max: 60,  label: "Modéré", color: "#EF9F27", advice: "ACWR ou monotonie élevés. Vaut le coup d'en parler avec ton coach pour varier les intensités." },
+      { min: 61, max: 100, label: "Élevé",  color: "#E24B4A", advice: "Plusieurs signaux cumulés. Parles-en à ton coach pour décider ensemble d'ajuster la charge — ce score n'est pas un ordre." },
     ],
   },
 };

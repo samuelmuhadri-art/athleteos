@@ -3,49 +3,54 @@
 ## Tâches précédentes
 - **Tâche 1** (nettoyage dépôt/secrets/CI) : terminée, commitée (`88b27d4`) et poussée sur `origin/main`.
 - **Tâche 2** (sécurisation `send-push`) : terminée, commitée (`2980909`), poussée, **déployée** et vérifiée en conditions réelles (10/11 tests automatisés OK — le seul échec était une clé mal collée localement lors du test manuel du chemin cron, pas un bug).
-- **Tâche 3** (durcissement `signup`) : terminée, **déployée** (migration + fonction), **9/9 tests automatisés OK en conditions réelles**. Détails ci-dessous.
+- **Tâche 3** (durcissement `signup`) : terminée, **déployée** (migration + fonction), **9/9 tests automatisés OK en conditions réelles**.
 
 ## Tâche active
-- Numéro : 3 (clôturée)
-- Objectif : Durcir l'inscription publique (`signup`) contre le spam, la création massive de comptes et la fuite d'informations, sans casser les deux parcours (créer un club / rejoindre par code).
+- Numéro : 15 (traitée hors ordre — dépend nominalement des tâches 9-14, non faites — décision de l'utilisateur, pas la mienne)
+- Branche : main (aucune branche dédiée créée — travail effectué directement, non commité)
+- Objectif : Remplacer les formulations causales/prédictives/prescriptives autour d'ACWR, fatigue, readiness, récupération par un langage de signal contextualisé, sans changer les calculs sous-jacents ni le design.
+- Risques : Aucun (changements textuels uniquement, aucune logique de calcul modifiée).
 
 ## Décisions prises
-- **Anti-bot : honeypot + délai minimum, pas de CAPTCHA tiers.** Décision prise avec vous : évite de dépendre d'un compte Cloudflare externe, déployable immédiatement. Champ caché `company` + rejet si soumission < 1.5s après chargement du formulaire.
-- **Rate limiting** : table `signup_attempts` (migration), fenêtre glissante — 8 tentatives/15min par IP, 3/60min par email. Toute tentative comptabilisée dès qu'elle passe la vérification elle-même (empêche un contournement en alternant requêtes valides/invalides). Nettoyage automatique des lignes >24h à chaque appel.
-- **`x-forwarded-for` : la PREMIÈRE valeur de la liste, confirmé via les vrais logs de la fonction déployée (pas une supposition).** J'avais d'abord écrit "dernière valeur" par prudence théorique (craignant qu'un client puisse falsifier l'en-tête), mais le test réel a montré que le rate limiting ne se déclenchait jamais. En inspectant les logs, la première valeur était stable et identique entre deux appels de la même machine (`85.x.x.x, 85.x.x.x, 99.x.x.x` puis `85.x.x.x, 85.x.x.x, 3.x.x.x` — seul le dernier segment changeait, correspondant à un nœud d'infrastructure interne Supabase qui change à chaque requête). Corrigé pour prendre la première valeur ; rate limiting vérifié fonctionnel ensuite (déclenchement d'un vrai 429 après plusieurs tentatives).
-- **Anti-énumération d'email** : si l'email existe déjà, la fonction répond **exactement** comme un succès (même statut 200, même forme), sans rien créer. Le `signInWithPassword` client tranche ensuite silencieusement. Vérifié en conditions réelles : aucun doublon créé, réponse identique à un succès.
-- **Atomicité** : RPC Postgres `signup_create_account` (`SECURITY DEFINER`) — club + users + athletes en une seule transaction SQL. Corrige un vrai bug de l'ancienne version : un échec sur l'insert `athletes` ne nettoyait jamais la ligne `users` déjà créée. Compensation réduite à un seul cas (suppression du compte Auth si le RPC échoue après coup) — vérifié en conditions réelles avec le hook de test (`SIGNUP_TEST_MODE`).
-- **Stratégie email pilote : `email_confirm:true` conservé** (accès immédiat, aucun email de vérification) — décision documentée, pas un oubli. Aucun fournisseur SMTP configuré dans Supabase Auth ; je ne peux ni le configurer ni le vérifier depuis ici. Pour activer une vraie vérification : Dashboard → Authentication → Settings → configurer un fournisseur SMTP, puis repasser `email_confirm` à `false`.
-- **Codes HTTP réels** (400/403/405/413/429/500) + `correlationId` dans chaque réponse/log. A nécessité une mise à jour de `SignupPage.jsx` (vérifié le comportement exact de `FunctionsHttpError` dans le code source installé de `@supabase/functions-js` plutôt que deviné).
-- **Hook de test `SIGNUP_TEST_MODE`** : utilisé une fois pour vérifier réellement la compensation, puis laissé désactivé (variable non définie dans les secrets — comportement par défaut sûr).
+- **Inventaire fait par recherche textuelle systématique** dans `src/` (termes : risque, blessure, diagnostic, immédiatement, détecte, prédiction, danger, critique...), puis lecture complète des fichiers pertinents avant modification.
+- **Constat de départ favorable** : `chargeCalculations.js`, `trainingLoad.js` et `loadAxes.js` avaient déjà des disclaimers "convention de coaching, pas une valeur publiée" en commentaire, et `athlete/shared.js` avait déjà un système `EVIDENCE_LEVELS` (validé / convention / calcul statistique) affiché dans `FormeDetailPanel.jsx` avec sources citées. Je me suis appuyé sur cette base existante plutôt que d'en recréer une parallèle.
+- **Renommage du score composite `risque` → "Signal de charge"** (label affiché uniquement — la clé interne `risque`/`metrics.risque` n'a pas été touchée, pour limiter le risque de régression). C'était la formulation la plus problématique : libellé "Risque blessure", texte explicatif affirmant qu'elle "détecte les patterns dangereux", et une formule attribuée à tort à un "Modèle Gabbett" (Gabbett n'a jamais publié ces pondérations précises — ce sont des conventions AthleteOS inspirées de ses travaux). Le texte explicatif dit maintenant explicitement que ce n'est ni une prédiction individuelle ni un diagnostic, et cite les facteurs de risque connus qui n'y sont pas intégrés (sommeil, stress, antécédents, biomécanique).
+- **Conseils de seuil reformulés** pour ne plus donner d'ordre médical ("Réduis immédiatement la charge. Consulte ton coach." → "Parles-en à ton coach pour décider ensemble... ce score n'est pas un ordre.") — conforme à la Definition of Done "le coach garde la décision finale".
+- **Taxonomie ajoutée** (`METRIC_TAXONOMY` dans `athlete/shared.js`) : classe chaque métrique en measured / estimation / signal, avec une note explicite qu'aucune métrique de l'app n'est de catégorie "alerte médicale" (l'app ne diagnostique rien). C'est de la documentation/classification interne, pas un nouvel élément d'UI — je n'ai pas ajouté d'affichage visuel supplémentaire pour rester dans le périmètre "langage", pas "design".
+- **Ce que je n'ai PAS fait, volontairement** :
+  - Pas de nouvel indicateur numérique de "confiance"/fiabilité des scores (ex: signaler qu'un score basé sur 1 seule semaine de données est moins fiable qu'avec un historique long). C'est une vraie fonctionnalité (calcul + UI), pas une correction de langage — je l'ai plutôt traitée en ajoutant la limite en texte dans les explications ("what"). Voir "Limites" ci-dessous pour une vraie implémentation future.
+  - Pas de renommage de la clé de données interne `risque` (`metrics.risque`, `dimColor("risque",...)`, etc.) — seuls les libellés affichés changent. Renommer la clé aurait touché beaucoup plus de fichiers pour un gain nul (personne ne voit les noms de clés JS).
+  - Pas de relecture par un coach ou un professionnel scientifique — je ne peux pas le faire moi-même, voir "Vérifications obligatoires" ci-dessous.
+  - Pas de vrai CAPTCHA/preuve scientifique publiée nouvelle — hors périmètre de cette tâche.
 
-## Bugs trouvés et corrigés pendant la vérification post-déploiement
-Le premier déploiement s'est révélé cassé à 100% dès le premier test réel — corrigé en trois passes, chacune re-testée en conditions réelles :
-1. **`.catch()` appelé sur une requête `postgrest-js`** (`admin.from(...).delete()...catch(() => {})`) — ces objets n'exposent que `.then()` (thenable), pas `.catch()`. Ça faisait planter la toute première ligne de la fonction, donc **100% des appels** échouaient en 500 avant même d'atteindre la logique métier. Confirmé en lisant le code source installé de `postgrest-js` plutôt qu'en re-devinant. Corrigé dans `signup/index.ts` et dans `test_signup_regression.mjs` (même erreur présente dans le script de nettoyage).
-2. **`x-forwarded-for`** : voir "Décisions prises" ci-dessus — deviné à l'envers une première fois, corrigé après preuve par les logs.
-3. **Bug dans le script de test lui-même** : le code d'invitation fabriqué pour le test (`SGN` + chiffres d'un timestamp) pouvait contenir un `0` ou un `1`, exclus de l'alphabet réel des codes club (`CODE_CHARS`, sans 0/O/1/I/L). La validation serveur rejetait donc à raison un code mal formé — pas un bug de `signup`, mais du test. Corrigé en générant un code de test dans le bon alphabet.
+## Fichiers modifiés
+- `src/athlete/shared.js` : renommage `risque` → "Signal de charge" (label + texte explicatif + formule + conseils de seuil), légère reformulation de `readiness.what`, ajout de `METRIC_TAXONOMY`.
+- `src/utils/chargeCalculations.js` : reformulation de la ligne ACWR>1.5 dans `generateContextAnalysis()` (le pire cas trouvé : "risque de blessure accru. Réduire la charge immédiatement." → signal contextualisé + suggestion), commentaire mis à jour.
+- `src/utils/coachFeed.js` : reformulation de la phrase "Fil du coach" pour ACWR critique.
+- `src/utils/notifications.js` : reformulation de la description de l'alerte automatique de surcharge.
+- `src/modules/ChargeView.jsx` : reformulation de l'alerte ACWR + légende du graphique ("Zone de danger" → "Zone à surveiller").
+- `src/modules/AthleteProfileTabs.jsx` et `src/athlete/views/AthleteDashboard.jsx` : renommage des libellés courts "Risque"/"Risque blessure" → "Signal"/"Signal de charge".
 
-Ces trois bugs illustrent une limite du processus : les tests écrits par un LLM sans exécution réelle contre l'infrastructure de production peuvent être plausibles mais faux. Le déploiement + test immédiat par vous a permis de les attraper avant qu'ils causent un incident (une fonction publique cassée à 100%).
-
-## Fichiers modifiés (état final, après corrections)
-- `supabase/migrations/20260727030000_signup_rate_limit_and_atomic_rpc.sql` : table `signup_attempts` + fonction `signup_create_account`. Appliquée en prod (`supabase db push`).
-- `supabase/functions/signup/index.ts` : réécrit, puis corrigé 2 fois post-déploiement (bug `.catch()`, sens de lecture `x-forwarded-for`). Déployé dans sa version finale.
-- `src/pages/SignupPage.jsx` : honeypot, `maxLength`, gestion d'erreur HTTP réelle.
-- `test_signup_regression.mjs` : corrigé 2 fois (bug `.catch()`, alphabet du code de test).
+Aucune formule de calcul, aucun seuil numérique, aucune migration, aucun schéma de données modifié — uniquement du texte.
 
 ## Vérifications exécutées
 - [x] `npm run build` — succès.
 - [ ] `npm run lint` / `npm run typecheck` — toujours aucun script dans le repo (cf. tâche 1).
-- [x] `node --check` sur `test_signup_regression.mjs` — syntaxe JS valide.
-- [x] **`test_signup_regression.mjs` exécuté en conditions réelles contre la fonction déployée : 9/9 OK.** Couvre : création club valide, adhésion par code valide (bon club + bon rôle), code invalide rejeté, email existant traité comme un succès sans doublon, honeypot rejeté, soumission trop rapide rejetée, rate limit IP déclenché (429 réel obtenu).
-- [x] Test de compensation (`SIGNUP_TEST_MODE=true`) exécuté une fois manuellement : compte Auth et ligne `users` correctement absents après un échec forcé du RPC. Variable retirée ensuite.
-- [ ] Vérification par le compilateur Deno — Deno CLI non installé dans cet environnement.
+- [ ] Tests automatisés — aucun test unitaire n'existe pour ces fonctions texte ; rien de pertinent à ajouter ici (ce sont des chaînes de caractères, pas de la logique testable au sens classique).
+- [x] Recherche textuelle de tous les termes à risque cités dans la tâche (risque de blessure, réduire immédiatement, diagnostic, détecte, prédiction, certain...) — plus aucune occurrence problématique après correction (vérifié par re-recherche).
+- [ ] **"Relecture UX par coach et professionnel scientifique" — PAS FAITE.** Je ne suis pas qualifié pour valider le fond scientifique, seulement la cohérence du langage avec les principes de prudence demandés. Recommandation forte : faire relire au minimum les nouveaux textes de `athlete/shared.js` (entrée `risque`) par quelqu'un du domaine avant une éventuelle commercialisation, comme le demande explicitement l'énoncé de la tâche.
+- [ ] Test manuel dans le navigateur — **non fait**. Je n'ai pas de compte de test pour me connecter à l'appli déployée. Le build passe et j'ai relu chaque ligne modifiée, mais je n'ai pas visuellement confirmé le rendu (troncature de texte plus long dans les cartes compactes, notamment le nouveau texte "what" plus long pour `risque` dans `FormeDetailPanel.jsx`).
 
 ## Résultats et limites
-- Commité, poussé, migration appliquée, fonction déployée, **vérifié en conditions réelles**.
-- `isDuplicateEmailError` (détection "email déjà utilisé") a été implicitement validée par le test "email existant -> aucun doublon créé" qui est passé — la heuristique fonctionne contre la vraie réponse de GoTrue de ce projet.
-- Table `signup_attempts` : contient désormais des lignes issues de nos tests manuels répétés (IP réelle de votre machine). Sans conséquence — ce sont des métadonnées techniques (IP/email/date), pas des données de compte. Se videra automatiquement sous 24h (nettoyage intégré à chaque appel), ou peut être vidée manuellement (`DELETE FROM signup_attempts;`) sans risque.
-- Dette non traitée (hors périmètre tâche 3) : pas de vraie vérification email (choix pilote documenté) ; pas de CAPTCHA tiers (choix produit) ; rate limiting en base plutôt qu'en cache distribué — suffisant à l'échelle actuelle, à revoir si le trafic grossit significativement.
+- **Rien n'a été commité ni poussé.**
+- **Limite technique assumée** : les scores restent calculés et affichés même avec très peu de données (ex: 1 seule semaine renseignée) sans indicateur de fiabilité réduite — seul le texte explicatif mentionne maintenant cette limite en toutes lettres, il n'y a pas de signal visuel distinct pour "peu de données". Implémenter un vrai indicateur de confiance (ex: griser ou annoter les scores basés sur moins de 3-4 semaines de charge) serait une tâche de suivi naturelle, distincte de celle-ci.
+- **Textes plus longs** : plusieurs chaînes explicatives (`what` de `risque`, notamment) sont maintenant nettement plus longues pour être honnêtes sur les limites — à vérifier visuellement que ça ne casse pas la mise en page de `FormeDetailPanel.jsx` sur petit écran (test manuel recommandé ci-dessous).
+- Le texte scientifique restant (README, GUIDE_IA.md) ne contient aucune formulation à risque — vérifié, rien à corriger là.
+
+## Tests manuels recommandés (à faire par vous)
+- [ ] Ouvrir `FormeDetailPanel.jsx` sur mobile pour l'athlète, taper sur "Signal de charge", vérifier que le texte plus long ne déborde pas.
+- [ ] Vérifier le Fil du coach (Dashboard) avec un athlète en ACWR > 1.5 — la nouvelle phrase doit être lisible et ne pas paraître alarmiste au point de perdre l'info utile.
+- [ ] Relecture par un coach/professionnel du sport, comme demandé par la Definition of Done de cette tâche.
 
 ## Prochaine tâche autorisée
-Non déterminée ici — arrêt après la tâche 3 comme demandé. Ne pas démarrer la tâche suivante automatiquement.
+Non déterminée ici — arrêt après la tâche 15 comme demandé. Ne pas démarrer la tâche suivante automatiquement.
