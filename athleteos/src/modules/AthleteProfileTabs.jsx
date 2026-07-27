@@ -15,12 +15,15 @@ import {
   computeChargeChartData,
   generateContextAnalysis, computePerformanceStability,
 } from "../utils/chargeCalculations";
+import { getAthleteAxisProfile } from "../utils/loadAxes";
+import { getISOWeek } from "../utils/helpers.js";
 import {
   RADAR_KEYS, scoreColor, acwrColor,
   ValidationBadge, StarRow, EmptySection, ChartTooltip, ScoreRing,
 } from "./athleteListShared";
 import AddRecordModal from "./AddRecordModal";
 import AddInjuryModal from "./AddInjuryModal";
+import AxisRadarCard from "../components/ui/AxisRadarCard";
 
 // ─── Onglet Performances ──────────────────────────────────────────────────────
 
@@ -192,9 +195,14 @@ export const TabPerformances = memo(({ athlete, competitions, onAddRecord }) => 
 
 // ─── Onglet Charge ────────────────────────────────────────────────────────────
 
-export const TabCharge = memo(({ athlete, metrics, weeklyCharge, competitions }) => {
+export const TabCharge = memo(({ athlete, metrics, weeklyCharge, competitions, sessions }) => {
   const { fatigue, forme, recuperation, readiness, risque, acwr } = metrics;
   const chartData = useMemo(() => computeChargeChartData(athlete.id, weeklyCharge), [athlete.id, weeklyCharge]);
+  const currentWeek = useMemo(() => getISOWeek(new Date()), []);
+  const axisProfile = useMemo(
+    () => getAthleteAxisProfile(athlete.id, sessions ?? [], currentWeek),
+    [athlete.id, sessions, currentWeek]
+  );
   const nextComp  = useMemo(() => {
     const now = new Date();
     return (competitions ?? []).filter(c => c.athleteIds.includes(athlete.id) && new Date(c.date) >= now)
@@ -273,6 +281,9 @@ export const TabCharge = memo(({ athlete, metrics, weeklyCharge, competitions })
           </ResponsiveContainer>
         </div>
       )}
+
+      {/* Profil de charge (6 axes) */}
+      <AxisRadarCard profile={axisProfile} title="Profil de charge" subtitle="Comparé aux semaines habituelles de l'athlète" />
 
       {/* Analyse contextuelle */}
       <div className="card p-5">

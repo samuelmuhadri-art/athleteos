@@ -139,7 +139,7 @@ const AthleteProfile = memo(({ athlete, weeklyCharge, sessions, competitions, on
       {/* Contenu onglet */}
       <div className="view-transition">
         {activeTab === "performances"  && <TabPerformances  athlete={athlete} competitions={competitions} onAddRecord={onAddRecord} />}
-        {activeTab === "charge"        && <TabCharge        athlete={athlete} metrics={metrics} weeklyCharge={weeklyCharge} competitions={competitions} />}
+        {activeTab === "charge"        && <TabCharge        athlete={athlete} metrics={metrics} weeklyCharge={weeklyCharge} competitions={competitions} sessions={sessions} />}
         {activeTab === "entrainements" && <TabEntrainements athlete={athlete} sessions={sessions} />}
         {activeTab === "blessures"     && <TabBlessures     athlete={athlete} onAddInjury={onAddInjury} onUpdateInjury={onUpdateInjury} onDeleteInjury={onDeleteInjury} />}
         {activeTab === "profil"        && <TabProfil        athlete={athlete} />}

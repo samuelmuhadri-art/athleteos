@@ -18,11 +18,13 @@ import {
 import {
   getAthleteMetricsForWeek, getStatusLabel,
 } from "../../utils/chargeCalculations";
+import { getAthleteAxisProfile } from "../../utils/loadAxes";
 import {
   getISOWeek, dimColor, acwrColor, colorsFor, parsePerf, isSameDay, parseLocalDate,
   initialsFromName, getDiscHib, DISC_TYPE_COLORS, WELLNESS_QUESTIONS, METRIC_SCIENCE, EVIDENCE_LEVELS,
 } from "../shared";
 import FormeDetailPanel from "../components/FormeDetailPanel";
+import AxisRadarCard from "../../components/ui/AxisRadarCard";
 import { SessionDetailModal } from "./AthletePlanning";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -242,6 +244,11 @@ export default function AthleteDashboard({
   }, [sessions, athlete.id, currentWeek]);
 
   const hasCharge = weeklyCharge.some(w => w.athleteId === athlete.id);
+
+  const axisProfile = useMemo(
+    () => getAthleteAxisProfile(athlete.id, sessions, currentWeek),
+    [athlete.id, sessions, currentWeek]
+  );
 
   const badges = useMemo(() =>
     computeBadges({ athlete, weeklyCharge, sessions, competitions, myPerformances, streak, currentWeek }),
@@ -612,6 +619,9 @@ export default function AthleteDashboard({
               </div>
             </div>
           )}
+
+          {/* ── Profil de charge (6 axes) ───────────────────────────────────── */}
+          <AxisRadarCard profile={axisProfile} title="Répartition de ta charge" />
 
           {/* ── État de forme ───────────────────────────────────────────────── */}
           {hasCharge && (

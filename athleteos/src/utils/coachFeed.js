@@ -14,6 +14,7 @@
 // ============================================================
 
 import { getAthleteMetricsForWeek } from "./chargeCalculations";
+import { getAthleteAxisProfile, LOAD_AXES } from "./loadAxes";
 
 // Un item "critical" passe toujours avant un "positive", peu importe
 // l'ordre dans lequel les règles ci-dessous ont été évaluées.
@@ -61,6 +62,23 @@ export function buildCoachFeed({ athletes, weeklyCharge, sessions, injuries, com
         items.push({
           id: `top-${athlete.id}`, priority: "positive", icon: "trending", color: "#1D9E75",
           sentence: `${name} est en forme optimale (readiness ${metrics.readiness}/100) — bon moment pour une séance exigeante.`,
+        });
+      }
+    }
+
+    // Axe de charge inhabituel : un seul signal par athlète, sur l'axe le
+    // plus marqué (évite de noyer le coach si plusieurs axes sortent en
+    // même temps). Volontairement pas de chiffre — juste "quel axe" et
+    // "ce que ça veut dire", cf. AxisRadarCard.
+    const axisProfile = getAthleteAxisProfile(athlete.id, sessions, currentWeek);
+    if (axisProfile) {
+      const worst = Object.entries(axisProfile).sort((a, b) => b[1].score - a[1].score)[0];
+      if (worst && worst[1].score > 75) {
+        const [axisId, axisData] = worst;
+        const axis = LOAD_AXES[axisId];
+        items.push({
+          id: `axis-${athlete.id}`, priority: "warning", icon: "activity", color: axisData.color,
+          sentence: `${name} a une charge ${axis.nounPhrase} nettement plus élevée que d'habitude cette semaine — ${axis.what}`,
         });
       }
     }
