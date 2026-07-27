@@ -18,6 +18,7 @@ import ResetPasswordPage from "./pages/ResetPasswordPage";
 import AccountSettingsModal from "./components/ui/AccountSettingsModal";
 import AthleteApp     from "./AthleteApp";
 import { usePushNotifications, PushToggleButton } from "./hooks/usePushNotifications";
+import { useUrlView } from "./hooks/useUrlView";
 import { initialsFromName } from "./utils/helpers.js";
 
 // ─── Lazy imports modules coach ───────────────────────────────────────────────
@@ -43,6 +44,7 @@ const NAV_ITEMS = [
   { id: "alerts",       label: "Alertes",          icon: Bell            },
   { id: "messaging",    label: "Messagerie",       icon: MessageSquare   },
 ];
+const NAV_ITEM_IDS = NAV_ITEMS.map(n => n.id);
 
 // ─── Résolution de la vue active ──────────────────────────────────────────────
 function ActiveView({ view, onNavigate }) {
@@ -97,11 +99,10 @@ function AuthLoader() {
 
 // ─── CoachShell ───────────────────────────────────────────────────────────────
 function CoachShell({ user, profile, clubId, signOut }) {
-  const [activeView,   setActiveView]   = useState("dashboard");
+  const { activeView, navigate: navigateUrl, viewKey } = useUrlView(NAV_ITEM_IDS, "dashboard");
   const [sidebarOpen,  setSidebarOpen]  = useState(true);
   const [mobileOpen,   setMobileOpen]   = useState(false);
   const [unreadAlerts, setUnreadAlerts] = useState(0);
-  const [viewKey, setViewKey] = useState(0);
   const [showInvite, setShowInvite] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [clubName, setClubName]     = useState("");
@@ -142,10 +143,9 @@ function CoachShell({ user, profile, clubId, signOut }) {
 
   const navigate = useCallback((view) => {
     if (activeView === "alerts") fetchUnreadCount();
-    setActiveView(view);
-    setViewKey(k => k + 1); // déclenche l'animation à chaque changement de vue
+    navigateUrl(view);
     setMobileOpen(false);
-  }, [activeView, fetchUnreadCount]);
+  }, [activeView, fetchUnreadCount, navigateUrl]);
 
   const currentNav    = NAV_ITEMS.find((n) => n.id === activeView);
   const coachName     = profile.name ?? user.email ?? "Coach";

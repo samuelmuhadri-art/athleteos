@@ -15,6 +15,7 @@ import { getAthleteMetricsForWeek } from "./utils/chargeCalculations";
 import { usePushNotifications, PushToggleButton } from "./hooks/usePushNotifications";
 import { initialsFromName, toLocalDateStr, getISOWeek } from "./athlete/shared";
 import { notifyAthleteWeeklyRecap, notifyAthleteWeeklyReport } from "./utils/notifications";
+import { useUrlView } from "./hooks/useUrlView";
 
 import AthleteDashboard from "./athlete/views/AthleteDashboard";
 import AthletePlanning  from "./athlete/views/AthletePlanning";
@@ -32,11 +33,12 @@ const NAV_ITEMS = [
   { id: "social",       label: "Mon club",        shortLabel: "Club",     icon: Users           },
   { id: "messagerie",   label: "Messagerie",      shortLabel: "Messages", icon: MessageSquare   },
 ];
+const NAV_ITEM_IDS = NAV_ITEMS.map(n => n.id);
 
 export default function AthleteApp() {
   const { profile, clubId, signOut } = useAuth();
 
-  const [activeView,   setActiveView]   = useState("dashboard");
+  const { activeView, navigate, viewKey } = useUrlView(NAV_ITEM_IDS, "dashboard");
   const [athlete,      setAthlete]      = useState(null);
   const [allAthletes,  setAllAthletes]  = useState([]);
   const [weeklyCharge, setWeeklyCharge] = useState([]);
@@ -55,7 +57,6 @@ export default function AthleteApp() {
   const [showWellness,   setShowWellness]   = useState(false);
   const [showInjuryReport, setShowInjuryReport] = useState(false);
   const [showSettings,   setShowSettings]   = useState(false);
-  const [viewKey,        setViewKey]        = useState(0);
 
   const { subscribed, subscribe, permissionState, swReady } = usePushNotifications(
     athlete?.id ?? null, clubId
@@ -196,10 +197,6 @@ export default function AthleteApp() {
   const handleComment = useCallback(async (sid,aid,comment) => {
     setSessions(p=>p.map(s=>s.id!==sid?s:{...s,validations:s.validations.map(v=>v.athleteId===aid?{...v,comment}:v)}));
     await supabase.from("session_athletes").update({comment}).eq("session_id",sid).eq("athlete_id",aid);
-  }, []);
-
-  const navigate = useCallback((view) => {
-    setActiveView(view); setViewKey(k => k + 1);
   }, []);
 
   // ── Guards ─────────────────────────────────────────────────────────────────
