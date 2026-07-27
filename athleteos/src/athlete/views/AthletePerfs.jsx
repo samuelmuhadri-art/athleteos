@@ -22,7 +22,14 @@ import {
   ScatterChart, Scatter, ZAxis, ReferenceArea, ReferenceLine,
 } from "recharts";
 import { supabase } from "../../utils/supabaseClient";
-import { getDiscHib, parsePerf, toLocalDateStr, getISOWeek } from "../shared";
+import { getDiscHib, getDiscType, parsePerf, toLocalDateStr, getISOWeek } from "../shared";
+
+// Détail par épreuve — disponible uniquement pour les disciplines combinées.
+// Ordre officiel des épreuves (jour 1 puis jour 2).
+const COMBINE_EVENTS = {
+  "Décathlon":  ["100m", "Longueur", "Poids", "Hauteur", "400m", "110m haies", "Disque", "Perche", "Javelot", "1500m"],
+  "Heptathlon": ["100m haies", "Hauteur", "Poids", "200m", "Longueur", "Javelot", "800m"],
+};
 import { notifyGoalAchieved, postClubCelebration } from "../../utils/notifications";
 import { getAthleteMetricsForWeek } from "../../utils/chargeCalculations";
 
@@ -81,6 +88,16 @@ function PerfTooltip({ active, payload, label }) {
       <p style={{ fontSize: 10.5, fontWeight: 500, color: "var(--c-text-3)", marginBottom: 4 }}>{label}</p>
       <p style={{ fontSize: 18, fontWeight: 700, color: "#1D9E75" }}>{d.raw}</p>
       {d.ctx && <p style={{ fontSize: 10.5, color: "var(--c-text-3)", fontStyle: "italic", marginTop: 4 }}>{d.ctx}</p>}
+      {d.breakdown && Object.keys(d.breakdown).length > 0 && (
+        <div style={{ marginTop: 8, paddingTop: 8, borderTop: "1px solid var(--c-border)" }}>
+          {Object.entries(d.breakdown).map(([ev, val]) => (
+            <div key={ev} style={{ display: "flex", justifyContent: "space-between", gap: 12, fontSize: 10.5, color: "var(--c-text-3)", marginTop: 2 }}>
+              <span>{ev}</span>
+              <span style={{ fontWeight: 600, color: "var(--c-text-2)" }}>{val}</span>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -265,11 +282,32 @@ function AddPerfModal({ disciplines, perfForm, setPerfForm, onClose, onSubmit, s
           </div>
 
           <div>
-            <label style={{ display: "block", fontSize: 10, fontWeight: 600, color: "var(--c-text-3)", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 8 }}>Résultat *</label>
+            <label style={{ display: "block", fontSize: 10, fontWeight: 600, color: "var(--c-text-3)", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 8 }}>
+              {COMBINE_EVENTS[perfForm.discipline] ? "Total (points) *" : "Résultat *"}
+            </label>
             <input className="input-premium" placeholder="Ex: 10.94 ou 7.45m"
               value={perfForm.value}
               onChange={e => setPerfForm(f => ({ ...f, value: e.target.value }))} />
           </div>
+
+          {/* Détail par épreuve — uniquement pour Décathlon/Heptathlon */}
+          {COMBINE_EVENTS[perfForm.discipline] && (
+            <div>
+              <label style={{ display: "block", fontSize: 10, fontWeight: 600, color: "var(--c-text-3)", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 8 }}>
+                Détail par épreuve (optionnel)
+              </label>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+                {COMBINE_EVENTS[perfForm.discipline].map(ev => (
+                  <div key={ev}>
+                    <input className="input-premium" placeholder={ev} style={{ fontSize: 12 }}
+                      value={perfForm.breakdown[ev] ?? ""}
+                      onChange={e => setPerfForm(f => ({ ...f, breakdown: { ...f.breakdown, [ev]: e.target.value } }))} />
+                    <p style={{ fontSize: 9, color: "var(--c-text-4)", marginTop: 3, marginLeft: 2 }}>{ev}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           <div>
             <label style={{ display: "block", fontSize: 10, fontWeight: 600, color: "var(--c-text-3)", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 8 }}>Date</label>
@@ -409,7 +447,7 @@ export default function AthletePerfs({ athlete, competitions, myPerformances, my
   });
 
   const [perfForm, setPerfForm] = useState({
-    discipline: "", value: "", performance_date: toLocalDateStr(today), context: "",
+    discipline: "", value: "", performance_date: toLocalDateStr(today), context: "", breakdown: {},
   });
   const [goalForm, setGoalForm] = useState({
     discipline: "", target_value: "", deadline: "", notes: "",
@@ -434,11 +472,12 @@ export default function AthletePerfs({ athlete, competitions, myPerformances, my
       .filter(p => p.discipline === disc && p.value != null)
       .sort((a, b) => a.performance_date.localeCompare(b.performance_date))
       .map(p => ({
-        date:  p.performance_date.slice(0, 10),
-        label: new Date(p.performance_date).toLocaleDateString("fr-BE", { day: "numeric", month: "short" }),
-        value: parseFloat(p.value) || 0,
-        raw:   p.value,
-        ctx:   p.context,
+        date:      p.performance_date.slice(0, 10),
+        label:     new Date(p.performance_date).toLocaleDateString("fr-BE", { day: "numeric", month: "short" }),
+        value:     parseFloat(p.value) || 0,
+        raw:       p.value,
+        ctx:       p.context,
+        breakdown: p.breakdown,
       }));
   }, [localPerfs, selectedDisc, disciplines]);
 
@@ -566,6 +605,11 @@ export default function AthletePerfs({ athlete, competitions, myPerformances, my
     if (!perfForm.discipline.trim() || !perfForm.value.trim()) return;
     setSavingPerf(true);
     try {
+      const isCombine = !!COMBINE_EVENTS[perfForm.discipline];
+      const cleanBreakdown = isCombine
+        ? Object.fromEntries(Object.entries(perfForm.breakdown).filter(([, v]) => v?.trim()))
+        : null;
+
       const { data, error } = await supabase
         .from("athlete_performances")
         .insert({
@@ -576,6 +620,7 @@ export default function AthletePerfs({ athlete, competitions, myPerformances, my
           value:            perfForm.value,
           performance_date: perfForm.performance_date,
           context:          perfForm.context || null,
+          breakdown:        cleanBreakdown && Object.keys(cleanBreakdown).length ? cleanBreakdown : null,
         })
         .select().single();
       if (error) throw error;
@@ -583,7 +628,7 @@ export default function AthletePerfs({ athlete, competitions, myPerformances, my
 
       await maybeUpdateRecord(perfForm.discipline, perfForm.value, perfForm.performance_date);
 
-      setPerfForm({ discipline: perfForm.discipline, value: "", performance_date: toLocalDateStr(today), context: "" });
+      setPerfForm({ discipline: perfForm.discipline, value: "", performance_date: toLocalDateStr(today), context: "", breakdown: {} });
       setShowAddPerf(false);
     } catch (e) {
       console.error("Erreur ajout perf:", e);
