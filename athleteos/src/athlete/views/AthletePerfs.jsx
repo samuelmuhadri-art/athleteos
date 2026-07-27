@@ -11,6 +11,7 @@
 // ============================================================
 
 import { useState, useMemo, useEffect } from "react";
+import { createPortal } from "react-dom";
 import {
   Plus, Trophy, Target, BarChart2, CheckCircle, X,
   TrendingUp, TrendingDown, Minus, ChevronRight,
@@ -190,7 +191,11 @@ function GoalProgressBar({ pr, target, color }) {
 // MODAL SAISIR UNE PERFORMANCE
 // ═══════════════════════════════════════════════════════════════════════════════
 function AddPerfModal({ disciplines, perfForm, setPerfForm, onClose, onSubmit, saving }) {
-  return (
+  // Portal sur document.body — AthletePerfs.jsx est rendu à l'intérieur du
+  // <main> scrollable d'AthleteApp.jsx ; sans portal ce position:fixed dérive
+  // avec le scroll au lieu de rester épinglé à l'écran sur mobile (même bug
+  // déjà corrigé sur AthleteClub.jsx et AthletePlanning.jsx).
+  return createPortal(
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4 modal-backdrop"
       onClick={e => e.target === e.currentTarget && !saving && onClose()}>
       <div className="rounded-t-3xl sm:rounded-3xl shadow-2xl w-full sm:max-w-sm max-h-[90vh] flex flex-col overflow-hidden modal-content"
@@ -269,7 +274,8 @@ function AddPerfModal({ disciplines, perfForm, setPerfForm, onClose, onSubmit, s
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 
@@ -277,7 +283,7 @@ function AddPerfModal({ disciplines, perfForm, setPerfForm, onClose, onSubmit, s
 // MODAL AJOUTER UN OBJECTIF
 // ═══════════════════════════════════════════════════════════════════════════════
 function AddGoalModal({ disciplines, goalForm, setGoalForm, onClose, onSubmit, saving }) {
-  return (
+  return createPortal(
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4 modal-backdrop"
       onClick={e => e.target === e.currentTarget && !saving && onClose()}>
       <div className="rounded-t-3xl sm:rounded-3xl shadow-2xl w-full sm:max-w-sm max-h-[90vh] flex flex-col overflow-hidden modal-content"
@@ -356,7 +362,8 @@ function AddGoalModal({ disciplines, goalForm, setGoalForm, onClose, onSubmit, s
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 
@@ -1134,7 +1141,7 @@ export default function AthletePerfs({ athlete, competitions, myPerformances, my
         />
       )}
 
-      {showAddComp && (
+      {showAddComp && createPortal(
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4 modal-backdrop"
           onClick={e => e.target === e.currentTarget && !savingComp && setShowAddComp(false)}>
           <div className="rounded-t-3xl sm:rounded-3xl shadow-2xl w-full sm:max-w-sm max-h-[90vh] flex flex-col overflow-hidden modal-content"
@@ -1197,7 +1204,8 @@ export default function AthletePerfs({ athlete, competitions, myPerformances, my
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {showConfetti && <ConfettiBurst onDone={() => setShowConfetti(false)} />}
