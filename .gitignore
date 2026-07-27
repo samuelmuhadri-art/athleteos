@@ -1,0 +1,25 @@
+# Dependencies
+**/node_modules/
+
+# Build output
+**/dist/
+**/build/
+
+# Environment variables — jamais de secret réel commité
+.env
+.env.*
+!.env.example
+
+# Configuration locale Claude Code (spécifique à la machine)
+**/.claude/settings.local.json
+
+# État local du CLI Supabase (cache de lien de projet, pas des migrations)
+**/supabase/.temp/
+
+# Logs
+*.log
+npm-debug.log*
+
+# Fichiers système
+.DS_Store
+Thumbs.db

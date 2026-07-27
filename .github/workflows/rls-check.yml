@@ -21,6 +21,9 @@ jobs:
 
       - run: npm ci
 
+      - name: Build
+        run: npm run build
+
       - name: Run RLS isolation regression test
         env:
           VITE_SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
