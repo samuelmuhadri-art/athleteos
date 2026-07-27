@@ -72,9 +72,21 @@ export const WELLNESS_QUESTIONS = [
   { key: "stress",   label: "Niveau de stress",       icon: Activity,   color: "#E24B4A", desc: ["Aucun","Faible","Modéré","Élevé","Très élevé"],                 inverted: true  },
 ];
 
+// Niveau de preuve affiché à côté de chaque métrique — la distinction que
+// chargeCalculations.js documente déjà en commentaire ("ces pondérations
+// sont des conventions de coaching, pas des valeurs publiées") mais qui
+// restait invisible pour l'utilisateur final. Rendue explicite ici pour
+// que l'appli ne se présente jamais comme plus "scientifique" qu'elle ne
+// l'est réellement.
+export const EVIDENCE_LEVELS = {
+  validated:   { label: "Validé scientifiquement", chip: "chip-success" },
+  convention:  { label: "Convention de coaching",  chip: "chip-warning" },
+  statistical: { label: "Calcul statistique",       chip: "chip-info"    },
+};
+
 export const METRIC_SCIENCE = {
   readiness: {
-    label: "Readiness", icon: "⚡",
+    label: "Readiness", icon: "⚡", evidenceLevel: "convention",
     color: (v) => v >= 75 ? "#1D9E75" : v >= 50 ? "#EF9F27" : "#E24B4A",
     unit: "/100", optimal: "≥ 75",
     formula: "Moyenne pondérée : Forme (40%) + Récupération (35%) + Wellness (25%)",
@@ -90,7 +102,7 @@ export const METRIC_SCIENCE = {
     ],
   },
   forme: {
-    label: "Forme", icon: "📈",
+    label: "Forme", icon: "📈", evidenceLevel: "convention",
     color: (v) => v >= 75 ? "#1D9E75" : v >= 50 ? "#EF9F27" : "#E24B4A",
     unit: "/100", optimal: "≥ 65",
     formula: "Charge chronique (moyenne 4 semaines) normalisée sur 100.",
@@ -106,7 +118,7 @@ export const METRIC_SCIENCE = {
     ],
   },
   fatigue: {
-    label: "Fatigue", icon: "🔋", inverted: true,
+    label: "Fatigue", icon: "🔋", inverted: true, evidenceLevel: "convention",
     color: (v) => v > 70 ? "#E24B4A" : v > 45 ? "#EF9F27" : "#1D9E75",
     unit: "/100", optimal: "≤ 45",
     formula: "Charge aiguë (moyenne 7 derniers jours) normalisée.",
@@ -122,7 +134,7 @@ export const METRIC_SCIENCE = {
     ],
   },
   recuperation: {
-    label: "Récupération", icon: "🌙",
+    label: "Récupération", icon: "🌙", evidenceLevel: "convention",
     color: (v) => v >= 70 ? "#1D9E75" : v >= 45 ? "#EF9F27" : "#E24B4A",
     unit: "/100", optimal: "≥ 70",
     formula: "Basée sur le ratio Forme/Fatigue et les données wellness. Convention coaching AthleteOS.",
@@ -138,7 +150,7 @@ export const METRIC_SCIENCE = {
     ],
   },
   risque: {
-    label: "Risque blessure", icon: "⚠️", inverted: true,
+    label: "Risque blessure", icon: "⚠️", inverted: true, evidenceLevel: "convention",
     color: (v) => v > 60 ? "#E24B4A" : v > 30 ? "#EF9F27" : "#1D9E75",
     unit: "/100", optimal: "≤ 30",
     formula: "Composé de l'ACWR (60%), monotonie (20%) et fatigue (20%). Modèle Gabbett.",

@@ -6,7 +6,7 @@
 import { useMemo, memo } from "react";
 import { createPortal } from "react-dom";
 import { X, Zap } from "lucide-react";
-import { getISOWeek, METRIC_SCIENCE } from "../shared";
+import { getISOWeek, METRIC_SCIENCE, EVIDENCE_LEVELS } from "../shared";
 
 const FormeDetailPanel = memo(({ metricKey, metrics, sessions, weeklyCharge, athlete, onClose }) => {
   const science     = METRIC_SCIENCE[metricKey];
@@ -99,6 +99,11 @@ const FormeDetailPanel = memo(({ metricKey, metrics, sessions, weeklyCharge, ath
               <h2 style={{ fontSize: 18, fontWeight: 600, color: "var(--c-text-1)", letterSpacing: "-0.02em", lineHeight: 1.2 }}>
                 {science.label}
               </h2>
+              {science.evidenceLevel && EVIDENCE_LEVELS[science.evidenceLevel] && (
+                <span className={`chip ${EVIDENCE_LEVELS[science.evidenceLevel].chip}`} style={{ marginTop: 5, display: "inline-flex" }}>
+                  {EVIDENCE_LEVELS[science.evidenceLevel].label}
+                </span>
+              )}
               <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 5 }}>
                 <span style={{ fontSize: 28, fontWeight: 700, color, fontVariantNumeric: "tabular-nums", letterSpacing: "-0.03em", lineHeight: 1 }}>
                   {value}
@@ -288,11 +293,13 @@ const FormeDetailPanel = memo(({ metricKey, metrics, sessions, weeklyCharge, ath
                   <p style={{ fontSize: 10.5, color: "var(--c-text-3)", marginTop: 2, fontStyle: "italic" }}>{src.detail}</p>
                 </div>
               ))}
-              <div style={{ padding: "9px 14px", background: "rgba(232,160,32,0.07)", borderTop: "1px solid var(--c-border)" }}>
-                <p style={{ fontSize: 10.5, color: "#E8A020", lineHeight: 1.5 }}>
-                  Les coefficients de pondération sont des conventions de coaching AthleteOS, pas des standards publiés.
-                </p>
-              </div>
+              {science.evidenceLevel === "convention" && (
+                <div style={{ padding: "9px 14px", background: "rgba(232,160,32,0.07)", borderTop: "1px solid var(--c-border)" }}>
+                  <p style={{ fontSize: 10.5, color: "#E8A020", lineHeight: 1.5 }}>
+                    Les coefficients de pondération sont des conventions de coaching AthleteOS, pas des standards publiés.
+                  </p>
+                </div>
+              )}
             </div>
           </div>
 

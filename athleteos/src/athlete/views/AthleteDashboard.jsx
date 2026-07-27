@@ -20,7 +20,7 @@ import {
 } from "../../utils/chargeCalculations";
 import {
   getISOWeek, dimColor, acwrColor, colorsFor, parsePerf, isSameDay, parseLocalDate,
-  initialsFromName, getDiscHib, DISC_TYPE_COLORS, WELLNESS_QUESTIONS, METRIC_SCIENCE,
+  initialsFromName, getDiscHib, DISC_TYPE_COLORS, WELLNESS_QUESTIONS, METRIC_SCIENCE, EVIDENCE_LEVELS,
 } from "../shared";
 import FormeDetailPanel from "../components/FormeDetailPanel";
 import { SessionDetailModal } from "./AthletePlanning";
@@ -503,7 +503,10 @@ export default function AthleteDashboard({
               {/* Header */}
               <div style={{ padding: "14px 16px 12px", display: "flex", alignItems: "flex-start", justifyContent: "space-between", borderBottom: "1px solid var(--c-border)" }}>
                 <div>
-                  <p className="card-title">Charge d'entraînement</p>
+                  <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
+                    <p className="card-title">Charge d'entraînement</p>
+                    <span className={`chip ${EVIDENCE_LEVELS.validated.chip}`}>ACWR validé</span>
+                  </div>
                   <p className="card-subtitle">8 dernières semaines</p>
                 </div>
                 {chargeTrend !== null && (

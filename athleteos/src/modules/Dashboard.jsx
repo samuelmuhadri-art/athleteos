@@ -20,7 +20,7 @@ import { LineChart, Line, ResponsiveContainer } from "recharts";
 import {
   Users, Zap, Bell, CheckCircle, Activity,
   Trophy, Star, ChevronRight, HeartPulse, Target,
-  BarChart2, ArrowUpRight,
+  BarChart2, ArrowUpRight, AlertTriangle, TrendingUp,
 } from "lucide-react";
 import { supabase }                  from "../utils/supabaseClient";
 import { useAuth }                   from "../context/AuthContext";
@@ -31,6 +31,7 @@ import {
   getStatusLabel,
 } from "../utils/chargeCalculations";
 import { checkUpcomingCompetitions, checkAndAlertACWR, notifyAthleteCompetitionReminder, checkWeeklyRecap, checkWeeklyReports } from "../utils/notifications";
+import { buildCoachFeed } from "../utils/coachFeed";
 import { getISOWeek, initialsFromName } from "../utils/helpers.js";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -279,6 +280,79 @@ function AthleteStatusCard({ athlete, weeklyCharge, currentWeek, injuries, sessi
   );
 }
 
+// ─── Fil du coach — les signaux (ACWR, fatigue, blessures, absences,
+// compétitions à risque) transformés en phrases priorisées et actionnables
+// au lieu de chiffres bruts à interpréter soi-même. Remplace les anciens
+// blocs statiques "surcharge"/"blessés". Logique dans src/utils/coachFeed.js.
+function CoachFeedIcon({ icon, color }) {
+  const props = { size: 15, color, strokeWidth: 2 };
+  if (icon === "alert")    return <AlertTriangle {...props} />;
+  if (icon === "activity") return <Activity {...props} />;
+  if (icon === "zap")      return <Zap {...props} />;
+  if (icon === "heart")    return <HeartPulse {...props} />;
+  if (icon === "trophy")   return <Trophy {...props} />;
+  if (icon === "users")    return <Users {...props} />;
+  if (icon === "trending") return <TrendingUp {...props} />;
+  return <Bell {...props} />;
+}
+
+function CoachFeedSection({ items, onNavigate }) {
+  const shown = items.slice(0, 6);
+  return (
+    <div className="card overflow-hidden">
+      <div className="px-5 py-4 border-b border-[color:var(--c-border)] flex items-center justify-between">
+        <div>
+          <h3 className="text-[14px] font-semibold" style={{ color: "var(--c-text-1)" }}>Fil du coach</h3>
+          <p className="text-[11px] mt-0.5" style={{ color: "var(--c-text-3)" }}>
+            {items.length > 0 ? "Priorisé automatiquement" : "Rien à signaler cette semaine"}
+          </p>
+        </div>
+        {items.length > 0 && (
+          <span className="text-[9.5px] font-bold px-2 py-0.5 rounded-full chip chip-warning">
+            {items.length} signal{items.length > 1 ? "aux" : ""}
+          </span>
+        )}
+      </div>
+      {shown.length === 0 ? (
+        <div className="px-5 py-8 flex items-center gap-3">
+          <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: "rgba(29,158,117,0.08)" }}>
+            <CheckCircle size={16} color="#1D9E75" strokeWidth={2} />
+          </div>
+          <p className="text-[12.5px] font-medium" style={{ color: "var(--c-text-2)" }}>
+            Aucune surcharge, blessure ou absence détectée dans le groupe.
+          </p>
+        </div>
+      ) : (
+        <div className="divide-y divide-[color:var(--c-border)]">
+          {shown.map(item => (
+            <button
+              key={item.id}
+              onClick={() => onNavigate("athletes")}
+              className="w-full px-5 py-3.5 flex items-start gap-3 text-left hover:bg-[var(--c-surface-2)] transition-colors border-l-4"
+              style={{ borderLeftColor: item.color }}
+            >
+              <div className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0 mt-0.5" style={{ background: `${item.color}18` }}>
+                <CoachFeedIcon icon={item.icon} color={item.color} />
+              </div>
+              <p className="flex-1 text-[12.5px] leading-relaxed" style={{ color: "var(--c-text-2)" }}>
+                {item.sentence}
+              </p>
+              <ChevronRight size={14} className="flex-shrink-0 mt-1" style={{ color: "var(--c-text-4)" }} />
+            </button>
+          ))}
+        </div>
+      )}
+      {items.length > shown.length && (
+        <div className="px-5 py-2.5 text-center border-t border-[color:var(--c-border)]">
+          <span className="text-[10.5px]" style={{ color: "var(--c-text-4)" }}>
+            +{items.length - shown.length} autre{items.length - shown.length > 1 ? "s" : ""} signal{items.length - shown.length > 1 ? "aux" : ""}
+          </span>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Composant principal ──────────────────────────────────────────────────────
 function Dashboard({ onNavigate }) {
   const { clubId, profile } = useAuth();
@@ -350,7 +424,14 @@ function Dashboard({ onNavigate }) {
         athleteIds: (c.competition_athletes ?? []).map(x => x.athlete_id),
       }));
       setCompetitions(mappedComps);
-      setInjuries(injuriesRes.data ?? []);
+      // Les lignes brutes de Supabase sont en snake_case (athlete_id) —
+      // sans ce mapping, AthleteStatusCard (i.athleteId) et le fil du coach
+      // ne matchaient jamais aucun athlète : le badge "blessure" sur les
+      // cartes du groupe ne s'affichait donc jamais, silencieusement.
+      setInjuries((injuriesRes.data ?? []).map(i => ({
+        id: i.id, athleteId: i.athlete_id, name: i.name,
+        intensity: i.intensity, status: i.status, location: i.location,
+      })));
       setGoals(goalsRes.data ?? []);
 
       if (mappedComps.length > 0) {
@@ -393,11 +474,16 @@ function Dashboard({ onNavigate }) {
     const totalExpected = weekSessions.reduce((s, sess) => s + sess.athleteIds.length, 0);
     const totalDone = weekSessions.reduce((s, sess) => s + (sess.validations?.filter(v => v.status === "done").length ?? 0), 0);
     const validationRate = totalExpected > 0 ? Math.round((totalDone / totalExpected) * 100) : null;
-    const overloaded = athletes.filter(a => getAthleteMetricsForWeek(a.id, weeklyCharge, currentWeek).acwr > 1.3);
-    const injured = [...new Set(injuries.map(i => i.athleteId))].length;
     const pendingAthleteSession = sessions.filter(s => s.createdByAthlete).length;
-    return { avgCharge, trend, actifs, unreadAlerts, validationRate, overloaded, injured, pendingAthleteSession };
-  }, [athletes, weeklyCharge, sessions, alerts, injuries, currentWeek]);
+    return { avgCharge, trend, actifs, unreadAlerts, validationRate, pendingAthleteSession };
+  }, [athletes, weeklyCharge, sessions, alerts, currentWeek]);
+
+  // Les anciens blocs "surcharge"/"blessés" (chiffres bruts) sont remplacés
+  // par ce fil narrativisé et priorisé — voir src/utils/coachFeed.js.
+  const coachFeed = useMemo(
+    () => buildCoachFeed({ athletes, weeklyCharge, sessions, injuries, competitions, currentWeek }),
+    [athletes, weeklyCharge, sessions, injuries, competitions, currentWeek]
+  );
 
   const recentFeedbacks = useMemo(() => {
     const results = [];
@@ -519,50 +605,8 @@ function Dashboard({ onNavigate }) {
         </div>
       </div>
 
-      {/* ── Alertes critiques groupe — bordure épaisse 4px ─────────────────── */}
-      {(metrics.overloaded.length > 0 || metrics.injured > 0) && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          {metrics.overloaded.length > 0 && (
-            <div className="card p-4 flex items-start gap-3 border-l-4" style={{ borderLeftColor: "#E24B4A" }}>
-              <div
-                className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
-                style={{ background: "rgba(226,75,74,0.08)" }}
-              >
-                <Activity size={16} color="#E24B4A" strokeWidth={2} />
-              </div>
-              <div>
-                <p className="text-[13px] font-semibold" style={{ color: "var(--c-text-1)" }}>
-                  {metrics.overloaded.length} en surcharge · ACWR &gt; 1.3
-                </p>
-                <p className="text-[11.5px] mt-0.5 font-medium" style={{ color: "var(--c-text-3)" }}>
-                  {metrics.overloaded.map(a => a.name.split(" ")[0]).join(", ")}
-                </p>
-              </div>
-            </div>
-          )}
-          {metrics.injured > 0 && (
-            <div className="card p-4 flex items-start gap-3 border-l-4" style={{ borderLeftColor: "#EF9F27" }}>
-              <div
-                className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
-                style={{ background: "rgba(239,159,39,0.08)" }}
-              >
-                <HeartPulse size={16} color="#EF9F27" strokeWidth={2} />
-              </div>
-              <div>
-                <p className="text-[13px] font-semibold" style={{ color: "var(--c-text-1)" }}>
-                  {metrics.injured} athlète{metrics.injured > 1 ? "s" : ""} blessé{metrics.injured > 1 ? "s" : ""}
-                </p>
-                <p className="text-[11.5px] mt-0.5 font-medium" style={{ color: "var(--c-text-3)" }}>
-                  {[...new Set(injuries.map(i => i.athleteId))]
-                    .map(id => athletes.find(a => a.id === id)?.name?.split(" ")[0])
-                    .filter(Boolean)
-                    .join(", ")}
-                </p>
-              </div>
-            </div>
-          )}
-        </div>
-      )}
+      {/* ── Fil du coach ─────────────────────────────────────────────────── */}
+      <CoachFeedSection items={coachFeed} onNavigate={onNavigate} />
 
       {/* ── KPIs — icône + liseré + glow au survol ────────────────────────── */}
       <div className="grid grid-cols-2 gap-3">
