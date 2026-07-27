@@ -130,21 +130,26 @@ serve(async (req) => {
     let body: Record<string, unknown>;
     try { body = JSON.parse(rawBody || "{}"); } catch { return fail(400, "JSON invalide."); }
 
-    // x-forwarded-for peut contenir plusieurs IP séparées par des virgules
-    // (une par proxy traversé, la plus récemment ajoutée en dernier). On
-    // prend la DERNIÈRE valeur, pas la première : un client malveillant peut
-    // envoyer son propre en-tête falsifié, qui se retrouve alors en tête de
-    // liste — seule la valeur ajoutée par l'infra Supabase elle-même (donc
-    // en fin de liste) est fiable. Non vérifié en conditions réelles (accès
-    // aux logs de la fonction déployée nécessaire) — à confirmer côté user.
+    // x-forwarded-for sur l'infra Supabase (vérifié en conditions réelles via
+    // les logs de la fonction déployée, pas une supposition) : la PREMIÈRE
+    // valeur est stable et identique d'un appel à l'autre pour une même
+    // source (ex: "85.x.x.x, 85.x.x.x, 99.x.x.x" puis "85.x.x.x, 85.x.x.x,
+    // 3.x.x.x" — seul le dernier segment change) — c'est la vraie IP client,
+    // posée par l'edge Supabase. Les valeurs suivantes sont des sauts
+    // d'infrastructure interne à Supabase, qui changent à chaque requête et
+    // ne doivent pas servir de clé de regroupement pour le rate limiting.
     const xff = req.headers.get("x-forwarded-for") ?? "";
     const ipParts = xff.split(",").map((s) => s.trim()).filter(Boolean);
-    const ip = ipParts.length ? ipParts[ipParts.length - 1] : "unknown";
+    const ip = ipParts.length ? ipParts[0] : "unknown";
     const emailRaw = typeof body.email === "string" ? body.email.trim().toLowerCase() : "";
 
     // ── Nettoyage + rate limiting AVANT tout travail coûteux ──────────
     const cutoff = new Date(Date.now() - ATTEMPT_RETENTION_HOURS * 3_600_000).toISOString();
-    await admin.from("signup_attempts").delete().lt("created_at", cutoff).catch(() => {});
+    // Best-effort : les objets requête de postgrest-js n'exposent que
+    // .then() (thenable), pas .catch()/.finally() — une erreur ici se lit
+    // dans { error }, elle ne rejette pas la promesse. On l'ignore
+    // volontairement (nettoyage non-critique).
+    await admin.from("signup_attempts").delete().lt("created_at", cutoff);
 
     const ipWindowStart = new Date(Date.now() - RATE_LIMIT_IP_WINDOW_MIN * 60_000).toISOString();
     const { count: ipCount } = await admin.from("signup_attempts")

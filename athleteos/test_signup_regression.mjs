@@ -57,6 +57,19 @@ const admin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, {
 });
 
 const RUN_ID = Date.now();
+
+// Même alphabet que CODE_CHARS côté serveur (supabase/functions/signup) —
+// sans 0/O/1/I/L pour éviter les confusions. Un code de test qui contient un
+// caractère hors de cet alphabet est rejeté par la validation serveur (à
+// raison), peu importe qu'un club existe avec ce code — d'où l'utilisation
+// d'un vrai code aléatoire plutôt que des chiffres bruts d'un timestamp
+// (qui contiennent presque toujours un 0 ou un 1).
+const CODE_CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+function randomTestCode(len = 8) {
+  let s = "";
+  for (let i = 0; i < len; i++) s += CODE_CHARS[Math.floor(Math.random() * CODE_CHARS.length)];
+  return s;
+}
 const results = [];
 function record(name, pass, detail) {
   results.push({ name, pass, detail });
@@ -105,7 +118,7 @@ async function main() {
   try {
     // ── Setup : un club existant avec un code valide, pour tester join_club ──
     existingClub = await admin.from("clubs")
-      .insert({ name: `Signup Test Club ${RUN_ID}`, invite_code: `SGN${String(RUN_ID).slice(-5)}` })
+      .insert({ name: `Signup Test Club ${RUN_ID}`, invite_code: randomTestCode() })
       .select().single().then((r) => { if (r.error) throw r.error; return r.data; });
     const validInviteCode = existingClub.invite_code;
 
@@ -225,7 +238,7 @@ async function main() {
     for (const email of createdEmails) await cleanupByEmail(email);
     await cleanupByEmail(`signup-test-compensation-${RUN_ID}@example.invalid`);
     for (let i = 0; i < 10; i++) await cleanupByEmail(`signup-test-rate-${RUN_ID}-${i}@example.invalid`);
-    if (existingClub) await admin.from("clubs").delete().eq("id", existingClub.id).catch(() => {});
+    if (existingClub) await admin.from("clubs").delete().eq("id", existingClub.id);
   }
 
   const failed = results.filter((r) => !r.pass);
