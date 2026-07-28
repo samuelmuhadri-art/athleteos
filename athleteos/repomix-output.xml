@@ -14595,7 +14595,7 @@ import {
   ReferenceLine, Label, LineChart, Line,
 } from "recharts";
 import {
-  Trophy, TrendingUp, Zap, Users, ChevronDown, User, Calendar,
+  Trophy, TrendingUp, Zap, Users, User, Calendar,
 } from "lucide-react";
 import { supabase }                   from "../utils/supabaseClient";
 import { useAuth }                    from "../context/AuthContext";
@@ -14679,8 +14679,8 @@ const ScatterTooltip = ({ active, payload, currentWeek }) => {
   return (
     <div className="rounded-xl shadow-lg px-3 py-3 text-[12px] min-w-[170px]" style={{ background: "var(--c-surface-2)", border: "1px solid var(--c-border-strong)" }}>
       <div className="flex items-center gap-2 mb-2">
-        <div className="w-6 h-6 rounded-full flex items-center justify-center text-white text-[8px] font-bold" style={{ background: d.color }}>{d.avatar}</div>
-        <span className="font-bold" style={{ color: "var(--c-text-1)" }}>{d.name}</span>
+        <div className="w-7 h-7 rounded-full flex items-center justify-center text-white text-[12px] font-semibold" style={{ background: d.color }}>{d.avatar}</div>
+        <span className="font-semibold" style={{ color: "var(--c-text-1)" }}>{d.name}</span>
       </div>
       <div className="space-y-0.5" style={{ color: "var(--c-text-2)" }}>
         <p>Charge S{currentWeek} : <strong style={{ color: "var(--c-text-1)" }}>{d.x} u</strong></p>
@@ -14697,10 +14697,10 @@ const LineTooltip = ({ active, payload, label }) => {
   const d = payload[0].payload;
   return (
     <div className="rounded-xl shadow-lg px-3 py-3 text-[12px] min-w-[150px]" style={{ background: "var(--c-surface-2)", border: "1px solid var(--c-border-strong)" }}>
-      <p className="font-bold mb-1" style={{ color: "var(--c-text-1)" }}>{d.compName}</p>
-      <p className="text-[10px] mb-2" style={{ color: "var(--c-text-2)" }}>{label}</p>
-      <p className="text-[14px] font-bold" style={{ color: "#4DC9A0" }}>{d.resultStr}</p>
-      {d.context && <p className="text-[11px] mt-1 italic" style={{ color: "var(--c-text-3)" }}>"{d.context}"</p>}
+      <p className="font-semibold mb-1" style={{ color: "var(--c-text-1)" }}>{d.compName}</p>
+      <p className="text-[12px] mb-2" style={{ color: "var(--c-text-2)" }}>{label}</p>
+      <p className="text-[15px] font-semibold" style={{ color: "var(--color-success)" }}>{d.resultStr}</p>
+      {d.context && <p className="text-[12px] mt-1 italic" style={{ color: "var(--c-text-2)" }}>"{d.context}"</p>}
     </div>
   );
 };
@@ -14714,16 +14714,16 @@ const Podium = memo(({ ranked }) => {
   ].filter((p) => p.data);
   if (ranked.length === 0) return null;
   return (
-    <div className="flex items-end justify-center gap-3 pb-4">
+    <div className="flex items-end justify-center gap-1 sm:gap-3 pb-4">
       {podiumConfig.map(({ data, height, medal, bg, border }) => (
-        <div key={data.athlete.id} className="flex flex-col items-center gap-2" style={{ width: 120 }}>
+        <div key={data.athlete.id} className="flex flex-1 max-w-[120px] min-w-0 flex-col items-center gap-2">
           <div className="text-center">
             <div className="w-12 h-12 rounded-2xl flex items-center justify-center text-white text-[13px] font-bold mx-auto mb-1.5 shadow-sm" style={{ background: ATHLETE_COLORS[data.colorIdx] }}>
               {data.athlete.avatar}
             </div>
             <p className="text-[12px] font-bold leading-tight" style={{ color: "var(--c-text-1)" }}>{data.athlete.name.split(" ")[0]}</p>
-            <p className="text-[11px] font-bold mt-0.5" style={{ color: "var(--c-text-2)" }}>{data.rec.sb}</p>
-            {data.pct !== null && <p className="text-[10px] font-semibold mt-0.5" style={{ color: pctColor(data.pct) }}>{data.pct}% PR</p>}
+            <p className="text-[12px] font-semibold mt-0.5" style={{ color: "var(--c-text-2)" }}>{data.rec.sb}</p>
+            {data.pct !== null && <p className="text-[12px] font-semibold mt-0.5" style={{ color: pctColor(data.pct) }}>{data.pct}% PR</p>}
           </div>
           <div className="w-full rounded-t-xl flex items-start justify-center pt-3 border-t-4" style={{ height, background: bg, borderColor: border }}>
             <span className="text-2xl">{medal}</span>
@@ -14737,7 +14737,7 @@ const Podium = memo(({ ranked }) => {
 // ─── Composant principal ──────────────────────────────────────────────────────
 function Performances() {
   const { clubId } = useAuth();
-  const CURRENT_WEEK = useMemo(() => getISOWeek(new Date()), []);
+  const CURRENT_WEEK = getISOWeek(new Date());
 
   const [athletes,       setAthletes]       = useState([]);
   const [weeklyCharge,   setWeeklyCharge]   = useState([]);
@@ -14746,7 +14746,6 @@ function Performances() {
   const [error,          setError]          = useState(null);
   const [viewMode,       setViewMode]       = useState("group");
   const [selectedDisc,   setSelectedDisc]   = useState(null);
-  const [dropdownOpen,   setDropdownOpen]   = useState(false);
   const [selectedAthleteId, setSelectedAthleteId] = useState(null);
 
   // ═══ Chargement ═══════════════════════════════════════════════════════════
@@ -14825,7 +14824,7 @@ function Performances() {
   const evolutionData = useMemo(() => {
     if (!selectedAthleteId || !selectedDisc) return [];
     return historyResults
-      .filter((r) => r.athlete_id === selectedAthleteId && r.event === selectedDisc)
+      .filter((r) => r.athlete_id === selectedAthleteId && r.event === selectedDisc && r.competitions?.date)
       .sort((a, b) => new Date(a.competitions.date) - new Date(b.competitions.date))
       .map((r) => {
         const parsed = parsePerf(r.result);
@@ -14838,6 +14837,12 @@ function Performances() {
   // pas d'un résultat individuel deviné depuis son format — un seul résultat
   // mal formaté ne doit pas inverser l'axe du graphique pour tout le monde.
   const isTimeEvent = selectedDisc ? !getDiscHib(selectedDisc) : false;
+  const bestEvolution = useMemo(() => {
+    if (!selectedDisc || evolutionData.length === 0) return null;
+    return evolutionData.reduce((best, result) => (
+      compareValues(result.resultNum, best.resultNum, selectedDisc) < 0 ? result : best
+    ));
+  }, [evolutionData, selectedDisc]);
 
   // ═══ Render ═══════════════════════════════════════════════════════════════
   if (loading) return <LoadingState message="Chargement des performances…" />;
@@ -14845,58 +14850,54 @@ function Performances() {
 
   if (allDisciplines.length === 0) {
     return (
-      <div className="p-6 max-w-7xl mx-auto space-y-6">
+      <div className="page-container py-4 md:py-6 max-w-7xl mx-auto space-y-5 animate-slide-up">
         <div>
-          <h2 className="text-[22px] font-bold tracking-tight" style={{ color: "var(--c-text-1)" }}>Performances</h2>
-          <p className="text-[13px] mt-0.5" style={{ color: "var(--c-text-3)" }}>Classement du groupe par épreuve · Season Best</p>
+          <h2 className="page-title">Performances</h2>
+          <p className="secondary-text mt-1">Classements du groupe et progression individuelle</p>
         </div>
-        <div className="card p-16 text-center">
-          <Trophy size={40} className="mx-auto mb-3" style={{ color: "var(--c-text-4)" }} />
+        <div className="card px-5 py-16 text-center">
+          <Trophy size={40} className="mx-auto mb-3" style={{ color: "var(--c-text-3)" }} />
           <p className="text-[15px] font-semibold" style={{ color: "var(--c-text-2)" }}>Aucun record enregistré pour l'instant</p>
-          <p className="text-[12px] mt-1 max-w-sm mx-auto" style={{ color: "var(--c-text-3)" }}>Dès que les athlètes auront ajouté leurs records, les classements apparaîtront ici.</p>
+          <p className="meta-text mt-1 max-w-sm mx-auto">Dès que les athlètes auront ajouté leurs records, les classements apparaîtront ici.</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="p-6 max-w-7xl mx-auto space-y-6">
+    <div className="page-container py-4 md:py-6 max-w-7xl mx-auto space-y-5 md:space-y-6 animate-slide-up">
+
+      <div>
+        <h2 className="page-title">Performances</h2>
+        <p className="secondary-text mt-1">
+          {athletes.length} athlète{athletes.length !== 1 ? "s" : ""} · {allDisciplines.length} épreuve{allDisciplines.length !== 1 ? "s" : ""} suivie{allDisciplines.length !== 1 ? "s" : ""}
+        </p>
+      </div>
 
       {/* ── En-tête ──────────────────────────────────────────────────────── */}
-      <div className="card flex items-start justify-between flex-wrap gap-4 p-3">
-        <div className="flex gap-2">
-          <button onClick={() => setViewMode("group")} className={`px-4 py-2 rounded-lg text-[13px] font-semibold transition-colors flex items-center gap-2 ${viewMode === "group" ? "bg-[rgba(29,158,117,0.15)] text-[#4DC9A0]" : "text-[var(--c-text-3)] hover:bg-[var(--c-surface-3)]"}`}>
-            <Users size={16} /> Classement Groupe
+      <div className="card p-2 flex flex-col md:flex-row md:items-center md:justify-between gap-2">
+        <div className="grid grid-cols-2 gap-1 p-1 rounded-xl w-full md:w-auto" style={{ background: "var(--c-surface-2)" }} role="group" aria-label="Mode d'analyse">
+          <button type="button" aria-pressed={viewMode === "group"} onClick={() => setViewMode("group")} className={`min-h-11 px-3 md:px-4 rounded-lg text-[13px] font-semibold transition-colors flex items-center justify-center gap-2 ${viewMode === "group" ? "bg-[rgba(29,158,117,0.15)] text-[var(--color-success)]" : "text-[var(--c-text-2)] hover:bg-[var(--c-surface-3)]"}`}>
+            <Users size={16} /> Classement
           </button>
-          <button onClick={() => setViewMode("evolution")} className={`px-4 py-2 rounded-lg text-[13px] font-semibold transition-colors flex items-center gap-2 ${viewMode === "evolution" ? "bg-[rgba(29,158,117,0.15)] text-[#4DC9A0]" : "text-[var(--c-text-3)] hover:bg-[var(--c-surface-3)]"}`}>
-            <TrendingUp size={16} /> Évolution Individuelle
+          <button type="button" aria-pressed={viewMode === "evolution"} onClick={() => setViewMode("evolution")} className={`min-h-11 px-3 md:px-4 rounded-lg text-[13px] font-semibold transition-colors flex items-center justify-center gap-2 ${viewMode === "evolution" ? "bg-[rgba(29,158,117,0.15)] text-[var(--color-success)]" : "text-[var(--c-text-2)] hover:bg-[var(--c-surface-3)]"}`}>
+            <TrendingUp size={16} /> Évolution
           </button>
         </div>
 
-        <div className="relative">
-          <button onClick={() => setDropdownOpen((v) => !v)} className="flex items-center gap-2.5 bg-[var(--c-surface-2)] border border-[var(--c-border)] rounded-lg px-4 py-2 text-[13px] font-semibold text-[var(--c-text-1)] shadow-sm hover:border-[var(--c-border-strong)] transition-all min-w-[200px] justify-between">
-            <span className="flex items-center gap-2"><Trophy size={15} color="#EF9F27" />{selectedDisc}</span>
-            <ChevronDown size={15} className={`text-[var(--c-text-3)] transition-transform ${dropdownOpen ? "rotate-180" : ""}`} />
-          </button>
-          {dropdownOpen && (
-            <div className="absolute top-full right-0 mt-1.5 rounded-xl shadow-xl z-20 overflow-hidden min-w-[220px]" style={{ background: "var(--c-surface-2)", border: "1px solid var(--c-border-strong)" }}>
-              <div className="max-h-64 overflow-y-auto py-1">
-                {allDisciplines.map((d) => (
-                  <button key={d} onClick={() => { setSelectedDisc(d); setDropdownOpen(false); }}
-                    className={["w-full text-left px-4 py-2 text-[13px] transition-colors", selectedDisc === d ? "bg-[rgba(29,158,117,0.15)] text-[#4DC9A0] font-semibold" : "text-[var(--c-text-2)] hover:bg-[var(--c-surface-3)]"].join(" ")}>
-                    {d}
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
+        <div className="relative w-full md:w-[240px]">
+          <label htmlFor="performance-discipline" className="sr-only">Épreuve analysée</label>
+          <Trophy size={16} aria-hidden="true" className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" style={{ color: "var(--color-warning)" }} />
+          <select id="performance-discipline" value={selectedDisc ?? ""} onChange={(event) => setSelectedDisc(event.target.value)} className="input-premium font-semibold" style={{ paddingLeft: 40 }}>
+            {allDisciplines.map((discipline) => <option key={discipline} value={discipline}>{discipline}</option>)}
+          </select>
         </div>
       </div>
 
       {/* ── Vue groupe ───────────────────────────────────────────────────── */}
       {viewMode === "group" && (
         <div className="space-y-6">
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             {[
               { icon: Users, bg: "bg-[rgba(239,159,39,0.15)]", color: "#EF9F27", label: "Athlètes", value: ranked.length, sub: `pratiquent ${selectedDisc}` },
               { icon: TrendingUp, bg: "bg-[rgba(29,158,117,0.15)]", color: "#1D9E75", label: "Meilleur SB", value: ranked[0]?.rec.sb ?? "—", sub: ranked[0]?.athlete.name.split(" ")[0] ?? "—", valueColor: "#1D9E75" },
@@ -14907,9 +14908,9 @@ function Performances() {
                   <card.icon size={18} color={card.color} />
                 </div>
                 <div>
-                  <p className="text-[11px] font-semibold uppercase tracking-wider" style={{ color: "var(--c-text-3)" }}>{card.label}</p>
+                  <p className="metric-label">{card.label}</p>
                   <p className="text-[22px] font-bold leading-tight" style={{ color: card.valueColor ?? "var(--c-text-1)" }}>{card.value}</p>
-                  <p className="text-[10px]" style={{ color: "var(--c-text-3)" }}>{card.sub}</p>
+                  <p className="meta-text">{card.sub}</p>
                 </div>
               </div>
             ))}
@@ -14917,21 +14918,21 @@ function Performances() {
 
           {ranked.length === 0 ? (
             <div className="card p-16 text-center">
-              <Trophy size={40} className="mx-auto mb-3" style={{ color: "var(--c-text-4)" }} />
+              <Trophy size={40} className="mx-auto mb-3" style={{ color: "var(--c-text-3)" }} />
               <p className="text-[15px] font-semibold" style={{ color: "var(--c-text-2)" }}>Aucun athlète n'a de record pour « {selectedDisc} »</p>
             </div>
           ) : (
             <>
               <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
                 <div className="lg:col-span-2 card p-5">
-                  <h3 className="text-[14px] font-semibold mb-4" style={{ color: "var(--c-text-1)" }}>Podium — {selectedDisc}</h3>
+                  <h3 className="card-title mb-4">Podium — {selectedDisc}</h3>
                   {ranked.length >= 2 ? <Podium ranked={ranked} /> : (
                     <div className="flex flex-col items-center justify-center py-8 gap-3">
                       <div className="w-16 h-16 rounded-2xl flex items-center justify-center text-white text-[18px] font-bold shadow-sm" style={{ background: ATHLETE_COLORS[ranked[0].colorIdx] }}>{ranked[0].athlete.avatar}</div>
                       <div className="text-center">
                         <p className="text-[15px] font-bold" style={{ color: "var(--c-text-1)" }}>{ranked[0].athlete.name}</p>
                         <p className="text-[18px] font-bold mt-1" style={{ color: "#4DC9A0" }}>{ranked[0].rec.sb}</p>
-                        <p className="text-[11px] mt-0.5" style={{ color: "var(--c-text-3)" }}>Seul pratiquant dans le groupe</p>
+                        <p className="meta-text mt-1">Seul pratiquant dans le groupe</p>
                       </div>
                     </div>
                   )}
@@ -14939,25 +14940,25 @@ function Performances() {
 
                 <div className="lg:col-span-3 card overflow-hidden">
                   <div className="px-5 py-4 border-b" style={{ borderColor: "var(--c-border)" }}>
-                    <h3 className="text-[14px] font-semibold" style={{ color: "var(--c-text-1)" }}>Classement complet</h3>
+                    <h3 className="card-title">Classement complet</h3>
                   </div>
                   <div className="divide-y divide-[var(--c-border)] max-h-[300px] overflow-y-auto">
                     {ranked.map((r, i) => (
                       <div key={r.athlete.id} className="px-5 py-3.5 flex items-center gap-3">
                         <span className={["w-7 h-7 rounded-full flex items-center justify-center text-[12px] font-bold flex-shrink-0", i === 0 ? "bg-[rgba(239,159,39,0.15)] text-[#EF9F27]" : i === 1 ? "bg-[rgba(255,255,255,0.08)] text-[var(--c-text-2)]" : i === 2 ? "bg-[rgba(249,115,22,0.15)] text-[#F97316]" : "bg-[rgba(255,255,255,0.08)] text-[var(--c-text-2)]"].join(" ")}>{i + 1}</span>
-                        <div className="w-8 h-8 rounded-full flex items-center justify-center text-white text-[10px] font-bold flex-shrink-0" style={{ background: ATHLETE_COLORS[r.colorIdx] }}>{r.athlete.avatar}</div>
+                        <div className="w-8 h-8 rounded-full flex items-center justify-center text-white text-[12px] font-semibold flex-shrink-0" style={{ background: ATHLETE_COLORS[r.colorIdx] }}>{r.athlete.avatar}</div>
                         <div className="flex-1 min-w-0">
                           <p className="text-[13px] font-semibold truncate" style={{ color: "var(--c-text-1)" }}>{r.athlete.name}</p>
-                          <p className="text-[10px] truncate" style={{ color: "var(--c-text-3)" }}>{r.athlete.mainDiscipline ?? "—"}</p>
+                          <p className="meta-text truncate">{r.athlete.mainDiscipline ?? "—"}</p>
                         </div>
                         <div className="text-right flex-shrink-0 w-20">
                           <p className="text-[14px] font-bold" style={{ color: "var(--c-text-1)" }}>{r.rec.sb}</p>
-                          <p className="text-[10px]" style={{ color: "var(--c-text-3)" }}>PR : {r.rec.pr}</p>
+                          <p className="meta-text">PR : {r.rec.pr}</p>
                         </div>
                         {r.pct !== null && (
                           <div className="w-16 text-right flex-shrink-0">
                             <p className="text-[12px] font-bold" style={{ color: pctColor(r.pct) }}>{r.pct}%</p>
-                            <p className="text-[9px]" style={{ color: "var(--c-text-3)" }}>du PR</p>
+                            <p className="meta-text">du PR</p>
                           </div>
                         )}
                       </div>
@@ -14969,17 +14970,18 @@ function Performances() {
               {scatterData.length >= 2 && (
                 <div className="card p-5">
                   <div className="mb-4">
-                    <h3 className="text-[14px] font-semibold" style={{ color: "var(--c-text-1)" }}>Charge vs Performance — {selectedDisc}</h3>
-                    <p className="text-[11px] mt-0.5" style={{ color: "var(--c-text-3)" }}>Charge S{CURRENT_WEEK} (axe X) · % du PR atteint (axe Y) · Chaque point = un athlète</p>
+                    <h3 className="card-title">Charge vs Performance — {selectedDisc}</h3>
+                    <p className="card-subtitle">Charge S{CURRENT_WEEK} (axe X) · % du PR atteint (axe Y) · Chaque point représente un athlète</p>
                   </div>
-                  <ResponsiveContainer width="100%" height={280}>
+                  <div role="img" aria-label={`Graphique comparant la charge et le pourcentage du record personnel pour ${selectedDisc}`}>
+                  <ResponsiveContainer width="100%" height={300}>
                     <ScatterChart margin={{ top: 20, right: 30, bottom: 20, left: 20 }}>
                       <CartesianGrid strokeDasharray="3 3" stroke="var(--c-border)" />
-                      <XAxis dataKey="x" name="Charge" type="number" tick={{ fontSize: 10, fill: "var(--c-text-3)" }} axisLine={false} tickLine={false}>
-                        <Label value="Charge (unités)" position="insideBottom" offset={-10} style={{ fontSize: 10, fill: "var(--c-text-3)" }} />
+                      <XAxis dataKey="x" name="Charge" type="number" tick={{ fontSize: 12, fill: "var(--c-text-2)" }} axisLine={false} tickLine={false}>
+                        <Label value="Charge (unités)" position="insideBottom" offset={-10} style={{ fontSize: 12, fill: "var(--c-text-2)" }} />
                       </XAxis>
-                      <YAxis dataKey="y" name="% PR" type="number" domain={[70, 105]} tick={{ fontSize: 10, fill: "var(--c-text-3)" }} axisLine={false} tickLine={false}>
-                        <Label value="% PR" angle={-90} position="insideLeft" style={{ fontSize: 10, fill: "var(--c-text-3)" }} />
+                      <YAxis dataKey="y" name="% PR" type="number" domain={[70, 105]} tick={{ fontSize: 12, fill: "var(--c-text-2)" }} axisLine={false} tickLine={false}>
+                        <Label value="% PR" angle={-90} position="insideLeft" style={{ fontSize: 12, fill: "var(--c-text-2)" }} />
                       </YAxis>
                       <ZAxis range={[80, 80]} />
                       <Tooltip content={<ScatterTooltip currentWeek={CURRENT_WEEK} />} />
@@ -14990,20 +14992,21 @@ function Performances() {
                         return (
                           <g>
                             <circle cx={cx} cy={cy} r={18} fill={payload.color} fillOpacity={0.15} stroke={payload.color} strokeWidth={1.5} />
-                            <text x={cx} y={cy} textAnchor="middle" dominantBaseline="central" fontSize={9} fontWeight="700" fill={payload.color}>{payload.avatar}</text>
+                            <text x={cx} y={cy} textAnchor="middle" dominantBaseline="central" fontSize={12} fontWeight="600" fill={payload.color}>{payload.avatar}</text>
                           </g>
                         );
                       }} />
                     </ScatterChart>
                   </ResponsiveContainer>
+                  </div>
                 </div>
               )}
 
               <div className="card p-5">
                 <div className="flex items-center gap-2 mb-4">
                   <Zap size={15} color="#EF9F27" />
-                  <h3 className="text-[14px] font-semibold" style={{ color: "var(--c-text-1)" }}>Analyse du groupe — {selectedDisc}</h3>
-                  <span className="text-[10px] bg-[rgba(255,255,255,0.08)] text-[var(--c-text-2)] px-2 py-0.5 rounded-full font-medium ml-1">Règles JS · sans IA</span>
+                  <h3 className="card-title">Analyse du groupe — {selectedDisc}</h3>
+                  <span className="text-[12px] bg-[rgba(255,255,255,0.08)] text-[var(--c-text-2)] px-2 py-1 rounded-full font-medium ml-1">Analyse automatique</span>
                 </div>
                 <div className="space-y-2">
                   {analysis.map((line, i) => <p key={i} className="text-[13px] bg-[var(--c-surface-2)] rounded-lg px-4 py-3 leading-relaxed" style={{ color: "var(--c-text-2)" }}>{line}</p>)}
@@ -15018,26 +15021,26 @@ function Performances() {
       {viewMode === "evolution" && (
         <div className="space-y-6">
           <div className="card p-5">
-            <label className="block text-[11px] font-semibold mb-1 uppercase tracking-wide" style={{ color: "var(--c-text-3)" }}>Sélectionner un athlète</label>
+            <label htmlFor="performance-athlete" className="metric-label block mb-2">Sélectionner un athlète</label>
             <div className="relative">
-              <select value={selectedAthleteId ?? ""} onChange={(e) => setSelectedAthleteId(Number(e.target.value))} className="w-full bg-[var(--c-surface-2)] border border-[var(--c-border)] text-[var(--c-text-1)] text-[14px] py-2.5 pl-10 pr-4 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500">
+              <select id="performance-athlete" value={selectedAthleteId ?? ""} onChange={(e) => setSelectedAthleteId(Number(e.target.value))} className="input-premium" style={{ paddingLeft: 40 }}>
                 {athletes.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
               </select>
-              <User size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--c-text-3)]" />
+              <User size={16} aria-hidden="true" className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none text-[var(--c-text-3)]" />
             </div>
           </div>
 
           <div className="card p-5">
             <div className="mb-6 flex justify-between items-start">
               <div>
-                <h3 className="text-[16px] font-bold" style={{ color: "var(--c-text-1)" }}>Historique des compétitions</h3>
-                <p className="text-[13px]" style={{ color: "var(--c-text-3)" }}>Progression sur l'épreuve : {selectedDisc}</p>
+                <h3 className="section-title">Historique des compétitions</h3>
+                <p className="secondary-text mt-1">Progression sur l'épreuve : {selectedDisc}</p>
               </div>
               {evolutionData.length > 0 && (
                 <div className="text-right">
-                  <p className="text-[11px] uppercase font-semibold" style={{ color: "var(--c-text-3)" }}>Meilleur résultat</p>
+                  <p className="metric-label">Meilleur résultat</p>
                   <p className="text-[20px] font-bold" style={{ color: "#4DC9A0" }}>
-                    {isTimeEvent ? Math.min(...evolutionData.map((d) => d.resultNum)) : Math.max(...evolutionData.map((d) => d.resultNum))}
+                    {bestEvolution?.resultStr}
                   </p>
                 </div>
               )}
@@ -15047,15 +15050,15 @@ function Performances() {
               <div className="h-[300px] flex flex-col items-center justify-center rounded-lg border border-dashed" style={{ color: "var(--c-text-3)", background: "var(--c-surface-2)", borderColor: "var(--c-border)" }}>
                 <Calendar size={32} className="mb-2 opacity-50" />
                 <p className="text-[14px] font-medium">Pas assez de données</p>
-                <p className="text-[12px]">Au moins 2 compétitions sur cette épreuve sont nécessaires.</p>
+                <p className="meta-text mt-1">Au moins 2 compétitions sur cette épreuve sont nécessaires.</p>
               </div>
             ) : (
-              <div className="h-[350px]">
+              <div className="h-[350px]" role="img" aria-label={`Évolution des résultats de l'athlète sélectionné sur ${selectedDisc}`}>
                 <ResponsiveContainer width="100%" height="100%">
                   <LineChart data={evolutionData} margin={{ top: 20, right: 30, left: 0, bottom: 10 }}>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--c-border)" />
-                    <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: "var(--c-text-3)" }} dy={10} />
-                    <YAxis domain={["dataMin", "dataMax"]} axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: "var(--c-text-3)" }} reversed={isTimeEvent} tickFormatter={(val) => isTimeEvent && val > 60 ? `${Math.floor(val / 60)}:${(val % 60).toString().padStart(2, "0")}` : val} />
+                    <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: "var(--c-text-2)" }} dy={10} />
+                    <YAxis domain={["dataMin", "dataMax"]} axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: "var(--c-text-2)" }} reversed={isTimeEvent} tickFormatter={(val) => isTimeEvent && val > 60 ? `${Math.floor(val / 60)}:${(val % 60).toString().padStart(2, "0")}` : val} />
                     <Tooltip content={<LineTooltip />} />
                     <Line type="monotone" dataKey="resultNum" stroke="#1D9E75" strokeWidth={3} dot={{ r: 5, fill: "#1D9E75", strokeWidth: 2, stroke: "var(--c-surface)" }} activeDot={{ r: 7, strokeWidth: 0, fill: "#1D9E75" }} animationDuration={800} />
                   </LineChart>
