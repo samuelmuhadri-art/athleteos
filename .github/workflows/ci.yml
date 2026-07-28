@@ -1,0 +1,104 @@
+name: CI — quality gate
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  quality-gate:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: athleteos
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          # @supabase/supabase-js initialise toujours un RealtimeClient à la
+          # création (même sans usage de Realtime), qui exige le WebSocket
+          # natif de Node — absent avant Node 22 ("Node.js detected but
+          # native WebSocket not found"), constaté lors d'un run CI (tâche 7).
+          node-version: 22
+
+      - run: npm ci
+
+      # ── Portes de qualité rapides, sans base de données (tâche 19) ──────────
+      # lint -> typecheck -> tests unitaires + couverture -> build. Le premier
+      # échec arrête le job (npm run check s'arrête à la première commande en
+      # erreur) — feedback rapide avant de payer le coût de Supabase local.
+      - name: npm run check (lint, typecheck, tests unitaires + couverture, build)
+        run: npm run check
+
+      # ══════════════════════════════════════════════════════════════════════
+      # À partir d'ici : instance Supabase locale et jetable (Docker, fournie
+      # par le runner) — rejoue TOUTES les migrations dans l'ordre, à partir
+      # d'une base vide. Ne touche jamais la production (tâche 7, DoD "ne
+      # touchent pas la production"). studio/imgproxy/mailpit/vector/logflare/
+      # edge-runtime exclus (pas nécessaires ici, démarrage plus rapide).
+      # ══════════════════════════════════════════════════════════════════════
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Start local Supabase (applique toutes les migrations)
+        run: supabase start -x studio,imgproxy,mailpit,vector,logflare,edge-runtime --debug
+
+      # Identifiants de l'instance locale — pas des secrets (clés de démo
+      # fixes, base jetable détruite à la fin du job). `supabase status -o env`
+      # sort des valeurs entre guillemets (NAME="value"), retirées avant
+      # d'écrire dans $GITHUB_ENV. Réexporte aussi API_URL/ANON_KEY sous les
+      # noms VITE_SUPABASE_* : Vite les embarque dans le bundle AU MOMENT DU
+      # BUILD (import.meta.env), donc le rebuild plus bas doit les voir sous
+      # ce nom précis, pas seulement sous le nom brut du CLI Supabase.
+      - name: Export local Supabase credentials
+        run: |
+          supabase status -o env | sed 's/"//g' | grep -E '^[A-Z_]+=' >> "$GITHUB_ENV"
+          echo "VITE_SUPABASE_URL=$(supabase status -o env | sed 's/"//g' | grep '^API_URL=' | cut -d= -f2-)" >> "$GITHUB_ENV"
+          echo "VITE_SUPABASE_ANON_KEY=$(supabase status -o env | sed 's/"//g' | grep '^ANON_KEY=' | cut -d= -f2-)" >> "$GITHUB_ENV"
+
+      # ── Suite RLS : lancée deux fois de suite (tâche 7, vérification
+      #    obligatoire) — la suite crée/nettoie ses propres fixtures à
+      #    chaque exécution, un deuxième passage identique confirme qu'elle
+      #    est déterministe et ne laisse rien traîner en base. ────────────
+      - name: RLS regression suite (1/2)
+        run: node test_rls_regression.mjs
+      - name: RLS regression suite (2/2 — déterminisme)
+        run: node test_rls_regression.mjs
+
+      # ── Reste de la suite d'intégration (tâches 3, 2, 4, 16, 18, 14, 8, 12) —
+      #    jamais câblée en CI jusqu'ici (nécessitait des secrets pointant
+      #    la production, jamais configurés) : tourne désormais contre
+      #    l'instance locale jetable ci-dessus, sans risque. ──────────────
+      - name: Reste de la suite d'intégration (contre Supabase local)
+        run: |
+          node test_signup_regression.mjs
+          node test_send_push_regression.mjs
+          node test_admin_actions.mjs
+          node test_charge_model_parity.mjs
+          node test_axis_model_parity.mjs
+          node test_competition_transactions.mjs
+          node test_private_storage.mjs
+          node test_performance_normalization.mjs
+
+      # ── E2E (Playwright) : rebuild avec les identifiants Supabase LOCAUX
+      #    (le 1er build, dans npm run check, utilisait des identifiants
+      #    absents/vides — un smoke test suffit là-bas, pas besoin de
+      #    Supabase). E2E_WITH_AUTH active global-setup.mjs, qui crée 2
+      #    comptes réels (coach + athlète) sur cette instance locale. ────
+      - name: Rebuild avec les identifiants Supabase locaux
+        run: npm run build
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+
+      - name: E2E (parcours coach/athlète critiques)
+        env:
+          E2E_WITH_AUTH: "1"
+        run: npm run test:e2e
+
+      - name: Stop local Supabase
+        if: always()
+        run: supabase stop

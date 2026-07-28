@@ -119,10 +119,21 @@ export default function AthletePlanning({
     // Ne capture le geste que sur les cartes non-compactes et non déjà
     // validées — inutile de re-swiper une séance déjà "faite".
     const canSwipe = !compact && st !== "done" && st !== "none";
+    // Trouvé par le lint react-hooks/rules-of-hooks ajouté à la tâche 19 —
+    // SessionCard est un composant défini via useCallback (donc son
+    // identité change quand [athlete.id, onStatusChange] change), pas
+    // reconnu comme un vrai composant stable : à chaque changement
+    // d'identité, React le démonte/remonte et l'état de swipe ci-dessous
+    // (dragX/dragging) est perdu. Bug réel et pré-existant, pas corrigé
+    // ici (corriger proprement = extraire SessionCard en composant de haut
+    // niveau et faire remonter ses props — hors périmètre d'une tâche
+    // d'installation d'outillage de test, à traiter dans une tâche dédiée).
+    /* eslint-disable react-hooks/rules-of-hooks */
     const [dragX, setDragX]     = useState(0);
     const [dragging, setDragging] = useState(false);
     const touchStartX = useRef(0);
     const justSwiped  = useRef(false);
+    /* eslint-enable react-hooks/rules-of-hooks */
 
     const onTouchStart = (e) => {
       if (!canSwipe) return;

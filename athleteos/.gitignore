@@ -1,2 +1,8 @@
 node_modules
 dist
+
+# Tâche 19 — artefacts de test générés localement/en CI, jamais committés
+coverage
+playwright-report
+test-results
+e2e/.auth-fixtures.json

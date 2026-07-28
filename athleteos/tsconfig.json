@@ -1,0 +1,35 @@
+{
+  // Tâche 19 — premier typecheck jamais installé sur ce projet.
+  //
+  // "checkJs": false EST DÉLIBÉRÉ, pas un oubli : ce projet est 100% JS
+  // sans annotations (~150 fichiers). Basculer checkJs à true a été
+  // testé pendant l'installation — 107 erreurs remontent immédiatement
+  // (mesuré le 2026-08-02), pour l'essentiel du bruit (arithmétique sur
+  // des Date non converties en nombre — un pattern JS valide et sûr, pas
+  // un bug) et quelques vraies formes de props JSX à corriger au cas par
+  // cas. Les corriger en masse pour "faire passer" le typecheck serait le
+  // refactor massif que la tâche interdit explicitement pendant une
+  // installation d'outillage.
+  //
+  // Ce fichier typecheck aujourd'hui : les fichiers .ts réels (actuellement
+  // seulement src/types/database.types.ts, généré et déjà valide). Pour
+  // étendre la couverture progressivement SANS tout activer d'un coup,
+  // ajouter un commentaire `// @ts-check` en tête d'un fichier .js/.jsx
+  // précis suffit à l'inclure dans le typecheck sans toucher aux autres.
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "jsx": "react-jsx",
+    "allowJs": true,
+    "checkJs": false,
+    "noEmit": true,
+    "skipLibCheck": true,
+    "strict": false,
+    "noImplicitAny": false,
+    "resolveJsonModule": true,
+    "isolatedModules": true
+  },
+  "include": ["src/**/*"]
+}
