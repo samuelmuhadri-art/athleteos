@@ -32,11 +32,16 @@ jobs:
       # GitHub) — rejoue TOUTES les migrations de supabase/migrations/ dans
       # l'ordre, à partir d'une base vide, à chaque run. La suite RLS ne
       # touche donc jamais la production (tâche 7, DoD "ne touchent pas la
-      # production"). studio/imgproxy/inbucket/vector/analytics/edge-runtime
+      # production"). studio/imgproxy/mailpit/vector/logflare/edge-runtime
       # ne sont pas nécessaires pour des tests RLS/storage et sont exclus
-      # pour accélérer le démarrage.
+      # pour accélérer le démarrage (noms de service confirmés par le CLI :
+      # "Valid containers to exclude are: edge-runtime, gotrue, imgproxy,
+      # kong, logflare, mailpit, postgres-meta, postgrest, realtime,
+      # storage-api, studio, supavisor, vector").
+      # --debug : sans ça, un échec de migration n'affiche que le SQL fautif,
+      # jamais la raison Postgres réelle (vécu lors du 1er run de cette CI).
       - name: Start local Supabase (applique toutes les migrations)
-        run: supabase start -x studio,imgproxy,inbucket,vector,analytics,edge-runtime
+        run: supabase start -x studio,imgproxy,mailpit,vector,logflare,edge-runtime --debug
 
       # Identifiants de l'instance locale — ce ne sont pas des secrets (clés
       # de démo fixes, base jetable détruite à la fin du job), donc pas

@@ -43,17 +43,6 @@ BEGIN;
 --     CLI le 2026-10-30).
 -- ============================================================
 
--- ── Fonction utilisée par (quasi) toutes les policies ci-dessous ───────────
-CREATE OR REPLACE FUNCTION public.get_my_club_id()
-RETURNS integer
-LANGUAGE sql STABLE SECURITY DEFINER
-SET search_path TO 'public'
-AS $$
-  SELECT club_id FROM users
-  WHERE lower(trim(auth_uid)) = lower(trim(auth.uid()::text))
-  LIMIT 1;
-$$;
-
 -- ── Tables ───────────────────────────────────────────────────────────────
 
 CREATE TABLE public.clubs (
@@ -70,6 +59,23 @@ CREATE TABLE public.users (
   auth_uid text,
   auth_id  uuid UNIQUE
 );
+
+-- Fonction utilisée par (quasi) toutes les policies plus bas — DOIT venir
+-- après `users` : pour une fonction LANGUAGE sql, Postgres résout et
+-- vérifie les tables référencées dès la création (contrairement à
+-- plpgsql, où le corps n'est vérifié qu'à la première exécution) — la
+-- créer avant que `users` existe échoue immédiatement ("relation "users"
+-- does not exist"). C'est exactement ce qui a fait échouer le 1er essai
+-- de cette migration en CI.
+CREATE OR REPLACE FUNCTION public.get_my_club_id()
+RETURNS integer
+LANGUAGE sql STABLE SECURITY DEFINER
+SET search_path TO 'public'
+AS $$
+  SELECT club_id FROM users
+  WHERE lower(trim(auth_uid)) = lower(trim(auth.uid()::text))
+  LIMIT 1;
+$$;
 
 CREATE TABLE public.athletes (
   id             serial PRIMARY KEY,
