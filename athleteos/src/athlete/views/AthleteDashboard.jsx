@@ -27,6 +27,7 @@ import FormeDetailPanel from "../components/FormeDetailPanel";
 import AxisRadarCard from "../../components/ui/AxisRadarCard";
 import { SessionDetailModal } from "./AthletePlanning";
 import { openSessionPdf } from "../../utils/storage";
+import { getTodayFocus } from "../dashboardFocus";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 function getDiscType(discName) {
@@ -177,6 +178,142 @@ const ReadinessRing = memo(({ value, color, size = 128 }) => {
   );
 });
 
+const DailyFocusCard = memo(({
+  focus, todaySessions, nextCompetition,
+  onOpenWellness, onOpenSession, onOpenPlanning,
+}) => {
+  const wellnessCompleted = focus.kind !== "wellness";
+  const session = focus.focusSession;
+  const progress = Math.round((focus.completedSteps / Math.max(1, focus.totalSteps)) * 100);
+
+  const presentation = focus.kind === "wellness" ? {
+    eyebrow: "Étape suivante",
+    title: "Check-in du matin",
+    description: "30 secondes pour fiabiliser ton Readiness et donner le bon contexte à ton coach.",
+    cta: "Faire mon check-in",
+    color: "var(--color-success)",
+    icon: Activity,
+    action: onOpenWellness,
+  } : focus.kind === "session" ? {
+    eyebrow: "Prochaine séance",
+    title: session?.title ?? "Séance du jour",
+    description: [session?.time, session?.durationMinutes ? `${session.durationMinutes} min` : null].filter(Boolean).join(" · "),
+    cta: "Ouvrir la séance",
+    color: session ? colorsFor(session.category).border : "var(--c-accent)",
+    icon: Clock,
+    action: onOpenSession,
+  } : focus.kind === "complete" ? {
+    eyebrow: "Journée à jour",
+    title: "Tout est validé",
+    description: "Ton check-in et tes séances du jour sont enregistrés. Beau travail.",
+    cta: "Voir la semaine",
+    color: "var(--color-success)",
+    icon: CheckCircle,
+    action: onOpenPlanning,
+  } : {
+    eyebrow: "Journée légère",
+    title: "Récupération & continuité",
+    description: "Aucune séance aujourd’hui. Garde un œil sur la suite et profite de la récupération.",
+    cta: "Voir le planning",
+    color: "var(--color-info)",
+    icon: CalendarDays,
+    action: onOpenPlanning,
+  };
+
+  const FocusIcon = presentation.icon;
+  const completedSessionLabel = todaySessions.length === 0
+    ? "Journée libre"
+    : `${focus.completedSessions}/${todaySessions.length} traitée${todaySessions.length > 1 ? "s" : ""}`;
+
+  return (
+    <section className="card" aria-labelledby="daily-focus-title" style={{
+      position: "relative", overflow: "hidden", minHeight: "100%",
+      background: "linear-gradient(155deg, rgba(36,168,125,0.08), rgba(255,255,255,0.018) 38%, transparent 72%), var(--c-surface)",
+    }}>
+      <div aria-hidden="true" style={{
+        position: "absolute", width: 180, height: 180, borderRadius: "50%", right: -90, top: -100,
+        background: `color-mix(in srgb, ${presentation.color} 9%, transparent)`, filter: "blur(12px)", pointerEvents: "none",
+      }} />
+      <div style={{ position: "relative", padding: "var(--card-padding-comfortable)", height: "100%", display: "flex", flexDirection: "column" }}>
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <p className="metric-label">Ton plan</p>
+            <h2 id="daily-focus-title" className="section-title" style={{ marginTop: "var(--space-1)" }}>Aujourd’hui</h2>
+          </div>
+          <span style={{
+            minWidth: 48, padding: "4px 10px", borderRadius: 99, textAlign: "center",
+            background: "var(--c-surface-2)", border: "1px solid var(--c-border)",
+            color: "var(--c-text-2)", fontSize: "var(--text-meta)", fontWeight: 600,
+            fontVariantNumeric: "tabular-nums",
+          }}>
+            {focus.completedSteps}/{focus.totalSteps}
+          </span>
+        </div>
+
+        <div className="progress-bar" style={{ marginTop: "var(--space-3)", marginBottom: "var(--space-4)", height: 4 }}>
+          <div className="progress-fill" style={{ width: `${progress}%`, background: presentation.color }} />
+        </div>
+
+        <div style={{
+          padding: "var(--space-4)", borderRadius: "var(--r-md)",
+          background: `color-mix(in srgb, ${presentation.color} 6%, transparent)`,
+          border: `1px solid color-mix(in srgb, ${presentation.color} 18%, transparent)`,
+        }}>
+          <div className="flex items-start gap-3">
+            <div style={{
+              width: 40, height: 40, borderRadius: 12, flexShrink: 0,
+              display: "flex", alignItems: "center", justifyContent: "center",
+              color: presentation.color, background: `color-mix(in srgb, ${presentation.color} 10%, transparent)`,
+            }}>
+              <FocusIcon size={18} strokeWidth={2} aria-hidden="true" />
+            </div>
+            <div className="min-w-0">
+              <p className="metric-label" style={{ color: presentation.color }}>{presentation.eyebrow}</p>
+              <p className="card-title" style={{ marginTop: "var(--space-1)" }}>{presentation.title}</p>
+              <p className="secondary-text" style={{ marginTop: "var(--space-1)" }}>{presentation.description}</p>
+            </div>
+          </div>
+          <button type="button" onClick={presentation.action} className="btn-primary" style={{ width: "100%", marginTop: "var(--space-4)" }}>
+            {presentation.cta}<ChevronRight size={15} aria-hidden="true" />
+          </button>
+        </div>
+
+        <div style={{ marginTop: "var(--space-3)", borderTop: "1px solid var(--c-border)" }}>
+          <button type="button" onClick={onOpenWellness} className="tap-feedback" style={{
+            width: "100%", minHeight: 48, display: "flex", alignItems: "center", gap: 10,
+            background: "transparent", border: 0, borderBottom: "1px solid var(--c-border)", padding: 0,
+            color: "inherit", cursor: "pointer", textAlign: "left",
+          }}>
+            <CheckCircle size={15} color={wellnessCompleted ? "var(--color-success)" : "var(--c-text-3)"} aria-hidden="true" />
+            <span className="secondary-text" style={{ flex: 1, color: "var(--c-text-1)" }}>Wellness du jour</span>
+            <span className="meta-text" style={{ color: wellnessCompleted ? "var(--color-success)" : "var(--color-warning)", fontWeight: 600 }}>
+              {wellnessCompleted ? "Complété" : "À faire"}
+            </span>
+          </button>
+
+          <button type="button" onClick={session ? onOpenSession : onOpenPlanning} className="tap-feedback" style={{
+            width: "100%", minHeight: 48, display: "flex", alignItems: "center", gap: 10,
+            background: "transparent", border: 0, padding: 0, color: "inherit", cursor: "pointer", textAlign: "left",
+          }}>
+            <CalendarDays size={15} color={session ? presentation.color : "var(--c-text-3)"} aria-hidden="true" />
+            <span className="secondary-text" style={{ flex: 1, color: "var(--c-text-1)" }}>Entraînement</span>
+            <span className="meta-text" style={{ color: session ? "var(--color-warning)" : "var(--c-text-2)", fontWeight: 600 }}>
+              {completedSessionLabel}
+            </span>
+            <ChevronRight size={14} color="var(--c-text-3)" aria-hidden="true" />
+          </button>
+        </div>
+
+        {nextCompetition && (
+          <p className="meta-text" style={{ marginTop: "auto", paddingTop: "var(--space-3)" }}>
+            Prochain cap · <span style={{ color: "var(--c-text-2)", fontWeight: 600 }}>{nextCompetition.name}</span>
+          </p>
+        )}
+      </div>
+    </section>
+  );
+});
+
 // ═══════════════════════════════════════════════════════════════════════════════
 // COMPOSANT PRINCIPAL
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -189,7 +326,7 @@ export default function AthleteDashboard({
   // Recalculé à chaque rendu pour rester juste après un changement de date.
   const today       = new Date();
   const currentWeek = getISOWeek(today);
-  const [openTodaySession, setOpenTodaySession] = useState(false);
+  const [openTodaySessionId, setOpenTodaySessionId] = useState(null);
 
   const metrics = useMemo(() =>
     getAthleteMetricsForWeek(athlete.id, weeklyCharge, currentWeek, wellnessToday ? [wellnessToday] : [], sessions),
@@ -209,9 +346,11 @@ export default function AthleteDashboard({
   // juste sous le ring plutôt que noyée dans la liste de la semaine.
   const todaySessions = weekSessions
     .filter(s => s.sessionDate && isSameDay(parseLocalDate(s.sessionDate), today));
-  const heroSession = todaySessions[0] ?? null;
-  const heroValidation = heroSession?.validations?.find(v => v.athleteId === athlete.id) ?? null;
-  const heroDone = heroValidation?.status === "done";
+  const todayFocus = getTodayFocus({
+    wellnessCompleted: Boolean(wellnessToday), todaySessions, athleteId: athlete.id,
+  });
+  const focusSession = todayFocus.focusSession;
+  const openedTodaySession = todaySessions.find(session => session.id === openTodaySessionId) ?? null;
 
   const topRecords     = Object.entries(athlete.records ?? {}).slice(0, 4);
   const activeInjuries = (athlete.injuries ?? []).filter(i => i.status !== "résolu");
@@ -297,18 +436,18 @@ export default function AthleteDashboard({
         <span className="meta-text hidden sm:block">Semaine {currentWeek}</span>
       </header>
 
-      {/* ══════════════════════════════════════════════════════════════════════
-          HERO — vert-noir profond, chiffres sobres
-         ══════════════════════════════════════════════════════════════════════ */}
-      <div className="rounded-2xl overflow-hidden select-none border"
-        style={{ background: "linear-gradient(160deg, var(--c-surface) 0%, var(--c-surface-2) 55%, var(--c-bg) 100%)", borderColor: "var(--c-border)" }}>
-        {/* Grille décorative — très subtile */}
-        <div className="absolute pointer-events-none" style={{
-          inset: 0, position: "relative",
-          backgroundImage: "linear-gradient(rgba(29,158,117,0.03) 1px, transparent 1px), linear-gradient(90deg, rgba(29,158,117,0.03) 1px, transparent 1px)",
-          backgroundSize: "24px 24px",
-        }} />
-        <div style={{ padding: "var(--card-padding-comfortable)" }}>
+      {/* Le premier écran répond à deux questions distinctes :
+          "comment je vais ?" à gauche, "que dois-je faire ?" à droite. */}
+      <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1.5fr)_minmax(300px,0.8fr)] gap-4 md:gap-5 items-stretch">
+        <section className="rounded-2xl overflow-hidden select-none border" aria-labelledby="readiness-title"
+          style={{ position: "relative", background: "linear-gradient(160deg, var(--c-surface) 0%, var(--c-surface-2) 55%, var(--c-bg) 100%)", borderColor: "var(--c-border)" }}>
+          {/* Grille décorative — très subtile */}
+          <div className="absolute pointer-events-none" aria-hidden="true" style={{
+            inset: 0,
+            backgroundImage: "linear-gradient(rgba(29,158,117,0.03) 1px, transparent 1px), linear-gradient(90deg, rgba(29,158,117,0.03) 1px, transparent 1px)",
+            backgroundSize: "24px 24px",
+          }} />
+          <div style={{ position: "relative", padding: "var(--card-padding-comfortable)" }}>
           {/* Identité */}
           <div className="flex items-start justify-between gap-3 mb-5">
             <div className="flex items-center gap-3">
@@ -325,7 +464,7 @@ export default function AthleteDashboard({
                 <p className="meta-text" style={{ fontWeight: 600, letterSpacing: "0.07em", textTransform: "uppercase", marginBottom: "var(--space-1)" }}>
                   État du jour · S{currentWeek}
                 </p>
-                <p className="section-title">{status.label}</p>
+                <p id="readiness-title" className="section-title">{status.label}</p>
                 <p className="meta-text" style={{ marginTop: "var(--space-1)" }}>
                   {athlete.mainDiscipline ?? "Athlète"}{athlete.group ? ` · ${athlete.group}` : ""}
                 </p>
@@ -382,68 +521,24 @@ export default function AthleteDashboard({
                 })}
               </div>
             </div>
+            </div>
           </div>
-        </div>
-      </div>
+        </section>
 
-      {/* ══════════════════════════════════════════════════════════════════════
-          SÉANCE DU JOUR — la chose la plus importante à faire aujourd'hui,
-          juste sous le ring, pas noyée dans la liste de la semaine.
-         ══════════════════════════════════════════════════════════════════════ */}
-      {heroSession ? (
-        <div className="card p-4" style={heroDone ? undefined : { borderColor: "rgba(29,158,117,0.30)" }}>
-          <div className="flex items-center justify-between gap-3">
-            <div className="flex items-center gap-3 min-w-0">
-              <div style={{
-                width: 40, height: 40, borderRadius: 10, flexShrink: 0,
-                background: heroDone ? "rgba(29,158,117,0.12)" : `${colorsFor(heroSession.category).border}18`,
-                display: "flex", alignItems: "center", justifyContent: "center",
-              }}>
-                {heroDone
-                  ? <CheckCircle size={18} color="#1D9E75" strokeWidth={2} />
-                  : <Clock size={18} color={colorsFor(heroSession.category).border} strokeWidth={2} />}
-              </div>
-              <div className="min-w-0">
-                <p className="meta-text" style={{ fontWeight: 600, letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: "var(--space-1)" }}>
-                  Séance du jour{todaySessions.length > 1 ? ` · +${todaySessions.length - 1} autre${todaySessions.length > 2 ? "s" : ""}` : ""}
-                </p>
-                <p className="card-title truncate">{heroSession.title}</p>
-                <p className="meta-text" style={{ marginTop: "var(--space-1)" }}>
-                  {heroSession.time}{heroSession.durationMinutes ? ` · ${heroSession.durationMinutes} min` : ""}
-                </p>
-              </div>
-            </div>
-            {heroDone ? (
-              <span style={{ fontSize: "var(--text-secondary)", fontWeight: 600, color: "var(--color-success)", flexShrink: 0, whiteSpace: "nowrap" }}>Validée</span>
-            ) : (
-              <button onClick={() => setOpenTodaySession(true)} className="btn-primary" style={{ flexShrink: 0 }}>
-                Valider
-              </button>
-            )}
-          </div>
-        </div>
-      ) : (
-        <div className="card card-content flex items-center justify-between gap-4">
-          <div className="flex items-center gap-3 min-w-0">
-            <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
-              style={{ background: "var(--c-surface-2)" }}>
-              <CalendarDays size={18} color="var(--c-text-2)" strokeWidth={1.8} />
-            </div>
-            <div className="min-w-0">
-              <p className="card-title">Aucune séance prévue aujourd’hui</p>
-              <p className="card-subtitle">Consulte ton planning pour voir la suite de la semaine.</p>
-            </div>
-          </div>
-          <button onClick={() => onNavigate("planning")} className="btn-secondary flex-shrink-0">
-            Planning
-          </button>
-        </div>
-      )}
+        <DailyFocusCard
+          focus={todayFocus}
+          todaySessions={todaySessions}
+          nextCompetition={nextComp}
+          onOpenWellness={onOpenWellness}
+          onOpenSession={() => focusSession && setOpenTodaySessionId(focusSession.id)}
+          onOpenPlanning={() => onNavigate("planning")}
+        />
+      </div>
 
       {/* ══════════════════════════════════════════════════════════════════════
           WELLNESS
          ══════════════════════════════════════════════════════════════════════ */}
-      {wellnessToday ? (
+      {wellnessToday && (
         <div className="card p-4">
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-2.5">
@@ -489,29 +584,14 @@ export default function AthleteDashboard({
             Modifier
           </button>
         </div>
-      ) : (
-        <div style={{ borderRadius: 14, padding: "14px 16px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16, background: "rgba(29,158,117,0.08)", border: "1px solid rgba(29,158,117,0.15)" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-            <div style={{ width: 36, height: 36, borderRadius: 9, background: "rgba(29,158,117,0.12)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-              <Activity size={15} color="#1D9E75" strokeWidth={2} />
-            </div>
-            <div>
-              <p className="card-title">Questionnaire matinal</p>
-              <p className="card-subtitle">30 secondes · Améliore ton Readiness</p>
-            </div>
-          </div>
-          <button onClick={onOpenWellness} className="btn-primary" style={{ flexShrink: 0 }}>
-            Remplir
-          </button>
-        </div>
       )}
 
       {/* ══════════════════════════════════════════════════════════════════════
           GRILLE PRINCIPALE
          ══════════════════════════════════════════════════════════════════════ */}
       <div>
-        <p className="section-title">À explorer</p>
-        <p className="secondary-text mt-1">Tes tendances, tes progrès et les informations de ton équipe.</p>
+        <p className="section-title">Tendances & progression</p>
+        <p className="secondary-text mt-1">Comprends ta charge, suis tes progrès et garde le lien avec ton équipe.</p>
       </div>
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 md:gap-5">
         <div className="lg:col-span-2 space-y-4 md:space-y-5">
@@ -576,7 +656,7 @@ export default function AthleteDashboard({
                         {/* Label semaine */}
                         <span style={{
                           fontSize: "var(--text-meta)", lineHeight: "var(--leading-meta)", paddingTop: 5, paddingBottom: 2,
-                          color: isCurrent ? "var(--c-text-2)" : "var(--c-text-4)",
+                          color: isCurrent ? "var(--c-text-2)" : "var(--c-text-3)",
                           fontWeight: isCurrent ? 500 : 400,
                           textAlign: "center", display: "block",
                         }}>
@@ -605,7 +685,7 @@ export default function AthleteDashboard({
                     <p style={{ fontSize: "var(--text-meta)", fontWeight: 600, letterSpacing: "0.06em", textTransform: "uppercase", color: "var(--c-text-3)", marginTop: 4 }}>
                       {s.label}
                     </p>
-                    <p style={{ fontSize: "var(--text-meta)", color: "var(--c-text-4)", marginTop: 2 }}>{s.sub}</p>
+                    <p style={{ fontSize: "var(--text-meta)", color: "var(--c-text-3)", marginTop: 2 }}>{s.sub}</p>
                   </div>
                 ))}
               </div>
@@ -625,7 +705,7 @@ export default function AthleteDashboard({
                     transition: "left 0.7s cubic-bezier(0.16,1,0.3,1)",
                   }} />
                 </div>
-                <div style={{ display: "flex", justifyContent: "space-between", fontSize: "var(--text-meta)", color: "var(--c-text-4)", marginTop: 4 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: "var(--text-meta)", color: "var(--c-text-3)", marginTop: 4 }}>
                   <span>0</span><span>0.8</span><span>1.3</span><span>2.0</span>
                 </div>
               </div>
@@ -673,7 +753,7 @@ export default function AthleteDashboard({
                         </div>
                         <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
                           <span style={{ fontSize: 14, fontWeight: 600, color: col, fontVariantNumeric: "tabular-nums", letterSpacing: "-0.02em" }}>{val}</span>
-                          <ChevronRight size={11} color="var(--c-text-4)" />
+                          <ChevronRight size={11} color="var(--c-text-3)" />
                         </div>
                       </div>
                       {/* Barre 3px */}
@@ -703,7 +783,7 @@ export default function AthleteDashboard({
             </div>
             {weekSessions.length === 0 ? (
               <div style={{ padding: "32px 16px", textAlign: "center" }}>
-                <CalendarDays size={20} color="var(--c-text-4)" strokeWidth={1.5} style={{ margin: "0 auto 8px" }} />
+                <CalendarDays size={20} color="var(--c-text-3)" strokeWidth={1.5} style={{ margin: "0 auto 8px" }} />
                 <p style={{ fontSize: 12, color: "var(--c-text-3)" }}>Aucune séance cette semaine</p>
               </div>
             ) : weekSessions.map((s, idx) => {
@@ -814,7 +894,7 @@ export default function AthleteDashboard({
             </div>
             {unlockedBadges.length === 0 ? (
               <div style={{ textAlign: "center", padding: "24px 0" }}>
-                <Trophy size={22} color="var(--c-text-4)" strokeWidth={1.5} style={{ margin: "0 auto 8px" }} />
+                <Trophy size={22} color="var(--c-text-3)" strokeWidth={1.5} style={{ margin: "0 auto 8px" }} />
                 <p style={{ fontSize: 12, color: "var(--c-text-3)" }}>Commence à t'entraîner pour débloquer tes premiers badges</p>
               </div>
             ) : (
@@ -983,10 +1063,10 @@ export default function AthleteDashboard({
         />
       )}
 
-      {openTodaySession && heroSession && (
+      {openedTodaySession && (
         <SessionDetailModal
-          session={heroSession} athlete={athlete} allAthletes={allAthletes ?? []}
-          onClose={() => setOpenTodaySession(false)}
+          session={openedTodaySession} athlete={athlete} allAthletes={allAthletes ?? []}
+          onClose={() => setOpenTodaySessionId(null)}
           onSetStatus={onStatusChange} onSetRpe={onRpeChange}
           onSetFeeling={onFeelingChange} onSetComment={onCommentChange}
         />
