@@ -2,15 +2,25 @@
 // ============================================================
 // AthleteOS — test_rls_regression.mjs
 //
-// Vérifie l'isolation par club : un coach authentifié du club A ne
-// doit pouvoir ni lire ni modifier ni supprimer aucune donnée du
-// club B, sur toutes les tables scoped par club_id/athlete_id.
+// Vérifie l'isolation par club ET l'isolation par propriétaire à
+// l'intérieur d'un même club (tâche 6) :
+//   1. Un coach authentifié du club A ne doit pouvoir ni lire ni
+//      modifier ni supprimer aucune donnée du club B.
+//   2. À l'intérieur du MÊME club, un athlète ne doit pouvoir lire/
+//      modifier ni le wellness, ni les blessures, ni l'abonnement push
+//      d'un coéquipier — uniquement les siens (le coach, lui, garde un
+//      accès en lecture à tout le club).
+//   3. Un athlète ne peut pas s'auto-attribuer un rôle différent
+//      (role/club_id verrouillés côté serveur).
+//   4. Un compte non-authentifié (anon) ne voit aucune donnée métier.
+//   5. Les RPC (get_my_club_id/get_my_role/get_my_athlete_id) renvoient
+//      la bonne valeur pour le bon appelant, directement via REST.
 //
-// Crée deux clubs + deux comptes coach éphémères, seed une ligne de
-// test dans chacune des tables couvertes (club B, plus un contrôle
-// positif dans le club A), se connecte comme coach A avec la clé
-// anon (comme le fait vraiment le frontend), tente d'accéder aux
-// données du club B, puis nettoie tout — succès ou échec.
+// Crée deux clubs, deux comptes coach et deux comptes athlète (même
+// club A) éphémères, seed une ligne de test dans chacune des tables
+// couvertes, se connecte avec la clé anon (comme le fait vraiment le
+// frontend), tente les accès interdits, puis nettoie tout — succès ou
+// échec.
 //
 // Usage :
 //   SUPABASE_SERVICE_ROLE_KEY=... node test_rls_regression.mjs
@@ -70,6 +80,9 @@ async function insertOrThrow(table, row) {
 async function main() {
   let clubA, clubB, userA, userB, authA, authB, athleteA, athleteB, sessionB, competitionB;
   let coachAClient;
+  // Tâche 6 — comptes athlète intra-club (ownership) :
+  let authX, authY, userX, userY, athleteX, athleteY;
+  let athleteXClient, athleteYClient, anonClient;
 
   try {
     // ── Setup : deux clubs, deux comptes coach ──────────────────────────────
@@ -119,6 +132,33 @@ async function main() {
     await insertOrThrow("athlete_notifications", { athlete_id: athleteB.id, club_id: clubB.id, type: "test", title: "Test RLS" });
     await insertOrThrow("social_posts", { athlete_id: athleteB.id, club_id: clubB.id, content: "Test RLS" });
     competitionB = await insertOrThrow("competitions", { club_id: clubB.id, name: "Compétition test RLS", date: "2026-08-01" });
+
+    // ── Seed club A : deux comptes athlète (test d'appartenance intra-club) ─
+    // X et Y sont dans le MÊME club (A) — le test n'est plus "un autre club
+    // peut-il voir ?" mais "un coéquipier peut-il voir ?".
+    const emailX = `rls-test-x-${RUN_ID}@example.invalid`;
+    const emailY = `rls-test-y-${RUN_ID}@example.invalid`;
+    const passwordXY = `Rls-Test-${RUN_ID}-Xy!`;
+
+    const { data: aX, error: eaX } = await admin.auth.admin.createUser({ email: emailX, password: passwordXY, email_confirm: true });
+    if (eaX) throw new Error(`createUser X : ${eaX.message}`);
+    authX = aX.user;
+    const { data: aY, error: eaY } = await admin.auth.admin.createUser({ email: emailY, password: passwordXY, email_confirm: true });
+    if (eaY) throw new Error(`createUser Y : ${eaY.message}`);
+    authY = aY.user;
+
+    userX = await insertOrThrow("users", { club_id: clubA.id, name: "Athlete X (test RLS)", email: emailX, role: "athlete", auth_uid: authX.id });
+    userY = await insertOrThrow("users", { club_id: clubA.id, name: "Athlete Y (test RLS)", email: emailY, role: "athlete", auth_uid: authY.id });
+    athleteX = await insertOrThrow("athletes", { club_id: clubA.id, name: "Athlete X (test RLS)", user_id: userX.id });
+    athleteY = await insertOrThrow("athletes", { club_id: clubA.id, name: "Athlete Y (test RLS)", user_id: userY.id });
+
+    // Données appartenant à X uniquement — Y (même club) ne doit rien voir.
+    await insertOrThrow("athlete_wellness", {
+      athlete_id: athleteX.id, club_id: clubA.id, date: "2026-07-21",
+      sleep: 4, energy: 4, soreness: 4, mood: 4, stress: 4,
+    });
+    await insertOrThrow("injuries", { athlete_id: athleteX.id, name: "Test RLS ownership", status: "actif" });
+    await insertOrThrow("push_subscriptions", { club_id: clubA.id, athlete_id: athleteX.id, endpoint: `https://example.invalid/push/own-${RUN_ID}` });
 
     // ── Connexion en tant que coach A, avec la clé anon (comme le frontend) ─
     coachAClient = createClient(SUPABASE_URL, ANON_KEY, { auth: { autoRefreshToken: false, persistSession: false } });
@@ -179,22 +219,137 @@ async function main() {
     await checkNoUpdate("sessions", sessionB.id, { title: "HACKED" });
     await checkNoDelete("competitions", competitionB.id);
 
+    // ── RPC directs via REST (get_my_club_id / get_my_role) ─────────────────
+    {
+      const { data, error } = await coachAClient.rpc("get_my_club_id");
+      record("RPC get_my_club_id() renvoie le club du coach A", !error && data === clubA.id, error?.message ?? `reçu ${data}`);
+    }
+    {
+      const { data, error } = await coachAClient.rpc("get_my_role");
+      record("RPC get_my_role() renvoie head_coach pour coach A", !error && data === "head_coach", error?.message ?? `reçu ${data}`);
+    }
+
+    // ── Connexion athlète X et Y (même club A) ──────────────────────────────
+    athleteXClient = createClient(SUPABASE_URL, ANON_KEY, { auth: { autoRefreshToken: false, persistSession: false } });
+    { const { error } = await athleteXClient.auth.signInWithPassword({ email: emailX, password: passwordXY }); if (error) throw new Error(`signIn X : ${error.message}`); }
+    athleteYClient = createClient(SUPABASE_URL, ANON_KEY, { auth: { autoRefreshToken: false, persistSession: false } });
+    { const { error } = await athleteYClient.auth.signInWithPassword({ email: emailY, password: passwordXY }); if (error) throw new Error(`signIn Y : ${error.message}`); }
+
+    {
+      const { data, error } = await athleteXClient.rpc("get_my_athlete_id");
+      record("RPC get_my_athlete_id() renvoie l'athlète X pour X", !error && data === athleteX.id, error?.message ?? `reçu ${data}`);
+    }
+
+    // ── Contrôles positifs : X doit voir/modifier SES propres données ──────
+    {
+      const { data, error } = await athleteXClient.from("athlete_wellness").select("*").eq("athlete_id", athleteX.id);
+      record("SELECT athlete_wellness (X, positif)", !error && (data ?? []).length === 1, error?.message);
+    }
+    {
+      const { data, error } = await athleteXClient.from("athlete_wellness")
+        .upsert({ athlete_id: athleteX.id, club_id: clubA.id, date: "2026-07-21", sleep: 5, energy: 5, soreness: 5, mood: 5, stress: 5 }, { onConflict: "athlete_id,date" })
+        .select();
+      record("UPSERT athlete_wellness (X, positif)", !error && (data ?? []).length === 1, error?.message);
+    }
+    {
+      const { data, error } = await athleteXClient.from("injuries").insert({ athlete_id: athleteX.id, name: "Auto-signalement", status: "actif" }).select();
+      record("INSERT injuries (X sur soi-même, positif)", !error && (data ?? []).length === 1, error?.message);
+      if (data?.[0]) await admin.from("injuries").delete().eq("id", data[0].id);
+    }
+
+    // ── Contrôle positif : le coach voit le wellness de tout son club ──────
+    {
+      const { data, error } = await coachAClient.from("athlete_wellness").select("*").eq("athlete_id", athleteX.id);
+      record("SELECT athlete_wellness (coach A sur athlète X, positif)", !error && (data ?? []).length >= 1, error?.message);
+    }
+
+    // ── Checks négatifs : Y ne doit RIEN voir/modifier des données de X ────
+    // (même club — c'est le coeur de la tâche 6 : isolation par propriétaire,
+    // pas seulement par club)
+    async function checkNoReadAs(client, label, table, filterCol, filterVal, { allowPermissionDenied = false } = {}) {
+      const { data, error } = await client.from(table).select("*").eq(filterCol, filterVal);
+      if (error) {
+        // "permission denied for table X" = bloqué au niveau GRANT Postgres,
+        // avant même que RLS soit évalué — c'est le résultat ATTENDU pour anon
+        // depuis que ses droits SELECT/INSERT/UPDATE/DELETE ont été révoqués
+        // (tâche 6). Pour un client authentifié (coach/athlète), qui garde
+        // ses GRANTs normaux, la même erreur serait en revanche suspecte.
+        const isExpectedPermissionDenied = allowPermissionDenied && /permission denied/i.test(error.message);
+        record(`SELECT ${label}`, isExpectedPermissionDenied, isExpectedPermissionDenied ? "accès refusé au niveau permissions, OK" : `erreur inattendue : ${error.message}`);
+        return;
+      }
+      const leaked = (data ?? []).length > 0;
+      record(`SELECT ${label}`, !leaked, leaked ? `${data.length} ligne(s) visible(s) !` : "invisible, OK");
+    }
+    await checkNoReadAs(athleteYClient, "athlete_wellness (X, vu par coéquipier Y)", "athlete_wellness", "athlete_id", athleteX.id);
+    await checkNoReadAs(athleteYClient, "injuries (X, vu par coéquipier Y)", "injuries", "athlete_id", athleteX.id);
+    await checkNoReadAs(athleteYClient, "push_subscriptions (X, vu par coéquipier Y)", "push_subscriptions", "athlete_id", athleteX.id);
+
+    {
+      const { data, error } = await athleteYClient.from("athlete_wellness").update({ notes: "HACKED" }).eq("athlete_id", athleteX.id).select();
+      const affected = !error && (data ?? []).length > 0;
+      record("UPDATE athlete_wellness (X modifié par Y)", !affected, affected ? "ligne modifiée !" : "bloqué, OK");
+    }
+    {
+      const { data, error } = await athleteYClient.from("injuries").update({ status: "guéri" }).eq("athlete_id", athleteX.id).select();
+      const affected = !error && (data ?? []).length > 0;
+      record("UPDATE injuries (X modifié par Y)", !affected, affected ? "ligne modifiée !" : "bloqué, OK");
+    }
+    {
+      // Y tente de signaler une blessure AU NOM de X (athlete_id forgé).
+      const { data, error } = await athleteYClient.from("injuries").insert({ athlete_id: athleteX.id, name: "Forgé par Y", status: "actif" }).select();
+      const inserted = !error && (data ?? []).length > 0;
+      record("INSERT injuries (Y au nom de X)", !inserted, inserted ? "ligne insérée !" : "bloqué, OK");
+      if (data?.[0]) await admin.from("injuries").delete().eq("id", data[0].id);
+    }
+
+    // ── Anti-escalation : un athlète ne peut pas s'auto-promouvoir ─────────
+    {
+      const { data, error } = await athleteYClient.from("users").update({ role: "head_coach" }).eq("id", userY.id).select();
+      const escalated = !error && (data ?? []).length > 0 && data[0].role === "head_coach";
+      record("UPDATE users.role (auto-promotion Y)", !escalated, escalated ? "rôle changé !" : "bloqué, OK");
+    }
+    {
+      // Reproduction exacte du bug trouvé : forger une ligne users dans le
+      // club B avec un rôle élevé, en utilisant sa propre identité (auth_uid).
+      const { data, error } = await athleteYClient.from("users").insert({
+        club_id: clubB.id, role: "head_coach", auth_uid: authY.id, name: "Y forgé", email: "pwn@example.invalid",
+      }).select();
+      const forged = !error && (data ?? []).length > 0;
+      record("INSERT users (Y se forge head_coach dans club B)", !forged, forged ? "ligne insérée !" : "bloqué, OK");
+      if (data?.[0]) await admin.from("users").delete().eq("id", data[0].id);
+    }
+
+    // ── anon : aucun accès à la moindre donnée métier ───────────────────────
+    anonClient = createClient(SUPABASE_URL, ANON_KEY, { auth: { autoRefreshToken: false, persistSession: false } });
+    await checkNoReadAs(anonClient, "athletes (vu par anon)", "athletes", "id", athleteA.id, { allowPermissionDenied: true });
+    await checkNoReadAs(anonClient, "users (vu par anon)", "users", "id", userA.id, { allowPermissionDenied: true });
+    await checkNoReadAs(anonClient, "clubs (vu par anon)", "clubs", "id", clubA.id, { allowPermissionDenied: true });
+
   } finally {
     // ── Nettoyage — succès ou échec, on ne laisse rien traîner ──────────────
     console.log("\nNettoyage...");
-    if (coachAClient) await coachAClient.auth.signOut().catch(() => {});
+    if (coachAClient)   await coachAClient.auth.signOut().catch(() => {});
+    if (athleteXClient) await athleteXClient.auth.signOut().catch(() => {});
+    if (athleteYClient) await athleteYClient.auth.signOut().catch(() => {});
     // Le cascade FK sur athlete_id nettoie alerts, athlete_goals,
     // athlete_notifications, athlete_wellness, injuries, push_subscriptions,
     // records, session_athletes, social_comments, social_posts,
     // social_reactions automatiquement.
     if (athleteA)     await admin.from("athletes").delete().eq("id", athleteA.id);
     if (athleteB)     await admin.from("athletes").delete().eq("id", athleteB.id);
+    if (athleteX)     await admin.from("athletes").delete().eq("id", athleteX.id);
+    if (athleteY)     await admin.from("athletes").delete().eq("id", athleteY.id);
     if (sessionB)     await admin.from("sessions").delete().eq("id", sessionB.id);
     if (competitionB) await admin.from("competitions").delete().eq("id", competitionB.id);
     if (userA)        await admin.from("users").delete().eq("id", userA.id);
     if (userB)        await admin.from("users").delete().eq("id", userB.id);
+    if (userX)        await admin.from("users").delete().eq("id", userX.id);
+    if (userY)        await admin.from("users").delete().eq("id", userY.id);
     if (authA)        await admin.auth.admin.deleteUser(authA.id).catch(() => {});
     if (authB)        await admin.auth.admin.deleteUser(authB.id).catch(() => {});
+    if (authX)        await admin.auth.admin.deleteUser(authX.id).catch(() => {});
+    if (authY)        await admin.auth.admin.deleteUser(authY.id).catch(() => {});
     if (clubA)        await admin.from("clubs").delete().eq("id", clubA.id);
     if (clubB)        await admin.from("clubs").delete().eq("id", clubB.id);
   }
