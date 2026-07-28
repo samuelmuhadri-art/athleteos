@@ -186,7 +186,8 @@ export default function AthleteDashboard({
   onOpenInjuryReport, allAthletes, onRpeChange, onStatusChange,
   onFeelingChange, onCommentChange,
 }) {
-  const today       = useMemo(() => new Date(), []);
+  // Recalculé à chaque rendu pour rester juste après un changement de date.
+  const today       = new Date();
   const currentWeek = getISOWeek(today);
   const [openTodaySession, setOpenTodaySession] = useState(false);
 
@@ -196,11 +197,9 @@ export default function AthleteDashboard({
 
   const status = getStatusLabel(metrics.readiness, metrics.fatigue, metrics.acwr);
 
-  const nextComp = useMemo(() =>
-    competitions
-      .filter(c => c.athleteIds.includes(athlete.id) && new Date(c.date) >= today)
-      .sort((a, b) => new Date(a.date) - new Date(b.date))[0] ?? null,
-  [competitions, athlete.id, today]);
+  const nextComp = competitions
+    .filter(c => c.athleteIds.includes(athlete.id) && new Date(c.date) >= today)
+    .sort((a, b) => new Date(a.date) - new Date(b.date))[0] ?? null;
 
   const weekSessions = useMemo(() =>
     sessions.filter(s => s.week === currentWeek).sort((a, b) => (a.time ?? "").localeCompare(b.time ?? "")),
@@ -208,9 +207,8 @@ export default function AthleteDashboard({
 
   // Séance(s) du jour — la plus importante info de l'écran, mise en avant
   // juste sous le ring plutôt que noyée dans la liste de la semaine.
-  const todaySessions = useMemo(() =>
-    weekSessions.filter(s => s.sessionDate && isSameDay(parseLocalDate(s.sessionDate), today)),
-  [weekSessions, today]);
+  const todaySessions = weekSessions
+    .filter(s => s.sessionDate && isSameDay(parseLocalDate(s.sessionDate), today));
   const heroSession = todaySessions[0] ?? null;
   const heroValidation = heroSession?.validations?.find(v => v.athleteId === athlete.id) ?? null;
   const heroDone = heroValidation?.status === "done";
