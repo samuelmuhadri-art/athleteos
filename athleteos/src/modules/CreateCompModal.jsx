@@ -37,7 +37,8 @@ const CreateCompModal = memo(({ athletes, onClose, onCreate }) => {
     }));
   };
 
-  const handleSubmit = async () => {
+  const handleSubmit = async (event) => {
+    event?.preventDefault();
     if (!form.name.trim() || !form.date) return;
     setSaving(true);
     setSaveError(null);
@@ -51,33 +52,35 @@ const CreateCompModal = memo(({ athletes, onClose, onCreate }) => {
     }
   };
 
-  const inputCls = "w-full border border-[var(--c-border-strong)] rounded-lg px-3 py-2 text-[13px] text-[var(--c-text-1)] focus:outline-none focus:ring-2 focus:ring-emerald-400 bg-[var(--c-surface-2)]";
-  const labelCls = "block text-[11px] font-semibold text-[var(--c-text-3)] uppercase tracking-wider mb-1";
+  const inputCls = "input-premium";
+  const labelCls = "metric-label block mb-2";
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4"
-      style={{ background: "rgba(15,23,42,0.45)" }}
+      className="modal-backdrop fixed inset-0 z-50 flex items-center justify-center p-4"
       onClick={(e) => e.target === e.currentTarget && !saving && onClose()}
     >
-      <div className="bg-[var(--c-surface)] rounded-2xl shadow-2xl w-full max-w-md max-h-[90vh] flex flex-col overflow-hidden">
-        <div className="px-6 py-5 border-b border-[var(--c-border)] flex items-center justify-between">
-          <h3 className="text-[16px] font-bold text-[var(--c-text-1)]">Créer une compétition</h3>
-          <button onClick={onClose} disabled={saving} className="p-1.5 rounded-lg hover:bg-[var(--c-surface-3)] transition-colors disabled:opacity-40">
+      <div role="dialog" aria-modal="true" aria-labelledby="create-competition-title" className="modal-content bg-[var(--c-surface)] border border-[var(--c-border)] rounded-2xl shadow-2xl w-full max-w-md max-h-[90vh] flex flex-col overflow-hidden">
+        <div className="px-4 sm:px-6 py-4 border-b border-[var(--c-border)] flex items-center justify-between">
+          <h3 id="create-competition-title" className="section-title">Créer une compétition</h3>
+          <button type="button" aria-label="Fermer" onClick={onClose} disabled={saving} className="min-w-11 min-h-11 inline-flex items-center justify-center rounded-lg hover:bg-[var(--c-surface-3)] transition-colors disabled:opacity-40">
             <X size={18} className="text-[var(--c-text-2)]" />
           </button>
         </div>
 
-        <div className="flex-1 overflow-y-auto px-6 py-5 space-y-4">
+        <form onSubmit={handleSubmit} className="flex flex-1 min-h-0 flex-col">
+        <div className="flex-1 overflow-y-auto px-4 sm:px-6 py-5 space-y-5">
           {saveError && (
-            <div className="bg-[rgba(224,82,82,0.15)] border border-[rgba(224,82,82,0.30)] rounded-lg px-3 py-2.5 text-[12px] text-[#E05252]">
+            <div role="alert" className="bg-[rgba(224,82,82,0.15)] border border-[rgba(224,82,82,0.30)] rounded-lg px-3 py-2.5 text-[12px] text-[#E05252]">
               {saveError}
             </div>
           )}
 
           <div>
-            <label className={labelCls}>Nom *</label>
+            <label htmlFor="competition-name" className={labelCls}>Nom *</label>
             <input
+              id="competition-name"
+              required
               className={inputCls}
               placeholder="Ex: Championnats Provinciaux"
               value={form.name}
@@ -85,14 +88,14 @@ const CreateCompModal = memo(({ athletes, onClose, onCreate }) => {
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label className={labelCls}>Date *</label>
-              <input type="date" className={inputCls} value={form.date} onChange={(e) => set("date", e.target.value)} />
+              <label htmlFor="competition-date" className={labelCls}>Date *</label>
+              <input id="competition-date" type="date" required className={inputCls} value={form.date} onChange={(e) => set("date", e.target.value)} />
             </div>
             <div>
-              <label className={labelCls}>Type</label>
-              <select className={inputCls} value={form.type} onChange={(e) => set("type", e.target.value)}>
+              <label htmlFor="competition-type" className={labelCls}>Type</label>
+              <select id="competition-type" className={inputCls} value={form.type} onChange={(e) => set("type", e.target.value)}>
                 {Object.keys(TYPE_CONFIG).map((k) => (
                   <option key={k} value={k}>{TYPE_CONFIG[k].label}</option>
                 ))}
@@ -101,8 +104,9 @@ const CreateCompModal = memo(({ athletes, onClose, onCreate }) => {
           </div>
 
           <div>
-            <label className={labelCls}>Lieu</label>
+            <label htmlFor="competition-location" className={labelCls}>Lieu</label>
             <input
+              id="competition-location"
               className={inputCls}
               placeholder="Ex: Namur, BE"
               value={form.location}
@@ -111,7 +115,10 @@ const CreateCompModal = memo(({ athletes, onClose, onCreate }) => {
           </div>
 
           <div>
-            <label className={labelCls}>Athlètes engagés & épreuve prévue</label>
+            <div className="flex items-center justify-between gap-3 mb-2">
+              <p className={labelCls}>Athlètes engagés & épreuve prévue</p>
+              <span className="meta-text">{form.athleteEntries.length} sélectionné{form.athleteEntries.length !== 1 ? "s" : ""}</span>
+            </div>
             {athletes.length === 0 ? (
               <p className="text-[12px] text-[var(--c-text-3)] mt-1">Aucun athlète disponible</p>
             ) : (
@@ -127,10 +134,11 @@ const CreateCompModal = memo(({ athletes, onClose, onCreate }) => {
                       <button
                         type="button"
                         onClick={() => toggleAthlete(a.id)}
-                        className="w-full flex items-center gap-2 px-2.5 py-1.5 text-[12px] font-medium text-left"
+                        aria-pressed={selected}
+                        className="w-full min-h-11 flex items-center gap-3 px-3 py-2 text-[13px] font-medium text-left"
                       >
                         <div
-                          className="w-5 h-5 rounded-full flex items-center justify-center text-white text-[8px] font-bold flex-shrink-0"
+                          className="w-7 h-7 rounded-full flex items-center justify-center text-white text-[12px] font-semibold flex-shrink-0"
                           style={{ background: selected ? "#1D9E75" : "#94a3b8" }}
                         >
                           {a.avatar?.slice(0, 1) ?? "?"}
@@ -138,9 +146,11 @@ const CreateCompModal = memo(({ athletes, onClose, onCreate }) => {
                         <span className={selected ? "text-[#7BD8B4]" : "text-[var(--c-text-2)]"}>{a.name}</span>
                       </button>
                       {selected && (
-                        <div className="px-2.5 pb-2">
+                        <div className="px-3 pb-3">
+                          <label htmlFor={`planned-event-${a.id}`} className="sr-only">Épreuve prévue pour {a.name}</label>
                           <input
-                            className="w-full border border-[var(--c-border-strong)] bg-[var(--c-surface-2)] text-[var(--c-text-1)] rounded px-2 py-1 text-[11.5px]"
+                            id={`planned-event-${a.id}`}
+                            className="input-premium"
                             placeholder="Épreuve prévue (ex: 100m, Longueur…)"
                             value={entry.plannedEvent}
                             onChange={(e) => setPlannedEvent(a.id, e.target.value)}
@@ -155,19 +165,19 @@ const CreateCompModal = memo(({ athletes, onClose, onCreate }) => {
           </div>
         </div>
 
-        <div className="px-6 py-4 border-t border-[var(--c-border)] flex items-center justify-between gap-3">
+        <div className="px-4 sm:px-6 py-4 border-t border-[var(--c-border)] flex items-center justify-between gap-3">
           <button
+            type="button"
             onClick={onClose}
             disabled={saving}
-            className="px-4 py-2 rounded-lg bg-[var(--c-surface-3)] text-[var(--c-text-2)] text-[13px] font-medium hover:bg-[var(--c-border-strong)] transition-colors disabled:opacity-40"
+            className="btn-ghost"
           >
             Annuler
           </button>
           <button
-            onClick={handleSubmit}
+            type="submit"
             disabled={!form.name.trim() || !form.date || saving}
-            className="flex items-center gap-2 px-5 py-2 rounded-lg text-white text-[13px] font-semibold transition-all disabled:opacity-40 disabled:cursor-not-allowed"
-            style={{ background: "#1D9E75" }}
+            className="btn-primary"
           >
             {saving ? (
               <>
@@ -182,6 +192,7 @@ const CreateCompModal = memo(({ athletes, onClose, onCreate }) => {
             )}
           </button>
         </div>
+        </form>
       </div>
     </div>
   );

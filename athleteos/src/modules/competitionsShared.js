@@ -5,6 +5,7 @@
 // ============================================================
 
 import { getAthleteMetricsForWeek } from "../utils/chargeCalculations.js";
+import { getISOWeek, parseLocalDate } from "../utils/helpers.js";
 
 // ─── Config types de compétition (UI statique) ────────────────────────────────
 
@@ -40,27 +41,26 @@ export function getTypeConfig(type) {
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 export function formatDate(dateStr, opts = {}) {
-  return new Date(dateStr).toLocaleDateString("fr-BE", {
+  return parseLocalDate(dateStr).toLocaleDateString("fr-BE", {
     weekday: "long", day: "numeric", month: "long", year: "numeric",
     ...opts,
   });
 }
 
 export function formatDateShort(dateStr) {
-  return new Date(dateStr).toLocaleDateString("fr-BE", {
+  return parseLocalDate(dateStr).toLocaleDateString("fr-BE", {
     day: "numeric", month: "short", year: "numeric",
   });
 }
 
-export function daysUntil(dateStr) {
-  const diff = new Date(dateStr) - new Date();
+export function daysUntil(dateStr, referenceDate = new Date()) {
+  const today = new Date(referenceDate.getFullYear(), referenceDate.getMonth(), referenceDate.getDate());
+  const diff = parseLocalDate(dateStr) - today;
   return Math.round(diff / (1000 * 60 * 60 * 24));
 }
 
 export function dateToWeek(dateStr) {
-  const d    = new Date(dateStr);
-  const jan1 = new Date(d.getFullYear(), 0, 1);
-  return Math.ceil(((d - jan1) / 86400000 + jan1.getDay() + 1) / 7);
+  return getISOWeek(parseLocalDate(dateStr));
 }
 
 export function generateResultAnalysis(result, competition, athlete, weeklyCharge) {
@@ -104,9 +104,10 @@ export function generateResultAnalysis(result, competition, athlete, weeklyCharg
   }
 
   const activeInjuries = athlete.injuries?.filter((inj) => {
-    const start    = new Date(inj.startDate);
-    const end      = inj.endDate ? new Date(inj.endDate) : new Date("2099-01-01");
-    const compDate = new Date(competition.date);
+    if (inj.status === "résolu" || !inj.startDate) return false;
+    const start    = parseLocalDate(inj.startDate);
+    const end      = inj.endDate ? parseLocalDate(inj.endDate) : new Date(2099, 0, 1);
+    const compDate = parseLocalDate(competition.date);
     return compDate >= start && compDate <= end;
   }) ?? [];
 

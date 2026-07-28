@@ -11,16 +11,21 @@ const AddResultInline = memo(({ athlete, competitionId, defaultEvent, onAdd }) =
   const [open,   setOpen]   = useState(false);
   const [form,   setForm]   = useState({ event: defaultEvent || "", result: "", context: "" });
   const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState(null);
 
   const set = (key, val) => setForm((f) => ({ ...f, [key]: val }));
 
-  const handleSubmit = async () => {
+  const handleSubmit = async (event) => {
+    event?.preventDefault();
     if (!form.event.trim() || !form.result.trim()) return;
     setSaving(true);
+    setSaveError(null);
     try {
       await onAdd(competitionId, athlete.id, form);
       setOpen(false);
-      setForm({ event: "", result: "", context: "" });
+      setForm({ event: defaultEvent || "", result: "", context: "" });
+    } catch (error) {
+      setSaveError(error.message ?? "Impossible d'enregistrer ce résultat");
     } finally {
       setSaving(false);
     }
@@ -29,51 +34,60 @@ const AddResultInline = memo(({ athlete, competitionId, defaultEvent, onAdd }) =
   if (!open) {
     return (
       <button
+        type="button"
         onClick={() => setOpen(true)}
-        className="text-[10px] font-semibold text-emerald-600 hover:text-emerald-700 mt-1 flex items-center gap-1"
+        className="text-[12px] font-semibold text-[var(--color-success)] hover:text-[var(--c-accent)] mt-2 min-h-11 flex items-center gap-1.5"
       >
-        <Plus size={11} /> Ajouter un résultat
+        <Plus size={14} /> Ajouter un résultat
       </button>
     );
   }
 
   return (
-    <div className="mt-2 space-y-1.5 bg-[var(--c-surface-2)] border border-[var(--c-border-strong)] rounded-lg p-2.5">
+    <form onSubmit={handleSubmit} className="mt-3 space-y-2 bg-[var(--c-surface-2)] border border-[var(--c-border-strong)] rounded-xl p-3">
+      <label htmlFor={`result-event-${athlete.id}`} className="sr-only">Épreuve</label>
       <input
-        className="w-full border border-[var(--c-border-strong)] bg-[var(--c-surface-2)] text-[var(--c-text-1)] rounded px-2 py-1 text-[11px]"
+        id={`result-event-${athlete.id}`}
+        className="input-premium"
         placeholder="Épreuve (ex: 100m)"
         value={form.event}
         onChange={(e) => set("event", e.target.value)}
       />
+      <label htmlFor={`result-value-${athlete.id}`} className="sr-only">Résultat</label>
       <input
-        className="w-full border border-[var(--c-border-strong)] bg-[var(--c-surface-2)] text-[var(--c-text-1)] rounded px-2 py-1 text-[11px]"
+        id={`result-value-${athlete.id}`}
+        className="input-premium"
         placeholder="Résultat (ex: 10.94s)"
         value={form.result}
         onChange={(e) => set("result", e.target.value)}
       />
+      <label htmlFor={`result-context-${athlete.id}`} className="sr-only">Contexte optionnel</label>
       <input
-        className="w-full border border-[var(--c-border-strong)] bg-[var(--c-surface-2)] text-[var(--c-text-1)] rounded px-2 py-1 text-[11px]"
+        id={`result-context-${athlete.id}`}
+        className="input-premium"
         placeholder="Contexte (optionnel)"
         value={form.context}
         onChange={(e) => set("context", e.target.value)}
       />
+      {saveError && <p role="alert" className="text-[12px] text-[var(--color-danger)]">{saveError}</p>}
       <div className="flex items-center gap-2 pt-0.5">
         <button
-          onClick={() => setOpen(false)}
+          type="button"
+          onClick={() => { setOpen(false); setSaveError(null); }}
           disabled={saving}
-          className="text-[10px] text-[var(--c-text-3)] hover:text-[var(--c-text-2)]"
+          className="btn-ghost"
         >
           Annuler
         </button>
         <button
-          onClick={handleSubmit}
+          type="submit"
           disabled={!form.event.trim() || !form.result.trim() || saving}
-          className="text-[10px] font-semibold text-white bg-emerald-600 hover:bg-emerald-700 rounded px-2 py-1 disabled:opacity-40"
+          className="btn-primary"
         >
           {saving ? "…" : "Valider"}
         </button>
       </div>
-    </div>
+    </form>
   );
 });
 

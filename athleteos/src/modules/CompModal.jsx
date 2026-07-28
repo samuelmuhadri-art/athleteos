@@ -20,36 +20,35 @@ const CompModal = memo(({ competition, athletes, weeklyCharge, records, onClose,
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4"
-      style={{ background: "rgba(15,23,42,0.5)" }}
+      className="modal-backdrop fixed inset-0 z-50 flex items-center justify-center p-4"
       onClick={(e) => e.target === e.currentTarget && onClose()}
     >
-      <div className="bg-[var(--c-surface)] rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden">
+      <div role="dialog" aria-modal="true" aria-labelledby="competition-detail-title" className="modal-content bg-[var(--c-surface)] border border-[var(--c-border)] rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden">
 
         <div
-          className="px-6 py-5 flex items-start justify-between gap-4 flex-shrink-0"
+          className="px-4 sm:px-6 py-5 flex items-start justify-between gap-4 flex-shrink-0"
           style={{ background: cfg.bg, borderBottom: `2px solid ${cfg.border}` }}
         >
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 mb-2 flex-wrap">
               <span
-                className="text-[10px] font-bold uppercase tracking-widest px-2.5 py-1 rounded-full"
+                className="text-[12px] font-semibold uppercase tracking-wider px-2.5 py-1 rounded-full"
                 style={{ background: cfg.border + "25", color: cfg.text }}
               >
                 {cfg.label}
               </span>
               {!isPast && days <= 14 && days >= 0 && (
-                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500 text-white">
+                <span className="text-[12px] font-semibold px-2 py-1 rounded-full bg-emerald-500 text-white">
                   {days === 0 ? "Aujourd'hui !" : `Dans ${days} jours`}
                 </span>
               )}
               {isPast && (
-                <span className="text-[10px] font-semibold text-[var(--c-text-3)] bg-[rgba(255,255,255,0.08)] px-2 py-0.5 rounded-full border border-[var(--c-border-strong)]">
+                <span className="text-[12px] font-semibold text-[var(--c-text-2)] bg-[rgba(255,255,255,0.08)] px-2 py-1 rounded-full border border-[var(--c-border-strong)]">
                   Compétition passée
                 </span>
               )}
             </div>
-            <h3 className="text-[20px] font-bold leading-tight" style={{ color: cfg.text }}>
+            <h3 id="competition-detail-title" className="text-[20px] font-bold leading-tight" style={{ color: cfg.text }}>
               {competition.name}
             </h3>
             <div className="flex items-center gap-4 mt-2 text-[12px] flex-wrap" style={{ color: cfg.text + "bb" }}>
@@ -63,18 +62,18 @@ const CompModal = memo(({ competition, athletes, weeklyCharge, records, onClose,
               </span>
             </div>
           </div>
-          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-black/10 transition-colors flex-shrink-0">
+          <button type="button" aria-label="Fermer" onClick={onClose} className="min-w-11 min-h-11 inline-flex items-center justify-center rounded-lg hover:bg-black/10 transition-colors flex-shrink-0">
             <X size={18} style={{ color: cfg.text }} />
           </button>
         </div>
 
-        <div className="flex-1 overflow-y-auto px-6 py-5 space-y-6">
+        <div className="flex-1 overflow-y-auto px-4 sm:px-6 py-5 space-y-6">
 
           {/* ── Athlètes engagés ─────────────────────────────────────── */}
           <div>
             <div className="flex items-center gap-2 mb-3">
               <Users size={14} className="text-[var(--c-text-3)]" />
-              <h4 className="text-[12px] font-semibold text-[var(--c-text-3)] uppercase tracking-wider">
+              <h4 className="metric-label">
                 Athlètes engagés ({engagedAthletes.length})
               </h4>
             </div>
@@ -92,7 +91,7 @@ const CompModal = memo(({ competition, athletes, weeklyCharge, records, onClose,
                   return (
                     <div key={a.id} className="bg-[var(--c-surface-2)] rounded-xl border border-[var(--c-border)] p-3.5 flex items-start gap-3">
                       <div
-                        className="w-9 h-9 rounded-xl flex items-center justify-center text-white text-[11px] font-bold flex-shrink-0"
+                        className="w-9 h-9 rounded-xl flex items-center justify-center text-white text-[12px] font-semibold flex-shrink-0"
                         style={{ background: color }}
                       >
                         {a.avatar}
@@ -100,14 +99,14 @@ const CompModal = memo(({ competition, athletes, weeklyCharge, records, onClose,
                       <div className="flex-1 min-w-0">
                         <p className="text-[13px] font-semibold text-[var(--c-text-1)]">{a.name}</p>
                         {plannedEvent && (
-                          <p className="text-[11px] text-[var(--c-text-3)] flex items-center gap-1 mt-0.5">
-                            <Zap size={10} className="text-amber-500" />
+                          <p className="text-[12px] text-[var(--c-text-2)] flex items-center gap-1 mt-1">
+                            <Zap size={12} className="text-amber-500" />
                             Prévu : <strong className="text-[var(--c-text-2)]">{plannedEvent}</strong>
                           </p>
                         )}
                         {result ? (
                           <div className="mt-1.5">
-                            <p className="text-[11px] text-[var(--c-text-2)]">
+                            <p className="text-[13px] text-[var(--c-text-2)]">
                               {result.event} :{" "}
                               <strong className="text-emerald-600">{result.result}</strong>
                               {(() => {
@@ -121,7 +120,7 @@ const CompModal = memo(({ competition, athletes, weeklyCharge, records, onClose,
                                 const isPR  = rec && recPrVal != null && resultVal != null
                                   && recPrVal === resultVal && rec.prDate === competition.date;
                                 return isPR ? (
-                                  <span className="ml-1.5 text-[10px] font-bold text-amber-600">🏆 Nouveau record !</span>
+                                  <span className="ml-1.5 text-[12px] font-semibold text-[var(--color-warning)]">🏆 Nouveau record !</span>
                                 ) : null;
                               })()}
                             </p>
@@ -134,7 +133,7 @@ const CompModal = memo(({ competition, athletes, weeklyCharge, records, onClose,
                             onAdd={onAddResult}
                           />
                         ) : (
-                          <div className="flex items-center gap-2 mt-1.5 text-[10px] text-[var(--c-text-3)] flex-wrap">
+                          <div className="flex items-center gap-2 mt-2 text-[12px] text-[var(--c-text-2)] flex-wrap">
                             <span>ACWR prévu :</span>
                             <span className="font-bold" style={{ color: metrics.acwr > 1.3 ? "#E24B4A" : metrics.acwr < 0.8 ? "#378ADD" : "#1D9E75" }}>
                               {metrics.acwr.toFixed(2)}
@@ -158,7 +157,7 @@ const CompModal = memo(({ competition, athletes, weeklyCharge, records, onClose,
             <div>
               <div className="flex items-center gap-2 mb-3">
                 <Trophy size={14} className="text-[var(--c-text-3)]" />
-                <h4 className="text-[12px] font-semibold text-[var(--c-text-3)] uppercase tracking-wider">
+                <h4 className="metric-label">
                   Résultats & Analyse contextuelle
                 </h4>
               </div>
@@ -176,18 +175,18 @@ const CompModal = memo(({ competition, athletes, weeklyCharge, records, onClose,
                       <div className="px-4 py-3 border-b border-[var(--c-border)] flex items-center justify-between flex-wrap gap-2">
                         <div className="flex items-center gap-2">
                           <div
-                            className="w-7 h-7 rounded-full flex items-center justify-center text-white text-[9px] font-bold"
+                            className="w-8 h-8 rounded-full flex items-center justify-center text-white text-[12px] font-semibold"
                             style={{ background: color }}
                           >
                             {athlete.avatar}
                           </div>
-                          <span className="text-[13px] font-bold text-[var(--c-text-1)]">{athlete.name}</span>
-                          <span className="text-[11px] text-[var(--c-text-3)]">{result.event}</span>
+                          <span className="text-[13px] font-semibold text-[var(--c-text-1)]">{athlete.name}</span>
+                          <span className="text-[12px] text-[var(--c-text-2)]">{result.event}</span>
                         </div>
-                        <span className="text-[16px] font-bold text-emerald-600">{result.result}</span>
+                        <span className="text-[16px] font-semibold text-[var(--color-success)]">{result.result}</span>
                       </div>
 
-                      <div className="px-4 py-2.5 bg-[var(--c-surface-3)] border-b border-[var(--c-border)] flex items-center gap-4 flex-wrap text-[11px]">
+                      <div className="px-4 py-3 bg-[var(--c-surface-3)] border-b border-[var(--c-border)] flex items-center gap-4 flex-wrap text-[12px]">
                         <span className="text-[var(--c-text-3)]">À la semaine ~{week} :</span>
                         <span className="flex items-center gap-1">
                           ACWR :
@@ -214,7 +213,7 @@ const CompModal = memo(({ competition, athletes, weeklyCharge, records, onClose,
                           <p key={j} className="text-[12px] text-[var(--c-text-2)] leading-relaxed">{line}</p>
                         ))}
                         {result.context && (
-                          <p className="text-[11.5px] text-[var(--c-text-3)] italic pt-1 border-t border-[var(--c-border)] mt-2">
+                          <p className="text-[12px] text-[var(--c-text-2)] italic pt-2 border-t border-[var(--c-border)] mt-2">
                             Note du coach : {result.context}
                           </p>
                         )}
@@ -228,18 +227,19 @@ const CompModal = memo(({ competition, athletes, weeklyCharge, records, onClose,
 
           {isPast && !(competition.results?.length > 0) && (
             <div className="bg-[var(--c-surface-2)] border border-[var(--c-border)] rounded-xl p-6 text-center">
-              <Trophy size={24} className="mx-auto mb-2 text-[var(--c-text-4)]" />
-              <p className="text-[12.5px] text-[var(--c-text-3)]">
+              <Trophy size={24} className="mx-auto mb-2 text-[var(--c-text-3)]" />
+              <p className="text-[13px] text-[var(--c-text-2)]">
                 Aucun résultat enregistré pour cette compétition. Utilise "Ajouter un résultat" sous chaque athlète ci-dessus.
               </p>
             </div>
           )}
         </div>
 
-        <div className="px-6 py-4 border-t border-[var(--c-border)] flex justify-end flex-shrink-0">
+        <div className="px-4 sm:px-6 py-4 border-t border-[var(--c-border)] flex justify-end flex-shrink-0">
           <button
+            type="button"
             onClick={onClose}
-            className="px-4 py-2 rounded-lg bg-[var(--c-surface-3)] text-[var(--c-text-2)] text-[13px] font-medium hover:bg-[var(--c-border-strong)] transition-colors"
+            className="btn-ghost"
           >
             Fermer
           </button>

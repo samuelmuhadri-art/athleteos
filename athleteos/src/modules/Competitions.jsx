@@ -15,7 +15,7 @@ import LoadingState                 from "../components/ui/LoadingState";
 import ErrorState                   from "../components/ui/ErrorState";
 import { dispatchOutboxNotifications } from "../utils/notifications";
 import { initialsFromName } from "../utils/helpers.js";
-import { TYPE_CONFIG } from "./competitionsShared";
+import { TYPE_CONFIG, daysUntil } from "./competitionsShared";
 import { resolveDisciplineId, getDisciplineHib, getDisciplineUnit } from "../domain/disciplines.js";
 import { parsePerf } from "../athlete/shared.js";
 import CompCard from "./CompCard";
@@ -53,7 +53,7 @@ function Competitions() {
 
       const athleteIds = athletesRes.data.map((a) => a.id);
 
-      const [chargeRes, competitionsRes, recordsRes] = await Promise.all([
+      const [chargeRes, competitionsRes, recordsRes, injuriesRes] = await Promise.all([
         athleteIds.length
           ? supabase.from("weekly_charge").select("*").in("athlete_id", athleteIds)
           : Promise.resolve({ data: [], error: null }),
@@ -62,10 +62,14 @@ function Competitions() {
         athleteIds.length
           ? supabase.from("records").select("*").in("athlete_id", athleteIds)
           : Promise.resolve({ data: [], error: null }),
+        athleteIds.length
+          ? supabase.from("injuries").select("*").in("athlete_id", athleteIds)
+          : Promise.resolve({ data: [], error: null }),
       ]);
       if (chargeRes.error)       throw chargeRes.error;
       if (competitionsRes.error) throw competitionsRes.error;
       if (recordsRes.error)      throw recordsRes.error;
+      if (injuriesRes.error)     throw injuriesRes.error;
 
       const competitionIds = competitionsRes.data.map((c) => c.id);
 
@@ -85,7 +89,17 @@ function Competitions() {
         name:           a.name,
         mainDiscipline: a.main_discipline,
         avatar:         a.profile_data?.avatar ?? initialsFromName(a.name),
-        injuries:       [],
+        injuries:       (injuriesRes.data ?? [])
+          .filter((injury) => injury.athlete_id === a.id)
+          .map((injury) => ({
+            id: injury.id,
+            name: injury.name,
+            location: injury.location,
+            intensity: injury.intensity,
+            status: injury.status,
+            startDate: injury.start_date,
+            notes: injury.notes,
+          })),
       }));
 
       const remappedCharge = chargeRes.data.map((c) => ({
@@ -192,13 +206,12 @@ function Competitions() {
     : null;
 
   const sorted = useMemo(
-    () => [...competitionList].sort((a, b) => new Date(a.date) - new Date(b.date)),
+    () => [...competitionList].sort((a, b) => a.date.localeCompare(b.date)),
     [competitionList]
   );
 
-  const now         = new Date();
-  const pastComps   = sorted.filter((c) => new Date(c.date) < now);
-  const futureComps = sorted.filter((c) => new Date(c.date) >= now);
+  const pastComps   = sorted.filter((c) => daysUntil(c.date) < 0);
+  const futureComps = sorted.filter((c) => daysUntil(c.date) >= 0);
   const nextComp    = futureComps[0];
 
   const stats = useMemo(() => ({
@@ -214,19 +227,20 @@ function Competitions() {
   if (error)   return <ErrorState  message={error} onRetry={fetchAll} />;
 
   return (
-    <div className="p-6 max-w-5xl mx-auto space-y-6">
+    <div className="page-container py-4 md:py-6 max-w-6xl mx-auto space-y-5 md:space-y-6 animate-slide-up">
 
       {/* ── En-tête ──────────────────────────────────────────────────────── */}
-      <div className="flex items-center justify-between flex-wrap gap-3">
+      <div className="flex items-start justify-between flex-wrap gap-4">
         <div>
-          <h2 className="text-[22px] font-bold text-[var(--c-text-1)] tracking-tight">Compétitions</h2>
-          <p className="text-[13px] text-[var(--c-text-3)] mt-0.5">Calendrier et analyse des performances</p>
+          <h2 className="page-title">Compétitions</h2>
+          <p className="secondary-text mt-1">Calendrier de la saison, engagements et résultats</p>
         </div>
         <button
+          type="button"
           onClick={() => setShowCreateModal(true)}
           disabled={athletes.length === 0}
-          className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-white text-[13px] font-semibold shadow-sm hover:shadow-md transition-all disabled:opacity-40"
-          style={{ background: "#1D9E75" }}
+          className="btn-primary"
+          title={athletes.length === 0 ? "Ajoute d'abord un athlète au club" : undefined}
         >
           <Plus size={16} />
           Créer une compétition
@@ -234,7 +248,7 @@ function Competitions() {
       </div>
 
       {/* ── KPIs ─────────────────────────────────────────────────────────── */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
         {[
           { label: "Total saison",   value: stats.total,       color: "#378ADD", icon: CalendarDays },
           { label: "Passées",        value: stats.past,        color: "#94A3B8", icon: Clock        },
@@ -243,13 +257,13 @@ function Competitions() {
         ].map((s) => {
           const Icon = s.icon;
           return (
-            <div key={s.label} className="bg-[var(--c-surface)] rounded-xl border border-[var(--c-border)] shadow-sm px-4 py-3.5 flex items-center gap-3">
-              <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: `${s.color}18` }}>
+            <div key={s.label} className="card p-4 flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: `${s.color}18` }}>
                 <Icon size={16} color={s.color} />
               </div>
               <div>
-                <p className="text-[22px] font-bold text-[var(--c-text-1)] leading-none">{s.value}</p>
-                <p className="text-[10px] text-[var(--c-text-3)] mt-0.5">{s.label}</p>
+                <p className="metric-value text-[var(--c-text-1)]">{s.value}</p>
+                <p className="meta-text mt-1">{s.label}</p>
               </div>
             </div>
           );
@@ -257,7 +271,7 @@ function Competitions() {
       </div>
 
       {/* ── Légende types ────────────────────────────────────────────────── */}
-      <div className="flex flex-wrap gap-3 text-[11px]">
+      <div className="flex flex-wrap gap-x-4 gap-y-2 text-[12px]" aria-label="Types de compétitions">
         {Object.entries(TYPE_CONFIG).map(([key, cfg]) => (
           <div key={key} className="flex items-center gap-1.5">
             <span className="w-3 h-3 rounded-full" style={{ background: cfg.dot }} />
@@ -268,11 +282,13 @@ function Competitions() {
 
       {/* ── Timeline ─────────────────────────────────────────────────────── */}
       {competitionList.length === 0 ? (
-        <div className="bg-[var(--c-surface)] rounded-xl border border-[var(--c-border)] shadow-sm p-16 text-center">
-          <Trophy size={40} className="mx-auto mb-3 text-[var(--c-text-4)]" />
-          <p className="text-[15px] font-semibold text-[var(--c-text-3)]">Aucune compétition programmée</p>
-          <p className="text-[12px] text-[var(--c-text-3)] mt-1">
-            Clique sur "Créer une compétition" pour démarrer le calendrier de saison.
+        <div className="card px-5 py-16 text-center">
+          <Trophy size={40} className="mx-auto mb-3 text-[var(--c-text-3)]" />
+          <p className="text-[15px] font-semibold text-[var(--c-text-2)]">Aucune compétition programmée</p>
+          <p className="meta-text mt-1">
+            {athletes.length === 0
+              ? "Ajoute d'abord un athlète au club pour pouvoir préparer son calendrier."
+              : "Clique sur “Créer une compétition” pour démarrer le calendrier de saison."}
           </p>
         </div>
       ) : (
@@ -282,12 +298,12 @@ function Competitions() {
             <div className="mb-2">
               <div className="flex items-center gap-3 mb-4">
                 <div className="h-px flex-1 bg-[var(--c-border)]" />
-                <span className="text-[11px] font-semibold text-[var(--c-text-3)] uppercase tracking-widest px-2">
+                <span className="metric-label px-2">
                   Compétitions passées
                 </span>
                 <div className="h-px flex-1 bg-[var(--c-border)]" />
               </div>
-              <div className="opacity-75">
+              <div>
                 {pastComps.map((c) => (
                   <CompCard
                     key={c.id}
@@ -307,7 +323,7 @@ function Competitions() {
             <div className="h-px flex-1 bg-[rgba(29,158,117,0.35)]" />
             <div className="flex items-center gap-2 bg-[rgba(29,158,117,0.15)] border border-[rgba(29,158,117,0.35)] rounded-full px-4 py-1.5">
               <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-              <span className="text-[11px] font-bold text-[#4DC9A0] uppercase tracking-wider">
+              <span className="text-[12px] font-semibold text-[var(--color-success)] uppercase tracking-wider">
                 Aujourd'hui · {new Date().toLocaleDateString("fr-BE", { day: "numeric", month: "long", year: "numeric" })}
               </span>
             </div>
@@ -319,7 +335,7 @@ function Competitions() {
             <div>
               <div className="flex items-center gap-3 mb-4">
                 <div className="h-px flex-1 bg-[var(--c-border)]" />
-                <span className="text-[11px] font-semibold text-[var(--c-text-3)] uppercase tracking-widest px-2">
+                <span className="metric-label px-2">
                   À venir
                 </span>
                 <div className="h-px flex-1 bg-[var(--c-border)]" />
@@ -336,9 +352,9 @@ function Competitions() {
               ))}
             </div>
           ) : (
-            <div className="bg-[var(--c-surface)] rounded-xl border border-[var(--c-border)] shadow-sm p-10 text-center">
-              <Trophy size={32} className="mx-auto mb-2 text-[var(--c-text-4)]" />
-              <p className="text-[14px] font-semibold text-[var(--c-text-3)]">Aucune compétition à venir programmée</p>
+            <div className="card p-10 text-center">
+              <Trophy size={32} className="mx-auto mb-2 text-[var(--c-text-3)]" />
+              <p className="text-[14px] font-semibold text-[var(--c-text-2)]">Aucune compétition à venir programmée</p>
             </div>
           )}
         </div>
