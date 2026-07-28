@@ -2,18 +2,16 @@
 // AthleteOS — src/athlete/views/AthletePerfs.jsx  ★ DESIGN PREMIUM DARK v2
 // Même logique métier que l'original (fetch, insert, update, delete
 // Supabase 100% inchangés). Seul le rendu visuel change :
-//   - Header + tabs alignés sur le style du Dashboard (dark, var(--c-*))
-//   - Records : ring de progression PR (plus de blocs plats blancs)
-//   - Évolution : chips toujours lisibles (fix du bug blanc-sur-blanc)
-//   - Objectifs : ring + badge J-X cohérents avec le reste de l'app
-//   - Compétitions : card dark alignée
-//   - Modals : bg-white → var(--c-surface) partout
+//   - Hero et navigation alignés sur les tokens premium de l'application
+//   - Records : mini-courbes par discipline et hiérarchie PR/SB plus fine
+//   - Évolution : indice commun où une hausse signifie toujours un progrès
+//   - Objectifs et compétitions : cartes plus lisibles et moins massives
 // ============================================================
 
 import { useState, useMemo, useEffect } from "react";
 import {
   Plus, Trophy, Target, BarChart2, CheckCircle,
-  TrendingUp, TrendingDown, Minus,
+  TrendingUp, TrendingDown, Minus, Activity, Flag, FileText, Sparkles,
 } from "lucide-react";
 import {
   AreaChart, Area, XAxis, YAxis, Tooltip,
@@ -25,8 +23,9 @@ import { getDiscHib, parsePerf, toLocalDateStr, getISOWeek, isBetterOrEqual, pct
 import { resolveDisciplineId, getDisciplineUnit } from "../../domain/disciplines.js";
 import { notifyGoalAchieved, postClubCelebration, dispatchOutboxNotifications } from "../../utils/notifications";
 import { getAthleteMetricsForWeek } from "../../utils/chargeCalculations";
+import { parseLocalDate } from "../../utils/helpers";
 import MesRapports from "./MesRapports";
-import { COMBINE_EVENTS, discColor } from "./perfsShared";
+import { COMBINE_EVENTS, discColor, performanceIndex } from "./perfsShared";
 import { ConfettiBurst, PerfTooltip, ProgressRing, RecordCard, GoalProgressBar } from "./PerfsWidgets";
 import AddPerfModal from "./AddPerfModal";
 import AddGoalModal from "./AddGoalModal";
@@ -65,31 +64,37 @@ export default function AthletePerfs({ athlete, competitions, myPerformances, my
   useEffect(() => { setLocalPerfs(myPerformances ?? []); }, [myPerformances]);
   useEffect(() => { setLocalGoals(myGoals ?? []);        }, [myGoals]);
 
-  const disciplines = Object.keys(athlete.records ?? {});
+  const disciplines = useMemo(() => Object.keys(athlete.records ?? {}), [athlete.records]);
 
   useEffect(() => {
     if (!selectedDisc && disciplines.length > 0) setSelectedDisc(disciplines[0]);
-  }, [disciplines.length]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [selectedDisc, disciplines]);
 
   const chartData = useMemo(() => {
     const disc = selectedDisc ?? disciplines[0];
     if (!disc) return [];
+    const reference = parsePerf(athlete.records?.[disc]?.pr).value;
     return localPerfs
       .filter(p => p.discipline === disc && p.value != null)
       .sort((a, b) => a.performance_date.localeCompare(b.performance_date))
-      .map(p => ({
-        date:      p.performance_date.slice(0, 10),
-        label:     new Date(p.performance_date).toLocaleDateString("fr-BE", { day: "numeric", month: "short" }),
+      .map(p => {
         // Tâche 12 : préfère la valeur canonique déjà stockée (normalized_value)
         // à un parseFloat brut, qui donnait un résultat faux sur un format
         // "minutes:secondes" ("1:52" -> 1 au lieu de 112) — fallback sur
         // parsePerf() pour les lignes pas encore backfillées.
-        value:     p.normalized_value ?? parsePerf(p.value).value ?? 0,
-        raw:       p.value,
-        ctx:       p.context,
-        breakdown: p.breakdown,
-      }));
-  }, [localPerfs, selectedDisc, disciplines]);
+        const value = p.normalized_value ?? parsePerf(p.value).value ?? 0;
+        const score = performanceIndex(value, reference, disc) ?? value;
+        return {
+          date: p.performance_date.slice(0, 10),
+          label: parseLocalDate(p.performance_date.slice(0, 10)).toLocaleDateString("fr-BE", { day: "numeric", month: "short" }),
+          value,
+          score,
+          raw: p.value,
+          ctx: p.context,
+          breakdown: p.breakdown,
+        };
+      });
+  }, [localPerfs, selectedDisc, disciplines, athlete.records]);
 
   // Zone ombrée entre le PR actuel et l'objectif visé sur la discipline
   // affichée — visualise d'un coup d'œil l'écart qu'il reste à combler.
@@ -98,14 +103,14 @@ export default function AthletePerfs({ athlete, competitions, myPerformances, my
     if (!disc) return null;
     const goal = localGoals.find(g => !g.achieved && g.discipline === disc);
     if (!goal) return null;
-    const targetP = parsePerf(goal.target_value);
-    if (targetP.value == null) return null;
+    const targetValue = parsePerf(goal.target_value).value;
+    if (targetValue == null) return null;
     const rec   = athlete.records?.[disc];
-    const prP   = rec?.pr ? parsePerf(rec.pr) : null;
-    const prVal = prP?.value ?? null;
-    const y1 = prVal != null ? Math.min(prVal, targetP.value) : targetP.value;
-    const y2 = prVal != null ? Math.max(prVal, targetP.value) : targetP.value;
-    return { target: targetP.value, prVal, y1, y2 };
+    const prValue = rec?.pr ? parsePerf(rec.pr).value : null;
+    if (prValue == null || prValue === 0) return null;
+    const targetScore = performanceIndex(targetValue, prValue, disc);
+    if (targetScore == null) return null;
+    return { target: targetScore, y1: Math.min(100, targetScore), y2: Math.max(100, targetScore) };
   }, [selectedDisc, disciplines, localGoals, athlete.records]);
 
   const compHistory = useMemo(() => {
@@ -137,12 +142,12 @@ export default function AthletePerfs({ athlete, competitions, myPerformances, my
         const pct = hib
           ? Math.min(105, Math.round((resP.value / prP.value) * 1000) / 10)
           : Math.min(105, Math.round((prP.value / resP.value) * 1000) / 10);
-        const week    = getISOWeek(new Date(comp.date));
+        const week    = getISOWeek(parseLocalDate(comp.date.slice(0, 10)));
         const metrics = getAthleteMetricsForWeek(athlete.id, weeklyCharge, week);
         return { x: metrics.acwr, y: pct, compName: comp.name, date: comp.date, resultStr: result.result };
       })
       .filter(Boolean);
-  }, [compHistory, selectedDisc, athlete.records, weeklyCharge]);
+  }, [compHistory, selectedDisc, athlete.id, athlete.records, weeklyCharge]);
 
   // Tâche 11 : "meilleure" performance déterminée via le moteur central
   // (isBetterOrEqual, qui consulte getDiscHib) — avant ce fix, un simple
@@ -152,14 +157,19 @@ export default function AthletePerfs({ athlete, competitions, myPerformances, my
   const disciplineStats = useMemo(() => {
     const map = {};
     localPerfs.forEach(p => {
-      if (!map[p.discipline]) map[p.discipline] = { count: 0, best: null, last: null };
+      if (!map[p.discipline]) map[p.discipline] = { count: 0, best: null, last: null, series: [] };
       map[p.discipline].count++;
       const v = parsePerf(p.value).value;
       if (v != null) {
+        map[p.discipline].series.push({ value: v, date: p.performance_date, raw: p.value });
         if (!map[p.discipline].best || isBetterOrEqual(v, map[p.discipline].best.v, p.discipline))
           map[p.discipline].best = { v, date: p.performance_date, raw: p.value };
         map[p.discipline].last = { v, date: p.performance_date, raw: p.value };
       }
+    });
+    Object.values(map).forEach(stats => {
+      stats.series.sort((a, b) => a.date.localeCompare(b.date));
+      stats.last = stats.series.at(-1) ?? null;
     });
     return map;
   }, [localPerfs]);
@@ -394,50 +404,70 @@ export default function AthletePerfs({ athlete, competitions, myPerformances, my
   };
 
   const PERF_TABS = [
-    { id: "records",   label: "Records" },
-    { id: "evolution", label: "Évolution" },
-    { id: "objectifs", label: activeGoals.length > 0 ? `Objectifs (${activeGoals.length})` : "Objectifs" },
-    { id: "comps",     label: "Compétitions" },
-    { id: "rapports",  label: "Rapports" },
+    { id: "records",   label: "Records", icon: Trophy },
+    { id: "evolution", label: "Évolution", icon: Activity },
+    { id: "objectifs", label: activeGoals.length > 0 ? `Objectifs (${activeGoals.length})` : "Objectifs", icon: Target },
+    { id: "comps",     label: "Compétitions", icon: Flag },
+    { id: "rapports",  label: "Rapports", icon: FileText },
   ];
 
   // ══════════════════════════════════════════════════════════════════════════
   return (
-    <div className="p-4 md:p-5 space-y-4 max-w-4xl mx-auto animate-slide-up">
+    <div className="p-4 md:p-6 space-y-6 max-w-5xl mx-auto animate-slide-up">
 
-      {/* ── HEADER ─────────────────────────────────────────────────────────── */}
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        <div>
-          <h2 style={{ fontSize: 20, fontWeight: 600, color: "var(--c-text-1)", letterSpacing: "-0.02em" }}>
-            Mes performances
-          </h2>
-          <p style={{ fontSize: 11, color: "var(--c-text-3)", marginTop: 2 }}>
-            {disciplines.length} épreuve{disciplines.length !== 1 ? "s" : ""}
-            {" · "}{localPerfs.length} mesure{localPerfs.length !== 1 ? "s" : ""}
-            {compHistory.length > 0 && ` · ${compHistory.length} compétition${compHistory.length > 1 ? "s" : ""}`}
-          </p>
+      <section className="card" style={{ position: "relative", overflow: "hidden", padding: 20, background: "linear-gradient(145deg, rgba(29,158,117,0.11), var(--c-surface) 48%, rgba(91,158,245,0.05))" }}>
+        <div aria-hidden="true" style={{ position: "absolute", width: 260, height: 260, right: -110, top: -150, borderRadius: "50%", background: "radial-gradient(circle, rgba(77,201,160,0.16), transparent 68%)" }} />
+        <div style={{ position: "relative", display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
+          <div style={{ minWidth: 0 }}>
+            <div style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "4px 9px", borderRadius: 99, background: "rgba(29,158,117,0.10)", border: "1px solid rgba(77,201,160,0.18)", marginBottom: 12 }}>
+              <Sparkles size={13} color="#7BD8B4" aria-hidden="true" />
+              <span style={{ fontSize: 12, fontWeight: 700, color: "#7BD8B4", letterSpacing: "0.05em", textTransform: "uppercase" }}>Performance lab</span>
+            </div>
+            <h1 className="page-title">Mes performances</h1>
+            <p style={{ fontSize: 13, lineHeight: 1.5, color: "var(--c-text-2)", marginTop: 6 }}>
+              Lis ta progression, comprends tes tendances et transforme chaque mesure en repère.
+            </p>
+          </div>
+          <button type="button" onClick={() => setShowAddPerf(true)} className="btn-primary" style={{ flexShrink: 0 }}>
+            <Plus size={16} aria-hidden="true" /> Saisir une performance
+          </button>
         </div>
-        <button onClick={() => setShowAddPerf(true)} className="btn-primary">
-          <Plus size={14} /> Saisir une perf
-        </button>
-      </div>
+
+        <div style={{ position: "relative", display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", marginTop: 20, paddingTop: 16, borderTop: "1px solid var(--c-border)" }}>
+          {[
+            { value: disciplines.length, label: "Records suivis" },
+            { value: localPerfs.length, label: "Mesures" },
+            { value: activeGoals.length, label: "Objectifs actifs" },
+          ].map((item, index) => (
+            <div key={item.label} style={{ paddingInline: index === 0 ? 0 : 16, borderLeft: index === 0 ? "none" : "1px solid var(--c-border)" }}>
+              <p style={{ fontSize: 22, fontWeight: 700, lineHeight: 1, color: "var(--c-text-1)", fontVariantNumeric: "tabular-nums" }}>{item.value}</p>
+              <p style={{ fontSize: 12, color: "var(--c-text-2)", marginTop: 6 }}>{item.label}</p>
+            </div>
+          ))}
+        </div>
+      </section>
 
       {/* ── TAB BAR ──────────────────────────────────────────────────────────── */}
-      <div className="flex gap-1 rounded-2xl p-1.5 overflow-x-auto" style={{ background: "var(--c-surface)", border: "1px solid var(--c-border)" }}>
-        {PERF_TABS.map(tab => (
-          <button key={tab.id} onClick={() => setActiveTab(tab.id)}
-            className="flex-1 py-2 rounded-xl text-center transition-all tap-feedback"
+      <nav aria-label="Sections des performances" className="flex gap-1 rounded-2xl p-1.5 overflow-x-auto" style={{ background: "var(--c-surface)", border: "1px solid var(--c-border)" }}>
+        {PERF_TABS.map(tab => {
+          const TabIcon = tab.icon;
+          return (
+          <button key={tab.id} type="button" onClick={() => setActiveTab(tab.id)} aria-pressed={activeTab === tab.id}
+            className="flex-1 rounded-xl text-center transition-all tap-feedback"
             style={{
-              fontSize: 12, fontWeight: 600, whiteSpace: "nowrap",
-              background: activeTab === tab.id ? "#1D9E75" : "transparent",
-              color: activeTab === tab.id ? "#0A150F" : "var(--c-text-3)",
-              boxShadow: activeTab === tab.id ? "0 2px 8px rgba(29,158,117,0.25)" : "none",
-              border: "none", cursor: "pointer",
+              minWidth: 116, minHeight: 44, padding: "0 14px", fontSize: 13, fontWeight: 700, whiteSpace: "nowrap",
+              display: "flex", alignItems: "center", justifyContent: "center", gap: 7,
+              background: activeTab === tab.id ? "rgba(29,158,117,0.16)" : "transparent",
+              color: activeTab === tab.id ? "#7BD8B4" : "var(--c-text-2)",
+              boxShadow: activeTab === tab.id ? "inset 0 0 0 1px rgba(77,201,160,0.22)" : "none",
+              border: "none", cursor: "pointer", flexShrink: 0,
             }}>
+            <TabIcon size={15} aria-hidden="true" />
             {tab.label}
           </button>
-        ))}
-      </div>
+          );
+        })}
+      </nav>
 
       {/* key={activeTab} force un remount à chaque changement d'onglet, ce qui
           déclenche .view-transition (fondu+glissement) au lieu d'un switch
@@ -447,17 +477,28 @@ export default function AthletePerfs({ athlete, competitions, myPerformances, my
           ONGLET RECORDS
          ══════════════════════════════════════════════════════════════════════ */}
       {activeTab === "records" && (
-        <div className="space-y-3">
+        <div className="space-y-5">
+          <div className="flex items-end justify-between gap-4">
+            <div>
+              <h2 className="section-title">Records personnels</h2>
+              <p style={{ fontSize: 13, color: "var(--c-text-2)", marginTop: 4 }}>
+                Ton meilleur niveau et la dynamique de tes dernières mesures.
+              </p>
+            </div>
+            {disciplines.length > 0 && (
+              <span style={{ fontSize: 12, color: "var(--c-text-2)", flexShrink: 0 }}>{disciplines.length} discipline{disciplines.length > 1 ? "s" : ""}</span>
+            )}
+          </div>
           {disciplines.length === 0 ? (
             <div className="card p-12 text-center">
               <div style={{ width: 56, height: 56, borderRadius: 18, display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 14px", background: "var(--c-surface-2)" }}>
-                <Trophy size={26} color="var(--c-text-4)" strokeWidth={1.5} />
+                <Trophy size={26} color="var(--c-text-3)" strokeWidth={1.5} />
               </div>
-              <p style={{ fontSize: 13, fontWeight: 500, color: "var(--c-text-2)" }}>Aucun record enregistré</p>
-              <p style={{ fontSize: 11, color: "var(--c-text-4)", marginTop: 4 }}>Ton coach les ajoutera après tes premières compétitions</p>
+              <p style={{ fontSize: 15, fontWeight: 700, color: "var(--c-text-1)" }}>Aucun record enregistré</p>
+              <p style={{ fontSize: 13, color: "var(--c-text-2)", marginTop: 4 }}>Ton coach les ajoutera après tes premières compétitions.</p>
             </div>
           ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {disciplines.map(disc => (
                 <RecordCard
                   key={disc}
@@ -472,32 +513,36 @@ export default function AthletePerfs({ athlete, competitions, myPerformances, my
 
           {compHistory.length > 0 && (
             <div className="card overflow-hidden">
-              <div style={{ padding: "14px 16px", display: "flex", alignItems: "center", justifyContent: "space-between", borderBottom: "1px solid var(--c-border)" }}>
+              <div style={{ padding: 16, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, borderBottom: "1px solid var(--c-border)" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  <div style={{ width: 26, height: 26, borderRadius: 8, background: "rgba(234,179,8,0.10)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                    <Trophy size={12} color="#EAB308" />
+                  <div style={{ width: 32, height: 32, borderRadius: 10, background: "rgba(234,179,8,0.10)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                    <Trophy size={15} color="#EAB308" aria-hidden="true" />
                   </div>
-                  <p style={{ fontSize: 13, fontWeight: 600, color: "var(--c-text-1)" }}>Dernières compétitions</p>
+                  <div>
+                    <p className="card-title">Dernières compétitions</p>
+                    <p style={{ fontSize: 12, color: "var(--c-text-2)", marginTop: 2 }}>Tes résultats les plus récents</p>
+                  </div>
                 </div>
-                <button onClick={() => setActiveTab("comps")} style={{ fontSize: 11, fontWeight: 600, color: "#4DC9A0", background: "none", border: "none", cursor: "pointer" }}>
+                <button type="button" onClick={() => setActiveTab("comps")} className="btn-ghost" style={{ minHeight: 44, fontSize: 12 }}>
                   Tout voir →
                 </button>
               </div>
               <div>
                 {compHistory.slice(0, 3).map(({ comp, result }, i) => (
-                  <div key={i} style={{ padding: "12px 16px", display: "flex", alignItems: "center", gap: 12, borderTop: i > 0 ? "1px solid var(--c-border)" : "none" }}>
-                    <div style={{ width: 34, height: 34, borderRadius: 10, background: "rgba(234,179,8,0.10)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                      <Trophy size={14} color="#EAB308" />
+                  <div key={`${comp.id}-${result.event}-${i}`} style={{ padding: 16, display: "flex", alignItems: "center", gap: 12, borderTop: i > 0 ? "1px solid var(--c-border)" : "none" }}>
+                    <div style={{ width: 40, height: 40, borderRadius: 12, background: "rgba(234,179,8,0.08)", border: "1px solid rgba(234,179,8,0.14)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                      <Trophy size={16} color="#EAB308" aria-hidden="true" />
                     </div>
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <p style={{ fontSize: 12.5, fontWeight: 600, color: "var(--c-text-1)" }} className="truncate">{comp.name}</p>
-                      <p style={{ fontSize: 11, color: "var(--c-text-3)" }}>
-                        {result.event} · <strong style={{ color: "#4DC9A0" }}>{result.result}</strong>
+                      <p style={{ fontSize: 14, fontWeight: 700, color: "var(--c-text-1)" }} className="truncate">{comp.name}</p>
+                      <p style={{ fontSize: 12, color: "var(--c-text-2)", marginTop: 3 }}>{result.event}</p>
+                    </div>
+                    <div style={{ textAlign: "right", flexShrink: 0 }}>
+                      <p style={{ fontSize: 16, fontWeight: 700, color: "#7BD8B4", fontVariantNumeric: "tabular-nums" }}>{result.result}</p>
+                      <p style={{ fontSize: 12, color: "var(--c-text-3)", marginTop: 3 }}>
+                        {parseLocalDate(comp.date.slice(0, 10)).toLocaleDateString("fr-BE", { day: "numeric", month: "short" })}
                       </p>
                     </div>
-                    <span style={{ fontSize: 10, color: "var(--c-text-4)", flexShrink: 0 }}>
-                      {new Date(comp.date).toLocaleDateString("fr-BE", { day: "numeric", month: "short" })}
-                    </span>
                   </div>
                 ))}
               </div>
@@ -510,23 +555,29 @@ export default function AthletePerfs({ athlete, competitions, myPerformances, my
           ONGLET ÉVOLUTION
          ══════════════════════════════════════════════════════════════════════ */}
       {activeTab === "evolution" && (
-        <div className="space-y-3">
+        <div className="space-y-5">
+
+          <div>
+            <h2 className="section-title">Courbe de progression</h2>
+            <p style={{ fontSize: 13, color: "var(--c-text-2)", marginTop: 4 }}>
+              Toutes les disciplines sont ramenées à un indice commun : 100 % correspond à ton record personnel.
+            </p>
+          </div>
 
           {disciplines.length > 0 && (
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 7 }}>
+            <div style={{ display: "flex", overflowX: "auto", gap: 8, paddingBottom: 2, scrollbarWidth: "none" }}>
               {disciplines.map(disc => {
                 const col = discColor(disc);
                 const sel = selectedDisc === disc;
                 return (
-                  <button key={disc} onClick={() => setSelectedDisc(disc)}
+                  <button key={disc} type="button" aria-pressed={sel} onClick={() => setSelectedDisc(disc)}
                     className="tap-feedback"
                     style={{
-                      padding: "7px 13px", borderRadius: 12, fontSize: 12, fontWeight: 600,
-                      border: `1.5px solid ${sel ? col : "var(--c-border-strong)"}`,
-                      background: sel ? col : "var(--c-surface-2)",
-                      color: sel ? "#0A150F" : "var(--c-text-2)",
-                      cursor: "pointer",
-                      boxShadow: sel ? `0 2px 8px ${col}40` : "none",
+                      minHeight: 44, padding: "0 14px", borderRadius: 12, fontSize: 13, fontWeight: 700, flexShrink: 0,
+                      border: `1px solid ${sel ? `${col}75` : "var(--c-border-strong)"}`,
+                      background: sel ? `${col}18` : "var(--c-surface-2)",
+                      color: sel ? col : "var(--c-text-2)", cursor: "pointer",
+                      boxShadow: sel ? `inset 0 0 0 1px ${col}22` : "none",
                     }}>
                     {disc}
                   </button>
@@ -535,111 +586,115 @@ export default function AthletePerfs({ athlete, competitions, myPerformances, my
             </div>
           )}
 
-          <div className="card p-4">
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 2 }}>
-              <p style={{ fontSize: 14, fontWeight: 600, color: "var(--c-text-1)" }}>
-                {selectedDisc ?? "Sélectionne une épreuve"}
-              </p>
-              <button onClick={() => setShowAddPerf(true)} style={{ fontSize: 11, fontWeight: 600, color: "#4DC9A0", background: "none", border: "none", cursor: "pointer" }}>
-                + Saisir
+          <div className="card" style={{ overflow: "hidden", padding: 20 }}>
+            <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12, marginBottom: 20 }}>
+              <div>
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  {selectedDisc && <span style={{ width: 8, height: 8, borderRadius: "50%", background: discColor(selectedDisc), boxShadow: `0 0 12px ${discColor(selectedDisc)}` }} />}
+                  <h3 className="card-title">{selectedDisc ?? "Sélectionne une épreuve"}</h3>
+                </div>
+                <p style={{ fontSize: 12, color: "var(--c-text-2)", marginTop: 5 }}>
+                  Indice de niveau · {chartData.length} mesure{chartData.length !== 1 ? "s" : ""}
+                </p>
+              </div>
+              <button type="button" onClick={() => setShowAddPerf(true)} className="btn-ghost" style={{ minHeight: 44, color: "#7BD8B4" }}>
+                <Plus size={14} aria-hidden="true" /> Ajouter
               </button>
             </div>
-            <p style={{ fontSize: 11, color: "var(--c-text-3)", marginBottom: 16 }}>
-              {chartData.length} mesure{chartData.length !== 1 ? "s" : ""}
-            </p>
 
             {chartData.length < 2 ? (
-              <div style={{ height: 180, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 8 }}>
-                <div style={{ width: 44, height: 44, borderRadius: 14, background: "var(--c-surface-2)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                  <BarChart2 size={20} color="var(--c-text-4)" strokeWidth={1.5} />
+              <div style={{ minHeight: 240, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 10 }}>
+                <div style={{ width: 52, height: 52, borderRadius: 16, background: "var(--c-surface-2)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  <BarChart2 size={22} color="var(--c-text-3)" strokeWidth={1.5} />
                 </div>
-                <p style={{ fontSize: 12, color: "var(--c-text-3)", textAlign: "center" }}>
+                <p style={{ fontSize: 13, color: "var(--c-text-2)", textAlign: "center" }}>
                   Minimum 2 mesures pour afficher le graphique
                 </p>
-                <button onClick={() => setShowAddPerf(true)} style={{ fontSize: 12, fontWeight: 600, color: "#4DC9A0", background: "none", border: "none", cursor: "pointer", marginTop: 2 }}>
+                <button type="button" onClick={() => setShowAddPerf(true)} className="btn-ghost" style={{ minHeight: 44, color: "#7BD8B4" }}>
                   + Saisir une performance
                 </button>
               </div>
             ) : (
               <>
-                <ResponsiveContainer width="100%" height={220}>
-                  <AreaChart data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 8, marginBottom: 20 }}>
+                  <div style={{ padding: 12, borderRadius: 12, background: "var(--c-surface-2)", border: "1px solid var(--c-border)" }}>
+                    <p style={{ fontSize: 12, color: "var(--c-text-3)" }}>Dernière mesure</p>
+                    <p style={{ fontSize: 16, fontWeight: 700, color: "var(--c-text-1)", marginTop: 4 }} className="truncate">{chartData.at(-1)?.raw}</p>
+                  </div>
+                  <div style={{ padding: 12, borderRadius: 12, background: "var(--c-surface-2)", border: "1px solid var(--c-border)" }}>
+                    <p style={{ fontSize: 12, color: "var(--c-text-3)" }}>Record</p>
+                    <p style={{ fontSize: 16, fontWeight: 700, color: selectedDisc ? discColor(selectedDisc) : "var(--c-accent)", marginTop: 4 }} className="truncate">{athlete.records?.[selectedDisc]?.pr ?? "—"}</p>
+                  </div>
+                  {(() => {
+                    const delta = chartData.at(-1).score - chartData[0].score;
+                    const Icon = delta > 0 ? TrendingUp : delta < 0 ? TrendingDown : Minus;
+                    const color = delta > 0 ? "#7BD8B4" : delta < 0 ? "#F19A9A" : "var(--c-text-2)";
+                    return (
+                      <div style={{ padding: 12, borderRadius: 12, background: "var(--c-surface-2)", border: "1px solid var(--c-border)" }}>
+                        <p style={{ fontSize: 12, color: "var(--c-text-3)" }}>Dynamique</p>
+                        <p style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 15, fontWeight: 700, color, marginTop: 4 }}>
+                          <Icon size={15} aria-hidden="true" /> {delta > 0 ? "+" : ""}{delta.toFixed(1)} pts
+                        </p>
+                      </div>
+                    );
+                  })()}
+                </div>
+
+                <ResponsiveContainer width="100%" height={280}>
+                  <AreaChart data={chartData} margin={{ top: 16, right: 12, left: 0, bottom: 0 }}>
                     <defs>
-                      <linearGradient id="gradPerfDark" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%"  stopColor="#1D9E75" stopOpacity={0.28} />
-                        <stop offset="95%" stopColor="#1D9E75" stopOpacity={0}    />
+                      <linearGradient id="gradPerfPremium" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor={selectedDisc ? discColor(selectedDisc) : "#1D9E75"} stopOpacity={0.24} />
+                        <stop offset="92%" stopColor={selectedDisc ? discColor(selectedDisc) : "#1D9E75"} stopOpacity={0} />
                       </linearGradient>
                     </defs>
-                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
-                    <XAxis dataKey="label" tick={{ fontSize: 10, fill: "rgba(255,255,255,0.35)" }} axisLine={false} tickLine={false} />
-                    <YAxis tick={{ fontSize: 10, fill: "rgba(255,255,255,0.35)" }} axisLine={false} tickLine={false} width={42}
+                    <CartesianGrid vertical={false} stroke="rgba(255,255,255,0.07)" />
+                    <XAxis dataKey="label" tick={{ fontSize: 12, fill: "var(--c-text-3)" }} axisLine={false} tickLine={false} minTickGap={24} />
+                    <YAxis tick={{ fontSize: 12, fill: "var(--c-text-3)" }} tickFormatter={value => `${value}%`} axisLine={false} tickLine={false} width={48}
                       domain={([min, max]) => {
-                        // Étend l'échelle pour englober l'objectif s'il est hors des données actuelles.
                         const lo = goalZone ? Math.min(min, goalZone.y1) : min;
                         const hi = goalZone ? Math.max(max, goalZone.y2) : max;
-                        const padding = (hi - lo) * 0.1 || 0.5;
-                        return [Math.floor((lo - padding) * 100) / 100, Math.ceil((hi + padding) * 100) / 100];
+                        const padding = Math.max(1.5, (hi - lo) * 0.14);
+                        return [Math.floor(lo - padding), Math.ceil(hi + padding)];
                       }}
-                      tickCount={6} />
+                      tickCount={5} />
                     <Tooltip content={<PerfTooltip />} />
-                    {/* Zone entre le PR actuel et l'objectif — l'écart qu'il reste à combler */}
                     {goalZone && (
-                      <ReferenceArea y1={goalZone.y1} y2={goalZone.y2} fill="#EAB308" fillOpacity={0.08} stroke="none" />
+                      <ReferenceArea y1={goalZone.y1} y2={goalZone.y2} fill="#EAB308" fillOpacity={0.07} stroke="none" />
                     )}
+                    <ReferenceLine y={100} stroke="rgba(123,216,180,0.52)" strokeDasharray="3 4" strokeWidth={1}
+                      label={{ value: "PR", position: "insideTopLeft", fontSize: 12, fill: "#7BD8B4" }} />
                     {goalZone && (
                       <ReferenceLine y={goalZone.target} stroke="#EAB308" strokeDasharray="4 3" strokeWidth={1.5}
-                        label={{ value: "Objectif", position: "insideTopRight", fontSize: 9, fill: "#EAB308" }} />
+                        label={{ value: "Objectif", position: "insideTopRight", fontSize: 12, fill: "#EAB308" }} />
                     )}
-                    <Area dataKey="value" name={selectedDisc ?? ""}
-                      stroke="#1D9E75" fill="url(#gradPerfDark)"
-                      strokeWidth={2.5}
-                      dot={{ r: 4, fill: "#1D9E75", strokeWidth: 2, stroke: "var(--c-surface)" }}
-                      activeDot={{ r: 6, strokeWidth: 0 }} />
+                    <Area dataKey="score" name={selectedDisc ?? ""}
+                      stroke={selectedDisc ? discColor(selectedDisc) : "#1D9E75"} fill="url(#gradPerfPremium)"
+                      strokeWidth={2.25}
+                      dot={{ r: 3.5, fill: selectedDisc ? discColor(selectedDisc) : "#1D9E75", strokeWidth: 2, stroke: "var(--c-surface)" }}
+                      activeDot={{ r: 5.5, strokeWidth: 0 }} />
                   </AreaChart>
                 </ResponsiveContainer>
 
-                {selectedDisc && athlete.records?.[selectedDisc] && (
-                  <div style={{ display: "flex", alignItems: "center", gap: 16, marginTop: 12, paddingTop: 12, borderTop: "1px solid var(--c-border)", fontSize: 12, flexWrap: "wrap" }}>
-                    <span style={{ color: "var(--c-text-3)" }}>
-                      PR <strong style={{ color: "#4DC9A0", fontSize: 14 }}>{athlete.records[selectedDisc].pr}</strong>
-                    </span>
-                    <span style={{ color: "var(--c-text-3)" }}>
-                      SB <strong style={{ color: "var(--c-text-2)" }}>{athlete.records[selectedDisc].sb}</strong>
-                    </span>
-                    {chartData.length >= 2 && (() => {
-                      // Tâche 11 : le signe de `diff` seul ne dit rien de "mieux"
-                      // ou "moins bien" — sur un chrono, une valeur qui BAISSE est
-                      // une amélioration. `improved` tranche via getDiscHib, pas
-                      // via le signe brut.
-                      const diff  = chartData[chartData.length - 1].value - chartData[0].value;
-                      const hib   = getDiscHib(selectedDisc);
-                      const improved = diff === 0 ? null : (hib ? diff > 0 : diff < 0);
-                      const col  = improved === null ? "var(--c-text-3)" : improved ? "#4DC9A0" : "#F19A9A";
-                      const Icon = improved === null ? Minus : improved ? TrendingUp : TrendingDown;
-                      return (
-                        <span style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 4, fontWeight: 700, color: col }}>
-                          <Icon size={13} />
-                          {diff >= 0 ? "+" : ""}{diff.toFixed(2)}
-                        </span>
-                      );
-                    })()}
-                  </div>
-                )}
+                <div style={{ display: "flex", alignItems: "center", gap: 16, marginTop: 12, paddingTop: 12, borderTop: "1px solid var(--c-border)", fontSize: 12, color: "var(--c-text-2)", flexWrap: "wrap" }}>
+                  <span><strong style={{ color: "#7BD8B4" }}>100 %</strong> = record personnel</span>
+                  {goalZone && <span><strong style={{ color: "#EAB308" }}>{goalZone.target.toFixed(1)} %</strong> = objectif</span>}
+                </div>
               </>
             )}
           </div>
 
           {chargeVsPerfData.length >= 2 && (
-            <div className="card p-4">
-              <p style={{ fontSize: 14, fontWeight: 600, color: "var(--c-text-1)" }}>Charge vs performance</p>
-              <p style={{ fontSize: 11, color: "var(--c-text-3)", marginTop: 2, marginBottom: 14 }}>
+            <div className="card" style={{ padding: 20 }}>
+              <p className="card-title">Charge et niveau de performance</p>
+              <p style={{ fontSize: 13, lineHeight: 1.5, color: "var(--c-text-2)", marginTop: 4, marginBottom: 16 }}>
                 ACWR au moment de chaque compétition (axe X) · % du PR réalisé (axe Y) — {selectedDisc}
               </p>
-              <ResponsiveContainer width="100%" height={220}>
-                <ScatterChart margin={{ top: 10, right: 14, bottom: 10, left: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
-                  <XAxis dataKey="x" type="number" domain={[0.4, 1.8]} tick={{ fontSize: 10, fill: "rgba(255,255,255,0.35)" }} axisLine={false} tickLine={false} />
-                  <YAxis dataKey="y" type="number" domain={[70, 105]} tick={{ fontSize: 10, fill: "rgba(255,255,255,0.35)" }} axisLine={false} tickLine={false} width={36} />
+              <ResponsiveContainer width="100%" height={260}>
+                <ScatterChart margin={{ top: 12, right: 16, bottom: 12, left: 0 }}>
+                  <CartesianGrid vertical={false} stroke="rgba(255,255,255,0.07)" />
+                  <XAxis dataKey="x" type="number" domain={[0.4, 1.8]} tick={{ fontSize: 12, fill: "var(--c-text-3)" }} axisLine={false} tickLine={false} />
+                  <YAxis dataKey="y" type="number" domain={[70, 105]} tickFormatter={value => `${value}%`} tick={{ fontSize: 12, fill: "var(--c-text-3)" }} axisLine={false} tickLine={false} width={46} />
                   <ZAxis range={[90, 90]} />
                   {/* Zone optimale infusée en fond plutôt que des lignes pointillées
                       — même esprit que la réglette ACWR du hero (bande de couleur,
@@ -649,11 +704,11 @@ export default function AthletePerfs({ athlete, competitions, myPerformances, my
                     if (!active || !payload?.length) return null;
                     const d = payload[0].payload;
                     return (
-                      <div style={{ background: "var(--c-surface-2)", border: "1px solid var(--c-border-strong)", borderRadius: 12, padding: "10px 12px", minWidth: 140 }}>
-                        <p style={{ fontSize: 11.5, fontWeight: 600, color: "var(--c-text-1)" }}>{d.compName}</p>
-                        <p style={{ fontSize: 10, color: "var(--c-text-3)", marginBottom: 6 }}>{new Date(d.date).toLocaleDateString("fr-BE", { day: "numeric", month: "short", year: "numeric" })}</p>
-                        <p style={{ fontSize: 11, color: "var(--c-text-2)" }}>Résultat : <strong style={{ color: "#4DC9A0" }}>{d.resultStr}</strong></p>
-                        <p style={{ fontSize: 11, color: "var(--c-text-2)" }}>ACWR : <strong>{d.x.toFixed(2)}</strong> · % PR : <strong>{d.y}%</strong></p>
+                      <div style={{ background: "var(--c-surface-2)", border: "1px solid var(--c-border-strong)", borderRadius: 12, padding: "12px 14px", minWidth: 156 }}>
+                        <p style={{ fontSize: 13, fontWeight: 700, color: "var(--c-text-1)" }}>{d.compName}</p>
+                        <p style={{ fontSize: 12, color: "var(--c-text-2)", marginTop: 2, marginBottom: 8 }}>{parseLocalDate(d.date.slice(0, 10)).toLocaleDateString("fr-BE", { day: "numeric", month: "short", year: "numeric" })}</p>
+                        <p style={{ fontSize: 12, color: "var(--c-text-2)" }}>Résultat : <strong style={{ color: "#7BD8B4" }}>{d.resultStr}</strong></p>
+                        <p style={{ fontSize: 12, color: "var(--c-text-2)", marginTop: 3 }}>ACWR : <strong>{d.x.toFixed(2)}</strong> · Niveau : <strong>{d.y}%</strong></p>
                       </div>
                     );
                   }} />
@@ -662,14 +717,14 @@ export default function AthletePerfs({ athlete, competitions, myPerformances, my
                     const col = payload.y >= 95 ? "#1D9E75" : payload.y >= 85 ? "#E8A020" : "#E05252";
                     return (
                       <g>
-                        <circle cx={cx} cy={cy} r={14} fill={col} fillOpacity={0.14} />
-                        <circle cx={cx} cy={cy} r={8} fill={col} fillOpacity={0.9} stroke={col} strokeWidth={1} />
+                        <circle cx={cx} cy={cy} r={10} fill={col} fillOpacity={0.13} />
+                        <circle cx={cx} cy={cy} r={5.5} fill={col} fillOpacity={0.94} stroke="var(--c-surface)" strokeWidth={2} />
                       </g>
                     );
                   }} />
                 </ScatterChart>
               </ResponsiveContainer>
-              <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 10, fontSize: 9.5, color: "var(--c-text-3)" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 12, fontSize: 12, color: "var(--c-text-2)" }}>
                 <span style={{ width: 10, height: 10, borderRadius: 3, background: "rgba(29,158,117,0.16)", border: "1px solid rgba(29,158,117,0.35)" }} />
                 <span>Zone de charge optimale (0.80 – 1.30)</span>
               </div>
@@ -678,37 +733,39 @@ export default function AthletePerfs({ athlete, competitions, myPerformances, my
 
           {chartData.length > 0 && (
             <div className="card overflow-hidden">
-              <div style={{ padding: "12px 16px", display: "flex", alignItems: "center", justifyContent: "space-between", borderBottom: "1px solid var(--c-border)" }}>
-                <p style={{ fontSize: 12.5, fontWeight: 600, color: "var(--c-text-1)" }}>
+              <div style={{ padding: 16, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, borderBottom: "1px solid var(--c-border)" }}>
+                <p style={{ fontSize: 14, fontWeight: 700, color: "var(--c-text-1)" }}>
                   Toutes les mesures — {selectedDisc}
                 </p>
-                <span style={{ fontSize: 10.5, color: "var(--c-text-3)" }}>{chartData.length} entrée{chartData.length > 1 ? "s" : ""}</span>
+                <span style={{ fontSize: 12, color: "var(--c-text-2)", flexShrink: 0 }}>{chartData.length} entrée{chartData.length > 1 ? "s" : ""}</span>
               </div>
-              <div style={{ maxHeight: 256, overflowY: "auto" }}>
+              <div style={{ maxHeight: 320, overflowY: "auto" }}>
                 {[...localPerfs].filter(p => p.discipline === selectedDisc).sort((a,b) => b.performance_date.localeCompare(a.performance_date)).map((p, i) => (
-                  <div key={p.id} className="group" style={{ padding: "11px 16px", display: "flex", alignItems: "center", justifyContent: "space-between", borderTop: i > 0 ? "1px solid var(--c-border)" : "none" }}>
-                    <div>
-                      <p style={{ fontSize: 15, fontWeight: 700, color: "#1D9E75" }}>{p.value}</p>
-                      {p.context && <p style={{ fontSize: 10.5, color: "var(--c-text-4)", fontStyle: "italic" }}>{p.context}</p>}
+                  <div key={p.id} className="group" style={{ padding: 16, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, borderTop: i > 0 ? "1px solid var(--c-border)" : "none" }}>
+                    <div style={{ minWidth: 0 }}>
+                      <p style={{ fontSize: 17, fontWeight: 700, color: selectedDisc ? discColor(selectedDisc) : "#7BD8B4", fontVariantNumeric: "tabular-nums" }}>{p.value}</p>
+                      {p.context && <p style={{ fontSize: 13, color: "var(--c-text-2)", fontStyle: "italic", marginTop: 3 }} className="truncate">{p.context}</p>}
                       {p.breakdown && Object.keys(p.breakdown).length > 0 && (
-                        <div style={{ display: "flex", flexWrap: "wrap", gap: "3px 8px", marginTop: 5, maxWidth: 220 }}>
+                        <div style={{ display: "flex", flexWrap: "wrap", gap: "4px 10px", marginTop: 6, maxWidth: 320 }}>
                           {Object.entries(p.breakdown).map(([ev, val]) => (
-                            <span key={ev} style={{ fontSize: 9.5, color: "var(--c-text-4)" }}>
-                              {ev} <strong style={{ color: "var(--c-text-3)" }}>{val}</strong>
+                            <span key={ev} style={{ fontSize: 12, color: "var(--c-text-2)" }}>
+                              {ev} <strong style={{ color: "var(--c-text-1)" }}>{val}</strong>
                             </span>
                           ))}
                         </div>
                       )}
                     </div>
                     <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                      <p style={{ fontSize: 10.5, color: "var(--c-text-3)", fontWeight: 500 }}>
-                        {new Date(p.performance_date + "T00:00:00").toLocaleDateString("fr-BE", { day: "numeric", month: "short", year: "numeric" })}
+                      <p style={{ fontSize: 12, color: "var(--c-text-2)", fontWeight: 500, textAlign: "right" }}>
+                        {parseLocalDate(p.performance_date.slice(0, 10)).toLocaleDateString("fr-BE", { day: "numeric", month: "short", year: "numeric" })}
                       </p>
                       <button
+                        type="button"
+                        aria-label={`Supprimer la performance ${p.value}`}
                         onClick={() => handleDeletePerf(p.id)}
                         className="tap-feedback"
-                        style={{ padding: "4px 8px", borderRadius: 7, background: "rgba(224,82,82,0.10)", border: "none", cursor: "pointer", color: "#F19A9A", fontSize: 10.5, fontWeight: 600 }}>
-                        Suppr.
+                        style={{ minHeight: 40, padding: "0 10px", borderRadius: 10, background: "rgba(224,82,82,0.08)", border: "1px solid rgba(224,82,82,0.12)", cursor: "pointer", color: "#F19A9A", fontSize: 12, fontWeight: 700 }}>
+                        Supprimer
                       </button>
                     </div>
                   </div>
@@ -723,10 +780,14 @@ export default function AthletePerfs({ athlete, competitions, myPerformances, my
           ONGLET OBJECTIFS
          ══════════════════════════════════════════════════════════════════════ */}
       {activeTab === "objectifs" && (
-        <div className="space-y-3">
-          <div className="flex justify-end">
-            <button onClick={() => setShowAddGoal(true)} className="btn-primary">
-              <Plus size={14} /> Ajouter un objectif
+        <div className="space-y-5">
+          <div className="flex items-end justify-between gap-4">
+            <div>
+              <h2 className="section-title">Objectifs</h2>
+              <p style={{ fontSize: 13, color: "var(--c-text-2)", marginTop: 4 }}>Des repères concrets entre ton niveau actuel et ta prochaine étape.</p>
+            </div>
+            <button type="button" onClick={() => setShowAddGoal(true)} className="btn-primary">
+              <Plus size={16} aria-hidden="true" /> Ajouter
             </button>
           </div>
 
@@ -735,22 +796,22 @@ export default function AthletePerfs({ athlete, competitions, myPerformances, my
               <div style={{ width: 56, height: 56, borderRadius: 18, display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 14px", background: "rgba(234,179,8,0.10)" }}>
                 <Target size={26} color="#EAB308" strokeWidth={1.5} />
               </div>
-              <p style={{ fontSize: 13, fontWeight: 500, color: "var(--c-text-2)" }}>Aucun objectif défini</p>
-              <p style={{ fontSize: 11, color: "var(--c-text-4)", marginTop: 4 }}>Fixe-toi des objectifs pour rester motivé</p>
-              <button onClick={() => setShowAddGoal(true)} className="btn-primary" style={{ marginTop: 18, marginInline: "auto" }}>
-                <Plus size={14} /> Définir un objectif
+              <p style={{ fontSize: 15, fontWeight: 700, color: "var(--c-text-1)" }}>Aucun objectif défini</p>
+              <p style={{ fontSize: 13, color: "var(--c-text-2)", marginTop: 4 }}>Fixe-toi une prochaine étape pour guider ta progression.</p>
+              <button type="button" onClick={() => setShowAddGoal(true)} className="btn-primary" style={{ marginTop: 20, marginInline: "auto" }}>
+                <Plus size={16} aria-hidden="true" /> Définir un objectif
               </button>
             </div>
           ) : (
             <>
               {activeGoals.length > 0 && (
-                <div className="space-y-2.5">
-                  <p style={{ fontSize: 10, fontWeight: 600, color: "var(--c-text-3)", textTransform: "uppercase", letterSpacing: "0.07em" }}>
+                <div className="space-y-3">
+                  <p style={{ fontSize: 12, fontWeight: 700, color: "var(--c-text-2)", textTransform: "uppercase", letterSpacing: "0.07em" }}>
                     En cours ({activeGoals.length})
                   </p>
                   {activeGoals.map(g => {
                     const daysLeft = g.deadline
-                      ? Math.round((new Date(g.deadline) - today) / (1000 * 60 * 60 * 24))
+                      ? Math.round((parseLocalDate(g.deadline.slice(0, 10)) - today) / (1000 * 60 * 60 * 24))
                       : null;
                     const isUrgent = daysLeft !== null && daysLeft <= 14;
                     const col      = discColor(g.discipline);
@@ -763,13 +824,13 @@ export default function AthletePerfs({ athlete, competitions, myPerformances, my
                     const pct  = pctOfReference(prN, tgN, g.discipline);
 
                     return (
-                      <div key={g.id} className="card p-4" style={{ display: "flex", gap: 14, alignItems: "flex-start" }}>
-                        <ProgressRing pct={pct} color={isUrgent ? "#EAB308" : col} size={56} stroke={5} />
+                      <div key={g.id} className="card" style={{ display: "flex", gap: 16, alignItems: "flex-start", padding: 20 }}>
+                        <ProgressRing pct={pct} color={isUrgent ? "#EAB308" : col} size={56} stroke={4} />
                         <div style={{ flex: 1, minWidth: 0 }}>
                           <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 4 }}>
-                            <p style={{ fontSize: 13.5, fontWeight: 600, color: "var(--c-text-1)" }}>{g.discipline}</p>
+                            <p style={{ fontSize: 15, fontWeight: 700, color: "var(--c-text-1)" }}>{g.discipline}</p>
                             {daysLeft !== null && (
-                              <span style={{ fontSize: 9.5, fontWeight: 700, padding: "2px 8px", borderRadius: 99, background: isUrgent ? "rgba(234,179,8,0.14)" : "var(--c-surface-2)", color: isUrgent ? "#F0CB61" : "var(--c-text-3)" }}>
+                              <span style={{ fontSize: 12, fontWeight: 700, padding: "4px 9px", borderRadius: 99, background: isUrgent ? "rgba(234,179,8,0.14)" : "var(--c-surface-2)", color: isUrgent ? "#F0CB61" : "var(--c-text-2)" }}>
                                 {daysLeft > 0 ? `J-${daysLeft}` : daysLeft === 0 ? "Aujourd'hui !" : "Échu"}
                               </span>
                             )}
@@ -777,20 +838,20 @@ export default function AthletePerfs({ athlete, competitions, myPerformances, my
                           <p style={{ fontSize: 24, fontWeight: 700, color: col, letterSpacing: "-0.02em", lineHeight: 1 }}>
                             {g.target_value}
                           </p>
-                          {g.notes && <p style={{ fontSize: 11, color: "var(--c-text-4)", fontStyle: "italic", marginTop: 6 }}>{g.notes}</p>}
+                          {g.notes && <p style={{ fontSize: 13, lineHeight: 1.5, color: "var(--c-text-2)", fontStyle: "italic", marginTop: 8 }}>{g.notes}</p>}
                           {g.deadline && (
-                            <p style={{ fontSize: 10.5, color: "var(--c-text-4)", marginTop: 4 }}>
-                              Échéance : {new Date(g.deadline).toLocaleDateString("fr-BE", { day: "numeric", month: "long", year: "numeric" })}
+                            <p style={{ fontSize: 12, color: "var(--c-text-2)", marginTop: 6 }}>
+                              Échéance : {parseLocalDate(g.deadline.slice(0, 10)).toLocaleDateString("fr-BE", { day: "numeric", month: "long", year: "numeric" })}
                             </p>
                           )}
                           <GoalProgressBar pr={pr} target={g.target_value} discipline={g.discipline} color={col} />
                           <div style={{ display: "flex", alignItems: "center", gap: 14, marginTop: 12, paddingTop: 12, borderTop: "1px solid var(--c-border)" }}>
-                            <button onClick={() => handleMarkGoalDone(g.id)}
-                              style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11.5, fontWeight: 600, color: "#4DC9A0", background: "none", border: "none", cursor: "pointer" }}>
-                              <CheckCircle size={13} /> Marquer atteint
+                            <button type="button" onClick={() => handleMarkGoalDone(g.id)}
+                              style={{ minHeight: 44, display: "flex", alignItems: "center", gap: 6, padding: "0 8px", fontSize: 12, fontWeight: 700, color: "#7BD8B4", background: "none", border: "none", cursor: "pointer" }}>
+                              <CheckCircle size={15} aria-hidden="true" /> Marquer atteint
                             </button>
-                            <button onClick={() => handleDeleteGoal(g.id)}
-                              style={{ fontSize: 11.5, fontWeight: 600, color: "#F19A9A", background: "none", border: "none", cursor: "pointer", marginLeft: "auto" }}>
+                            <button type="button" onClick={() => handleDeleteGoal(g.id)}
+                              style={{ minHeight: 44, padding: "0 8px", fontSize: 12, fontWeight: 700, color: "#F19A9A", background: "none", border: "none", cursor: "pointer", marginLeft: "auto" }}>
                               Supprimer
                             </button>
                           </div>
@@ -803,19 +864,19 @@ export default function AthletePerfs({ athlete, competitions, myPerformances, my
 
               {achievedGoals.length > 0 && (
                 <div className="space-y-2">
-                  <p style={{ fontSize: 10, fontWeight: 600, color: "var(--c-text-3)", textTransform: "uppercase", letterSpacing: "0.07em" }}>
+                  <p style={{ fontSize: 12, fontWeight: 700, color: "var(--c-text-2)", textTransform: "uppercase", letterSpacing: "0.07em" }}>
                     Atteints ({achievedGoals.length})
                   </p>
                   {achievedGoals.map(g => (
-                    <div key={g.id} className="card" style={{ padding: 14, display: "flex", alignItems: "center", gap: 12, opacity: 0.55 }}>
-                      <div style={{ width: 30, height: 30, borderRadius: 10, background: "rgba(29,158,117,0.12)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                    <div key={g.id} className="card" style={{ padding: 16, display: "flex", alignItems: "center", gap: 12, opacity: 0.72 }}>
+                      <div style={{ width: 36, height: 36, borderRadius: 11, background: "rgba(29,158,117,0.12)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
                         <CheckCircle size={15} color="#1D9E75" />
                       </div>
                       <div>
-                        <p style={{ fontSize: 12, fontWeight: 500, color: "var(--c-text-2)" }}>
+                        <p style={{ fontSize: 13, fontWeight: 700, color: "var(--c-text-1)" }}>
                           {g.discipline} — {g.target_value}
                         </p>
-                        {g.notes && <p style={{ fontSize: 10.5, color: "var(--c-text-4)" }}>{g.notes}</p>}
+                        {g.notes && <p style={{ fontSize: 12, color: "var(--c-text-2)", marginTop: 3 }}>{g.notes}</p>}
                       </div>
                     </div>
                   ))}
@@ -830,10 +891,14 @@ export default function AthletePerfs({ athlete, competitions, myPerformances, my
           ONGLET COMPÉTITIONS
          ══════════════════════════════════════════════════════════════════════ */}
       {activeTab === "comps" && (
-        <div className="space-y-3">
-          <div className="flex justify-end">
-            <button onClick={() => setShowAddComp(true)} className="btn-primary">
-              <Plus size={14} /> Ajouter une compétition
+        <div className="space-y-5">
+          <div className="flex items-end justify-between gap-4">
+            <div>
+              <h2 className="section-title">Compétitions</h2>
+              <p style={{ fontSize: 13, color: "var(--c-text-2)", marginTop: 4 }}>Le contexte et le résultat de chaque rendez-vous.</p>
+            </div>
+            <button type="button" onClick={() => setShowAddComp(true)} className="btn-primary">
+              <Plus size={16} aria-hidden="true" /> Ajouter
             </button>
           </div>
           {compHistory.length === 0 ? (
@@ -841,34 +906,34 @@ export default function AthletePerfs({ athlete, competitions, myPerformances, my
               <div style={{ width: 56, height: 56, borderRadius: 18, display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 14px", background: "rgba(234,179,8,0.10)" }}>
                 <Trophy size={26} color="#EAB308" strokeWidth={1.5} />
               </div>
-              <p style={{ fontSize: 13, fontWeight: 500, color: "var(--c-text-2)" }}>Aucune compétition enregistrée</p>
+              <p style={{ fontSize: 15, fontWeight: 700, color: "var(--c-text-1)" }}>Aucune compétition enregistrée</p>
             </div>
           ) : (
             compHistory.map(({ comp, result }, i) => (
-              <div key={i} className="card card-hover p-4">
+              <div key={`${comp.id}-${result.event}-${i}`} className="card card-hover" style={{ padding: 20 }}>
                 <div style={{ display: "flex", alignItems: "flex-start", gap: 14 }}>
                   <div style={{ width: 44, height: 44, borderRadius: 14, background: "rgba(234,179,8,0.10)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
                     <Trophy size={19} color="#EAB308" />
                   </div>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 4 }}>
-                      <p style={{ fontSize: 13.5, fontWeight: 600, color: "var(--c-text-1)" }}>{comp.name}</p>
+                      <p style={{ fontSize: 15, fontWeight: 700, color: "var(--c-text-1)" }}>{comp.name}</p>
                       <span className="chip chip-neutral">{comp.type}</span>
                     </div>
-                    <p style={{ fontSize: 11, color: "var(--c-text-3)", marginBottom: 12 }}>
+                    <p style={{ fontSize: 12, color: "var(--c-text-2)", marginBottom: 12 }}>
                       {comp.location && `${comp.location} · `}
-                      {new Date(comp.date).toLocaleDateString("fr-BE", { day: "numeric", month: "long", year: "numeric" })}
+                      {parseLocalDate(comp.date.slice(0, 10)).toLocaleDateString("fr-BE", { day: "numeric", month: "long", year: "numeric" })}
                     </p>
                     <div style={{ display: "inline-block", borderRadius: 14, padding: "10px 16px", background: "rgba(29,158,117,0.10)", border: "1px solid rgba(29,158,117,0.20)" }}>
-                      <p style={{ fontSize: 9.5, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", color: "#4DC9A0", marginBottom: 3 }}>
+                      <p style={{ fontSize: 12, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", color: "#7BD8B4", marginBottom: 4 }}>
                         {result.event}
                       </p>
-                      <p style={{ fontSize: 21, fontWeight: 700, color: "#4DC9A0", letterSpacing: "-0.02em", lineHeight: 1 }}>
+                      <p style={{ fontSize: 22, fontWeight: 700, color: "#7BD8B4", letterSpacing: "-0.02em", lineHeight: 1 }}>
                         {result.result}
                       </p>
                     </div>
                     {result.context && (
-                      <p style={{ fontSize: 11, color: "var(--c-text-4)", fontStyle: "italic", marginTop: 8 }}>{result.context}</p>
+                      <p style={{ fontSize: 13, lineHeight: 1.5, color: "var(--c-text-2)", fontStyle: "italic", marginTop: 10 }}>{result.context}</p>
                     )}
                   </div>
                 </div>

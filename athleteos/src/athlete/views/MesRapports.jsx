@@ -14,6 +14,7 @@ import { LineChart, Line, ResponsiveContainer } from "recharts";
 import { supabase } from "../../utils/supabaseClient";
 import { CATEGORIES, colorsFor, acwrColor } from "../shared";
 import { getRPELabel } from "../../utils/chargeCalculations";
+import { parseLocalDate } from "../../utils/helpers";
 import {
   getAvailableWeeks, formatWeekLabel,
   buildWeeklyReport, buildMonthlyAggregate,
@@ -23,13 +24,13 @@ function StatusIcon({ status }) {
   if (status === "done")    return <CheckCircle2 size={15} color="#1D9E75" />;
   if (status === "partial") return <AlertCircle  size={15} color="#EF9F27" />;
   if (status === "none")    return <XCircle      size={15} color="#E24B4A" />;
-  return <div style={{ width: 15, height: 15, borderRadius: "50%", border: "1.5px dashed var(--c-text-4)" }} />;
+  return <div style={{ width: 15, height: 15, borderRadius: "50%", border: "1.5px dashed var(--c-text-3)" }} />;
 }
 
 function MiniLoadSpark({ data }) {
-  if (data.length < 2) return <div style={{ width: 56, height: 22 }} />;
+  if (data.length < 2) return <div style={{ width: 72, height: 28 }} />;
   return (
-    <div style={{ width: 56, height: 22 }}>
+    <div style={{ width: 72, height: 28 }}>
       <ResponsiveContainer width="100%" height="100%">
         <LineChart data={data} margin={{ top: 2, right: 2, bottom: 2, left: 2 }}>
           <Line type="monotone" dataKey="load" stroke="#1D9E75" strokeWidth={2} dot={false} />
@@ -42,21 +43,21 @@ function MiniLoadSpark({ data }) {
 function TrendArrow({ trend }) {
   if (trend === "up")   return <span style={{ display: "inline-flex", alignItems: "center", gap: 2, color: "#4DC9A0" }}><TrendingUp size={12} /> Hausse</span>;
   if (trend === "down") return <span style={{ display: "inline-flex", alignItems: "center", gap: 2, color: "#F19A9A" }}><TrendingDown size={12} /> Baisse</span>;
-  return <span style={{ display: "inline-flex", alignItems: "center", gap: 2, color: "var(--c-text-4)" }}><Minus size={12} /> Stable</span>;
+  return <span style={{ display: "inline-flex", alignItems: "center", gap: 4, color: "var(--c-text-2)" }}><Minus size={14} /> Stable</span>;
 }
 
 function WeekCard({ week, dateRange, sessionCount, onClick }) {
   return (
-    <button onClick={onClick} className="card tap-feedback"
+    <button type="button" onClick={onClick} className="card card-hover tap-feedback"
       style={{ width: "100%", textAlign: "left", padding: "16px 18px", display: "flex", alignItems: "center", gap: 14, cursor: "pointer" }}>
       <div style={{ width: 40, height: 40, borderRadius: 12, background: "rgba(29,158,117,0.10)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
         <FileText size={17} color="#1D9E75" strokeWidth={1.8} />
       </div>
       <div style={{ flex: 1, minWidth: 0 }}>
-        <p style={{ fontSize: 13.5, fontWeight: 600, color: "var(--c-text-1)" }}>{formatWeekLabel(week, dateRange)}</p>
-        <p style={{ fontSize: 11, color: "var(--c-text-3)", marginTop: 2 }}>{sessionCount} séance{sessionCount > 1 ? "s" : ""}</p>
+        <p style={{ fontSize: 15, fontWeight: 700, color: "var(--c-text-1)" }}>{formatWeekLabel(week, dateRange)}</p>
+        <p style={{ fontSize: 12, color: "var(--c-text-2)", marginTop: 3 }}>{sessionCount} séance{sessionCount > 1 ? "s" : ""}</p>
       </div>
-      <ChevronRight size={16} color="var(--c-text-4)" />
+      <ChevronRight size={17} color="var(--c-text-3)" aria-hidden="true" />
     </button>
   );
 }
@@ -68,41 +69,41 @@ function WeekReportDetail({ report }) {
   return (
     <div className="space-y-4">
       <div style={{ padding: 14, borderRadius: 14, background: "rgba(29,158,117,0.06)", border: "1px solid rgba(29,158,117,0.15)" }}>
-        <p style={{ fontSize: 12, lineHeight: 1.6, color: "var(--c-text-2)" }}>{summary}</p>
+        <p style={{ fontSize: 13, lineHeight: 1.6, color: "var(--c-text-2)" }}>{summary}</p>
       </div>
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 8 }}>
         <div style={{ padding: "12px 10px", borderRadius: 14, background: "var(--c-surface-2)", border: "1px solid var(--c-border)", textAlign: "center" }}>
-          <p style={{ fontSize: 9.5, fontWeight: 600, color: "var(--c-text-3)", textTransform: "uppercase", letterSpacing: "0.05em" }}>Charge aiguë</p>
+          <p style={{ fontSize: 12, fontWeight: 700, color: "var(--c-text-2)", textTransform: "uppercase", letterSpacing: "0.05em" }}>Charge aiguë</p>
           <p style={{ fontSize: 19, fontWeight: 700, color: "var(--c-text-1)", marginTop: 4 }}>{stats.total > 0 ? metrics.acute : "—"}</p>
         </div>
         <div style={{ padding: "12px 10px", borderRadius: 14, background: "var(--c-surface-2)", border: "1px solid var(--c-border)", textAlign: "center" }}>
-          <p style={{ fontSize: 9.5, fontWeight: 600, color: "var(--c-text-3)", textTransform: "uppercase", letterSpacing: "0.05em" }}>ACWR</p>
+          <p style={{ fontSize: 12, fontWeight: 700, color: "var(--c-text-2)", textTransform: "uppercase", letterSpacing: "0.05em" }}>ACWR</p>
           <p style={{ fontSize: 19, fontWeight: 700, color: stats.total > 0 ? acwrColor(metrics.acwr) : "var(--c-text-1)", marginTop: 4 }}>
             {stats.total > 0 ? metrics.acwr.toFixed(2) : "—"}
           </p>
         </div>
         <div style={{ padding: "12px 10px", borderRadius: 14, background: "var(--c-surface-2)", border: "1px solid var(--c-border)", textAlign: "center" }}>
-          <p style={{ fontSize: 9.5, fontWeight: 600, color: "var(--c-text-3)", textTransform: "uppercase", letterSpacing: "0.05em" }}>Wellness moy.</p>
+          <p style={{ fontSize: 12, fontWeight: 700, color: "var(--c-text-2)", textTransform: "uppercase", letterSpacing: "0.05em" }}>Wellness moy.</p>
           <p style={{ fontSize: 19, fontWeight: 700, color: "var(--c-text-1)", marginTop: 4 }}>{wellnessAvg != null ? wellnessAvg : "—"}</p>
         </div>
       </div>
 
       {categoriesWorked.length > 0 && (
         <div>
-          <p style={{ fontSize: 10, fontWeight: 600, color: "var(--c-text-3)", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 8 }}>Répartition de la charge</p>
+          <p style={{ fontSize: 12, fontWeight: 700, color: "var(--c-text-2)", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 8 }}>Répartition de la charge</p>
           <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
             {categoriesWorked.map(c => {
               const col = colorsFor(c.id);
               return (
-                <span key={c.id} style={{ fontSize: 11, fontWeight: 600, padding: "5px 10px", borderRadius: 10, background: col.bg, color: col.text, border: `1px solid ${col.border}33` }}>
+                <span key={c.id} style={{ fontSize: 12, fontWeight: 700, padding: "6px 10px", borderRadius: 10, background: col.bg, color: col.text, border: `1px solid ${col.border}33` }}>
                   {c.label} · {c.load} u.a.
                 </span>
               );
             })}
           </div>
           {categoriesAbsent.length > 0 && categoriesAbsent.length < CATEGORIES.length && (
-            <p style={{ fontSize: 10.5, color: "var(--c-text-4)", marginTop: 8 }}>
+            <p style={{ fontSize: 12, color: "var(--c-text-2)", marginTop: 8 }}>
               Non travaillées : {categoriesAbsent.map(id => CATEGORIES.find(c => c.id === id)?.label ?? id).join(", ")}
             </p>
           )}
@@ -110,11 +111,11 @@ function WeekReportDetail({ report }) {
       )}
 
       <div>
-        <p style={{ fontSize: 10, fontWeight: 600, color: "var(--c-text-3)", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 8 }}>
+        <p style={{ fontSize: 12, fontWeight: 700, color: "var(--c-text-2)", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 8 }}>
           Séances ({sessions.length})
         </p>
         {sessions.length === 0 ? (
-          <p style={{ fontSize: 12, color: "var(--c-text-4)" }}>Aucune séance planifiée cette semaine.</p>
+          <p style={{ fontSize: 13, color: "var(--c-text-2)" }}>Aucune séance planifiée cette semaine.</p>
         ) : (
           <div className="card" style={{ overflow: "hidden" }}>
             {sessions.map((s, i) => {
@@ -125,19 +126,19 @@ function WeekReportDetail({ report }) {
                   <div style={{ marginTop: 2, flexShrink: 0 }}><StatusIcon status={s.status} /></div>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-                      <p style={{ fontSize: 12.5, fontWeight: 600, color: "var(--c-text-1)" }}>{s.title}</p>
-                      <span style={{ fontSize: 9.5, fontWeight: 600, padding: "2px 7px", borderRadius: 7, background: col.bg, color: col.text }}>
+                      <p style={{ fontSize: 14, fontWeight: 700, color: "var(--c-text-1)" }}>{s.title}</p>
+                      <span style={{ fontSize: 12, fontWeight: 700, padding: "3px 8px", borderRadius: 7, background: col.bg, color: col.text }}>
                         {CATEGORIES.find(c => c.id === s.category)?.label ?? s.category}
                       </span>
                     </div>
                     <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 3, flexWrap: "wrap" }}>
-                      <span style={{ fontSize: 10.5, color: "var(--c-text-4)" }}>
-                        {s.sessionDate ? new Date(s.sessionDate + "T00:00:00").toLocaleDateString("fr-BE", { weekday: "short", day: "numeric", month: "short" }) : s.day}
+                      <span style={{ fontSize: 12, color: "var(--c-text-2)" }}>
+                        {s.sessionDate ? parseLocalDate(s.sessionDate.slice(0, 10)).toLocaleDateString("fr-BE", { weekday: "short", day: "numeric", month: "short" }) : s.day}
                       </span>
-                      {s.rpe != null && <span style={{ fontSize: 10.5, fontWeight: 600, color: rpe.color }}>RPE {s.rpe} · {rpe.label}</span>}
-                      {s.load != null && <span style={{ fontSize: 10.5, color: "var(--c-text-3)" }}>{s.load} u.a.</span>}
+                      {s.rpe != null && <span style={{ fontSize: 12, fontWeight: 700, color: rpe.color }}>RPE {s.rpe} · {rpe.label}</span>}
+                      {s.load != null && <span style={{ fontSize: 12, color: "var(--c-text-2)" }}>{s.load} u.a.</span>}
                     </div>
-                    {s.comment && <p style={{ fontSize: 11, color: "var(--c-text-3)", fontStyle: "italic", marginTop: 4 }}>« {s.comment} »</p>}
+                    {s.comment && <p style={{ fontSize: 13, lineHeight: 1.5, color: "var(--c-text-2)", fontStyle: "italic", marginTop: 5 }}>« {s.comment} »</p>}
                   </div>
                 </div>
               );
@@ -182,15 +183,19 @@ export default function MesRapports({ athlete, sessions, weeklyCharge }) {
   const selectedWeekMeta = weeks.find(w => w.week === selectedWeek);
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-5">
+      <div>
+        <h2 className="section-title">Rapports d’entraînement</h2>
+        <p style={{ fontSize: 13, color: "var(--c-text-2)", marginTop: 4 }}>Charge, régularité et contenu de tes dernières semaines.</p>
+      </div>
       <div className="flex gap-1 rounded-2xl p-1.5" style={{ background: "var(--c-surface)", border: "1px solid var(--c-border)" }}>
         {[{ id: "week", label: "Semaine" }, { id: "month", label: "Mois" }].map(m => (
-          <button key={m.id} onClick={() => { setViewMode(m.id); setSelectedWeek(null); }}
+          <button key={m.id} type="button" aria-pressed={viewMode === m.id} onClick={() => { setViewMode(m.id); setSelectedWeek(null); }}
             className="flex-1"
             style={{
-              padding: "8px 0", borderRadius: 12, fontSize: 12, fontWeight: 600,
-              background: viewMode === m.id ? "#1D9E75" : "transparent",
-              color: viewMode === m.id ? "#0A150F" : "var(--c-text-3)",
+              minHeight: 44, padding: "0 12px", borderRadius: 12, fontSize: 13, fontWeight: 700,
+              background: viewMode === m.id ? "rgba(29,158,117,0.16)" : "transparent",
+              color: viewMode === m.id ? "#7BD8B4" : "var(--c-text-2)",
               border: "none", cursor: "pointer",
             }}>
             {m.label}
@@ -202,10 +207,10 @@ export default function MesRapports({ athlete, sessions, weeklyCharge }) {
         weeks.length === 0 ? (
           <div className="card p-12 text-center">
             <div style={{ width: 56, height: 56, borderRadius: 18, display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 14px", background: "var(--c-surface-2)" }}>
-              <CalendarDays size={26} color="var(--c-text-4)" strokeWidth={1.5} />
+              <CalendarDays size={26} color="var(--c-text-3)" strokeWidth={1.5} />
             </div>
-            <p style={{ fontSize: 13, fontWeight: 500, color: "var(--c-text-2)" }}>Aucun rapport disponible</p>
-            <p style={{ fontSize: 11, color: "var(--c-text-4)", marginTop: 4 }}>Il apparaîtra dès ta première semaine avec des séances</p>
+            <p style={{ fontSize: 15, fontWeight: 700, color: "var(--c-text-1)" }}>Aucun rapport disponible</p>
+            <p style={{ fontSize: 13, color: "var(--c-text-2)", marginTop: 4 }}>Il apparaîtra dès ta première semaine avec des séances.</p>
           </div>
         ) : (
           <div className="space-y-2.5">
@@ -219,11 +224,11 @@ export default function MesRapports({ athlete, sessions, weeklyCharge }) {
 
       {viewMode === "week" && selectedWeek != null && selectedReport && (
         <div className="space-y-3">
-          <button onClick={() => setSelectedWeek(null)} className="tap-feedback"
-            style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, fontWeight: 600, color: "#4DC9A0", background: "none", border: "none", cursor: "pointer", padding: "4px 0" }}>
-            <ChevronLeft size={15} /> Toutes mes semaines
+          <button type="button" onClick={() => setSelectedWeek(null)} className="tap-feedback"
+            style={{ minHeight: 44, display: "flex", alignItems: "center", gap: 6, fontSize: 13, fontWeight: 700, color: "#7BD8B4", background: "none", border: "none", cursor: "pointer", padding: "0 4px" }}>
+            <ChevronLeft size={16} aria-hidden="true" /> Toutes mes semaines
           </button>
-          <p style={{ fontSize: 13.5, fontWeight: 600, color: "var(--c-text-1)" }}>
+          <p style={{ fontSize: 17, fontWeight: 700, color: "var(--c-text-1)" }}>
             {formatWeekLabel(selectedWeek, selectedWeekMeta?.dateRange)}
           </p>
           <WeekReportDetail report={selectedReport} />
@@ -233,20 +238,20 @@ export default function MesRapports({ athlete, sessions, weeklyCharge }) {
       {viewMode === "month" && (
         !monthAggregate ? (
           <div className="card p-12 text-center">
-            <p style={{ fontSize: 13, fontWeight: 500, color: "var(--c-text-2)" }}>Pas encore assez de données pour une vue mensuelle</p>
+            <p style={{ fontSize: 15, fontWeight: 700, color: "var(--c-text-1)" }}>Pas encore assez de données pour une vue mensuelle</p>
           </div>
         ) : (
-          <div className="card p-4">
-            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
-              <p style={{ fontSize: 13, fontWeight: 600, color: "var(--c-text-1)", flex: 1 }}>4 dernières semaines</p>
+          <div className="card" style={{ padding: 20 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16 }}>
+              <p className="card-title" style={{ flex: 1 }}>4 dernières semaines</p>
               <MiniLoadSpark data={monthAggregate.weeks.map(w => ({ load: w.stats.totalLoad }))} />
             </div>
             <div style={{ display: "flex", alignItems: "baseline", gap: 6, marginBottom: 6 }}>
               <span style={{ fontSize: 22, fontWeight: 700, color: "var(--c-text-1)" }}>{monthAggregate.totalLoad}</span>
-              <span style={{ fontSize: 11, color: "var(--c-text-3)" }}>u.a. cumulées</span>
+              <span style={{ fontSize: 12, color: "var(--c-text-2)" }}>u.a. cumulées</span>
             </div>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
-              <span style={{ fontSize: 11, color: "var(--c-text-3)" }}>{monthAggregate.doneTotal}/{monthAggregate.sessionsTotal} séances faites</span>
+              <span style={{ fontSize: 12, color: "var(--c-text-2)" }}>{monthAggregate.doneTotal}/{monthAggregate.sessionsTotal} séances faites</span>
               <TrendArrow trend={monthAggregate.trend} />
             </div>
             {monthAggregate.categoriesWorked.length > 0 && (
@@ -254,7 +259,7 @@ export default function MesRapports({ athlete, sessions, weeklyCharge }) {
                 {monthAggregate.categoriesWorked.slice(0, 5).map(c => {
                   const col = colorsFor(c.id);
                   return (
-                    <span key={c.id} style={{ fontSize: 10, fontWeight: 600, padding: "3px 8px", borderRadius: 8, background: col.bg, color: col.text }}>
+                    <span key={c.id} style={{ fontSize: 12, fontWeight: 700, padding: "5px 9px", borderRadius: 8, background: col.bg, color: col.text }}>
                       {c.label}
                     </span>
                   );

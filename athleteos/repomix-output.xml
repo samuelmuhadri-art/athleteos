@@ -68,6 +68,7 @@ src/
       CreateSessionModal.jsx
       MesRapports.jsx
       perfsShared.js
+      perfsShared.test.js
       PerfsWidgets.jsx
       planningShared.jsx
       SessionDetailModal.jsx
@@ -1365,22 +1366,24 @@ import { Plus, X } from "lucide-react";
 import { COMBINE_EVENTS } from "./perfsShared";
 
 export default function AddCompModal({ compForm, setCompForm, onClose, onSubmit, saving }) {
+  const labelStyle = { display: "block", fontSize: 12, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", color: "var(--c-text-2)", marginBottom: 8 };
   return createPortal(
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4 modal-backdrop"
       onClick={e => e.target === e.currentTarget && !saving && onClose()}>
-      <div className="rounded-t-3xl sm:rounded-3xl shadow-2xl w-full sm:max-w-sm max-h-[90vh] flex flex-col overflow-hidden modal-content"
+      <form onSubmit={event => { event.preventDefault(); onSubmit(); }} role="dialog" aria-modal="true" aria-labelledby="add-comp-title"
+        className="rounded-t-3xl sm:rounded-3xl shadow-2xl w-full sm:max-w-sm max-h-[90vh] flex flex-col overflow-hidden modal-content"
         style={{ background: "var(--c-surface)" }}>
         <div style={{ display: "flex", justifyContent: "center", paddingTop: 10, paddingBottom: 4 }}>
           <div style={{ width: 32, height: 3, borderRadius: 99, background: "var(--c-border-strong)" }} />
         </div>
         <div style={{ padding: "14px 20px", borderBottom: "1px solid var(--c-border)", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
           <div>
-            <p style={{ fontSize: 14, fontWeight: 600, color: "var(--c-text-1)" }}>Ajouter une compétition</p>
-            <p style={{ fontSize: 11, color: "var(--c-text-3)", marginTop: 2 }}>Résultat enregistré dans ton profil</p>
+            <h2 id="add-comp-title" style={{ fontSize: 17, fontWeight: 700, color: "var(--c-text-1)" }}>Ajouter une compétition</h2>
+            <p style={{ fontSize: 13, color: "var(--c-text-2)", marginTop: 3 }}>Le résultat sera enregistré dans ton profil.</p>
           </div>
-          <button onClick={onClose} disabled={saving}
-            style={{ width: 30, height: 30, borderRadius: 8, background: "var(--c-surface-2)", border: "1px solid var(--c-border)", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: "var(--c-text-2)" }}>
-            <X size={14} />
+          <button type="button" aria-label="Fermer" onClick={onClose} disabled={saving}
+            style={{ width: 44, height: 44, borderRadius: 12, background: "var(--c-surface-2)", border: "1px solid var(--c-border)", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: "var(--c-text-2)" }}>
+            <X size={18} aria-hidden="true" />
           </button>
         </div>
         <div style={{ flex: 1, overflowY: "auto", padding: "16px 20px", display: "flex", flexDirection: "column", gap: 12 }}>
@@ -1392,26 +1395,27 @@ export default function AddCompModal({ compForm, setCompForm, onClose, onSubmit,
             { key: "context",  label: "Contexte",                placeholder: "Ex: Vent +1.2, finale" },
           ].map(f => (
             <div key={f.key}>
-              <label style={{ display: "block", fontSize: 9.5, fontWeight: 600, letterSpacing: "0.06em", textTransform: "uppercase", color: "var(--c-text-3)", marginBottom: 6 }}>
+              <label htmlFor={`comp-${f.key}`} style={labelStyle}>
                 {f.label}
               </label>
-              <input className="input-premium" placeholder={f.placeholder}
+              <input id={`comp-${f.key}`} className="input-premium" placeholder={f.placeholder}
+                required={["name", "event", "result"].includes(f.key)}
                 value={compForm[f.key]}
                 onChange={e => setCompForm(p => ({ ...p, [f.key]: e.target.value }))} />
             </div>
           ))}
           {COMBINE_EVENTS[compForm.event] && (
             <div>
-              <label style={{ display: "block", fontSize: 9.5, fontWeight: 600, letterSpacing: "0.06em", textTransform: "uppercase", color: "var(--c-text-3)", marginBottom: 6 }}>
+              <label style={labelStyle}>
                 Détail par épreuve (optionnel)
               </label>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
                 {COMBINE_EVENTS[compForm.event].map(ev => (
                   <div key={ev}>
-                    <input className="input-premium" placeholder={ev} style={{ fontSize: 12 }}
+                    <input className="input-premium" aria-label={`Résultat ${ev}`} placeholder={ev}
                       value={compForm.breakdown[ev] ?? ""}
                       onChange={e => setCompForm(f => ({ ...f, breakdown: { ...f.breakdown, [ev]: e.target.value } }))} />
-                    <p style={{ fontSize: 9, color: "var(--c-text-4)", marginTop: 3, marginLeft: 2 }}>{ev}</p>
+                    <p style={{ fontSize: 12, color: "var(--c-text-2)", marginTop: 4, marginLeft: 2 }}>{ev}</p>
                   </div>
                 ))}
               </div>
@@ -1419,14 +1423,14 @@ export default function AddCompModal({ compForm, setCompForm, onClose, onSubmit,
           )}
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
             <div>
-              <label style={{ display: "block", fontSize: 9.5, fontWeight: 600, letterSpacing: "0.06em", textTransform: "uppercase", color: "var(--c-text-3)", marginBottom: 6 }}>Date *</label>
-              <input type="date" className="input-premium"
+              <label htmlFor="comp-date" style={labelStyle}>Date *</label>
+              <input id="comp-date" type="date" className="input-premium" required
                 value={compForm.date}
                 onChange={e => setCompForm(p => ({ ...p, date: e.target.value }))} />
             </div>
             <div>
-              <label style={{ display: "block", fontSize: 9.5, fontWeight: 600, letterSpacing: "0.06em", textTransform: "uppercase", color: "var(--c-text-3)", marginBottom: 6 }}>Type</label>
-              <select className="input-premium"
+              <label htmlFor="comp-type" style={labelStyle}>Type</label>
+              <select id="comp-type" className="input-premium"
                 value={compForm.type}
                 onChange={e => setCompForm(p => ({ ...p, type: e.target.value }))}>
                 {["Régionale","Provinciale","Nationale","Internationale","Autre"].map(t => (
@@ -1437,14 +1441,14 @@ export default function AddCompModal({ compForm, setCompForm, onClose, onSubmit,
           </div>
         </div>
         <div style={{ padding: "12px 20px", borderTop: "1px solid var(--c-border)", display: "flex", gap: 10 }}>
-          <button onClick={onClose} className="btn-secondary">Annuler</button>
-          <button onClick={onSubmit}
+          <button type="button" onClick={onClose} className="btn-secondary">Annuler</button>
+          <button type="submit"
             disabled={!compForm.name.trim() || !compForm.event.trim() || !compForm.result.trim() || saving}
             className="btn-primary" style={{ flex: 1 }}>
             {saving ? <><div className="loader-ring loader-ring-sm" />Enregistrement…</> : <><Plus size={14} />Ajouter</>}
           </button>
         </div>
-      </div>
+      </form>
     </div>,
     document.body
   );
@@ -1461,10 +1465,12 @@ import { createPortal } from "react-dom";
 import { Plus, Target, X } from "lucide-react";
 
 export default function AddGoalModal({ disciplines, goalForm, setGoalForm, onClose, onSubmit, saving }) {
+  const labelStyle = { display: "block", fontSize: 12, fontWeight: 700, color: "var(--c-text-2)", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 8 };
   return createPortal(
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4 modal-backdrop"
       onClick={e => e.target === e.currentTarget && !saving && onClose()}>
-      <div className="rounded-t-3xl sm:rounded-3xl shadow-2xl w-full sm:max-w-sm max-h-[90vh] flex flex-col overflow-hidden modal-content"
+      <form onSubmit={event => { event.preventDefault(); onSubmit(); }} role="dialog" aria-modal="true" aria-labelledby="add-goal-title"
+        className="rounded-t-3xl sm:rounded-3xl shadow-2xl w-full sm:max-w-sm max-h-[90vh] flex flex-col overflow-hidden modal-content"
         style={{ background: "var(--c-surface)" }}>
 
         <div className="flex justify-center pt-3 pb-1 sm:hidden flex-shrink-0">
@@ -1475,21 +1481,21 @@ export default function AddGoalModal({ disciplines, goalForm, setGoalForm, onClo
           style={{ background: "rgba(234,179,8,0.08)", borderBottom: "1px solid rgba(234,179,8,0.20)" }}>
           <div>
             <div style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "4px 10px", borderRadius: 99, marginBottom: 6, background: "rgba(234,179,8,0.14)", border: "1px solid rgba(234,179,8,0.25)" }}>
-              <Target size={10} color="#EAB308" />
-              <span style={{ fontSize: 10, fontWeight: 600, letterSpacing: "0.05em", textTransform: "uppercase", color: "#F0CB61" }}>Nouvel objectif</span>
+              <Target size={14} color="#F0CB61" aria-hidden="true" />
+              <h2 id="add-goal-title" style={{ fontSize: 15, fontWeight: 700, color: "#F0CB61" }}>Nouvel objectif</h2>
             </div>
-            <p style={{ fontSize: 11.5, color: "var(--c-text-3)" }}>Fixe-toi un cap à atteindre</p>
+            <p style={{ fontSize: 13, color: "var(--c-text-2)" }}>Fixe-toi un cap à atteindre</p>
           </div>
-          <button onClick={onClose} disabled={saving}
-            style={{ padding: 8, borderRadius: 10, background: "var(--c-surface-2)", border: "none", cursor: "pointer", color: "var(--c-text-2)", flexShrink: 0 }}>
-            <X size={17} />
+          <button type="button" aria-label="Fermer" onClick={onClose} disabled={saving}
+            style={{ width: 44, height: 44, borderRadius: 12, background: "var(--c-surface-2)", border: "1px solid var(--c-border)", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: "var(--c-text-2)", flexShrink: 0 }}>
+            <X size={18} aria-hidden="true" />
           </button>
         </div>
 
         <div className="flex-1 overflow-y-auto px-6 py-5 space-y-5">
           <div>
-            <label style={{ display: "block", fontSize: 10, fontWeight: 600, color: "var(--c-text-3)", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 8 }}>Épreuve *</label>
-            <input className="input-premium" placeholder="Ex: 100m, Longueur…"
+            <label htmlFor="goal-discipline" style={labelStyle}>Épreuve *</label>
+            <input id="goal-discipline" className="input-premium" placeholder="Ex: 100m, Longueur…" required autoFocus
               value={goalForm.discipline}
               onChange={e => setGoalForm(f => ({ ...f, discipline: e.target.value }))} />
             {disciplines.length > 0 && (
@@ -1497,9 +1503,9 @@ export default function AddGoalModal({ disciplines, goalForm, setGoalForm, onClo
                 {disciplines.map(d => {
                   const sel = goalForm.discipline === d;
                   return (
-                    <button key={d} onClick={() => setGoalForm(f => ({ ...f, discipline: d }))}
+                    <button key={d} type="button" aria-pressed={sel} onClick={() => setGoalForm(f => ({ ...f, discipline: d }))}
                       className="tap-feedback"
-                      style={{ padding: "5px 11px", borderRadius: 10, fontSize: 11, fontWeight: 600, border: `1.5px solid ${sel ? "#EAB308" : "var(--c-border-strong)"}`, background: sel ? "#EAB308" : "var(--c-surface-2)", color: sel ? "#0A150F" : "var(--c-text-2)", cursor: "pointer" }}>
+                      style={{ minHeight: 44, padding: "0 12px", borderRadius: 10, fontSize: 13, fontWeight: 700, border: `1.5px solid ${sel ? "#EAB308" : "var(--c-border-strong)"}`, background: sel ? "rgba(234,179,8,0.16)" : "var(--c-surface-2)", color: sel ? "#F0CB61" : "var(--c-text-2)", cursor: "pointer" }}>
                       {d}
                     </button>
                   );
@@ -1509,22 +1515,22 @@ export default function AddGoalModal({ disciplines, goalForm, setGoalForm, onClo
           </div>
 
           <div>
-            <label style={{ display: "block", fontSize: 10, fontWeight: 600, color: "var(--c-text-3)", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 8 }}>Objectif à atteindre *</label>
-            <input className="input-premium" placeholder="Ex: 10.80 ou 7.60m"
+            <label htmlFor="goal-value" style={labelStyle}>Objectif à atteindre *</label>
+            <input id="goal-value" className="input-premium" placeholder="Ex: 10.80 ou 7.60m" required
               value={goalForm.target_value}
               onChange={e => setGoalForm(f => ({ ...f, target_value: e.target.value }))} />
           </div>
 
           <div>
-            <label style={{ display: "block", fontSize: 10, fontWeight: 600, color: "var(--c-text-3)", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 8 }}>Échéance (optionnel)</label>
-            <input type="date" className="input-premium"
+            <label htmlFor="goal-deadline" style={labelStyle}>Échéance (optionnel)</label>
+            <input id="goal-deadline" type="date" className="input-premium"
               value={goalForm.deadline}
               onChange={e => setGoalForm(f => ({ ...f, deadline: e.target.value }))} />
           </div>
 
           <div>
-            <label style={{ display: "block", fontSize: 10, fontWeight: 600, color: "var(--c-text-3)", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 8 }}>Notes</label>
-            <textarea className="input-premium resize-none" rows={2}
+            <label htmlFor="goal-notes" style={labelStyle}>Notes</label>
+            <textarea id="goal-notes" className="input-premium resize-none" rows={3}
               placeholder="Motivation, contexte…"
               value={goalForm.notes}
               onChange={e => setGoalForm(f => ({ ...f, notes: e.target.value }))} />
@@ -1532,14 +1538,14 @@ export default function AddGoalModal({ disciplines, goalForm, setGoalForm, onClo
         </div>
 
         <div className="px-6 py-4 flex items-center justify-between gap-3 flex-shrink-0" style={{ borderTop: "1px solid var(--c-border)" }}>
-          <button onClick={onClose} className="btn-secondary">Annuler</button>
-          <button onClick={onSubmit}
+          <button type="button" onClick={onClose} className="btn-secondary">Annuler</button>
+          <button type="submit"
             disabled={!goalForm.discipline.trim() || !goalForm.target_value.trim() || saving}
             className="btn-primary">
             {saving ? <><div className="loader-ring loader-ring-sm" />Enregistrement…</> : <><Plus size={14} />Créer l'objectif</>}
           </button>
         </div>
-      </div>
+      </form>
     </div>,
     document.body
   );
@@ -1557,6 +1563,7 @@ import { Plus, TrendingUp, X } from "lucide-react";
 import { COMBINE_EVENTS, discColor } from "./perfsShared";
 
 export default function AddPerfModal({ disciplines, perfForm, setPerfForm, onClose, onSubmit, saving }) {
+  const labelStyle = { display: "block", fontSize: 12, fontWeight: 700, color: "var(--c-text-2)", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 8 };
   // Portal sur document.body — AthletePerfs.jsx est rendu à l'intérieur du
   // <main> scrollable d'AthleteApp.jsx ; sans portal ce position:fixed dérive
   // avec le scroll au lieu de rester épinglé à l'écran sur mobile (même bug
@@ -1564,7 +1571,8 @@ export default function AddPerfModal({ disciplines, perfForm, setPerfForm, onClo
   return createPortal(
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4 modal-backdrop"
       onClick={e => e.target === e.currentTarget && !saving && onClose()}>
-      <div className="rounded-t-3xl sm:rounded-3xl shadow-2xl w-full sm:max-w-sm max-h-[90vh] flex flex-col overflow-hidden modal-content"
+      <form onSubmit={event => { event.preventDefault(); onSubmit(); }} role="dialog" aria-modal="true" aria-labelledby="add-perf-title"
+        className="rounded-t-3xl sm:rounded-3xl shadow-2xl w-full sm:max-w-sm max-h-[90vh] flex flex-col overflow-hidden modal-content"
         style={{ background: "var(--c-surface)" }}>
 
         <div className="flex justify-center pt-3 pb-1 sm:hidden flex-shrink-0">
@@ -1575,21 +1583,21 @@ export default function AddPerfModal({ disciplines, perfForm, setPerfForm, onClo
           style={{ background: "rgba(29,158,117,0.08)", borderBottom: "1px solid rgba(29,158,117,0.18)" }}>
           <div>
             <div style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "4px 10px", borderRadius: 99, marginBottom: 6, background: "rgba(29,158,117,0.14)", border: "1px solid rgba(29,158,117,0.25)" }}>
-              <TrendingUp size={10} color="#1D9E75" />
-              <span style={{ fontSize: 10, fontWeight: 600, letterSpacing: "0.05em", textTransform: "uppercase", color: "#4DC9A0" }}>Saisir une performance</span>
+              <TrendingUp size={14} color="#7BD8B4" aria-hidden="true" />
+              <h2 id="add-perf-title" style={{ fontSize: 15, fontWeight: 700, color: "#7BD8B4" }}>Saisir une performance</h2>
             </div>
-            <p style={{ fontSize: 11.5, color: "var(--c-text-3)" }}>Chrono, distance, hauteur…</p>
+            <p style={{ fontSize: 13, color: "var(--c-text-2)" }}>Chrono, distance, hauteur…</p>
           </div>
-          <button onClick={onClose} disabled={saving}
-            style={{ padding: 8, borderRadius: 10, background: "var(--c-surface-2)", border: "none", cursor: "pointer", color: "var(--c-text-2)", flexShrink: 0 }}>
-            <X size={17} />
+          <button type="button" aria-label="Fermer" onClick={onClose} disabled={saving}
+            style={{ width: 44, height: 44, borderRadius: 12, background: "var(--c-surface-2)", border: "1px solid var(--c-border)", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: "var(--c-text-2)", flexShrink: 0 }}>
+            <X size={18} aria-hidden="true" />
           </button>
         </div>
 
         <div className="flex-1 overflow-y-auto px-6 py-5 space-y-5">
           <div>
-            <label style={{ display: "block", fontSize: 10, fontWeight: 600, color: "var(--c-text-3)", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 8 }}>Épreuve *</label>
-            <input className="input-premium" placeholder="Ex: 100m, Longueur…"
+            <label htmlFor="perf-discipline" style={labelStyle}>Épreuve *</label>
+            <input id="perf-discipline" className="input-premium" placeholder="Ex: 100m, Longueur…" required autoFocus
               value={perfForm.discipline}
               onChange={e => setPerfForm(f => ({ ...f, discipline: e.target.value }))} />
             {disciplines.length > 0 && (
@@ -1598,9 +1606,9 @@ export default function AddPerfModal({ disciplines, perfForm, setPerfForm, onClo
                   const sel = perfForm.discipline === d;
                   const col = discColor(d);
                   return (
-                    <button key={d} onClick={() => setPerfForm(f => ({ ...f, discipline: d }))}
+                    <button key={d} type="button" aria-pressed={sel} onClick={() => setPerfForm(f => ({ ...f, discipline: d }))}
                       className="tap-feedback"
-                      style={{ padding: "5px 11px", borderRadius: 10, fontSize: 11, fontWeight: 600, border: `1.5px solid ${sel ? col : "var(--c-border-strong)"}`, background: sel ? col : "var(--c-surface-2)", color: sel ? "#0A150F" : "var(--c-text-2)", cursor: "pointer" }}>
+                      style={{ minHeight: 44, padding: "0 12px", borderRadius: 10, fontSize: 13, fontWeight: 700, border: `1.5px solid ${sel ? col : "var(--c-border-strong)"}`, background: sel ? `${col}20` : "var(--c-surface-2)", color: sel ? col : "var(--c-text-2)", cursor: "pointer" }}>
                       {d}
                     </button>
                   );
@@ -1610,10 +1618,10 @@ export default function AddPerfModal({ disciplines, perfForm, setPerfForm, onClo
           </div>
 
           <div>
-            <label style={{ display: "block", fontSize: 10, fontWeight: 600, color: "var(--c-text-3)", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 8 }}>
+            <label htmlFor="perf-value" style={labelStyle}>
               {COMBINE_EVENTS[perfForm.discipline] ? "Total (points) *" : "Résultat *"}
             </label>
-            <input className="input-premium" placeholder="Ex: 10.94 ou 7.45m"
+            <input id="perf-value" className="input-premium" placeholder="Ex: 10.94 ou 7.45m" required
               value={perfForm.value}
               onChange={e => setPerfForm(f => ({ ...f, value: e.target.value }))} />
           </div>
@@ -1621,16 +1629,16 @@ export default function AddPerfModal({ disciplines, perfForm, setPerfForm, onClo
           {/* Détail par épreuve — uniquement pour Décathlon/Heptathlon */}
           {COMBINE_EVENTS[perfForm.discipline] && (
             <div>
-              <label style={{ display: "block", fontSize: 10, fontWeight: 600, color: "var(--c-text-3)", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 8 }}>
+              <label style={labelStyle}>
                 Détail par épreuve (optionnel)
               </label>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
                 {COMBINE_EVENTS[perfForm.discipline].map(ev => (
                   <div key={ev}>
-                    <input className="input-premium" placeholder={ev} style={{ fontSize: 12 }}
+                    <input className="input-premium" aria-label={`Résultat ${ev}`} placeholder={ev}
                       value={perfForm.breakdown[ev] ?? ""}
                       onChange={e => setPerfForm(f => ({ ...f, breakdown: { ...f.breakdown, [ev]: e.target.value } }))} />
-                    <p style={{ fontSize: 9, color: "var(--c-text-4)", marginTop: 3, marginLeft: 2 }}>{ev}</p>
+                    <p style={{ fontSize: 12, color: "var(--c-text-2)", marginTop: 4, marginLeft: 2 }}>{ev}</p>
                   </div>
                 ))}
               </div>
@@ -1638,29 +1646,29 @@ export default function AddPerfModal({ disciplines, perfForm, setPerfForm, onClo
           )}
 
           <div>
-            <label style={{ display: "block", fontSize: 10, fontWeight: 600, color: "var(--c-text-3)", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 8 }}>Date</label>
-            <input type="date" className="input-premium"
+            <label htmlFor="perf-date" style={labelStyle}>Date</label>
+            <input id="perf-date" type="date" className="input-premium"
               value={perfForm.performance_date}
               onChange={e => setPerfForm(f => ({ ...f, performance_date: e.target.value }))} />
           </div>
 
           <div>
-            <label style={{ display: "block", fontSize: 10, fontWeight: 600, color: "var(--c-text-3)", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 8 }}>Contexte (optionnel)</label>
-            <input className="input-premium" placeholder="Ex: Vent +1.2m/s, finale régionale…"
+            <label htmlFor="perf-context" style={labelStyle}>Contexte (optionnel)</label>
+            <input id="perf-context" className="input-premium" placeholder="Ex: Vent +1.2m/s, finale régionale…"
               value={perfForm.context}
               onChange={e => setPerfForm(f => ({ ...f, context: e.target.value }))} />
           </div>
         </div>
 
         <div className="px-6 py-4 flex items-center justify-between gap-3 flex-shrink-0" style={{ borderTop: "1px solid var(--c-border)" }}>
-          <button onClick={onClose} className="btn-secondary">Annuler</button>
-          <button onClick={onSubmit}
+          <button type="button" onClick={onClose} className="btn-secondary">Annuler</button>
+          <button type="submit"
             disabled={!perfForm.discipline.trim() || !perfForm.value.trim() || saving}
             className="btn-primary">
             {saving ? <><div className="loader-ring loader-ring-sm" />Enregistrement…</> : <><Plus size={14} />Enregistrer</>}
           </button>
         </div>
-      </div>
+      </form>
     </div>,
     document.body
   );
@@ -3881,18 +3889,16 @@ export default function AthleteMsgerie({
 // AthleteOS — src/athlete/views/AthletePerfs.jsx  ★ DESIGN PREMIUM DARK v2
 // Même logique métier que l'original (fetch, insert, update, delete
 // Supabase 100% inchangés). Seul le rendu visuel change :
-//   - Header + tabs alignés sur le style du Dashboard (dark, var(--c-*))
-//   - Records : ring de progression PR (plus de blocs plats blancs)
-//   - Évolution : chips toujours lisibles (fix du bug blanc-sur-blanc)
-//   - Objectifs : ring + badge J-X cohérents avec le reste de l'app
-//   - Compétitions : card dark alignée
-//   - Modals : bg-white → var(--c-surface) partout
+//   - Hero et navigation alignés sur les tokens premium de l'application
+//   - Records : mini-courbes par discipline et hiérarchie PR/SB plus fine
+//   - Évolution : indice commun où une hausse signifie toujours un progrès
+//   - Objectifs et compétitions : cartes plus lisibles et moins massives
 // ============================================================
 
 import { useState, useMemo, useEffect } from "react";
 import {
   Plus, Trophy, Target, BarChart2, CheckCircle,
-  TrendingUp, TrendingDown, Minus,
+  TrendingUp, TrendingDown, Minus, Activity, Flag, FileText, Sparkles,
 } from "lucide-react";
 import {
   AreaChart, Area, XAxis, YAxis, Tooltip,
@@ -3904,8 +3910,9 @@ import { getDiscHib, parsePerf, toLocalDateStr, getISOWeek, isBetterOrEqual, pct
 import { resolveDisciplineId, getDisciplineUnit } from "../../domain/disciplines.js";
 import { notifyGoalAchieved, postClubCelebration, dispatchOutboxNotifications } from "../../utils/notifications";
 import { getAthleteMetricsForWeek } from "../../utils/chargeCalculations";
+import { parseLocalDate } from "../../utils/helpers";
 import MesRapports from "./MesRapports";
-import { COMBINE_EVENTS, discColor } from "./perfsShared";
+import { COMBINE_EVENTS, discColor, performanceIndex } from "./perfsShared";
 import { ConfettiBurst, PerfTooltip, ProgressRing, RecordCard, GoalProgressBar } from "./PerfsWidgets";
 import AddPerfModal from "./AddPerfModal";
 import AddGoalModal from "./AddGoalModal";
@@ -3944,31 +3951,37 @@ export default function AthletePerfs({ athlete, competitions, myPerformances, my
   useEffect(() => { setLocalPerfs(myPerformances ?? []); }, [myPerformances]);
   useEffect(() => { setLocalGoals(myGoals ?? []);        }, [myGoals]);
 
-  const disciplines = Object.keys(athlete.records ?? {});
+  const disciplines = useMemo(() => Object.keys(athlete.records ?? {}), [athlete.records]);
 
   useEffect(() => {
     if (!selectedDisc && disciplines.length > 0) setSelectedDisc(disciplines[0]);
-  }, [disciplines.length]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [selectedDisc, disciplines]);
 
   const chartData = useMemo(() => {
     const disc = selectedDisc ?? disciplines[0];
     if (!disc) return [];
+    const reference = parsePerf(athlete.records?.[disc]?.pr).value;
     return localPerfs
       .filter(p => p.discipline === disc && p.value != null)
       .sort((a, b) => a.performance_date.localeCompare(b.performance_date))
-      .map(p => ({
-        date:      p.performance_date.slice(0, 10),
-        label:     new Date(p.performance_date).toLocaleDateString("fr-BE", { day: "numeric", month: "short" }),
+      .map(p => {
         // Tâche 12 : préfère la valeur canonique déjà stockée (normalized_value)
         // à un parseFloat brut, qui donnait un résultat faux sur un format
         // "minutes:secondes" ("1:52" -> 1 au lieu de 112) — fallback sur
         // parsePerf() pour les lignes pas encore backfillées.
-        value:     p.normalized_value ?? parsePerf(p.value).value ?? 0,
-        raw:       p.value,
-        ctx:       p.context,
-        breakdown: p.breakdown,
-      }));
-  }, [localPerfs, selectedDisc, disciplines]);
+        const value = p.normalized_value ?? parsePerf(p.value).value ?? 0;
+        const score = performanceIndex(value, reference, disc) ?? value;
+        return {
+          date: p.performance_date.slice(0, 10),
+          label: parseLocalDate(p.performance_date.slice(0, 10)).toLocaleDateString("fr-BE", { day: "numeric", month: "short" }),
+          value,
+          score,
+          raw: p.value,
+          ctx: p.context,
+          breakdown: p.breakdown,
+        };
+      });
+  }, [localPerfs, selectedDisc, disciplines, athlete.records]);
 
   // Zone ombrée entre le PR actuel et l'objectif visé sur la discipline
   // affichée — visualise d'un coup d'œil l'écart qu'il reste à combler.
@@ -3977,14 +3990,14 @@ export default function AthletePerfs({ athlete, competitions, myPerformances, my
     if (!disc) return null;
     const goal = localGoals.find(g => !g.achieved && g.discipline === disc);
     if (!goal) return null;
-    const targetP = parsePerf(goal.target_value);
-    if (targetP.value == null) return null;
+    const targetValue = parsePerf(goal.target_value).value;
+    if (targetValue == null) return null;
     const rec   = athlete.records?.[disc];
-    const prP   = rec?.pr ? parsePerf(rec.pr) : null;
-    const prVal = prP?.value ?? null;
-    const y1 = prVal != null ? Math.min(prVal, targetP.value) : targetP.value;
-    const y2 = prVal != null ? Math.max(prVal, targetP.value) : targetP.value;
-    return { target: targetP.value, prVal, y1, y2 };
+    const prValue = rec?.pr ? parsePerf(rec.pr).value : null;
+    if (prValue == null || prValue === 0) return null;
+    const targetScore = performanceIndex(targetValue, prValue, disc);
+    if (targetScore == null) return null;
+    return { target: targetScore, y1: Math.min(100, targetScore), y2: Math.max(100, targetScore) };
   }, [selectedDisc, disciplines, localGoals, athlete.records]);
 
   const compHistory = useMemo(() => {
@@ -4016,12 +4029,12 @@ export default function AthletePerfs({ athlete, competitions, myPerformances, my
         const pct = hib
           ? Math.min(105, Math.round((resP.value / prP.value) * 1000) / 10)
           : Math.min(105, Math.round((prP.value / resP.value) * 1000) / 10);
-        const week    = getISOWeek(new Date(comp.date));
+        const week    = getISOWeek(parseLocalDate(comp.date.slice(0, 10)));
         const metrics = getAthleteMetricsForWeek(athlete.id, weeklyCharge, week);
         return { x: metrics.acwr, y: pct, compName: comp.name, date: comp.date, resultStr: result.result };
       })
       .filter(Boolean);
-  }, [compHistory, selectedDisc, athlete.records, weeklyCharge]);
+  }, [compHistory, selectedDisc, athlete.id, athlete.records, weeklyCharge]);
 
   // Tâche 11 : "meilleure" performance déterminée via le moteur central
   // (isBetterOrEqual, qui consulte getDiscHib) — avant ce fix, un simple
@@ -4031,14 +4044,19 @@ export default function AthletePerfs({ athlete, competitions, myPerformances, my
   const disciplineStats = useMemo(() => {
     const map = {};
     localPerfs.forEach(p => {
-      if (!map[p.discipline]) map[p.discipline] = { count: 0, best: null, last: null };
+      if (!map[p.discipline]) map[p.discipline] = { count: 0, best: null, last: null, series: [] };
       map[p.discipline].count++;
       const v = parsePerf(p.value).value;
       if (v != null) {
+        map[p.discipline].series.push({ value: v, date: p.performance_date, raw: p.value });
         if (!map[p.discipline].best || isBetterOrEqual(v, map[p.discipline].best.v, p.discipline))
           map[p.discipline].best = { v, date: p.performance_date, raw: p.value };
         map[p.discipline].last = { v, date: p.performance_date, raw: p.value };
       }
+    });
+    Object.values(map).forEach(stats => {
+      stats.series.sort((a, b) => a.date.localeCompare(b.date));
+      stats.last = stats.series.at(-1) ?? null;
     });
     return map;
   }, [localPerfs]);
@@ -4273,50 +4291,70 @@ export default function AthletePerfs({ athlete, competitions, myPerformances, my
   };
 
   const PERF_TABS = [
-    { id: "records",   label: "Records" },
-    { id: "evolution", label: "Évolution" },
-    { id: "objectifs", label: activeGoals.length > 0 ? `Objectifs (${activeGoals.length})` : "Objectifs" },
-    { id: "comps",     label: "Compétitions" },
-    { id: "rapports",  label: "Rapports" },
+    { id: "records",   label: "Records", icon: Trophy },
+    { id: "evolution", label: "Évolution", icon: Activity },
+    { id: "objectifs", label: activeGoals.length > 0 ? `Objectifs (${activeGoals.length})` : "Objectifs", icon: Target },
+    { id: "comps",     label: "Compétitions", icon: Flag },
+    { id: "rapports",  label: "Rapports", icon: FileText },
   ];
 
   // ══════════════════════════════════════════════════════════════════════════
   return (
-    <div className="p-4 md:p-5 space-y-4 max-w-4xl mx-auto animate-slide-up">
+    <div className="p-4 md:p-6 space-y-6 max-w-5xl mx-auto animate-slide-up">
 
-      {/* ── HEADER ─────────────────────────────────────────────────────────── */}
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        <div>
-          <h2 style={{ fontSize: 20, fontWeight: 600, color: "var(--c-text-1)", letterSpacing: "-0.02em" }}>
-            Mes performances
-          </h2>
-          <p style={{ fontSize: 11, color: "var(--c-text-3)", marginTop: 2 }}>
-            {disciplines.length} épreuve{disciplines.length !== 1 ? "s" : ""}
-            {" · "}{localPerfs.length} mesure{localPerfs.length !== 1 ? "s" : ""}
-            {compHistory.length > 0 && ` · ${compHistory.length} compétition${compHistory.length > 1 ? "s" : ""}`}
-          </p>
+      <section className="card" style={{ position: "relative", overflow: "hidden", padding: 20, background: "linear-gradient(145deg, rgba(29,158,117,0.11), var(--c-surface) 48%, rgba(91,158,245,0.05))" }}>
+        <div aria-hidden="true" style={{ position: "absolute", width: 260, height: 260, right: -110, top: -150, borderRadius: "50%", background: "radial-gradient(circle, rgba(77,201,160,0.16), transparent 68%)" }} />
+        <div style={{ position: "relative", display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
+          <div style={{ minWidth: 0 }}>
+            <div style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "4px 9px", borderRadius: 99, background: "rgba(29,158,117,0.10)", border: "1px solid rgba(77,201,160,0.18)", marginBottom: 12 }}>
+              <Sparkles size={13} color="#7BD8B4" aria-hidden="true" />
+              <span style={{ fontSize: 12, fontWeight: 700, color: "#7BD8B4", letterSpacing: "0.05em", textTransform: "uppercase" }}>Performance lab</span>
+            </div>
+            <h1 className="page-title">Mes performances</h1>
+            <p style={{ fontSize: 13, lineHeight: 1.5, color: "var(--c-text-2)", marginTop: 6 }}>
+              Lis ta progression, comprends tes tendances et transforme chaque mesure en repère.
+            </p>
+          </div>
+          <button type="button" onClick={() => setShowAddPerf(true)} className="btn-primary" style={{ flexShrink: 0 }}>
+            <Plus size={16} aria-hidden="true" /> Saisir une performance
+          </button>
         </div>
-        <button onClick={() => setShowAddPerf(true)} className="btn-primary">
-          <Plus size={14} /> Saisir une perf
-        </button>
-      </div>
+
+        <div style={{ position: "relative", display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", marginTop: 20, paddingTop: 16, borderTop: "1px solid var(--c-border)" }}>
+          {[
+            { value: disciplines.length, label: "Records suivis" },
+            { value: localPerfs.length, label: "Mesures" },
+            { value: activeGoals.length, label: "Objectifs actifs" },
+          ].map((item, index) => (
+            <div key={item.label} style={{ paddingInline: index === 0 ? 0 : 16, borderLeft: index === 0 ? "none" : "1px solid var(--c-border)" }}>
+              <p style={{ fontSize: 22, fontWeight: 700, lineHeight: 1, color: "var(--c-text-1)", fontVariantNumeric: "tabular-nums" }}>{item.value}</p>
+              <p style={{ fontSize: 12, color: "var(--c-text-2)", marginTop: 6 }}>{item.label}</p>
+            </div>
+          ))}
+        </div>
+      </section>
 
       {/* ── TAB BAR ──────────────────────────────────────────────────────────── */}
-      <div className="flex gap-1 rounded-2xl p-1.5 overflow-x-auto" style={{ background: "var(--c-surface)", border: "1px solid var(--c-border)" }}>
-        {PERF_TABS.map(tab => (
-          <button key={tab.id} onClick={() => setActiveTab(tab.id)}
-            className="flex-1 py-2 rounded-xl text-center transition-all tap-feedback"
+      <nav aria-label="Sections des performances" className="flex gap-1 rounded-2xl p-1.5 overflow-x-auto" style={{ background: "var(--c-surface)", border: "1px solid var(--c-border)" }}>
+        {PERF_TABS.map(tab => {
+          const TabIcon = tab.icon;
+          return (
+          <button key={tab.id} type="button" onClick={() => setActiveTab(tab.id)} aria-pressed={activeTab === tab.id}
+            className="flex-1 rounded-xl text-center transition-all tap-feedback"
             style={{
-              fontSize: 12, fontWeight: 600, whiteSpace: "nowrap",
-              background: activeTab === tab.id ? "#1D9E75" : "transparent",
-              color: activeTab === tab.id ? "#0A150F" : "var(--c-text-3)",
-              boxShadow: activeTab === tab.id ? "0 2px 8px rgba(29,158,117,0.25)" : "none",
-              border: "none", cursor: "pointer",
+              minWidth: 116, minHeight: 44, padding: "0 14px", fontSize: 13, fontWeight: 700, whiteSpace: "nowrap",
+              display: "flex", alignItems: "center", justifyContent: "center", gap: 7,
+              background: activeTab === tab.id ? "rgba(29,158,117,0.16)" : "transparent",
+              color: activeTab === tab.id ? "#7BD8B4" : "var(--c-text-2)",
+              boxShadow: activeTab === tab.id ? "inset 0 0 0 1px rgba(77,201,160,0.22)" : "none",
+              border: "none", cursor: "pointer", flexShrink: 0,
             }}>
+            <TabIcon size={15} aria-hidden="true" />
             {tab.label}
           </button>
-        ))}
-      </div>
+          );
+        })}
+      </nav>
 
       {/* key={activeTab} force un remount à chaque changement d'onglet, ce qui
           déclenche .view-transition (fondu+glissement) au lieu d'un switch
@@ -4326,17 +4364,28 @@ export default function AthletePerfs({ athlete, competitions, myPerformances, my
           ONGLET RECORDS
          ══════════════════════════════════════════════════════════════════════ */}
       {activeTab === "records" && (
-        <div className="space-y-3">
+        <div className="space-y-5">
+          <div className="flex items-end justify-between gap-4">
+            <div>
+              <h2 className="section-title">Records personnels</h2>
+              <p style={{ fontSize: 13, color: "var(--c-text-2)", marginTop: 4 }}>
+                Ton meilleur niveau et la dynamique de tes dernières mesures.
+              </p>
+            </div>
+            {disciplines.length > 0 && (
+              <span style={{ fontSize: 12, color: "var(--c-text-2)", flexShrink: 0 }}>{disciplines.length} discipline{disciplines.length > 1 ? "s" : ""}</span>
+            )}
+          </div>
           {disciplines.length === 0 ? (
             <div className="card p-12 text-center">
               <div style={{ width: 56, height: 56, borderRadius: 18, display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 14px", background: "var(--c-surface-2)" }}>
-                <Trophy size={26} color="var(--c-text-4)" strokeWidth={1.5} />
+                <Trophy size={26} color="var(--c-text-3)" strokeWidth={1.5} />
               </div>
-              <p style={{ fontSize: 13, fontWeight: 500, color: "var(--c-text-2)" }}>Aucun record enregistré</p>
-              <p style={{ fontSize: 11, color: "var(--c-text-4)", marginTop: 4 }}>Ton coach les ajoutera après tes premières compétitions</p>
+              <p style={{ fontSize: 15, fontWeight: 700, color: "var(--c-text-1)" }}>Aucun record enregistré</p>
+              <p style={{ fontSize: 13, color: "var(--c-text-2)", marginTop: 4 }}>Ton coach les ajoutera après tes premières compétitions.</p>
             </div>
           ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {disciplines.map(disc => (
                 <RecordCard
                   key={disc}
@@ -4351,32 +4400,36 @@ export default function AthletePerfs({ athlete, competitions, myPerformances, my
 
           {compHistory.length > 0 && (
             <div className="card overflow-hidden">
-              <div style={{ padding: "14px 16px", display: "flex", alignItems: "center", justifyContent: "space-between", borderBottom: "1px solid var(--c-border)" }}>
+              <div style={{ padding: 16, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, borderBottom: "1px solid var(--c-border)" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  <div style={{ width: 26, height: 26, borderRadius: 8, background: "rgba(234,179,8,0.10)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                    <Trophy size={12} color="#EAB308" />
+                  <div style={{ width: 32, height: 32, borderRadius: 10, background: "rgba(234,179,8,0.10)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                    <Trophy size={15} color="#EAB308" aria-hidden="true" />
                   </div>
-                  <p style={{ fontSize: 13, fontWeight: 600, color: "var(--c-text-1)" }}>Dernières compétitions</p>
+                  <div>
+                    <p className="card-title">Dernières compétitions</p>
+                    <p style={{ fontSize: 12, color: "var(--c-text-2)", marginTop: 2 }}>Tes résultats les plus récents</p>
+                  </div>
                 </div>
-                <button onClick={() => setActiveTab("comps")} style={{ fontSize: 11, fontWeight: 600, color: "#4DC9A0", background: "none", border: "none", cursor: "pointer" }}>
+                <button type="button" onClick={() => setActiveTab("comps")} className="btn-ghost" style={{ minHeight: 44, fontSize: 12 }}>
                   Tout voir →
                 </button>
               </div>
               <div>
                 {compHistory.slice(0, 3).map(({ comp, result }, i) => (
-                  <div key={i} style={{ padding: "12px 16px", display: "flex", alignItems: "center", gap: 12, borderTop: i > 0 ? "1px solid var(--c-border)" : "none" }}>
-                    <div style={{ width: 34, height: 34, borderRadius: 10, background: "rgba(234,179,8,0.10)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                      <Trophy size={14} color="#EAB308" />
+                  <div key={`${comp.id}-${result.event}-${i}`} style={{ padding: 16, display: "flex", alignItems: "center", gap: 12, borderTop: i > 0 ? "1px solid var(--c-border)" : "none" }}>
+                    <div style={{ width: 40, height: 40, borderRadius: 12, background: "rgba(234,179,8,0.08)", border: "1px solid rgba(234,179,8,0.14)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                      <Trophy size={16} color="#EAB308" aria-hidden="true" />
                     </div>
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <p style={{ fontSize: 12.5, fontWeight: 600, color: "var(--c-text-1)" }} className="truncate">{comp.name}</p>
-                      <p style={{ fontSize: 11, color: "var(--c-text-3)" }}>
-                        {result.event} · <strong style={{ color: "#4DC9A0" }}>{result.result}</strong>
+                      <p style={{ fontSize: 14, fontWeight: 700, color: "var(--c-text-1)" }} className="truncate">{comp.name}</p>
+                      <p style={{ fontSize: 12, color: "var(--c-text-2)", marginTop: 3 }}>{result.event}</p>
+                    </div>
+                    <div style={{ textAlign: "right", flexShrink: 0 }}>
+                      <p style={{ fontSize: 16, fontWeight: 700, color: "#7BD8B4", fontVariantNumeric: "tabular-nums" }}>{result.result}</p>
+                      <p style={{ fontSize: 12, color: "var(--c-text-3)", marginTop: 3 }}>
+                        {parseLocalDate(comp.date.slice(0, 10)).toLocaleDateString("fr-BE", { day: "numeric", month: "short" })}
                       </p>
                     </div>
-                    <span style={{ fontSize: 10, color: "var(--c-text-4)", flexShrink: 0 }}>
-                      {new Date(comp.date).toLocaleDateString("fr-BE", { day: "numeric", month: "short" })}
-                    </span>
                   </div>
                 ))}
               </div>
@@ -4389,23 +4442,29 @@ export default function AthletePerfs({ athlete, competitions, myPerformances, my
           ONGLET ÉVOLUTION
          ══════════════════════════════════════════════════════════════════════ */}
       {activeTab === "evolution" && (
-        <div className="space-y-3">
+        <div className="space-y-5">
+
+          <div>
+            <h2 className="section-title">Courbe de progression</h2>
+            <p style={{ fontSize: 13, color: "var(--c-text-2)", marginTop: 4 }}>
+              Toutes les disciplines sont ramenées à un indice commun : 100 % correspond à ton record personnel.
+            </p>
+          </div>
 
           {disciplines.length > 0 && (
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 7 }}>
+            <div style={{ display: "flex", overflowX: "auto", gap: 8, paddingBottom: 2, scrollbarWidth: "none" }}>
               {disciplines.map(disc => {
                 const col = discColor(disc);
                 const sel = selectedDisc === disc;
                 return (
-                  <button key={disc} onClick={() => setSelectedDisc(disc)}
+                  <button key={disc} type="button" aria-pressed={sel} onClick={() => setSelectedDisc(disc)}
                     className="tap-feedback"
                     style={{
-                      padding: "7px 13px", borderRadius: 12, fontSize: 12, fontWeight: 600,
-                      border: `1.5px solid ${sel ? col : "var(--c-border-strong)"}`,
-                      background: sel ? col : "var(--c-surface-2)",
-                      color: sel ? "#0A150F" : "var(--c-text-2)",
-                      cursor: "pointer",
-                      boxShadow: sel ? `0 2px 8px ${col}40` : "none",
+                      minHeight: 44, padding: "0 14px", borderRadius: 12, fontSize: 13, fontWeight: 700, flexShrink: 0,
+                      border: `1px solid ${sel ? `${col}75` : "var(--c-border-strong)"}`,
+                      background: sel ? `${col}18` : "var(--c-surface-2)",
+                      color: sel ? col : "var(--c-text-2)", cursor: "pointer",
+                      boxShadow: sel ? `inset 0 0 0 1px ${col}22` : "none",
                     }}>
                     {disc}
                   </button>
@@ -4414,111 +4473,115 @@ export default function AthletePerfs({ athlete, competitions, myPerformances, my
             </div>
           )}
 
-          <div className="card p-4">
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 2 }}>
-              <p style={{ fontSize: 14, fontWeight: 600, color: "var(--c-text-1)" }}>
-                {selectedDisc ?? "Sélectionne une épreuve"}
-              </p>
-              <button onClick={() => setShowAddPerf(true)} style={{ fontSize: 11, fontWeight: 600, color: "#4DC9A0", background: "none", border: "none", cursor: "pointer" }}>
-                + Saisir
+          <div className="card" style={{ overflow: "hidden", padding: 20 }}>
+            <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12, marginBottom: 20 }}>
+              <div>
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  {selectedDisc && <span style={{ width: 8, height: 8, borderRadius: "50%", background: discColor(selectedDisc), boxShadow: `0 0 12px ${discColor(selectedDisc)}` }} />}
+                  <h3 className="card-title">{selectedDisc ?? "Sélectionne une épreuve"}</h3>
+                </div>
+                <p style={{ fontSize: 12, color: "var(--c-text-2)", marginTop: 5 }}>
+                  Indice de niveau · {chartData.length} mesure{chartData.length !== 1 ? "s" : ""}
+                </p>
+              </div>
+              <button type="button" onClick={() => setShowAddPerf(true)} className="btn-ghost" style={{ minHeight: 44, color: "#7BD8B4" }}>
+                <Plus size={14} aria-hidden="true" /> Ajouter
               </button>
             </div>
-            <p style={{ fontSize: 11, color: "var(--c-text-3)", marginBottom: 16 }}>
-              {chartData.length} mesure{chartData.length !== 1 ? "s" : ""}
-            </p>
 
             {chartData.length < 2 ? (
-              <div style={{ height: 180, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 8 }}>
-                <div style={{ width: 44, height: 44, borderRadius: 14, background: "var(--c-surface-2)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                  <BarChart2 size={20} color="var(--c-text-4)" strokeWidth={1.5} />
+              <div style={{ minHeight: 240, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 10 }}>
+                <div style={{ width: 52, height: 52, borderRadius: 16, background: "var(--c-surface-2)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  <BarChart2 size={22} color="var(--c-text-3)" strokeWidth={1.5} />
                 </div>
-                <p style={{ fontSize: 12, color: "var(--c-text-3)", textAlign: "center" }}>
+                <p style={{ fontSize: 13, color: "var(--c-text-2)", textAlign: "center" }}>
                   Minimum 2 mesures pour afficher le graphique
                 </p>
-                <button onClick={() => setShowAddPerf(true)} style={{ fontSize: 12, fontWeight: 600, color: "#4DC9A0", background: "none", border: "none", cursor: "pointer", marginTop: 2 }}>
+                <button type="button" onClick={() => setShowAddPerf(true)} className="btn-ghost" style={{ minHeight: 44, color: "#7BD8B4" }}>
                   + Saisir une performance
                 </button>
               </div>
             ) : (
               <>
-                <ResponsiveContainer width="100%" height={220}>
-                  <AreaChart data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 8, marginBottom: 20 }}>
+                  <div style={{ padding: 12, borderRadius: 12, background: "var(--c-surface-2)", border: "1px solid var(--c-border)" }}>
+                    <p style={{ fontSize: 12, color: "var(--c-text-3)" }}>Dernière mesure</p>
+                    <p style={{ fontSize: 16, fontWeight: 700, color: "var(--c-text-1)", marginTop: 4 }} className="truncate">{chartData.at(-1)?.raw}</p>
+                  </div>
+                  <div style={{ padding: 12, borderRadius: 12, background: "var(--c-surface-2)", border: "1px solid var(--c-border)" }}>
+                    <p style={{ fontSize: 12, color: "var(--c-text-3)" }}>Record</p>
+                    <p style={{ fontSize: 16, fontWeight: 700, color: selectedDisc ? discColor(selectedDisc) : "var(--c-accent)", marginTop: 4 }} className="truncate">{athlete.records?.[selectedDisc]?.pr ?? "—"}</p>
+                  </div>
+                  {(() => {
+                    const delta = chartData.at(-1).score - chartData[0].score;
+                    const Icon = delta > 0 ? TrendingUp : delta < 0 ? TrendingDown : Minus;
+                    const color = delta > 0 ? "#7BD8B4" : delta < 0 ? "#F19A9A" : "var(--c-text-2)";
+                    return (
+                      <div style={{ padding: 12, borderRadius: 12, background: "var(--c-surface-2)", border: "1px solid var(--c-border)" }}>
+                        <p style={{ fontSize: 12, color: "var(--c-text-3)" }}>Dynamique</p>
+                        <p style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 15, fontWeight: 700, color, marginTop: 4 }}>
+                          <Icon size={15} aria-hidden="true" /> {delta > 0 ? "+" : ""}{delta.toFixed(1)} pts
+                        </p>
+                      </div>
+                    );
+                  })()}
+                </div>
+
+                <ResponsiveContainer width="100%" height={280}>
+                  <AreaChart data={chartData} margin={{ top: 16, right: 12, left: 0, bottom: 0 }}>
                     <defs>
-                      <linearGradient id="gradPerfDark" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%"  stopColor="#1D9E75" stopOpacity={0.28} />
-                        <stop offset="95%" stopColor="#1D9E75" stopOpacity={0}    />
+                      <linearGradient id="gradPerfPremium" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor={selectedDisc ? discColor(selectedDisc) : "#1D9E75"} stopOpacity={0.24} />
+                        <stop offset="92%" stopColor={selectedDisc ? discColor(selectedDisc) : "#1D9E75"} stopOpacity={0} />
                       </linearGradient>
                     </defs>
-                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
-                    <XAxis dataKey="label" tick={{ fontSize: 10, fill: "rgba(255,255,255,0.35)" }} axisLine={false} tickLine={false} />
-                    <YAxis tick={{ fontSize: 10, fill: "rgba(255,255,255,0.35)" }} axisLine={false} tickLine={false} width={42}
+                    <CartesianGrid vertical={false} stroke="rgba(255,255,255,0.07)" />
+                    <XAxis dataKey="label" tick={{ fontSize: 12, fill: "var(--c-text-3)" }} axisLine={false} tickLine={false} minTickGap={24} />
+                    <YAxis tick={{ fontSize: 12, fill: "var(--c-text-3)" }} tickFormatter={value => `${value}%`} axisLine={false} tickLine={false} width={48}
                       domain={([min, max]) => {
-                        // Étend l'échelle pour englober l'objectif s'il est hors des données actuelles.
                         const lo = goalZone ? Math.min(min, goalZone.y1) : min;
                         const hi = goalZone ? Math.max(max, goalZone.y2) : max;
-                        const padding = (hi - lo) * 0.1 || 0.5;
-                        return [Math.floor((lo - padding) * 100) / 100, Math.ceil((hi + padding) * 100) / 100];
+                        const padding = Math.max(1.5, (hi - lo) * 0.14);
+                        return [Math.floor(lo - padding), Math.ceil(hi + padding)];
                       }}
-                      tickCount={6} />
+                      tickCount={5} />
                     <Tooltip content={<PerfTooltip />} />
-                    {/* Zone entre le PR actuel et l'objectif — l'écart qu'il reste à combler */}
                     {goalZone && (
-                      <ReferenceArea y1={goalZone.y1} y2={goalZone.y2} fill="#EAB308" fillOpacity={0.08} stroke="none" />
+                      <ReferenceArea y1={goalZone.y1} y2={goalZone.y2} fill="#EAB308" fillOpacity={0.07} stroke="none" />
                     )}
+                    <ReferenceLine y={100} stroke="rgba(123,216,180,0.52)" strokeDasharray="3 4" strokeWidth={1}
+                      label={{ value: "PR", position: "insideTopLeft", fontSize: 12, fill: "#7BD8B4" }} />
                     {goalZone && (
                       <ReferenceLine y={goalZone.target} stroke="#EAB308" strokeDasharray="4 3" strokeWidth={1.5}
-                        label={{ value: "Objectif", position: "insideTopRight", fontSize: 9, fill: "#EAB308" }} />
+                        label={{ value: "Objectif", position: "insideTopRight", fontSize: 12, fill: "#EAB308" }} />
                     )}
-                    <Area dataKey="value" name={selectedDisc ?? ""}
-                      stroke="#1D9E75" fill="url(#gradPerfDark)"
-                      strokeWidth={2.5}
-                      dot={{ r: 4, fill: "#1D9E75", strokeWidth: 2, stroke: "var(--c-surface)" }}
-                      activeDot={{ r: 6, strokeWidth: 0 }} />
+                    <Area dataKey="score" name={selectedDisc ?? ""}
+                      stroke={selectedDisc ? discColor(selectedDisc) : "#1D9E75"} fill="url(#gradPerfPremium)"
+                      strokeWidth={2.25}
+                      dot={{ r: 3.5, fill: selectedDisc ? discColor(selectedDisc) : "#1D9E75", strokeWidth: 2, stroke: "var(--c-surface)" }}
+                      activeDot={{ r: 5.5, strokeWidth: 0 }} />
                   </AreaChart>
                 </ResponsiveContainer>
 
-                {selectedDisc && athlete.records?.[selectedDisc] && (
-                  <div style={{ display: "flex", alignItems: "center", gap: 16, marginTop: 12, paddingTop: 12, borderTop: "1px solid var(--c-border)", fontSize: 12, flexWrap: "wrap" }}>
-                    <span style={{ color: "var(--c-text-3)" }}>
-                      PR <strong style={{ color: "#4DC9A0", fontSize: 14 }}>{athlete.records[selectedDisc].pr}</strong>
-                    </span>
-                    <span style={{ color: "var(--c-text-3)" }}>
-                      SB <strong style={{ color: "var(--c-text-2)" }}>{athlete.records[selectedDisc].sb}</strong>
-                    </span>
-                    {chartData.length >= 2 && (() => {
-                      // Tâche 11 : le signe de `diff` seul ne dit rien de "mieux"
-                      // ou "moins bien" — sur un chrono, une valeur qui BAISSE est
-                      // une amélioration. `improved` tranche via getDiscHib, pas
-                      // via le signe brut.
-                      const diff  = chartData[chartData.length - 1].value - chartData[0].value;
-                      const hib   = getDiscHib(selectedDisc);
-                      const improved = diff === 0 ? null : (hib ? diff > 0 : diff < 0);
-                      const col  = improved === null ? "var(--c-text-3)" : improved ? "#4DC9A0" : "#F19A9A";
-                      const Icon = improved === null ? Minus : improved ? TrendingUp : TrendingDown;
-                      return (
-                        <span style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 4, fontWeight: 700, color: col }}>
-                          <Icon size={13} />
-                          {diff >= 0 ? "+" : ""}{diff.toFixed(2)}
-                        </span>
-                      );
-                    })()}
-                  </div>
-                )}
+                <div style={{ display: "flex", alignItems: "center", gap: 16, marginTop: 12, paddingTop: 12, borderTop: "1px solid var(--c-border)", fontSize: 12, color: "var(--c-text-2)", flexWrap: "wrap" }}>
+                  <span><strong style={{ color: "#7BD8B4" }}>100 %</strong> = record personnel</span>
+                  {goalZone && <span><strong style={{ color: "#EAB308" }}>{goalZone.target.toFixed(1)} %</strong> = objectif</span>}
+                </div>
               </>
             )}
           </div>
 
           {chargeVsPerfData.length >= 2 && (
-            <div className="card p-4">
-              <p style={{ fontSize: 14, fontWeight: 600, color: "var(--c-text-1)" }}>Charge vs performance</p>
-              <p style={{ fontSize: 11, color: "var(--c-text-3)", marginTop: 2, marginBottom: 14 }}>
+            <div className="card" style={{ padding: 20 }}>
+              <p className="card-title">Charge et niveau de performance</p>
+              <p style={{ fontSize: 13, lineHeight: 1.5, color: "var(--c-text-2)", marginTop: 4, marginBottom: 16 }}>
                 ACWR au moment de chaque compétition (axe X) · % du PR réalisé (axe Y) — {selectedDisc}
               </p>
-              <ResponsiveContainer width="100%" height={220}>
-                <ScatterChart margin={{ top: 10, right: 14, bottom: 10, left: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
-                  <XAxis dataKey="x" type="number" domain={[0.4, 1.8]} tick={{ fontSize: 10, fill: "rgba(255,255,255,0.35)" }} axisLine={false} tickLine={false} />
-                  <YAxis dataKey="y" type="number" domain={[70, 105]} tick={{ fontSize: 10, fill: "rgba(255,255,255,0.35)" }} axisLine={false} tickLine={false} width={36} />
+              <ResponsiveContainer width="100%" height={260}>
+                <ScatterChart margin={{ top: 12, right: 16, bottom: 12, left: 0 }}>
+                  <CartesianGrid vertical={false} stroke="rgba(255,255,255,0.07)" />
+                  <XAxis dataKey="x" type="number" domain={[0.4, 1.8]} tick={{ fontSize: 12, fill: "var(--c-text-3)" }} axisLine={false} tickLine={false} />
+                  <YAxis dataKey="y" type="number" domain={[70, 105]} tickFormatter={value => `${value}%`} tick={{ fontSize: 12, fill: "var(--c-text-3)" }} axisLine={false} tickLine={false} width={46} />
                   <ZAxis range={[90, 90]} />
                   {/* Zone optimale infusée en fond plutôt que des lignes pointillées
                       — même esprit que la réglette ACWR du hero (bande de couleur,
@@ -4528,11 +4591,11 @@ export default function AthletePerfs({ athlete, competitions, myPerformances, my
                     if (!active || !payload?.length) return null;
                     const d = payload[0].payload;
                     return (
-                      <div style={{ background: "var(--c-surface-2)", border: "1px solid var(--c-border-strong)", borderRadius: 12, padding: "10px 12px", minWidth: 140 }}>
-                        <p style={{ fontSize: 11.5, fontWeight: 600, color: "var(--c-text-1)" }}>{d.compName}</p>
-                        <p style={{ fontSize: 10, color: "var(--c-text-3)", marginBottom: 6 }}>{new Date(d.date).toLocaleDateString("fr-BE", { day: "numeric", month: "short", year: "numeric" })}</p>
-                        <p style={{ fontSize: 11, color: "var(--c-text-2)" }}>Résultat : <strong style={{ color: "#4DC9A0" }}>{d.resultStr}</strong></p>
-                        <p style={{ fontSize: 11, color: "var(--c-text-2)" }}>ACWR : <strong>{d.x.toFixed(2)}</strong> · % PR : <strong>{d.y}%</strong></p>
+                      <div style={{ background: "var(--c-surface-2)", border: "1px solid var(--c-border-strong)", borderRadius: 12, padding: "12px 14px", minWidth: 156 }}>
+                        <p style={{ fontSize: 13, fontWeight: 700, color: "var(--c-text-1)" }}>{d.compName}</p>
+                        <p style={{ fontSize: 12, color: "var(--c-text-2)", marginTop: 2, marginBottom: 8 }}>{parseLocalDate(d.date.slice(0, 10)).toLocaleDateString("fr-BE", { day: "numeric", month: "short", year: "numeric" })}</p>
+                        <p style={{ fontSize: 12, color: "var(--c-text-2)" }}>Résultat : <strong style={{ color: "#7BD8B4" }}>{d.resultStr}</strong></p>
+                        <p style={{ fontSize: 12, color: "var(--c-text-2)", marginTop: 3 }}>ACWR : <strong>{d.x.toFixed(2)}</strong> · Niveau : <strong>{d.y}%</strong></p>
                       </div>
                     );
                   }} />
@@ -4541,14 +4604,14 @@ export default function AthletePerfs({ athlete, competitions, myPerformances, my
                     const col = payload.y >= 95 ? "#1D9E75" : payload.y >= 85 ? "#E8A020" : "#E05252";
                     return (
                       <g>
-                        <circle cx={cx} cy={cy} r={14} fill={col} fillOpacity={0.14} />
-                        <circle cx={cx} cy={cy} r={8} fill={col} fillOpacity={0.9} stroke={col} strokeWidth={1} />
+                        <circle cx={cx} cy={cy} r={10} fill={col} fillOpacity={0.13} />
+                        <circle cx={cx} cy={cy} r={5.5} fill={col} fillOpacity={0.94} stroke="var(--c-surface)" strokeWidth={2} />
                       </g>
                     );
                   }} />
                 </ScatterChart>
               </ResponsiveContainer>
-              <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 10, fontSize: 9.5, color: "var(--c-text-3)" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 12, fontSize: 12, color: "var(--c-text-2)" }}>
                 <span style={{ width: 10, height: 10, borderRadius: 3, background: "rgba(29,158,117,0.16)", border: "1px solid rgba(29,158,117,0.35)" }} />
                 <span>Zone de charge optimale (0.80 – 1.30)</span>
               </div>
@@ -4557,37 +4620,39 @@ export default function AthletePerfs({ athlete, competitions, myPerformances, my
 
           {chartData.length > 0 && (
             <div className="card overflow-hidden">
-              <div style={{ padding: "12px 16px", display: "flex", alignItems: "center", justifyContent: "space-between", borderBottom: "1px solid var(--c-border)" }}>
-                <p style={{ fontSize: 12.5, fontWeight: 600, color: "var(--c-text-1)" }}>
+              <div style={{ padding: 16, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, borderBottom: "1px solid var(--c-border)" }}>
+                <p style={{ fontSize: 14, fontWeight: 700, color: "var(--c-text-1)" }}>
                   Toutes les mesures — {selectedDisc}
                 </p>
-                <span style={{ fontSize: 10.5, color: "var(--c-text-3)" }}>{chartData.length} entrée{chartData.length > 1 ? "s" : ""}</span>
+                <span style={{ fontSize: 12, color: "var(--c-text-2)", flexShrink: 0 }}>{chartData.length} entrée{chartData.length > 1 ? "s" : ""}</span>
               </div>
-              <div style={{ maxHeight: 256, overflowY: "auto" }}>
+              <div style={{ maxHeight: 320, overflowY: "auto" }}>
                 {[...localPerfs].filter(p => p.discipline === selectedDisc).sort((a,b) => b.performance_date.localeCompare(a.performance_date)).map((p, i) => (
-                  <div key={p.id} className="group" style={{ padding: "11px 16px", display: "flex", alignItems: "center", justifyContent: "space-between", borderTop: i > 0 ? "1px solid var(--c-border)" : "none" }}>
-                    <div>
-                      <p style={{ fontSize: 15, fontWeight: 700, color: "#1D9E75" }}>{p.value}</p>
-                      {p.context && <p style={{ fontSize: 10.5, color: "var(--c-text-4)", fontStyle: "italic" }}>{p.context}</p>}
+                  <div key={p.id} className="group" style={{ padding: 16, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, borderTop: i > 0 ? "1px solid var(--c-border)" : "none" }}>
+                    <div style={{ minWidth: 0 }}>
+                      <p style={{ fontSize: 17, fontWeight: 700, color: selectedDisc ? discColor(selectedDisc) : "#7BD8B4", fontVariantNumeric: "tabular-nums" }}>{p.value}</p>
+                      {p.context && <p style={{ fontSize: 13, color: "var(--c-text-2)", fontStyle: "italic", marginTop: 3 }} className="truncate">{p.context}</p>}
                       {p.breakdown && Object.keys(p.breakdown).length > 0 && (
-                        <div style={{ display: "flex", flexWrap: "wrap", gap: "3px 8px", marginTop: 5, maxWidth: 220 }}>
+                        <div style={{ display: "flex", flexWrap: "wrap", gap: "4px 10px", marginTop: 6, maxWidth: 320 }}>
                           {Object.entries(p.breakdown).map(([ev, val]) => (
-                            <span key={ev} style={{ fontSize: 9.5, color: "var(--c-text-4)" }}>
-                              {ev} <strong style={{ color: "var(--c-text-3)" }}>{val}</strong>
+                            <span key={ev} style={{ fontSize: 12, color: "var(--c-text-2)" }}>
+                              {ev} <strong style={{ color: "var(--c-text-1)" }}>{val}</strong>
                             </span>
                           ))}
                         </div>
                       )}
                     </div>
                     <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                      <p style={{ fontSize: 10.5, color: "var(--c-text-3)", fontWeight: 500 }}>
-                        {new Date(p.performance_date + "T00:00:00").toLocaleDateString("fr-BE", { day: "numeric", month: "short", year: "numeric" })}
+                      <p style={{ fontSize: 12, color: "var(--c-text-2)", fontWeight: 500, textAlign: "right" }}>
+                        {parseLocalDate(p.performance_date.slice(0, 10)).toLocaleDateString("fr-BE", { day: "numeric", month: "short", year: "numeric" })}
                       </p>
                       <button
+                        type="button"
+                        aria-label={`Supprimer la performance ${p.value}`}
                         onClick={() => handleDeletePerf(p.id)}
                         className="tap-feedback"
-                        style={{ padding: "4px 8px", borderRadius: 7, background: "rgba(224,82,82,0.10)", border: "none", cursor: "pointer", color: "#F19A9A", fontSize: 10.5, fontWeight: 600 }}>
-                        Suppr.
+                        style={{ minHeight: 40, padding: "0 10px", borderRadius: 10, background: "rgba(224,82,82,0.08)", border: "1px solid rgba(224,82,82,0.12)", cursor: "pointer", color: "#F19A9A", fontSize: 12, fontWeight: 700 }}>
+                        Supprimer
                       </button>
                     </div>
                   </div>
@@ -4602,10 +4667,14 @@ export default function AthletePerfs({ athlete, competitions, myPerformances, my
           ONGLET OBJECTIFS
          ══════════════════════════════════════════════════════════════════════ */}
       {activeTab === "objectifs" && (
-        <div className="space-y-3">
-          <div className="flex justify-end">
-            <button onClick={() => setShowAddGoal(true)} className="btn-primary">
-              <Plus size={14} /> Ajouter un objectif
+        <div className="space-y-5">
+          <div className="flex items-end justify-between gap-4">
+            <div>
+              <h2 className="section-title">Objectifs</h2>
+              <p style={{ fontSize: 13, color: "var(--c-text-2)", marginTop: 4 }}>Des repères concrets entre ton niveau actuel et ta prochaine étape.</p>
+            </div>
+            <button type="button" onClick={() => setShowAddGoal(true)} className="btn-primary">
+              <Plus size={16} aria-hidden="true" /> Ajouter
             </button>
           </div>
 
@@ -4614,22 +4683,22 @@ export default function AthletePerfs({ athlete, competitions, myPerformances, my
               <div style={{ width: 56, height: 56, borderRadius: 18, display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 14px", background: "rgba(234,179,8,0.10)" }}>
                 <Target size={26} color="#EAB308" strokeWidth={1.5} />
               </div>
-              <p style={{ fontSize: 13, fontWeight: 500, color: "var(--c-text-2)" }}>Aucun objectif défini</p>
-              <p style={{ fontSize: 11, color: "var(--c-text-4)", marginTop: 4 }}>Fixe-toi des objectifs pour rester motivé</p>
-              <button onClick={() => setShowAddGoal(true)} className="btn-primary" style={{ marginTop: 18, marginInline: "auto" }}>
-                <Plus size={14} /> Définir un objectif
+              <p style={{ fontSize: 15, fontWeight: 700, color: "var(--c-text-1)" }}>Aucun objectif défini</p>
+              <p style={{ fontSize: 13, color: "var(--c-text-2)", marginTop: 4 }}>Fixe-toi une prochaine étape pour guider ta progression.</p>
+              <button type="button" onClick={() => setShowAddGoal(true)} className="btn-primary" style={{ marginTop: 20, marginInline: "auto" }}>
+                <Plus size={16} aria-hidden="true" /> Définir un objectif
               </button>
             </div>
           ) : (
             <>
               {activeGoals.length > 0 && (
-                <div className="space-y-2.5">
-                  <p style={{ fontSize: 10, fontWeight: 600, color: "var(--c-text-3)", textTransform: "uppercase", letterSpacing: "0.07em" }}>
+                <div className="space-y-3">
+                  <p style={{ fontSize: 12, fontWeight: 700, color: "var(--c-text-2)", textTransform: "uppercase", letterSpacing: "0.07em" }}>
                     En cours ({activeGoals.length})
                   </p>
                   {activeGoals.map(g => {
                     const daysLeft = g.deadline
-                      ? Math.round((new Date(g.deadline) - today) / (1000 * 60 * 60 * 24))
+                      ? Math.round((parseLocalDate(g.deadline.slice(0, 10)) - today) / (1000 * 60 * 60 * 24))
                       : null;
                     const isUrgent = daysLeft !== null && daysLeft <= 14;
                     const col      = discColor(g.discipline);
@@ -4642,13 +4711,13 @@ export default function AthletePerfs({ athlete, competitions, myPerformances, my
                     const pct  = pctOfReference(prN, tgN, g.discipline);
 
                     return (
-                      <div key={g.id} className="card p-4" style={{ display: "flex", gap: 14, alignItems: "flex-start" }}>
-                        <ProgressRing pct={pct} color={isUrgent ? "#EAB308" : col} size={56} stroke={5} />
+                      <div key={g.id} className="card" style={{ display: "flex", gap: 16, alignItems: "flex-start", padding: 20 }}>
+                        <ProgressRing pct={pct} color={isUrgent ? "#EAB308" : col} size={56} stroke={4} />
                         <div style={{ flex: 1, minWidth: 0 }}>
                           <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 4 }}>
-                            <p style={{ fontSize: 13.5, fontWeight: 600, color: "var(--c-text-1)" }}>{g.discipline}</p>
+                            <p style={{ fontSize: 15, fontWeight: 700, color: "var(--c-text-1)" }}>{g.discipline}</p>
                             {daysLeft !== null && (
-                              <span style={{ fontSize: 9.5, fontWeight: 700, padding: "2px 8px", borderRadius: 99, background: isUrgent ? "rgba(234,179,8,0.14)" : "var(--c-surface-2)", color: isUrgent ? "#F0CB61" : "var(--c-text-3)" }}>
+                              <span style={{ fontSize: 12, fontWeight: 700, padding: "4px 9px", borderRadius: 99, background: isUrgent ? "rgba(234,179,8,0.14)" : "var(--c-surface-2)", color: isUrgent ? "#F0CB61" : "var(--c-text-2)" }}>
                                 {daysLeft > 0 ? `J-${daysLeft}` : daysLeft === 0 ? "Aujourd'hui !" : "Échu"}
                               </span>
                             )}
@@ -4656,20 +4725,20 @@ export default function AthletePerfs({ athlete, competitions, myPerformances, my
                           <p style={{ fontSize: 24, fontWeight: 700, color: col, letterSpacing: "-0.02em", lineHeight: 1 }}>
                             {g.target_value}
                           </p>
-                          {g.notes && <p style={{ fontSize: 11, color: "var(--c-text-4)", fontStyle: "italic", marginTop: 6 }}>{g.notes}</p>}
+                          {g.notes && <p style={{ fontSize: 13, lineHeight: 1.5, color: "var(--c-text-2)", fontStyle: "italic", marginTop: 8 }}>{g.notes}</p>}
                           {g.deadline && (
-                            <p style={{ fontSize: 10.5, color: "var(--c-text-4)", marginTop: 4 }}>
-                              Échéance : {new Date(g.deadline).toLocaleDateString("fr-BE", { day: "numeric", month: "long", year: "numeric" })}
+                            <p style={{ fontSize: 12, color: "var(--c-text-2)", marginTop: 6 }}>
+                              Échéance : {parseLocalDate(g.deadline.slice(0, 10)).toLocaleDateString("fr-BE", { day: "numeric", month: "long", year: "numeric" })}
                             </p>
                           )}
                           <GoalProgressBar pr={pr} target={g.target_value} discipline={g.discipline} color={col} />
                           <div style={{ display: "flex", alignItems: "center", gap: 14, marginTop: 12, paddingTop: 12, borderTop: "1px solid var(--c-border)" }}>
-                            <button onClick={() => handleMarkGoalDone(g.id)}
-                              style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11.5, fontWeight: 600, color: "#4DC9A0", background: "none", border: "none", cursor: "pointer" }}>
-                              <CheckCircle size={13} /> Marquer atteint
+                            <button type="button" onClick={() => handleMarkGoalDone(g.id)}
+                              style={{ minHeight: 44, display: "flex", alignItems: "center", gap: 6, padding: "0 8px", fontSize: 12, fontWeight: 700, color: "#7BD8B4", background: "none", border: "none", cursor: "pointer" }}>
+                              <CheckCircle size={15} aria-hidden="true" /> Marquer atteint
                             </button>
-                            <button onClick={() => handleDeleteGoal(g.id)}
-                              style={{ fontSize: 11.5, fontWeight: 600, color: "#F19A9A", background: "none", border: "none", cursor: "pointer", marginLeft: "auto" }}>
+                            <button type="button" onClick={() => handleDeleteGoal(g.id)}
+                              style={{ minHeight: 44, padding: "0 8px", fontSize: 12, fontWeight: 700, color: "#F19A9A", background: "none", border: "none", cursor: "pointer", marginLeft: "auto" }}>
                               Supprimer
                             </button>
                           </div>
@@ -4682,19 +4751,19 @@ export default function AthletePerfs({ athlete, competitions, myPerformances, my
 
               {achievedGoals.length > 0 && (
                 <div className="space-y-2">
-                  <p style={{ fontSize: 10, fontWeight: 600, color: "var(--c-text-3)", textTransform: "uppercase", letterSpacing: "0.07em" }}>
+                  <p style={{ fontSize: 12, fontWeight: 700, color: "var(--c-text-2)", textTransform: "uppercase", letterSpacing: "0.07em" }}>
                     Atteints ({achievedGoals.length})
                   </p>
                   {achievedGoals.map(g => (
-                    <div key={g.id} className="card" style={{ padding: 14, display: "flex", alignItems: "center", gap: 12, opacity: 0.55 }}>
-                      <div style={{ width: 30, height: 30, borderRadius: 10, background: "rgba(29,158,117,0.12)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                    <div key={g.id} className="card" style={{ padding: 16, display: "flex", alignItems: "center", gap: 12, opacity: 0.72 }}>
+                      <div style={{ width: 36, height: 36, borderRadius: 11, background: "rgba(29,158,117,0.12)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
                         <CheckCircle size={15} color="#1D9E75" />
                       </div>
                       <div>
-                        <p style={{ fontSize: 12, fontWeight: 500, color: "var(--c-text-2)" }}>
+                        <p style={{ fontSize: 13, fontWeight: 700, color: "var(--c-text-1)" }}>
                           {g.discipline} — {g.target_value}
                         </p>
-                        {g.notes && <p style={{ fontSize: 10.5, color: "var(--c-text-4)" }}>{g.notes}</p>}
+                        {g.notes && <p style={{ fontSize: 12, color: "var(--c-text-2)", marginTop: 3 }}>{g.notes}</p>}
                       </div>
                     </div>
                   ))}
@@ -4709,10 +4778,14 @@ export default function AthletePerfs({ athlete, competitions, myPerformances, my
           ONGLET COMPÉTITIONS
          ══════════════════════════════════════════════════════════════════════ */}
       {activeTab === "comps" && (
-        <div className="space-y-3">
-          <div className="flex justify-end">
-            <button onClick={() => setShowAddComp(true)} className="btn-primary">
-              <Plus size={14} /> Ajouter une compétition
+        <div className="space-y-5">
+          <div className="flex items-end justify-between gap-4">
+            <div>
+              <h2 className="section-title">Compétitions</h2>
+              <p style={{ fontSize: 13, color: "var(--c-text-2)", marginTop: 4 }}>Le contexte et le résultat de chaque rendez-vous.</p>
+            </div>
+            <button type="button" onClick={() => setShowAddComp(true)} className="btn-primary">
+              <Plus size={16} aria-hidden="true" /> Ajouter
             </button>
           </div>
           {compHistory.length === 0 ? (
@@ -4720,34 +4793,34 @@ export default function AthletePerfs({ athlete, competitions, myPerformances, my
               <div style={{ width: 56, height: 56, borderRadius: 18, display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 14px", background: "rgba(234,179,8,0.10)" }}>
                 <Trophy size={26} color="#EAB308" strokeWidth={1.5} />
               </div>
-              <p style={{ fontSize: 13, fontWeight: 500, color: "var(--c-text-2)" }}>Aucune compétition enregistrée</p>
+              <p style={{ fontSize: 15, fontWeight: 700, color: "var(--c-text-1)" }}>Aucune compétition enregistrée</p>
             </div>
           ) : (
             compHistory.map(({ comp, result }, i) => (
-              <div key={i} className="card card-hover p-4">
+              <div key={`${comp.id}-${result.event}-${i}`} className="card card-hover" style={{ padding: 20 }}>
                 <div style={{ display: "flex", alignItems: "flex-start", gap: 14 }}>
                   <div style={{ width: 44, height: 44, borderRadius: 14, background: "rgba(234,179,8,0.10)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
                     <Trophy size={19} color="#EAB308" />
                   </div>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 4 }}>
-                      <p style={{ fontSize: 13.5, fontWeight: 600, color: "var(--c-text-1)" }}>{comp.name}</p>
+                      <p style={{ fontSize: 15, fontWeight: 700, color: "var(--c-text-1)" }}>{comp.name}</p>
                       <span className="chip chip-neutral">{comp.type}</span>
                     </div>
-                    <p style={{ fontSize: 11, color: "var(--c-text-3)", marginBottom: 12 }}>
+                    <p style={{ fontSize: 12, color: "var(--c-text-2)", marginBottom: 12 }}>
                       {comp.location && `${comp.location} · `}
-                      {new Date(comp.date).toLocaleDateString("fr-BE", { day: "numeric", month: "long", year: "numeric" })}
+                      {parseLocalDate(comp.date.slice(0, 10)).toLocaleDateString("fr-BE", { day: "numeric", month: "long", year: "numeric" })}
                     </p>
                     <div style={{ display: "inline-block", borderRadius: 14, padding: "10px 16px", background: "rgba(29,158,117,0.10)", border: "1px solid rgba(29,158,117,0.20)" }}>
-                      <p style={{ fontSize: 9.5, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", color: "#4DC9A0", marginBottom: 3 }}>
+                      <p style={{ fontSize: 12, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", color: "#7BD8B4", marginBottom: 4 }}>
                         {result.event}
                       </p>
-                      <p style={{ fontSize: 21, fontWeight: 700, color: "#4DC9A0", letterSpacing: "-0.02em", lineHeight: 1 }}>
+                      <p style={{ fontSize: 22, fontWeight: 700, color: "#7BD8B4", letterSpacing: "-0.02em", lineHeight: 1 }}>
                         {result.result}
                       </p>
                     </div>
                     {result.context && (
-                      <p style={{ fontSize: 11, color: "var(--c-text-4)", fontStyle: "italic", marginTop: 8 }}>{result.context}</p>
+                      <p style={{ fontSize: 13, lineHeight: 1.5, color: "var(--c-text-2)", fontStyle: "italic", marginTop: 10 }}>{result.context}</p>
                     )}
                   </div>
                 </div>
@@ -5616,6 +5689,7 @@ import { LineChart, Line, ResponsiveContainer } from "recharts";
 import { supabase } from "../../utils/supabaseClient";
 import { CATEGORIES, colorsFor, acwrColor } from "../shared";
 import { getRPELabel } from "../../utils/chargeCalculations";
+import { parseLocalDate } from "../../utils/helpers";
 import {
   getAvailableWeeks, formatWeekLabel,
   buildWeeklyReport, buildMonthlyAggregate,
@@ -5625,13 +5699,13 @@ function StatusIcon({ status }) {
   if (status === "done")    return <CheckCircle2 size={15} color="#1D9E75" />;
   if (status === "partial") return <AlertCircle  size={15} color="#EF9F27" />;
   if (status === "none")    return <XCircle      size={15} color="#E24B4A" />;
-  return <div style={{ width: 15, height: 15, borderRadius: "50%", border: "1.5px dashed var(--c-text-4)" }} />;
+  return <div style={{ width: 15, height: 15, borderRadius: "50%", border: "1.5px dashed var(--c-text-3)" }} />;
 }
 
 function MiniLoadSpark({ data }) {
-  if (data.length < 2) return <div style={{ width: 56, height: 22 }} />;
+  if (data.length < 2) return <div style={{ width: 72, height: 28 }} />;
   return (
-    <div style={{ width: 56, height: 22 }}>
+    <div style={{ width: 72, height: 28 }}>
       <ResponsiveContainer width="100%" height="100%">
         <LineChart data={data} margin={{ top: 2, right: 2, bottom: 2, left: 2 }}>
           <Line type="monotone" dataKey="load" stroke="#1D9E75" strokeWidth={2} dot={false} />
@@ -5644,21 +5718,21 @@ function MiniLoadSpark({ data }) {
 function TrendArrow({ trend }) {
   if (trend === "up")   return <span style={{ display: "inline-flex", alignItems: "center", gap: 2, color: "#4DC9A0" }}><TrendingUp size={12} /> Hausse</span>;
   if (trend === "down") return <span style={{ display: "inline-flex", alignItems: "center", gap: 2, color: "#F19A9A" }}><TrendingDown size={12} /> Baisse</span>;
-  return <span style={{ display: "inline-flex", alignItems: "center", gap: 2, color: "var(--c-text-4)" }}><Minus size={12} /> Stable</span>;
+  return <span style={{ display: "inline-flex", alignItems: "center", gap: 4, color: "var(--c-text-2)" }}><Minus size={14} /> Stable</span>;
 }
 
 function WeekCard({ week, dateRange, sessionCount, onClick }) {
   return (
-    <button onClick={onClick} className="card tap-feedback"
+    <button type="button" onClick={onClick} className="card card-hover tap-feedback"
       style={{ width: "100%", textAlign: "left", padding: "16px 18px", display: "flex", alignItems: "center", gap: 14, cursor: "pointer" }}>
       <div style={{ width: 40, height: 40, borderRadius: 12, background: "rgba(29,158,117,0.10)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
         <FileText size={17} color="#1D9E75" strokeWidth={1.8} />
       </div>
       <div style={{ flex: 1, minWidth: 0 }}>
-        <p style={{ fontSize: 13.5, fontWeight: 600, color: "var(--c-text-1)" }}>{formatWeekLabel(week, dateRange)}</p>
-        <p style={{ fontSize: 11, color: "var(--c-text-3)", marginTop: 2 }}>{sessionCount} séance{sessionCount > 1 ? "s" : ""}</p>
+        <p style={{ fontSize: 15, fontWeight: 700, color: "var(--c-text-1)" }}>{formatWeekLabel(week, dateRange)}</p>
+        <p style={{ fontSize: 12, color: "var(--c-text-2)", marginTop: 3 }}>{sessionCount} séance{sessionCount > 1 ? "s" : ""}</p>
       </div>
-      <ChevronRight size={16} color="var(--c-text-4)" />
+      <ChevronRight size={17} color="var(--c-text-3)" aria-hidden="true" />
     </button>
   );
 }
@@ -5670,41 +5744,41 @@ function WeekReportDetail({ report }) {
   return (
     <div className="space-y-4">
       <div style={{ padding: 14, borderRadius: 14, background: "rgba(29,158,117,0.06)", border: "1px solid rgba(29,158,117,0.15)" }}>
-        <p style={{ fontSize: 12, lineHeight: 1.6, color: "var(--c-text-2)" }}>{summary}</p>
+        <p style={{ fontSize: 13, lineHeight: 1.6, color: "var(--c-text-2)" }}>{summary}</p>
       </div>
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 8 }}>
         <div style={{ padding: "12px 10px", borderRadius: 14, background: "var(--c-surface-2)", border: "1px solid var(--c-border)", textAlign: "center" }}>
-          <p style={{ fontSize: 9.5, fontWeight: 600, color: "var(--c-text-3)", textTransform: "uppercase", letterSpacing: "0.05em" }}>Charge aiguë</p>
+          <p style={{ fontSize: 12, fontWeight: 700, color: "var(--c-text-2)", textTransform: "uppercase", letterSpacing: "0.05em" }}>Charge aiguë</p>
           <p style={{ fontSize: 19, fontWeight: 700, color: "var(--c-text-1)", marginTop: 4 }}>{stats.total > 0 ? metrics.acute : "—"}</p>
         </div>
         <div style={{ padding: "12px 10px", borderRadius: 14, background: "var(--c-surface-2)", border: "1px solid var(--c-border)", textAlign: "center" }}>
-          <p style={{ fontSize: 9.5, fontWeight: 600, color: "var(--c-text-3)", textTransform: "uppercase", letterSpacing: "0.05em" }}>ACWR</p>
+          <p style={{ fontSize: 12, fontWeight: 700, color: "var(--c-text-2)", textTransform: "uppercase", letterSpacing: "0.05em" }}>ACWR</p>
           <p style={{ fontSize: 19, fontWeight: 700, color: stats.total > 0 ? acwrColor(metrics.acwr) : "var(--c-text-1)", marginTop: 4 }}>
             {stats.total > 0 ? metrics.acwr.toFixed(2) : "—"}
           </p>
         </div>
         <div style={{ padding: "12px 10px", borderRadius: 14, background: "var(--c-surface-2)", border: "1px solid var(--c-border)", textAlign: "center" }}>
-          <p style={{ fontSize: 9.5, fontWeight: 600, color: "var(--c-text-3)", textTransform: "uppercase", letterSpacing: "0.05em" }}>Wellness moy.</p>
+          <p style={{ fontSize: 12, fontWeight: 700, color: "var(--c-text-2)", textTransform: "uppercase", letterSpacing: "0.05em" }}>Wellness moy.</p>
           <p style={{ fontSize: 19, fontWeight: 700, color: "var(--c-text-1)", marginTop: 4 }}>{wellnessAvg != null ? wellnessAvg : "—"}</p>
         </div>
       </div>
 
       {categoriesWorked.length > 0 && (
         <div>
-          <p style={{ fontSize: 10, fontWeight: 600, color: "var(--c-text-3)", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 8 }}>Répartition de la charge</p>
+          <p style={{ fontSize: 12, fontWeight: 700, color: "var(--c-text-2)", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 8 }}>Répartition de la charge</p>
           <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
             {categoriesWorked.map(c => {
               const col = colorsFor(c.id);
               return (
-                <span key={c.id} style={{ fontSize: 11, fontWeight: 600, padding: "5px 10px", borderRadius: 10, background: col.bg, color: col.text, border: `1px solid ${col.border}33` }}>
+                <span key={c.id} style={{ fontSize: 12, fontWeight: 700, padding: "6px 10px", borderRadius: 10, background: col.bg, color: col.text, border: `1px solid ${col.border}33` }}>
                   {c.label} · {c.load} u.a.
                 </span>
               );
             })}
           </div>
           {categoriesAbsent.length > 0 && categoriesAbsent.length < CATEGORIES.length && (
-            <p style={{ fontSize: 10.5, color: "var(--c-text-4)", marginTop: 8 }}>
+            <p style={{ fontSize: 12, color: "var(--c-text-2)", marginTop: 8 }}>
               Non travaillées : {categoriesAbsent.map(id => CATEGORIES.find(c => c.id === id)?.label ?? id).join(", ")}
             </p>
           )}
@@ -5712,11 +5786,11 @@ function WeekReportDetail({ report }) {
       )}
 
       <div>
-        <p style={{ fontSize: 10, fontWeight: 600, color: "var(--c-text-3)", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 8 }}>
+        <p style={{ fontSize: 12, fontWeight: 700, color: "var(--c-text-2)", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 8 }}>
           Séances ({sessions.length})
         </p>
         {sessions.length === 0 ? (
-          <p style={{ fontSize: 12, color: "var(--c-text-4)" }}>Aucune séance planifiée cette semaine.</p>
+          <p style={{ fontSize: 13, color: "var(--c-text-2)" }}>Aucune séance planifiée cette semaine.</p>
         ) : (
           <div className="card" style={{ overflow: "hidden" }}>
             {sessions.map((s, i) => {
@@ -5727,19 +5801,19 @@ function WeekReportDetail({ report }) {
                   <div style={{ marginTop: 2, flexShrink: 0 }}><StatusIcon status={s.status} /></div>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-                      <p style={{ fontSize: 12.5, fontWeight: 600, color: "var(--c-text-1)" }}>{s.title}</p>
-                      <span style={{ fontSize: 9.5, fontWeight: 600, padding: "2px 7px", borderRadius: 7, background: col.bg, color: col.text }}>
+                      <p style={{ fontSize: 14, fontWeight: 700, color: "var(--c-text-1)" }}>{s.title}</p>
+                      <span style={{ fontSize: 12, fontWeight: 700, padding: "3px 8px", borderRadius: 7, background: col.bg, color: col.text }}>
                         {CATEGORIES.find(c => c.id === s.category)?.label ?? s.category}
                       </span>
                     </div>
                     <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 3, flexWrap: "wrap" }}>
-                      <span style={{ fontSize: 10.5, color: "var(--c-text-4)" }}>
-                        {s.sessionDate ? new Date(s.sessionDate + "T00:00:00").toLocaleDateString("fr-BE", { weekday: "short", day: "numeric", month: "short" }) : s.day}
+                      <span style={{ fontSize: 12, color: "var(--c-text-2)" }}>
+                        {s.sessionDate ? parseLocalDate(s.sessionDate.slice(0, 10)).toLocaleDateString("fr-BE", { weekday: "short", day: "numeric", month: "short" }) : s.day}
                       </span>
-                      {s.rpe != null && <span style={{ fontSize: 10.5, fontWeight: 600, color: rpe.color }}>RPE {s.rpe} · {rpe.label}</span>}
-                      {s.load != null && <span style={{ fontSize: 10.5, color: "var(--c-text-3)" }}>{s.load} u.a.</span>}
+                      {s.rpe != null && <span style={{ fontSize: 12, fontWeight: 700, color: rpe.color }}>RPE {s.rpe} · {rpe.label}</span>}
+                      {s.load != null && <span style={{ fontSize: 12, color: "var(--c-text-2)" }}>{s.load} u.a.</span>}
                     </div>
-                    {s.comment && <p style={{ fontSize: 11, color: "var(--c-text-3)", fontStyle: "italic", marginTop: 4 }}>« {s.comment} »</p>}
+                    {s.comment && <p style={{ fontSize: 13, lineHeight: 1.5, color: "var(--c-text-2)", fontStyle: "italic", marginTop: 5 }}>« {s.comment} »</p>}
                   </div>
                 </div>
               );
@@ -5784,15 +5858,19 @@ export default function MesRapports({ athlete, sessions, weeklyCharge }) {
   const selectedWeekMeta = weeks.find(w => w.week === selectedWeek);
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-5">
+      <div>
+        <h2 className="section-title">Rapports d’entraînement</h2>
+        <p style={{ fontSize: 13, color: "var(--c-text-2)", marginTop: 4 }}>Charge, régularité et contenu de tes dernières semaines.</p>
+      </div>
       <div className="flex gap-1 rounded-2xl p-1.5" style={{ background: "var(--c-surface)", border: "1px solid var(--c-border)" }}>
         {[{ id: "week", label: "Semaine" }, { id: "month", label: "Mois" }].map(m => (
-          <button key={m.id} onClick={() => { setViewMode(m.id); setSelectedWeek(null); }}
+          <button key={m.id} type="button" aria-pressed={viewMode === m.id} onClick={() => { setViewMode(m.id); setSelectedWeek(null); }}
             className="flex-1"
             style={{
-              padding: "8px 0", borderRadius: 12, fontSize: 12, fontWeight: 600,
-              background: viewMode === m.id ? "#1D9E75" : "transparent",
-              color: viewMode === m.id ? "#0A150F" : "var(--c-text-3)",
+              minHeight: 44, padding: "0 12px", borderRadius: 12, fontSize: 13, fontWeight: 700,
+              background: viewMode === m.id ? "rgba(29,158,117,0.16)" : "transparent",
+              color: viewMode === m.id ? "#7BD8B4" : "var(--c-text-2)",
               border: "none", cursor: "pointer",
             }}>
             {m.label}
@@ -5804,10 +5882,10 @@ export default function MesRapports({ athlete, sessions, weeklyCharge }) {
         weeks.length === 0 ? (
           <div className="card p-12 text-center">
             <div style={{ width: 56, height: 56, borderRadius: 18, display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 14px", background: "var(--c-surface-2)" }}>
-              <CalendarDays size={26} color="var(--c-text-4)" strokeWidth={1.5} />
+              <CalendarDays size={26} color="var(--c-text-3)" strokeWidth={1.5} />
             </div>
-            <p style={{ fontSize: 13, fontWeight: 500, color: "var(--c-text-2)" }}>Aucun rapport disponible</p>
-            <p style={{ fontSize: 11, color: "var(--c-text-4)", marginTop: 4 }}>Il apparaîtra dès ta première semaine avec des séances</p>
+            <p style={{ fontSize: 15, fontWeight: 700, color: "var(--c-text-1)" }}>Aucun rapport disponible</p>
+            <p style={{ fontSize: 13, color: "var(--c-text-2)", marginTop: 4 }}>Il apparaîtra dès ta première semaine avec des séances.</p>
           </div>
         ) : (
           <div className="space-y-2.5">
@@ -5821,11 +5899,11 @@ export default function MesRapports({ athlete, sessions, weeklyCharge }) {
 
       {viewMode === "week" && selectedWeek != null && selectedReport && (
         <div className="space-y-3">
-          <button onClick={() => setSelectedWeek(null)} className="tap-feedback"
-            style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, fontWeight: 600, color: "#4DC9A0", background: "none", border: "none", cursor: "pointer", padding: "4px 0" }}>
-            <ChevronLeft size={15} /> Toutes mes semaines
+          <button type="button" onClick={() => setSelectedWeek(null)} className="tap-feedback"
+            style={{ minHeight: 44, display: "flex", alignItems: "center", gap: 6, fontSize: 13, fontWeight: 700, color: "#7BD8B4", background: "none", border: "none", cursor: "pointer", padding: "0 4px" }}>
+            <ChevronLeft size={16} aria-hidden="true" /> Toutes mes semaines
           </button>
-          <p style={{ fontSize: 13.5, fontWeight: 600, color: "var(--c-text-1)" }}>
+          <p style={{ fontSize: 17, fontWeight: 700, color: "var(--c-text-1)" }}>
             {formatWeekLabel(selectedWeek, selectedWeekMeta?.dateRange)}
           </p>
           <WeekReportDetail report={selectedReport} />
@@ -5835,20 +5913,20 @@ export default function MesRapports({ athlete, sessions, weeklyCharge }) {
       {viewMode === "month" && (
         !monthAggregate ? (
           <div className="card p-12 text-center">
-            <p style={{ fontSize: 13, fontWeight: 500, color: "var(--c-text-2)" }}>Pas encore assez de données pour une vue mensuelle</p>
+            <p style={{ fontSize: 15, fontWeight: 700, color: "var(--c-text-1)" }}>Pas encore assez de données pour une vue mensuelle</p>
           </div>
         ) : (
-          <div className="card p-4">
-            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
-              <p style={{ fontSize: 13, fontWeight: 600, color: "var(--c-text-1)", flex: 1 }}>4 dernières semaines</p>
+          <div className="card" style={{ padding: 20 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16 }}>
+              <p className="card-title" style={{ flex: 1 }}>4 dernières semaines</p>
               <MiniLoadSpark data={monthAggregate.weeks.map(w => ({ load: w.stats.totalLoad }))} />
             </div>
             <div style={{ display: "flex", alignItems: "baseline", gap: 6, marginBottom: 6 }}>
               <span style={{ fontSize: 22, fontWeight: 700, color: "var(--c-text-1)" }}>{monthAggregate.totalLoad}</span>
-              <span style={{ fontSize: 11, color: "var(--c-text-3)" }}>u.a. cumulées</span>
+              <span style={{ fontSize: 12, color: "var(--c-text-2)" }}>u.a. cumulées</span>
             </div>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
-              <span style={{ fontSize: 11, color: "var(--c-text-3)" }}>{monthAggregate.doneTotal}/{monthAggregate.sessionsTotal} séances faites</span>
+              <span style={{ fontSize: 12, color: "var(--c-text-2)" }}>{monthAggregate.doneTotal}/{monthAggregate.sessionsTotal} séances faites</span>
               <TrendArrow trend={monthAggregate.trend} />
             </div>
             {monthAggregate.categoriesWorked.length > 0 && (
@@ -5856,7 +5934,7 @@ export default function MesRapports({ athlete, sessions, weeklyCharge }) {
                 {monthAggregate.categoriesWorked.slice(0, 5).map(c => {
                   const col = colorsFor(c.id);
                   return (
-                    <span key={c.id} style={{ fontSize: 10, fontWeight: 600, padding: "3px 8px", borderRadius: 8, background: col.bg, color: col.text }}>
+                    <span key={c.id} style={{ fontSize: 12, fontWeight: 700, padding: "5px 9px", borderRadius: 8, background: col.bg, color: col.text }}>
                       {c.label}
                     </span>
                   );
@@ -5884,11 +5962,22 @@ export default function MesRapports({ athlete, sessions, weeklyCharge }) {
 // COMBINE_EVENTS[disc], discColor reste une fonction).
 // ============================================================
 
-import { COMBINE_EVENTS, getDisciplineColor } from "../../domain/disciplines.js";
+import { COMBINE_EVENTS, getDisciplineColor, getDisciplineHib } from "../../domain/disciplines.js";
 
 export { COMBINE_EVENTS };
 
 export const discColor = (disc) => getDisciplineColor(disc);
+
+// Indice visuel non plafonné : 100 = record de référence, >100 = record
+// dépassé. Contrairement à pctOfReference(), il doit pouvoir afficher un
+// objectif au-delà de 100 dans le graphique d'évolution.
+export function performanceIndex(currentValue, referenceValue, discipline) {
+  if (currentValue == null || referenceValue == null || currentValue === 0 || referenceValue === 0) return null;
+  const ratio = getDisciplineHib(discipline)
+    ? currentValue / referenceValue
+    : referenceValue / currentValue;
+  return Math.round(ratio * 1000) / 10;
+}
 
 // ─── Couleur selon la proximité au PR — même seuils que le classement groupe
 // côté coach (Performances.jsx) : ≥97% optimal, ≥90% correct, en-dessous à
@@ -5899,6 +5988,28 @@ export function recordStatusColor(pct) {
   if (pct >= 90) return "#EF9F27";
   return "#E24B4A";
 }
+</file>
+
+<file path="src/athlete/views/perfsShared.test.js">
+import { describe, expect, it } from "vitest";
+import { performanceIndex } from "./perfsShared";
+
+describe("performanceIndex", () => {
+  it("fait monter l'indice quand un chrono diminue", () => {
+    expect(performanceIndex(11.5, 11, "100m")).toBeCloseTo(95.7, 1);
+    expect(performanceIndex(10.9, 11, "100m")).toBeCloseTo(100.9, 1);
+  });
+
+  it("fait monter l'indice quand une distance augmente", () => {
+    expect(performanceIndex(6.6, 7, "Longueur")).toBeCloseTo(94.3, 1);
+    expect(performanceIndex(7.1, 7, "Longueur")).toBeCloseTo(101.4, 1);
+  });
+
+  it("refuse les valeurs qui ne permettent pas un ratio fiable", () => {
+    expect(performanceIndex(null, 11, "100m")).toBeNull();
+    expect(performanceIndex(11, 0, "100m")).toBeNull();
+  });
+});
 </file>
 
 <file path="src/athlete/views/PerfsWidgets.jsx">
@@ -5913,6 +6024,7 @@ import { useMemo, useEffect } from "react";
 import { ChevronRight } from "lucide-react";
 import { getDiscHib, parsePerf, pctOfReference } from "../shared";
 import { discColor, recordStatusColor } from "./perfsShared";
+import { parseLocalDate } from "../../utils/helpers";
 
 // ─── Confettis — célébration d'un nouveau record personnel ───────────────────
 const CONFETTI_COLORS = ["#1D9E75", "#EAB308", "#5B8DEF", "#EC4899", "#38BDF8", "#FB923C"];
@@ -5954,14 +6066,14 @@ export function PerfTooltip({ active, payload, label }) {
   if (!active || !payload?.length) return null;
   const d = payload[0].payload;
   return (
-    <div style={{ background: "var(--c-surface-2)", border: "1px solid var(--c-border-strong)", borderRadius: 14, padding: "10px 14px", minWidth: 110, boxShadow: "var(--shadow-md)" }}>
-      <p style={{ fontSize: 10.5, fontWeight: 500, color: "var(--c-text-3)", marginBottom: 4 }}>{label}</p>
-      <p style={{ fontSize: 18, fontWeight: 700, color: "#1D9E75" }}>{d.raw}</p>
-      {d.ctx && <p style={{ fontSize: 10.5, color: "var(--c-text-3)", fontStyle: "italic", marginTop: 4 }}>{d.ctx}</p>}
+    <div style={{ background: "var(--c-surface-2)", border: "1px solid var(--c-border-strong)", borderRadius: 14, padding: "12px 14px", minWidth: 128, boxShadow: "var(--shadow-md)" }}>
+      <p style={{ fontSize: 12, fontWeight: 600, color: "var(--c-text-2)", marginBottom: 4 }}>{label}</p>
+      <p style={{ fontSize: 20, fontWeight: 700, color: "var(--c-accent)" }}>{d.raw}</p>
+      {d.ctx && <p style={{ fontSize: 12, color: "var(--c-text-2)", fontStyle: "italic", marginTop: 4 }}>{d.ctx}</p>}
       {d.breakdown && Object.keys(d.breakdown).length > 0 && (
         <div style={{ marginTop: 8, paddingTop: 8, borderTop: "1px solid var(--c-border)" }}>
           {Object.entries(d.breakdown).map(([ev, val]) => (
-            <div key={ev} style={{ display: "flex", justifyContent: "space-between", gap: 12, fontSize: 10.5, color: "var(--c-text-3)", marginTop: 2 }}>
+            <div key={ev} style={{ display: "flex", justifyContent: "space-between", gap: 12, fontSize: 12, color: "var(--c-text-2)", marginTop: 4 }}>
               <span>{ev}</span>
               <span style={{ fontWeight: 600, color: "var(--c-text-2)" }}>{val}</span>
             </div>
@@ -5989,8 +6101,8 @@ export function ProgressRing({ pct, color, size = 64, label, stroke = 6 }) {
         )}
       </svg>
       <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column" }}>
-        <span style={{ fontSize: size > 56 ? 13 : 11, fontWeight: 700, color }}>{pct !== null ? `${pct}%` : "—"}</span>
-        {label && <span style={{ fontSize: 7.5, color: "var(--c-text-4)", marginTop: 1 }}>{label}</span>}
+        <span style={{ fontSize: 12, fontWeight: 700, color }}>{pct !== null ? `${pct}%` : "—"}</span>
+        {label && <span style={{ fontSize: 12, color: "var(--c-text-2)", marginTop: 1 }}>{label}</span>}
       </div>
     </div>
   );
@@ -5999,6 +6111,46 @@ export function ProgressRing({ pct, color, size = 64, label, stroke = 6 }) {
 // ─── Card discipline / record — façon "carte de crédit sportive" : le PR en
 // typo monumentale (ce qui compte le plus), SB juste en dessous en discret,
 // barre fine SB→PR colorée selon le statut, glow ambiant assorti.
+function TrendSparkline({ discipline, series, color }) {
+  const points = (series ?? []).slice(-8);
+  if (points.length < 2) {
+    return (
+      <div style={{ height: 58, display: "flex", alignItems: "center", justifyContent: "center", borderRadius: 12, background: "var(--c-surface-2)", border: "1px solid var(--c-border)" }}>
+        <span style={{ fontSize: 12, color: "var(--c-text-3)" }}>Courbe après 2 mesures</span>
+      </div>
+    );
+  }
+
+  const higherIsBetter = getDiscHib(discipline);
+  const scores = points.map(point => higherIsBetter ? point.value : -point.value);
+  const min = Math.min(...scores);
+  const max = Math.max(...scores);
+  const range = max - min || 1;
+  const coords = scores.map((score, index) => ({
+    x: 8 + (index / (scores.length - 1)) * 164,
+    y: 45 - ((score - min) / range) * 34,
+  }));
+  const line = coords.map(point => `${point.x},${point.y}`).join(" ");
+  const area = `8,52 ${line} 172,52`;
+  const gradientId = `record-spark-${discipline.replace(/[^a-z0-9]/gi, "-")}`;
+
+  return (
+    <svg viewBox="0 0 180 56" width="100%" height="58" preserveAspectRatio="none" aria-hidden="true">
+      <defs>
+        <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor={color} stopOpacity="0.22" />
+          <stop offset="100%" stopColor={color} stopOpacity="0" />
+        </linearGradient>
+      </defs>
+      <path d={`M ${area} Z`} fill={`url(#${gradientId})`} />
+      <polyline points={line} fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
+      {coords.map((point, index) => (
+        <circle key={index} cx={point.x} cy={point.y} r={index === coords.length - 1 ? 3.5 : 2} fill={index === coords.length - 1 ? color : "var(--c-surface)"} stroke={color} strokeWidth="1.5" vectorEffect="non-scaling-stroke" />
+      ))}
+    </svg>
+  );
+}
+
 export function RecordCard({ disc, rec, onSeeEvolution, stats }) {
   const col = discColor(disc);
   // hib (higher-is-better) : indispensable pour les disciplines chronométrées
@@ -6013,55 +6165,52 @@ export function RecordCard({ disc, rec, onSeeEvolution, stats }) {
   const statusColor = recordStatusColor(pct) ?? col;
 
   return (
-    <div className="card" style={{ position: "relative", overflow: "hidden", padding: "16px 18px" }}>
-      {/* Glow ambiant — vert si proche du PR, orange/rouge sinon */}
+    <button type="button" onClick={onSeeEvolution} className="card card-hover tap-feedback" style={{ position: "relative", overflow: "hidden", width: "100%", padding: 20, textAlign: "left", cursor: "pointer" }}>
       <div style={{
-        position: "absolute", right: -34, top: -34, width: 150, height: 150, borderRadius: "50%",
-        background: `radial-gradient(circle, ${statusColor}26 0%, transparent 70%)`, pointerEvents: "none",
+        position: "absolute", right: -48, top: -58, width: 190, height: 190, borderRadius: "50%",
+        background: `radial-gradient(circle, ${col}20 0%, transparent 68%)`, pointerEvents: "none",
       }} />
 
-      <div style={{ position: "relative", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 16 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 7, minWidth: 0 }}>
-          <span style={{ width: 8, height: 8, borderRadius: "50%", background: col, flexShrink: 0 }} />
-          <p style={{ fontSize: 12, fontWeight: 600, letterSpacing: "0.03em", textTransform: "uppercase", color: "var(--c-text-3)" }} className="truncate">{disc}</p>
+      <div style={{ position: "relative", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 20 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+          <span style={{ width: 7, height: 7, borderRadius: "50%", background: col, boxShadow: `0 0 12px ${col}`, flexShrink: 0 }} />
+          <p style={{ fontSize: 13, fontWeight: 700, letterSpacing: "0.04em", textTransform: "uppercase", color: "var(--c-text-2)" }} className="truncate">{disc}</p>
         </div>
-        <button onClick={onSeeEvolution}
-          style={{ fontSize: 10.5, fontWeight: 600, color: col, background: "none", border: "none", cursor: "pointer", flexShrink: 0, display: "flex", alignItems: "center", gap: 2 }}>
-          Évolution <ChevronRight size={11} />
-        </button>
-      </div>
-
-      <p style={{ position: "relative", fontSize: 34, fontWeight: 700, color: "var(--c-text-1)", letterSpacing: "-0.03em", lineHeight: 1, fontVariantNumeric: "tabular-nums" }}>
-        {rec.pr ?? "—"}
-      </p>
-      <p style={{ position: "relative", fontSize: 9, fontWeight: 500, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--c-text-4)", marginTop: 5 }}>
-        Record personnel
-      </p>
-
-      <p style={{ position: "relative", fontSize: 12.5, color: "var(--c-text-3)", marginTop: 12 }}>
-        SB saison <strong style={{ color: "var(--c-text-2)", fontWeight: 600 }}>{rec.sb ?? "—"}</strong>
-      </p>
-
-      <div style={{ position: "relative", display: "flex", alignItems: "center", gap: 8, marginTop: 8 }}>
-        <div style={{ flex: 1, height: 3, background: "var(--c-surface-3)", borderRadius: 99, overflow: "hidden" }}>
-          <div style={{ height: "100%", width: `${pct ?? 0}%`, background: statusColor, borderRadius: 99, transition: "width 0.7s cubic-bezier(0.16,1,0.3,1)" }} />
-        </div>
-        <span style={{ fontSize: 11.5, fontWeight: 700, color: statusColor, flexShrink: 0, minWidth: 30, textAlign: "right" }}>
-          {pct !== null ? `${pct}%` : "—"}
+        <span style={{ fontSize: 12, fontWeight: 700, color: statusColor, background: `${statusColor}14`, border: `1px solid ${statusColor}2E`, borderRadius: 99, padding: "4px 8px", flexShrink: 0 }}>
+          {pct !== null ? `${pct}% du PR` : "Saison"}
         </span>
       </div>
 
-      <div style={{ position: "relative", display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 12 }}>
-        <span style={{ fontSize: 9.5, color: "var(--c-text-4)" }}>
-          {stats?.count > 0 ? `${stats.count} mesure${stats.count > 1 ? "s" : ""}` : ""}
-        </span>
-        {rec.prDate && (
-          <span style={{ fontSize: 9.5, color: "var(--c-text-4)" }}>
-            {new Date(rec.prDate).toLocaleDateString("fr-BE", { day: "numeric", month: "short", year: "numeric" })}
-          </span>
-        )}
+      <div style={{ position: "relative", display: "grid", gridTemplateColumns: "minmax(0, 1fr) minmax(110px, 0.9fr)", alignItems: "end", gap: 16 }}>
+        <div style={{ minWidth: 0 }}>
+          <p style={{ fontSize: 12, fontWeight: 600, color: "var(--c-text-2)", marginBottom: 6 }}>Record personnel</p>
+          <p style={{ fontSize: "clamp(28px, 7vw, 36px)", fontWeight: 700, color: "var(--c-text-1)", letterSpacing: "-0.04em", lineHeight: 1, fontVariantNumeric: "tabular-nums" }} className="truncate">
+            {rec.pr ?? "—"}
+          </p>
+        </div>
+        <TrendSparkline discipline={disc} series={stats?.series} color={col} />
       </div>
-    </div>
+
+      <div style={{ position: "relative", display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 8, marginTop: 16, paddingTop: 16, borderTop: "1px solid var(--c-border)" }}>
+        <div>
+          <p style={{ fontSize: 12, color: "var(--c-text-3)" }}>Saison</p>
+          <p style={{ fontSize: 13, fontWeight: 700, color: "var(--c-text-1)", marginTop: 2 }}>{rec.sb ?? "—"}</p>
+        </div>
+        <div>
+          <p style={{ fontSize: 12, color: "var(--c-text-3)" }}>Mesures</p>
+          <p style={{ fontSize: 13, fontWeight: 700, color: "var(--c-text-1)", marginTop: 2 }}>{stats?.count ?? 0}</p>
+        </div>
+        <div style={{ textAlign: "right" }}>
+          <p style={{ fontSize: 12, color: "var(--c-text-3)" }}>Record établi</p>
+          <p style={{ fontSize: 12, fontWeight: 600, color: "var(--c-text-2)", marginTop: 2 }}>
+            {rec.prDate ? parseLocalDate(rec.prDate.slice(0, 10)).toLocaleDateString("fr-BE", { day: "numeric", month: "short", year: "numeric" }) : "—"}
+          </p>
+        </div>
+      </div>
+      <span style={{ position: "relative", display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 4, marginTop: 14, fontSize: 12, fontWeight: 700, color: col }}>
+        Voir l’évolution <ChevronRight size={14} aria-hidden="true" />
+      </span>
+    </button>
   );
 }
 
@@ -6077,7 +6226,7 @@ export function GoalProgressBar({ pr, target, discipline, color }) {
   if (pct === null) return null;
   return (
     <div style={{ marginTop: 12 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", fontSize: 9.5, fontWeight: 500, color: "var(--c-text-3)", marginBottom: 6 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", gap: 8, fontSize: 12, fontWeight: 500, color: "var(--c-text-2)", marginBottom: 8 }}>
         <span>PR {pr}</span>
         <span style={{ color }}>{pct}%</span>
         <span>Objectif {target}</span>
