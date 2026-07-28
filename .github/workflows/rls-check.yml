@@ -46,8 +46,15 @@ jobs:
       # Identifiants de l'instance locale — ce ne sont pas des secrets (clés
       # de démo fixes, base jetable détruite à la fin du job), donc pas
       # besoin des secrets GitHub SUPABASE_* utilisés avant cette tâche.
+      # Le contenu est aussi affiché en clair dans les logs (ni sensible ni
+      # utile à cacher) — sert à vérifier les noms de variables exacts que
+      # le CLI produit, jamais confirmés faute de Docker local.
       - name: Export local Supabase credentials
-        run: supabase status -o env >> "$GITHUB_ENV"
+        run: |
+          echo "--- supabase status -o env ---"
+          supabase status -o env
+          echo "--- fin ---"
+          supabase status -o env >> "$GITHUB_ENV"
 
       # Lancée deux fois de suite (tâche 7, vérification obligatoire) : la
       # suite crée/nettoie ses propres fixtures à chaque exécution, un
