@@ -41,8 +41,8 @@ export function StatusBadge({ readiness, fatigue, acwr }) {
   const s = getStatusLabel(readiness, fatigue, acwr);
   return (
     <span
-      className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11.5px] font-bold text-white shadow-sm"
-      style={{ background: s.color }}
+      className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[12px] font-bold shadow-sm"
+      style={{ background: s.color, color: "#07110C" }}
     >
       {s.dot} {s.label}
     </span>
@@ -60,7 +60,7 @@ export function ScoreRing({ value, color, label, size = 72 }) {
           strokeDasharray={`${dash} ${circ}`} strokeLinecap="round" transform="rotate(-90 36 36)" />
         <text x="36" y="40" textAnchor="middle" fontSize="13" fontWeight="800" fill={color}>{value}</text>
       </svg>
-      <span className="text-[10.5px] font-semibold text-center leading-tight" style={{ color: "var(--c-text-3)" }}>{label}</span>
+      <span className="meta-text font-semibold text-center leading-tight">{label}</span>
     </div>
   );
 }
@@ -74,7 +74,7 @@ export function ValidationBadge({ status }) {
   };
   const b = map[status] ?? map.future;
   return (
-    <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full" style={{ background: b.bg, color: b.color, border: `1px solid ${b.border}` }}>
+    <span className="text-[12px] font-semibold px-2 py-0.5 rounded-full" style={{ background: b.bg, color: b.color, border: `1px solid ${b.border}` }}>
       {b.label}
     </span>
   );
@@ -93,7 +93,7 @@ export function StarRow({ value, max = 5, color = "#EF9F27" }) {
 export function EmptySection({ icon: Icon = Trophy, title, sub }) {
   return (
     <div className="card p-12 text-center">
-      <Icon size={32} strokeWidth={1.5} className="mx-auto mb-3" style={{ color: "var(--c-text-4)" }} />
+      <Icon size={32} strokeWidth={1.5} className="mx-auto mb-3" style={{ color: "var(--c-text-3)" }} />
       <p className="text-[13.5px] font-bold" style={{ color: "var(--c-text-2)" }}>{title}</p>
       {sub && <p className="text-[12px] mt-1" style={{ color: "var(--c-text-3)" }}>{sub}</p>}
     </div>
@@ -116,4 +116,4 @@ export const ChartTooltip = ({ active, payload, label }) => {
 
 // ─── Inputs partagés ──────────────────────────────────────────────────────────
 export const inputCls = "input-premium";
-export const labelCls = "block text-[11px] font-bold uppercase tracking-wider mb-1.5";
+export const labelCls = "block text-[12px] font-bold uppercase tracking-wide mb-1.5";

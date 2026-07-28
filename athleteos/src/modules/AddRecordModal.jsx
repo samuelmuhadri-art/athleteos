@@ -31,10 +31,10 @@ const AddRecordModal = memo(({ athleteName, onClose, onAdd }) => {
         </div>
         <div className="px-6 py-5 flex items-center justify-between flex-shrink-0" style={{ borderBottom: "1px solid var(--c-border)" }}>
           <div>
-            <h3 className="text-[16px] font-black" style={{ color: "var(--c-text-1)" }}>Ajouter un record</h3>
+            <h2 className="text-[17px] font-bold" style={{ color: "var(--c-text-1)" }}>Ajouter un record</h2>
             <p className="text-[12px] mt-0.5" style={{ color: "var(--c-text-3)" }}>{athleteName}</p>
           </div>
-          <button onClick={onClose} disabled={saving} className="p-2 rounded-xl transition-colors disabled:opacity-40"
+          <button type="button" aria-label="Fermer" onClick={onClose} disabled={saving} className="p-2 rounded-xl transition-colors disabled:opacity-40"
                   style={{ color: "var(--c-text-2)" }} onMouseEnter={e => e.currentTarget.style.background = "var(--c-surface-2)"} onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
             <X size={18} />
           </button>

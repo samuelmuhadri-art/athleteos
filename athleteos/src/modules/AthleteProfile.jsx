@@ -26,32 +26,32 @@ const AthleteProfile = memo(({ athlete, weeklyCharge, sessions, competitions, on
   };
 
   return (
-    <div className="p-4 md:p-6 max-w-6xl mx-auto space-y-5 animate-slide-up">
+    <div className="page-container py-4 md:py-6 max-w-6xl mx-auto space-y-5 animate-slide-up">
       {/* Barre actions */}
       <div className="flex items-center justify-between flex-wrap gap-2">
-        <button onClick={onBack}
-          className="flex items-center gap-1.5 text-[13px] font-semibold transition-colors tap-feedback" style={{ color: "var(--c-text-3)" }} onMouseEnter={e => e.currentTarget.style.color = "var(--c-text-1)"} onMouseLeave={e => e.currentTarget.style.color = "var(--c-text-3)"}>
+        <button type="button" onClick={onBack}
+          className="flex items-center gap-1.5 min-h-10 text-[13px] font-semibold transition-colors tap-feedback" style={{ color: "var(--c-text-2)" }} onMouseEnter={e => e.currentTarget.style.color = "var(--c-text-1)"} onMouseLeave={e => e.currentTarget.style.color = "var(--c-text-2)"}>
           <ArrowLeft size={16} /> Retour à la liste
         </button>
         <div className="flex items-center gap-2">
-          <button onClick={() => onEditRequest(athlete)}
-            className="text-[12px] font-bold border rounded-xl px-3 py-1.5 transition-colors" style={{ color: "var(--c-text-3)", borderColor: "var(--c-border)", background: "transparent" }} onMouseEnter={e => e.currentTarget.style.background = "var(--c-surface-2)"} onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
+          <button type="button" onClick={() => onEditRequest(athlete)}
+            className="text-[12px] font-bold border rounded-xl min-h-10 px-3 transition-colors" style={{ color: "var(--c-text-2)", borderColor: "var(--c-border)", background: "transparent" }} onMouseEnter={e => e.currentTarget.style.background = "var(--c-surface-2)"} onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
             ✏️ Modifier
           </button>
           {!confirmDelete ? (
-            <button onClick={() => setConfirmDelete(true)}
-              className="text-[12px] font-bold border rounded-xl px-3 py-1.5 transition-colors" style={{ color: "#F19A9A", borderColor: "rgba(226,75,74,0.3)", background: "transparent" }} onMouseEnter={e => e.currentTarget.style.background = "rgba(226,75,74,0.1)"} onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
+            <button type="button" onClick={() => setConfirmDelete(true)}
+              className="text-[12px] font-bold border rounded-xl min-h-10 px-3 transition-colors" style={{ color: "#F19A9A", borderColor: "rgba(226,75,74,0.3)", background: "transparent" }} onMouseEnter={e => e.currentTarget.style.background = "rgba(226,75,74,0.1)"} onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
               🗑️ Supprimer
             </button>
           ) : (
             <div className="flex items-center gap-2 border rounded-xl px-3 py-1.5" style={{ background: "rgba(226,75,74,0.1)", borderColor: "rgba(226,75,74,0.3)" }}>
               <span className="text-[12px] font-semibold" style={{ color: "#F19A9A" }}>Confirmer ?</span>
-              <button onClick={handleDelete} disabled={deleting}
-                className="text-[11px] font-bold text-white rounded-lg px-2 py-0.5 disabled:opacity-50" style={{ background: "#E24B4A" }}>
+              <button type="button" onClick={handleDelete} disabled={deleting}
+                className="text-[12px] font-bold text-white rounded-lg px-2.5 py-1 disabled:opacity-50" style={{ background: "#E24B4A" }}>
                 {deleting ? "…" : "Oui"}
               </button>
-              <button onClick={() => setConfirmDelete(false)} disabled={deleting}
-                className="text-[11px]" style={{ color: "var(--c-text-4)" }} onMouseEnter={e => e.currentTarget.style.color = "var(--c-text-2)"} onMouseLeave={e => e.currentTarget.style.color = "var(--c-text-4)"}>Non</button>
+              <button type="button" onClick={() => setConfirmDelete(false)} disabled={deleting}
+                className="text-[12px]" style={{ color: "var(--c-text-2)" }}>Non</button>
             </div>
           )}
         </div>
@@ -72,7 +72,7 @@ const AthleteProfile = memo(({ athlete, weeklyCharge, sessions, competitions, on
         <div className="relative flex items-start gap-5 flex-wrap">
           {/* Avatar */}
           <div
-            className="w-16 h-16 rounded-2xl flex items-center justify-center text-white text-[20px] font-black flex-shrink-0 shadow-lg"
+            className="w-16 h-16 rounded-2xl flex items-center justify-center text-white text-[20px] font-bold flex-shrink-0 shadow-lg"
             style={{ background: "rgba(255,255,255,0.20)" }}
           >
             {athlete.avatar}
@@ -80,16 +80,16 @@ const AthleteProfile = memo(({ athlete, weeklyCharge, sessions, competitions, on
 
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-3 flex-wrap mb-1">
-              <h2 className="text-[22px] font-black text-white tracking-tight">{athlete.name}</h2>
+              <h2 className="text-[24px] font-bold text-white tracking-tight">{athlete.name}</h2>
               <StatusBadge readiness={readiness} fatigue={fatigue} acwr={acwr} />
               {activeInjuries.length > 0 && (
-                <span className="flex items-center gap-1 text-[11px] font-bold px-2.5 py-1 rounded-full text-white" style={{ background: "rgba(239,159,39,0.3)", border: "1px solid rgba(239,159,39,0.4)" }}>
+                <span className="flex items-center gap-1 text-[12px] font-bold px-2.5 py-1 rounded-full text-white" style={{ background: "rgba(239,159,39,0.3)", border: "1px solid rgba(239,159,39,0.4)" }}>
                   <HeartPulse size={11} /> {activeInjuries.length} blessure{activeInjuries.length > 1 ? "s" : ""}
                 </span>
               )}
             </div>
-            <p className="text-white/70 text-[13px]">{athlete.mainDiscipline ?? "Discipline non renseignée"}</p>
-            <div className="flex items-center gap-3 flex-wrap text-[12px] text-white/50 mt-1">
+            <p className="text-[13px]" style={{ color: "rgba(255,255,255,0.86)" }}>{athlete.mainDiscipline ?? "Discipline non renseignée"}</p>
+            <div className="flex items-center gap-3 flex-wrap text-[12px] mt-1" style={{ color: "rgba(255,255,255,0.72)" }}>
               <span>{athlete.group ?? "—"}</span>
               <span>·</span>
               <span>{athlete.level ?? "—"}</span>
@@ -103,16 +103,16 @@ const AthleteProfile = memo(({ athlete, weeklyCharge, sessions, competitions, on
             <ScoreRing value={readiness} color="white" label="Readiness" size={80} />
             <div className="space-y-2 text-[12px]">
               <div className="flex items-center justify-between gap-6">
-                <span className="text-white/60">Fatigue</span>
-                <span className="font-black text-white">{fatigue}</span>
+                <span style={{ color: "rgba(255,255,255,0.76)" }}>Fatigue</span>
+                <span className="font-bold text-white">{fatigue}</span>
               </div>
               <div className="flex items-center justify-between gap-6">
-                <span className="text-white/60">Forme</span>
-                <span className="font-black text-white">{metrics.forme}</span>
+                <span style={{ color: "rgba(255,255,255,0.76)" }}>Forme</span>
+                <span className="font-bold text-white">{metrics.forme}</span>
               </div>
               <div className="flex items-center justify-between gap-6">
-                <span className="text-white/60">ACWR</span>
-                <span className="font-black text-white">{acwr.toFixed(2)}</span>
+                <span style={{ color: "rgba(255,255,255,0.76)" }}>ACWR</span>
+                <span className="font-bold text-white">{acwr.toFixed(2)}</span>
               </div>
             </div>
           </div>
@@ -125,8 +125,8 @@ const AthleteProfile = memo(({ athlete, weeklyCharge, sessions, competitions, on
           const Icon     = tab.icon;
           const isActive = activeTab === tab.id;
           return (
-            <button key={tab.id} onClick={() => setActiveTab(tab.id)}
-              className={["flex items-center gap-2 px-4 py-2 rounded-xl text-[12.5px] font-bold whitespace-nowrap transition-all flex-1 justify-center tap-feedback", isActive ? "" : "hover:opacity-80"].join(" ")}
+            <button type="button" key={tab.id} onClick={() => setActiveTab(tab.id)}
+              className={["flex items-center gap-2 px-4 min-h-10 rounded-xl text-[13px] font-bold whitespace-nowrap transition-all flex-1 justify-center tap-feedback", isActive ? "" : "hover:opacity-80"].join(" ")}
               style={isActive ? { background: "#1D9E75", color: "#0A150F", boxShadow: "0 2px 8px rgba(29,158,117,0.30)" } : { color: "var(--c-text-3)", background: "transparent" }}
             >
               <Icon size={13} strokeWidth={isActive ? 2.5 : 2} />

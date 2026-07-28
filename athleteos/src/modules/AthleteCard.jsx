@@ -17,6 +17,7 @@ const AthleteCard = memo(({ athlete, weeklyCharge, onClick }) => {
 
   return (
     <button
+      type="button"
       onClick={() => onClick(athlete)}
       className="card card-hover card-glow-green shimmer-hover text-left p-5 flex flex-col gap-4 w-full tap-feedback"
     >
@@ -24,32 +25,32 @@ const AthleteCard = memo(({ athlete, weeklyCharge, onClick }) => {
       <div className="flex items-start justify-between gap-2">
         <div className="flex items-center gap-3">
           <div
-            className="w-12 h-12 rounded-2xl flex items-center justify-center text-white text-[14px] font-black flex-shrink-0 shadow-sm"
+            className="w-12 h-12 rounded-2xl flex items-center justify-center text-white text-[14px] font-bold flex-shrink-0 shadow-sm"
             style={{ background: "linear-gradient(135deg, #1D9E75, #16826C)" }}
           >
             {athlete.avatar}
           </div>
           <div>
-            <p className="text-[14.5px] font-black leading-tight" style={{ color: "var(--c-text-1)" }}>{athlete.name}</p>
-            <p className="text-[11px] mt-0.5" style={{ color: "var(--c-text-4)" }}>{athlete.mainDiscipline ?? "—"}</p>
+            <p className="card-title leading-tight">{athlete.name}</p>
+            <p className="meta-text mt-0.5">{athlete.mainDiscipline ?? "—"}</p>
           </div>
         </div>
-        <ChevronRight size={16} className="flex-shrink-0 mt-1" style={{ color: "var(--c-text-4)" }} />
+        <ChevronRight size={16} className="flex-shrink-0 mt-1" style={{ color: "var(--c-text-3)" }} />
       </div>
 
       {/* Badges */}
       <div className="flex flex-wrap gap-1.5">
         {hasCharge && (
-          <span className="text-[10.5px] font-bold px-2.5 py-1 rounded-full text-white shadow-sm"
-            style={{ background: status.color }}>
+          <span className="text-[12px] font-bold px-2.5 py-1 rounded-full shadow-sm"
+            style={{ background: status.color, color: "#07110C" }}>
             {status.dot} {status.label}
           </span>
         )}
-        <span className="text-[10.5px] font-semibold px-2.5 py-1 rounded-full" style={{ background: "var(--c-surface-2)", color: "var(--c-text-3)" }}>
+        <span className="text-[12px] font-semibold px-2.5 py-1 rounded-full" style={{ background: "var(--c-surface-2)", color: "var(--c-text-2)" }}>
           {athlete.level ?? "Niveau —"}
         </span>
         {activeInjuries.length > 0 && (
-          <span className="flex items-center gap-1 text-[10.5px] font-bold px-2.5 py-1 rounded-full" style={{ background: "rgba(239,159,39,0.15)", color: "#F0CB61", border: "1px solid rgba(239,159,39,0.3)" }}>
+          <span className="flex items-center gap-1 text-[12px] font-bold px-2.5 py-1 rounded-full" style={{ background: "rgba(239,159,39,0.15)", color: "#F0CB61", border: "1px solid rgba(239,159,39,0.3)" }}>
             <HeartPulse size={11} /> {activeInjuries.length} blessure{activeInjuries.length > 1 ? "s" : ""}
           </span>
         )}
@@ -64,18 +65,18 @@ const AthleteCard = memo(({ athlete, weeklyCharge, onClick }) => {
             { label: "ACWR",      value: acwr.toFixed(2), color: acwrColor(acwr)             },
           ].map(s => (
             <div key={s.label} className="rounded-2xl p-2.5 text-center" style={{ background: "var(--c-surface-2)" }}>
-              <p className="text-[18px] font-black leading-tight" style={{ color: s.color }}>{s.value}</p>
-              <p className="text-[9.5px] mt-0.5 font-medium" style={{ color: "var(--c-text-4)" }}>{s.label}</p>
+              <p className="text-[18px] font-bold leading-tight" style={{ color: s.color }}>{s.value}</p>
+              <p className="meta-text mt-0.5 font-medium">{s.label}</p>
             </div>
           ))}
         </div>
       ) : (
         <div className="rounded-2xl p-3 text-center" style={{ background: "var(--c-surface-2)" }}>
-          <p className="text-[11px] font-medium" style={{ color: "var(--c-text-4)" }}>Pas encore de charge enregistrée</p>
+          <p className="meta-text font-medium">Pas encore de charge enregistrée</p>
         </div>
       )}
 
-      <p className="text-[11px] font-medium" style={{ color: "var(--c-text-4)" }}>{athlete.group ?? "Groupe —"}</p>
+      <p className="meta-text font-medium">{athlete.group ?? "Groupe —"}</p>
     </button>
   );
 });

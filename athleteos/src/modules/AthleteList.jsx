@@ -19,7 +19,7 @@ import AddAthleteModal from "./AddAthleteModal";
 
 // ─── Composant principal ──────────────────────────────────────────────────────
 
-function AthleteList({ onNavigate }) {
+function AthleteList() {
   const { clubId } = useAuth();
 
   const [selectedAthlete,    setSelectedAthlete]    = useState(null);
@@ -191,18 +191,18 @@ function AthleteList({ onNavigate }) {
   }
 
   return (
-    <div className="p-4 md:p-6 max-w-7xl mx-auto space-y-5 animate-slide-up">
+    <div className="page-container py-4 md:py-6 max-w-7xl mx-auto space-y-5 animate-slide-up">
       {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <h2 className="text-[22px] font-black tracking-tight" style={{ color: "var(--c-text-1)" }}>Athlètes</h2>
-          <p className="text-[13px] mt-0.5" style={{ color: "var(--c-text-3)" }}>
+          <h2 className="page-title">Athlètes</h2>
+          <p className="secondary-text mt-1">
             {athletes.length > 0
               ? `${athletes.length} athlète${athletes.length>1?"s":""} suivi${athletes.length>1?"s":""} · Cliquez pour le profil complet`
               : "Aucun athlète pour l'instant"}
           </p>
         </div>
-        <button onClick={() => setAthleteModalTarget("create")} className="btn-primary">
+        <button type="button" onClick={() => setAthleteModalTarget("create")} className="btn-primary">
           <Plus size={16} /> Inscrire un athlète
         </button>
       </div>

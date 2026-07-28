@@ -35,14 +35,14 @@ const AddAthleteModal = memo(({ onClose, onCreate, initialData = null }) => {
         <div className="flex justify-center pt-3 pb-1 sm:hidden flex-shrink-0"><div className="w-10 h-1 rounded-full" style={{ background: "var(--c-border-strong)" }} /></div>
         <div className="px-6 py-5 flex items-center justify-between flex-shrink-0" style={{ borderBottom: "1px solid var(--c-border)" }}>
           <div>
-            <h3 className="text-[17px] font-black" style={{ color: "var(--c-text-1)" }}>
+            <h2 className="text-[17px] font-bold" style={{ color: "var(--c-text-1)" }}>
               {isEdit ? "Modifier le profil" : "Inscrire un athlète"}
-            </h3>
-            <p className="text-[12px]" style={{ color: "var(--c-text-3)", mt: 0.5 }}>
+            </h2>
+            <p className="text-[13px] mt-0.5" style={{ color: "var(--c-text-2)" }}>
               {isEdit ? "Modifie uniquement ce qui a changé." : "Seul le nom est obligatoire."}
             </p>
           </div>
-          <button onClick={onClose} disabled={saving} className="p-2 rounded-xl transition-colors disabled:opacity-40"
+          <button type="button" aria-label="Fermer" onClick={onClose} disabled={saving} className="p-2 rounded-xl transition-colors disabled:opacity-40"
                   style={{ color: "var(--c-text-2)" }} onMouseEnter={e => e.currentTarget.style.background = "var(--c-surface-2)"} onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
             <X size={18} />
           </button>
@@ -93,15 +93,15 @@ const AddAthleteModal = memo(({ onClose, onCreate, initialData = null }) => {
               <span className="text-[12.5px] font-semibold" style={{ color: "var(--c-text-1)" }}>
                 Profil athlétique initial (optionnel)
               </span>
-              <span className="text-[11px]" style={{ color: "var(--c-text-4)" }}>{showProfile ? "▲" : "▼"}</span>
+              <span className="text-[12px]" style={{ color: "var(--c-text-2)" }}>{showProfile ? "▲" : "▼"}</span>
             </button>
             {showProfile && (
               <div className="p-4 space-y-3" style={{ background: "var(--c-surface)" }}>
                 {RADAR_KEYS.map(k => (
                   <div key={k.key}>
                     <div className="flex items-center justify-between mb-1.5">
-                      <label className="text-[11.5px] font-semibold" style={{ color: "var(--c-text-2)" }}>{k.label}</label>
-                      <span className="text-[12px] font-black" style={{ color: scoreColor(form[k.key]) }}>
+                      <label className="text-[12px] font-semibold" style={{ color: "var(--c-text-2)" }}>{k.label}</label>
+                      <span className="text-[12px] font-bold" style={{ color: scoreColor(form[k.key]) }}>
                         {form[k.key]}
                       </span>
                     </div>
