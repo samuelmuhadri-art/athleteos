@@ -1,10 +1,12 @@
 // ============================================================
 // AthleteOS — src/components/ui/AccountSettingsModal.jsx
 // Réglages de compte partagés coach + athlète : nom, email, mot de
-// passe pour tout le monde ; nom du club + code d'invitation pour
-// les coachs uniquement. Les actions sensibles (renommer le club,
-// régénérer le code, modifier le nom) passent par l'Edge Function
-// admin-actions (service role, vérifie le rôle côté serveur).
+// passe pour tout le monde ; nom du club + code d'invitation réservés
+// au HEAD COACH (tâche 4 — un simple coach ne doit plus voir ces
+// actions structurelles). Les actions sensibles (renommer le club,
+// régénérer le code) passent par l'Edge Function admin-actions
+// (service role, revérifie le rôle côté serveur — cet écran ne fait que
+// masquer l'UI, la sécurité réelle est côté serveur).
 // ============================================================
 
 import { useState, useEffect } from "react";
@@ -26,7 +28,7 @@ const inputStyle = { background: "var(--c-surface-2)", borderColor: "var(--c-bor
 
 export default function AccountSettingsModal({ onClose }) {
   const { user, profile, clubId } = useAuth();
-  const isCoach = profile?.role === "head_coach" || profile?.role === "coach";
+  const isHeadCoach = profile?.role === "head_coach";
 
   const [name, setName]   = useState(profile?.name ?? "");
   const [email, setEmail] = useState(user?.email ?? "");
@@ -90,7 +92,9 @@ export default function AccountSettingsModal({ onClose }) {
     if (!clubName.trim()) return;
     setBusy("club"); setMsg(null);
     try {
-      await callAdmin({ action: "rename_club", clubName: clubName.trim() });
+      // Clé d'idempotence : un double-clic ou un retry réseau sur ce
+      // même clic ne renomme pas le club une seconde fois côté serveur.
+      await callAdmin({ action: "rename_club", clubName: clubName.trim(), idempotencyKey: crypto.randomUUID() });
       setMsg({ type: "success", text: "Nom du club mis à jour." });
     } catch (e) { setMsg({ type: "error", text: e.message }); }
     setBusy(null);
@@ -99,7 +103,7 @@ export default function AccountSettingsModal({ onClose }) {
   const regenerateCode = async () => {
     setBusy("code"); setMsg(null);
     try {
-      const data = await callAdmin({ action: "regenerate_invite_code" });
+      const data = await callAdmin({ action: "regenerate_invite_code", idempotencyKey: crypto.randomUUID() });
       setInviteCode(data.inviteCode);
       setMsg({ type: "success", text: "Nouveau code généré — l'ancien ne fonctionne plus." });
     } catch (e) { setMsg({ type: "error", text: e.message }); }
@@ -176,7 +180,7 @@ export default function AccountSettingsModal({ onClose }) {
             </div>
           </Field>
 
-          {isCoach && (
+          {isHeadCoach && (
             <>
               <div className="pt-1" style={{ borderTop: "1px solid var(--c-border)" }} />
               <Field label="Nom du club">
