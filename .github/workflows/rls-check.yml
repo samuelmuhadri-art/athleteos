@@ -17,7 +17,11 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          # @supabase/supabase-js initialise toujours un RealtimeClient à la
+          # création (même sans usage de Realtime), qui exige le WebSocket
+          # natif de Node — absent avant Node 22 ("Node.js detected but
+          # native WebSocket not found"), constaté lors d'un run CI.
+          node-version: 22
 
       - run: npm ci
 
