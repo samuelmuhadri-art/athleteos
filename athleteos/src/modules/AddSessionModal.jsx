@@ -75,7 +75,7 @@ const AddSessionModal = memo(({ athletes, initialData, onClose, onAdd }) => {
   };
 
   const selCat = SESSION_COLORS[form.category] ?? SESSION_COLORS.technique;
-  const labelCls = "block text-[11px] font-bold uppercase tracking-wider mb-1.5";
+  const labelCls = "block text-[12px] font-bold uppercase tracking-wide mb-1.5";
   const labelStyle = { color: "var(--c-text-3)" };
 
   return (
@@ -95,14 +95,14 @@ const AddSessionModal = memo(({ athletes, initialData, onClose, onAdd }) => {
           style={{ background: `${selCat.border}14`, borderBottom: `1px solid ${selCat.border}40` }}
         >
           <div>
-            <h3 className="text-[17px] font-black" style={{ color: selCat.text }}>
+            <h2 className="text-[17px] font-bold" style={{ color: selCat.text }}>
               {isEdit ? "Modifier la séance" : "Nouvelle séance"}
-            </h3>
-            <p className="text-[11px] mt-0.5" style={{ color: "var(--c-text-2)" }}>
+            </h2>
+            <p className="text-[13px] mt-0.5" style={{ color: "var(--c-text-2)" }}>
               {isEdit ? "Modifie les détails" : "Planifie un entraînement"}
             </p>
           </div>
-          <button onClick={onClose} disabled={saving}
+          <button type="button" aria-label="Fermer" onClick={onClose} disabled={saving}
             className="p-2 rounded-xl disabled:opacity-40 transition-colors">
             <X size={18} style={{ color: selCat.text }} />
           </button>
@@ -124,7 +124,7 @@ const AddSessionModal = memo(({ athletes, initialData, onClose, onAdd }) => {
                 const sel = form.category === cat.id;
                 return (
                   <button key={cat.id} onClick={() => set("category", cat.id)}
-                    className="px-3 py-1.5 rounded-xl text-[11.5px] font-semibold border-2 transition-all tap-feedback"
+                    className="px-3 py-2 rounded-xl text-[12px] font-semibold border-2 transition-all tap-feedback"
                     style={sel
                       ? { background: cc.border, color: "#0A150F", borderColor: cc.border }
                       : { background: `${cc.border}14`, color: cc.text, borderColor: `${cc.border}40` }
@@ -172,14 +172,14 @@ const AddSessionModal = memo(({ athletes, initialData, onClose, onAdd }) => {
           <div>
             <label className={labelCls} style={labelStyle}>PDF (optionnel)</label>
             {isEdit && form.pdfUrl && !pdfFile && (
-              <p className="text-[11px] mb-1.5" style={{ color: "#7BD8B4" }}>📎 PDF déjà joint</p>
+              <p className="text-[12px] mb-1.5" style={{ color: "#7BD8B4" }}>📎 PDF déjà joint</p>
             )}
             <input type="file" accept="application/pdf"
               onChange={e => pickPdf(e.target.files?.[0] ?? null)}
-              className="w-full text-[12px] file:mr-3 file:py-1.5 file:px-3 file:rounded-xl file:border-0 file:text-[11.5px] file:font-semibold"
+              className="w-full text-[12px] file:mr-3 file:py-2 file:px-3 file:rounded-xl file:border-0 file:text-[12px] file:font-semibold"
               style={{ color: "var(--c-text-3)" }} />
-            {pdfFile && <p className="text-[11px] mt-1" style={{ color: "var(--c-text-3)" }}>📎 {pdfFile.name}</p>}
-            {pdfError && <p className="text-[11px] mt-1" style={{ color: "#F19A9A" }}>{pdfError}</p>}
+            {pdfFile && <p className="meta-text mt-1">📎 {pdfFile.name}</p>}
+            {pdfError && <p className="text-[12px] mt-1" style={{ color: "#F19A9A" }}>{pdfError}</p>}
           </div>
 
           <div>
@@ -187,7 +187,7 @@ const AddSessionModal = memo(({ athletes, initialData, onClose, onAdd }) => {
               Athlètes * ({form.athleteIds.length} sélectionné{form.athleteIds.length > 1 ? "s" : ""})
             </label>
             {athletes.length === 0 ? (
-              <p className="text-[12px]" style={{ color: "var(--c-text-4)" }}>Aucun athlète disponible</p>
+              <p className="meta-text">Aucun athlète disponible</p>
             ) : (
               <div className="flex flex-wrap gap-2">
                 {athletes.map(a => {
@@ -198,7 +198,7 @@ const AddSessionModal = memo(({ athletes, initialData, onClose, onAdd }) => {
                       style={sel
                         ? { background: "rgba(29,158,117,0.14)", borderColor: "#1D9E75", color: "#7BD8B4" }
                         : { background: "var(--c-surface-2)", borderColor: "var(--c-border)", color: "var(--c-text-3)" }}>
-                      <div className="w-6 h-6 rounded-full flex items-center justify-center text-[8px] font-bold"
+                      <div className="w-7 h-7 rounded-full flex items-center justify-center text-[12px] font-bold"
                         style={{ background: sel ? "#1D9E75" : "var(--c-surface-3)", color: sel ? "#0A150F" : "var(--c-text-3)" }}>
                         {a.avatar?.slice(0, 1) ?? "?"}
                       </div>

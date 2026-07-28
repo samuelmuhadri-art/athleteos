@@ -51,22 +51,22 @@ const SessionModal = memo(({ session, athletes, onClose, onSetRpe, onSetStatus, 
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 mb-2 flex-wrap">
               <span
-                className="text-[10px] font-black uppercase tracking-widest px-2.5 py-1 rounded-full"
+                className="text-[12px] font-bold uppercase tracking-wide px-2.5 py-1 rounded-full"
                 style={{ background: c.border, color: "#0A150F" }}
               >
                 {CATEGORIES.find(x => x.id === session.category)?.label ?? session.type}
               </span>
               {session.createdByAthlete && (
-                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full"
+                <span className="text-[12px] font-bold px-2 py-0.5 rounded-full"
                   style={{ background: "rgba(168,85,247,0.16)", color: "#D8B4FE" }}>
                   📋 Proposé par un athlète
                 </span>
               )}
               <StatusIcon status={status} size={14} />
             </div>
-            <h3 className="text-[20px] font-black leading-tight" style={{ color: c.text }}>
+            <h2 className="text-[20px] font-bold leading-tight" style={{ color: c.text }}>
               {session.title}
-            </h3>
+            </h2>
             <p className="text-[12px] mt-1.5 font-medium" style={{ color: "var(--c-text-2)" }}>
               📅 {dateStr}
               {session.time && ` · ⏰ ${session.time}`}
@@ -74,6 +74,8 @@ const SessionModal = memo(({ session, athletes, onClose, onSetRpe, onSetStatus, 
             </p>
           </div>
           <button
+            type="button"
+            aria-label="Fermer"
             onClick={onClose}
             className="p-2 rounded-xl flex-shrink-0 transition-colors"
             style={{ background: "transparent" }}
@@ -106,7 +108,7 @@ const SessionModal = memo(({ session, athletes, onClose, onSetRpe, onSetStatus, 
                   return (
                     <div key={id}>
                       <div className="flex items-center gap-2 mb-2.5">
-                        <div className="w-7 h-7 rounded-full flex items-center justify-center text-[9px] font-bold flex-shrink-0"
+                        <div className="w-7 h-7 rounded-full flex items-center justify-center text-[12px] font-bold flex-shrink-0"
                           style={{ background: c.border, color: "#0A150F" }}>
                           {a.avatar?.slice(0,1) ?? "?"}
                         </div>
@@ -122,7 +124,7 @@ const SessionModal = memo(({ session, athletes, onClose, onSetRpe, onSetStatus, 
                           return (
                             <button key={opt.id}
                               onClick={() => onSetStatus(session.id, id, opt.id)}
-                              className="flex-1 py-2 rounded-xl text-[11px] font-bold border-2 transition-all tap-feedback"
+                              className="flex-1 py-2.5 rounded-xl text-[12px] font-bold border-2 transition-all tap-feedback"
                               style={sel
                                 ? { background: opt.bg, borderColor: opt.border, color: opt.color }
                                 : { background: "var(--c-surface-2)", borderColor: "var(--c-border)", color: "var(--c-text-3)" }}
@@ -134,14 +136,14 @@ const SessionModal = memo(({ session, athletes, onClose, onSetRpe, onSetStatus, 
                       </div>
                       {v?.status && v.status !== "none" && (
                         <div>
-                          <p className="text-[10px] font-bold uppercase tracking-wider mb-1.5" style={{ color: "var(--c-text-3)" }}>RPE</p>
+                          <p className="meta-text font-bold uppercase tracking-wide mb-1.5">RPE</p>
                           <div className="flex gap-1 flex-wrap">
                             {Array.from({ length: 11 }, (_, i) => {
                               const sel = v?.rpe === i;
                               const rpeColor = i <= 3 ? "#3DBE8B" : i <= 6 ? "#EAB308" : "#EF6B6B";
                               return (
                                 <button key={i} onClick={() => onSetRpe(session.id, id, i)}
-                                  className="w-8 h-8 rounded-xl text-[11px] font-black border-2 transition-all tap-feedback"
+                                  className="w-9 h-9 rounded-xl text-[12px] font-bold border-2 transition-all tap-feedback"
                                   style={sel
                                     ? { background: rpeColor, borderColor: rpeColor, color: "#0A150F" }
                                     : { background: "var(--c-surface-2)", borderColor: "var(--c-border)", color: "var(--c-text-3)" }}
@@ -163,7 +165,7 @@ const SessionModal = memo(({ session, athletes, onClose, onSetRpe, onSetStatus, 
             <div className="rounded-2xl p-4" style={{ background: "var(--c-surface-2)" }}>
               <div className="flex items-center gap-2 mb-2">
                 <FileText size={13} style={{ color: "var(--c-text-3)" }} />
-                <span className="text-[10px] font-bold uppercase tracking-wider" style={{ color: "var(--c-text-3)" }}>Description</span>
+                <span className="meta-text font-bold uppercase tracking-wide">Description</span>
               </div>
               <p className="text-[13px] leading-relaxed" style={{ color: "var(--c-text-2)" }}>{session.description}</p>
             </div>
@@ -174,7 +176,7 @@ const SessionModal = memo(({ session, athletes, onClose, onSetRpe, onSetStatus, 
             <div className="rounded-2xl overflow-hidden" style={{ border: "1px solid rgba(234,179,8,0.30)", background: "rgba(234,179,8,0.06)" }}>
               <div className="px-4 py-2.5 flex items-center gap-2" style={{ borderBottom: "1px solid rgba(234,179,8,0.20)" }}>
                 <AlertCircle size={13} color="#EAB308" />
-                <span className="text-[10px] font-bold uppercase tracking-wider" style={{ color: "#F0CB61" }}>Consignes du coach</span>
+                <span className="text-[12px] font-bold uppercase tracking-wide" style={{ color: "#F0CB61" }}>Consignes du coach</span>
               </div>
               <p className="px-4 py-3 text-[13px] leading-relaxed" style={{ color: "#E6D189" }}>{session.instructions}</p>
             </div>
@@ -194,12 +196,12 @@ const SessionModal = memo(({ session, athletes, onClose, onSetRpe, onSetStatus, 
           <div>
             <div className="flex items-center gap-2 mb-3">
               <Users size={13} style={{ color: "var(--c-text-3)" }} />
-              <span className="text-[10px] font-bold uppercase tracking-wider" style={{ color: "var(--c-text-3)" }}>
+              <span className="meta-text font-bold uppercase tracking-wide">
                 Participants ({session.athleteIds.length})
               </span>
             </div>
             {session.athleteIds.length === 0 ? (
-              <p className="text-[12px]" style={{ color: "var(--c-text-4)" }}>Aucun athlète assigné</p>
+              <p className="meta-text">Aucun athlète assigné</p>
             ) : (
               <div className="space-y-2">
                 {session.athleteIds.map(id => {
@@ -209,7 +211,7 @@ const SessionModal = memo(({ session, athletes, onClose, onSetRpe, onSetStatus, 
                   if (!a) return null;
                   return (
                     <div key={id} className="card flex items-start gap-3 p-3.5">
-                      <div className="w-9 h-9 rounded-xl flex items-center justify-center text-[10px] font-bold flex-shrink-0"
+                      <div className="w-9 h-9 rounded-xl flex items-center justify-center text-[12px] font-bold flex-shrink-0"
                         style={{ background: c.border, color: "#0A150F" }}>
                         {a.avatar}
                       </div>
@@ -218,7 +220,7 @@ const SessionModal = memo(({ session, athletes, onClose, onSetRpe, onSetStatus, 
                           <span className="text-[13px] font-bold" style={{ color: "var(--c-text-1)" }}>{a.name}</span>
                           <ValidationBadge status={st} />
                           {v?.rpe != null && (
-                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full"
+                            <span className="text-[12px] font-bold px-2 py-0.5 rounded-full"
                               style={{ background: "var(--c-surface-3)", color: "var(--c-text-2)" }}>
                               RPE {v.rpe}
                             </span>
@@ -234,7 +236,7 @@ const SessionModal = memo(({ session, athletes, onClose, onSetRpe, onSetStatus, 
                           </div>
                         )}
                         {v?.comment && (
-                          <p className="text-[11.5px] italic" style={{ color: "var(--c-text-3)" }}>« {v.comment} »</p>
+                          <p className="meta-text italic">« {v.comment} »</p>
                         )}
                       </div>
                     </div>
@@ -262,11 +264,11 @@ const SessionModal = memo(({ session, athletes, onClose, onSetRpe, onSetStatus, 
               <span className="flex items-center gap-2">
                 <span className="text-[12px] font-semibold" style={{ color: "#F19A9A" }}>Confirmer ?</span>
                 <button onClick={handleDelete} disabled={deleting}
-                  className="text-[11px] font-bold rounded-lg px-2.5 py-1 tap-feedback"
+                  className="text-[12px] font-bold rounded-lg px-2.5 py-1 tap-feedback"
                   style={{ background: "#EF6B6B", color: "#0A150F" }}>
                   {deleting ? "…" : "Oui"}
                 </button>
-                <button onClick={() => setConfirmDel(false)} className="text-[11px]" style={{ color: "var(--c-text-3)" }}>Non</button>
+                <button onClick={() => setConfirmDel(false)} className="text-[12px]" style={{ color: "var(--c-text-3)" }}>Non</button>
               </span>
             )}
           </div>

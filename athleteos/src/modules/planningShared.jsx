@@ -113,7 +113,7 @@ export function ValidationBadge({ status }) {
   const b = map[status] ?? { label: "À venir", bg: "var(--c-surface-3)", color: "var(--c-text-3)" };
   return (
     <span
-      className="text-[10px] font-semibold px-2 py-0.5 rounded-full"
+      className="text-[12px] font-semibold px-2 py-0.5 rounded-full"
       style={{ background: b.bg, color: b.color }}
     >
       {b.label}
