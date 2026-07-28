@@ -15,6 +15,7 @@
 
 import { computeSessionLoad, computeWellnessScore, getAthleteMetricsForWeek } from "./chargeCalculations";
 import { CATEGORIES } from "../athlete/shared";
+import { getISOWeek, parseLocalDate } from "./helpers.js";
 
 // ─── Semaines disponibles ─────────────────────────────────────────────────
 // Liste triée (desc) des numéros de semaine ISO présents dans les séances,
@@ -118,14 +119,17 @@ export function buildWeeklyReport({ athleteId, week, sessions, weeklyCharge, wel
   const workedIds = new Set(categoriesWorked.map(c => c.id));
   const categoriesAbsent = CATEGORIES.filter(c => !workedIds.has(c.id)).map(c => c.id);
 
-  const wellnessForAthlete = wellnessRows.filter(w => w.athleteId === athleteId);
+  const wellnessForAthlete = wellnessRows.filter(w => (
+    w.athleteId === athleteId && w.date && getISOWeek(parseLocalDate(w.date)) === week
+  ));
   const wellnessScores = wellnessForAthlete.map(w => computeWellnessScore(w)).filter(v => v != null);
   const wellnessAvg = wellnessScores.length
     ? Math.round(wellnessScores.reduce((a, b) => a + b, 0) / wellnessScores.length)
     : null;
 
-  const athleteSessions = sessions.filter(s => s.athleteIds?.includes(athleteId));
-  const metrics = getAthleteMetricsForWeek(athleteId, weeklyCharge, week, wellnessForAthlete, athleteSessions);
+  const athleteSessions = sessions.filter(s => s.athleteIds?.includes(athleteId) && s.week <= week);
+  const chargeThroughWeek = weeklyCharge.filter(w => w.week <= week);
+  const metrics = getAthleteMetricsForWeek(athleteId, chargeThroughWeek, week, wellnessForAthlete, athleteSessions);
 
   const dates = weekSessions.map(s => s.sessionDate).filter(Boolean).sort();
   const dateRange = dates.length ? { start: dates[0], end: dates[dates.length - 1] } : null;
@@ -162,7 +166,9 @@ export function buildMonthlyAggregate({ athleteId, weeks, sessions, weeklyCharge
   const mid = Math.ceil(weeklyReports.length / 2);
   const firstHalf  = weeklyReports.slice(0, mid).reduce((s, r) => s + r.stats.totalLoad, 0);
   const secondHalf = weeklyReports.slice(mid).reduce((s, r) => s + r.stats.totalLoad, 0);
-  const trend = firstHalf === 0
+  const trend = weeklyReports.length < 2
+    ? "flat"
+    : firstHalf === 0
     ? (secondHalf > 0 ? "up" : "flat")
     : (secondHalf > firstHalf * 1.1 ? "up" : secondHalf < firstHalf * 0.9 ? "down" : "flat");
 

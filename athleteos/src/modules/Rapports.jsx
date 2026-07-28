@@ -37,7 +37,7 @@ function StatusIcon({ status }) {
 function MiniLoadSpark({ data }) {
   if (data.length < 2) return <div style={{ width: 60, height: 24 }} />;
   return (
-    <div style={{ width: 60, height: 24 }}>
+    <div aria-hidden="true" style={{ width: 60, height: 24 }}>
       <ResponsiveContainer width="100%" height="100%">
         <LineChart data={data} margin={{ top: 2, right: 2, bottom: 2, left: 2 }}>
           <Line type="monotone" dataKey="load" stroke="#1D9E75" strokeWidth={2} dot={false} />
@@ -50,22 +50,21 @@ function MiniLoadSpark({ data }) {
 function TrendArrow({ trend }) {
   if (trend === "up")   return <span style={{ display: "inline-flex", alignItems: "center", gap: 2, color: "#4DC9A0" }}><TrendingUp size={12} /> Hausse</span>;
   if (trend === "down") return <span style={{ display: "inline-flex", alignItems: "center", gap: 2, color: "#F19A9A" }}><TrendingDown size={12} /> Baisse</span>;
-  return <span style={{ display: "inline-flex", alignItems: "center", gap: 2, color: "var(--c-text-4)" }}><Minus size={12} /> Stable</span>;
+  return <span style={{ display: "inline-flex", alignItems: "center", gap: 4, color: "var(--c-text-2)" }}><Minus size={12} /> Stable</span>;
 }
 
 // ─── Card d'une semaine (liste principale) ────────────────────────────────
 function WeekCard({ week, dateRange, sessionCount, onClick }) {
   return (
-    <button onClick={onClick} className="card tap-feedback"
-      style={{ width: "100%", textAlign: "left", padding: "16px 18px", display: "flex", alignItems: "center", gap: 14, cursor: "pointer" }}>
-      <div style={{ width: 40, height: 40, borderRadius: 12, background: "rgba(29,158,117,0.10)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+    <button type="button" onClick={onClick} className="card tap-feedback w-full min-h-16 p-4 flex items-center gap-3 text-left">
+      <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: "rgba(29,158,117,0.10)" }}>
         <FileText size={17} color="#1D9E75" strokeWidth={1.8} />
       </div>
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <p style={{ fontSize: 13.5, fontWeight: 600, color: "var(--c-text-1)" }}>{formatWeekLabel(week, dateRange)}</p>
-        <p style={{ fontSize: 11, color: "var(--c-text-3)", marginTop: 2 }}>{sessionCount} séance{sessionCount > 1 ? "s" : ""} planifiée{sessionCount > 1 ? "s" : ""}</p>
+      <div className="flex-1 min-w-0">
+        <p className="card-title">{formatWeekLabel(week, dateRange)}</p>
+        <p className="meta-text mt-1">{sessionCount} séance{sessionCount !== 1 ? "s" : ""} planifiée{sessionCount !== 1 ? "s" : ""}</p>
       </div>
-      <ChevronRight size={16} color="var(--c-text-4)" />
+      <ChevronRight size={16} color="var(--c-text-3)" />
     </button>
   );
 }
@@ -74,27 +73,26 @@ function WeekCard({ week, dateRange, sessionCount, onClick }) {
 function AthleteWeekRow({ athlete, report, onClick }) {
   const { stats, metrics, categoriesWorked } = report;
   const chip = stats.total === 0
-    ? { label: "Pas de séance", color: "var(--c-text-4)" }
+    ? { label: "Pas de séance", color: "var(--c-text-2)" }
     : { label: `${stats.done}/${stats.total} faites`, color: stats.done === stats.total ? "#4DC9A0" : stats.none > 0 ? "#F19A9A" : "#EAB308" };
 
   return (
-    <button onClick={onClick} className="tap-feedback"
-      style={{ width: "100%", textAlign: "left", padding: "13px 16px", display: "flex", alignItems: "center", gap: 12, background: "none", border: "none", cursor: "pointer", borderTop: "1px solid var(--c-border)" }}>
-      <div style={{ width: 34, height: 34, borderRadius: "50%", background: "linear-gradient(135deg, #378ADD, #2563EB)", display: "flex", alignItems: "center", justifyContent: "center", color: "white", fontSize: 11, fontWeight: 700, flexShrink: 0 }}>
+    <button type="button" onClick={onClick} className="tap-feedback w-full min-h-16 px-4 py-3 flex items-center gap-3 text-left border-t border-[var(--c-border)]">
+      <div className="w-9 h-9 rounded-full flex items-center justify-center text-white text-[12px] font-semibold flex-shrink-0" style={{ background: "linear-gradient(135deg, #378ADD, #2563EB)" }}>
         {athlete.avatar}
       </div>
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <p style={{ fontSize: 13, fontWeight: 600, color: "var(--c-text-1)" }} className="truncate">{athlete.name}</p>
-        <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 2 }}>
-          <span style={{ fontSize: 10.5, fontWeight: 600, color: chip.color }}>{chip.label}</span>
+      <div className="flex-1 min-w-0">
+        <p className="text-[13px] font-semibold text-[var(--c-text-1)] truncate">{athlete.name}</p>
+        <div className="flex items-center gap-2 mt-1 flex-wrap">
+          <span className="text-[12px] font-semibold" style={{ color: chip.color }}>{chip.label}</span>
           {stats.total > 0 && (
             <>
-              <span style={{ fontSize: 10, color: "var(--c-text-4)" }}>·</span>
-              <span style={{ fontSize: 10.5, color: "var(--c-text-3)" }}>{stats.totalLoad} u.a.</span>
+              <span className="text-[12px] text-[var(--c-text-3)]">·</span>
+              <span className="text-[12px] text-[var(--c-text-2)]">{stats.totalLoad} u.a.</span>
               {categoriesWorked[0] && (
                 <>
-                  <span style={{ fontSize: 10, color: "var(--c-text-4)" }}>·</span>
-                  <span style={{ fontSize: 10.5, color: "var(--c-text-3)" }}>{categoriesWorked[0].label}</span>
+                  <span className="text-[12px] text-[var(--c-text-3)]">·</span>
+                  <span className="text-[12px] text-[var(--c-text-2)]">{categoriesWorked[0].label}</span>
                 </>
               )}
             </>
@@ -102,12 +100,12 @@ function AthleteWeekRow({ athlete, report, onClick }) {
         </div>
       </div>
       {stats.total > 0 && (
-        <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
+        <div className="flex items-center gap-1.5 flex-shrink-0">
           <span style={{ width: 7, height: 7, borderRadius: "50%", background: acwrColor(metrics.acwr) }} />
-          <span style={{ fontSize: 11, fontWeight: 700, color: acwrColor(metrics.acwr) }}>{metrics.acwr.toFixed(2)}</span>
+          <span className="text-[12px] font-semibold" style={{ color: acwrColor(metrics.acwr) }}>{metrics.acwr.toFixed(2)}</span>
         </div>
       )}
-      <ChevronRight size={15} color="var(--c-text-4)" style={{ flexShrink: 0 }} />
+      <ChevronRight size={15} color="var(--c-text-3)" style={{ flexShrink: 0 }} />
     </button>
   );
 }
@@ -119,43 +117,43 @@ function AthleteWeekDetail({ athlete, report, onClose }) {
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4 modal-backdrop"
       onClick={e => e.target === e.currentTarget && onClose()}>
-      <div className="rounded-t-3xl sm:rounded-3xl shadow-2xl w-full sm:max-w-lg max-h-[92vh] flex flex-col overflow-hidden modal-content"
+      <div role="dialog" aria-modal="true" aria-labelledby="athlete-report-title" className="rounded-t-3xl sm:rounded-3xl shadow-2xl w-full sm:max-w-lg max-h-[92vh] flex flex-col overflow-hidden modal-content border border-[var(--c-border)]"
         style={{ background: "var(--c-surface)" }}>
 
-        <div style={{ padding: "18px 22px", borderBottom: "1px solid var(--c-border)", display: "flex", alignItems: "center", gap: 12, background: "rgba(29,158,117,0.06)" }}>
-          <div style={{ width: 40, height: 40, borderRadius: "50%", background: "linear-gradient(135deg, #378ADD, #2563EB)", display: "flex", alignItems: "center", justifyContent: "center", color: "white", fontSize: 13, fontWeight: 700, flexShrink: 0 }}>
+        <div className="px-4 sm:px-5 py-4 border-b border-[var(--c-border)] flex items-center gap-3" style={{ background: "rgba(29,158,117,0.06)" }}>
+          <div className="w-10 h-10 rounded-full flex items-center justify-center text-white text-[13px] font-semibold flex-shrink-0" style={{ background: "linear-gradient(135deg, #378ADD, #2563EB)" }}>
             {athlete.avatar}
           </div>
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <p style={{ fontSize: 14.5, fontWeight: 700, color: "var(--c-text-1)" }} className="truncate">{athlete.name}</p>
-            <p style={{ fontSize: 11, color: "var(--c-text-3)", marginTop: 1 }}>{formatWeekLabel(week, dateRange)}</p>
+          <div className="flex-1 min-w-0">
+            <h3 id="athlete-report-title" className="card-title truncate">{athlete.name}</h3>
+            <p className="meta-text mt-1">{formatWeekLabel(week, dateRange)}</p>
           </div>
-          <button onClick={onClose} style={{ padding: 8, borderRadius: 10, background: "var(--c-surface-2)", border: "none", cursor: "pointer", color: "var(--c-text-2)", flexShrink: 0 }}>
+          <button type="button" aria-label="Fermer" onClick={onClose} className="min-w-11 min-h-11 inline-flex items-center justify-center rounded-xl bg-[var(--c-surface-2)] text-[var(--c-text-2)] flex-shrink-0">
             <X size={16} />
           </button>
         </div>
 
-        <div style={{ flex: 1, overflowY: "auto", padding: "18px 22px", display: "flex", flexDirection: "column", gap: 16 }}>
+        <div className="flex-1 overflow-y-auto p-4 sm:p-5 flex flex-col gap-4">
 
           {/* Résumé auto */}
           <div style={{ padding: 14, borderRadius: 14, background: "rgba(29,158,117,0.06)", border: "1px solid rgba(29,158,117,0.15)" }}>
-            <p style={{ fontSize: 12, lineHeight: 1.6, color: "var(--c-text-2)" }}>{summary}</p>
+            <p className="text-[13px] leading-relaxed text-[var(--c-text-2)]">{summary}</p>
           </div>
 
           {/* Métriques — style gauges Garmin/Whoop */}
           <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 8 }}>
             <div style={{ padding: "12px 10px", borderRadius: 14, background: "var(--c-surface-2)", border: "1px solid var(--c-border)", textAlign: "center" }}>
-              <p style={{ fontSize: 9.5, fontWeight: 600, color: "var(--c-text-3)", textTransform: "uppercase", letterSpacing: "0.05em" }}>Charge aiguë</p>
+              <p className="metric-label">Charge aiguë</p>
               <p style={{ fontSize: 19, fontWeight: 700, color: "var(--c-text-1)", marginTop: 4 }}>{stats.total > 0 ? metrics.acute : "—"}</p>
             </div>
             <div style={{ padding: "12px 10px", borderRadius: 14, background: "var(--c-surface-2)", border: "1px solid var(--c-border)", textAlign: "center" }}>
-              <p style={{ fontSize: 9.5, fontWeight: 600, color: "var(--c-text-3)", textTransform: "uppercase", letterSpacing: "0.05em" }}>ACWR</p>
+              <p className="metric-label">ACWR</p>
               <p style={{ fontSize: 19, fontWeight: 700, color: stats.total > 0 ? acwrColor(metrics.acwr) : "var(--c-text-1)", marginTop: 4 }}>
                 {stats.total > 0 ? metrics.acwr.toFixed(2) : "—"}
               </p>
             </div>
             <div style={{ padding: "12px 10px", borderRadius: 14, background: "var(--c-surface-2)", border: "1px solid var(--c-border)", textAlign: "center" }}>
-              <p style={{ fontSize: 9.5, fontWeight: 600, color: "var(--c-text-3)", textTransform: "uppercase", letterSpacing: "0.05em" }}>Wellness moy.</p>
+              <p className="metric-label">Wellness moy.</p>
               <p style={{ fontSize: 19, fontWeight: 700, color: "var(--c-text-1)", marginTop: 4 }}>{wellnessAvg != null ? `${wellnessAvg}` : "—"}</p>
             </div>
           </div>
@@ -163,19 +161,19 @@ function AthleteWeekDetail({ athlete, report, onClose }) {
           {/* Catégories */}
           {categoriesWorked.length > 0 && (
             <div>
-              <p style={{ fontSize: 10, fontWeight: 600, color: "var(--c-text-3)", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 8 }}>Répartition de la charge</p>
+              <p className="metric-label mb-2">Répartition de la charge</p>
               <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
                 {categoriesWorked.map(c => {
                   const col = colorsFor(c.id);
                   return (
-                    <span key={c.id} style={{ fontSize: 11, fontWeight: 600, padding: "5px 10px", borderRadius: 10, background: col.bg, color: col.text, border: `1px solid ${col.border}33` }}>
+                    <span key={c.id} style={{ fontSize: 12, fontWeight: 600, padding: "5px 10px", borderRadius: 10, background: col.bg, color: col.text, border: `1px solid ${col.border}33` }}>
                       {c.label} · {c.load} u.a.
                     </span>
                   );
                 })}
               </div>
               {categoriesAbsent.length > 0 && categoriesAbsent.length < CATEGORIES.length && (
-                <p style={{ fontSize: 10.5, color: "var(--c-text-4)", marginTop: 8 }}>
+                <p className="text-[12px] text-[var(--c-text-2)] mt-2">
                   Non travaillées : {categoriesAbsent.map(id => CATEGORIES.find(c => c.id === id)?.label ?? id).join(", ")}
                 </p>
               )}
@@ -184,11 +182,11 @@ function AthleteWeekDetail({ athlete, report, onClose }) {
 
           {/* Liste des séances */}
           <div>
-            <p style={{ fontSize: 10, fontWeight: 600, color: "var(--c-text-3)", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 8 }}>
+            <p className="metric-label mb-2">
               Séances ({sessions.length})
             </p>
             {sessions.length === 0 ? (
-              <p style={{ fontSize: 12, color: "var(--c-text-4)" }}>Aucune séance planifiée cette semaine.</p>
+              <p className="meta-text">Aucune séance planifiée cette semaine.</p>
             ) : (
               <div className="card" style={{ overflow: "hidden" }}>
                 {sessions.map((s, i) => {
@@ -199,24 +197,24 @@ function AthleteWeekDetail({ athlete, report, onClose }) {
                       <div style={{ marginTop: 2, flexShrink: 0 }}><StatusIcon status={s.status} /></div>
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-                          <p style={{ fontSize: 12.5, fontWeight: 600, color: "var(--c-text-1)" }}>{s.title}</p>
-                          <span style={{ fontSize: 9.5, fontWeight: 600, padding: "2px 7px", borderRadius: 7, background: col.bg, color: col.text }}>
+                          <p className="text-[13px] font-semibold text-[var(--c-text-1)]">{s.title}</p>
+                          <span style={{ fontSize: 12, fontWeight: 600, padding: "2px 7px", borderRadius: 7, background: col.bg, color: col.text }}>
                             {CATEGORIES.find(c => c.id === s.category)?.label ?? s.category}
                           </span>
                         </div>
                         <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 3, flexWrap: "wrap" }}>
-                          <span style={{ fontSize: 10.5, color: "var(--c-text-4)" }}>
+                          <span className="text-[12px] text-[var(--c-text-2)]">
                             {s.sessionDate ? new Date(s.sessionDate + "T00:00:00").toLocaleDateString("fr-BE", { weekday: "short", day: "numeric", month: "short" }) : s.day}
                           </span>
                           {s.rpe != null && (
-                            <span style={{ fontSize: 10.5, fontWeight: 600, color: rpe.color }}>RPE {s.rpe} · {rpe.label}</span>
+                            <span className="text-[12px] font-semibold" style={{ color: rpe.color }}>RPE {s.rpe} · {rpe.label}</span>
                           )}
                           {s.load != null && (
-                            <span style={{ fontSize: 10.5, color: "var(--c-text-3)" }}>{s.load} u.a.</span>
+                            <span className="text-[12px] text-[var(--c-text-2)]">{s.load} u.a.</span>
                           )}
                         </div>
                         {s.comment && (
-                          <p style={{ fontSize: 11, color: "var(--c-text-3)", fontStyle: "italic", marginTop: 4 }}>« {s.comment} »</p>
+                          <p className="text-[12px] text-[var(--c-text-2)] italic mt-1">« {s.comment} »</p>
                         )}
                       </div>
                     </div>
@@ -239,26 +237,26 @@ function AthleteMonthCard({ athlete, aggregate }) {
   return (
     <div className="card p-4">
       <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
-        <div style={{ width: 32, height: 32, borderRadius: "50%", background: "linear-gradient(135deg, #378ADD, #2563EB)", display: "flex", alignItems: "center", justifyContent: "center", color: "white", fontSize: 10.5, fontWeight: 700, flexShrink: 0 }}>
+        <div className="w-8 h-8 rounded-full flex items-center justify-center text-white text-[12px] font-semibold flex-shrink-0" style={{ background: "linear-gradient(135deg, #378ADD, #2563EB)" }}>
           {athlete.avatar}
         </div>
-        <p style={{ fontSize: 13, fontWeight: 600, color: "var(--c-text-1)", flex: 1 }} className="truncate">{athlete.name}</p>
+        <p className="text-[13px] font-semibold text-[var(--c-text-1)] flex-1 truncate">{athlete.name}</p>
         <MiniLoadSpark data={sparkData} />
       </div>
       <div style={{ display: "flex", alignItems: "baseline", gap: 6, marginBottom: 6 }}>
         <span style={{ fontSize: 20, fontWeight: 700, color: "var(--c-text-1)" }}>{totalLoad}</span>
-        <span style={{ fontSize: 11, color: "var(--c-text-3)" }}>u.a. sur 4 semaines</span>
+        <span className="text-[12px] text-[var(--c-text-2)]">u.a. sur {weeks.length} semaine{weeks.length !== 1 ? "s" : ""}</span>
       </div>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
-        <span style={{ fontSize: 11, color: "var(--c-text-3)" }}>{doneTotal}/{sessionsTotal} séances faites</span>
-        <span style={{ fontSize: 11, fontWeight: 600 }}><TrendArrow trend={trend} /></span>
+        <span className="text-[12px] text-[var(--c-text-2)]">{doneTotal}/{sessionsTotal} séances faites</span>
+        <span className="text-[12px] font-semibold"><TrendArrow trend={trend} /></span>
       </div>
       {categoriesWorked.length > 0 && (
         <div style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>
           {categoriesWorked.slice(0, 4).map(c => {
             const col = colorsFor(c.id);
             return (
-              <span key={c.id} style={{ fontSize: 10, fontWeight: 600, padding: "3px 8px", borderRadius: 8, background: col.bg, color: col.text }}>
+              <span key={c.id} style={{ fontSize: 12, fontWeight: 600, padding: "3px 8px", borderRadius: 8, background: col.bg, color: col.text }}>
                 {c.label}
               </span>
             );
@@ -305,6 +303,9 @@ export default function Rapports() {
         athleteIds.length ? supabase.from("weekly_charge").select("*").in("athlete_id", athleteIds) : Promise.resolve({ data: [] }),
         supabase.from("athlete_wellness").select("*").eq("club_id", clubId),
       ]);
+      if (sessionsRes.error) throw sessionsRes.error;
+      if (chargeRes.error)   throw chargeRes.error;
+      if (wellnessRes.error) throw wellnessRes.error;
 
       const mappedSessions = (sessionsRes.data ?? []).map(s => {
         const rows = s.session_athletes ?? [];
@@ -330,7 +331,11 @@ export default function Rapports() {
       setWellnessRows(mappedWellness);
 
       if (mappedAthletes.length > 0) {
-        await checkWeeklyReports(clubId, mappedAthletes, currentWeek, profile?.id ?? null);
+        try {
+          await checkWeeklyReports(clubId, mappedAthletes, currentWeek, profile?.id ?? null);
+        } catch (notificationError) {
+          console.error("Rapports — notifications hebdomadaires :", notificationError);
+        }
       }
     } catch (err) {
       setError(err.message ?? "Erreur inconnue");
@@ -359,6 +364,24 @@ export default function Rapports() {
     })).sort((a, b) => b.aggregate.totalLoad - a.aggregate.totalLoad);
   }, [viewMode, last4Weeks, athletes, sessions, weeklyCharge, wellnessRows]);
 
+  const latestWeekOverview = useMemo(() => {
+    const latestWeek = weeks[0]?.week;
+    if (latestWeek == null) return null;
+    const reports = athletes.map(athlete => buildWeeklyReport({
+      athleteId: athlete.id,
+      week: latestWeek,
+      sessions,
+      weeklyCharge,
+      wellnessRows,
+    }));
+    return {
+      week: latestWeek,
+      planned: reports.reduce((sum, report) => sum + report.stats.total, 0),
+      done: reports.reduce((sum, report) => sum + report.stats.done, 0),
+      totalLoad: reports.reduce((sum, report) => sum + report.stats.totalLoad, 0),
+    };
+  }, [weeks, athletes, sessions, weeklyCharge, wellnessRows]);
+
   if (loading) return <LoadingState message="Chargement des rapports…" />;
   if (error)   return <ErrorState  message={error} onRetry={fetchAll} />;
 
@@ -368,23 +391,23 @@ export default function Rapports() {
     : null;
 
   return (
-    <div className="p-4 md:p-5 space-y-4 max-w-4xl mx-auto animate-slide-up">
+    <div className="page-container py-4 md:py-6 space-y-5 md:space-y-6 max-w-5xl mx-auto animate-slide-up">
 
       {/* ── HEADER ─────────────────────────────────────────────────────── */}
-      <div className="flex items-center justify-between flex-wrap gap-3">
+      <div className="flex items-start justify-between flex-wrap gap-4">
         <div>
-          <h2 style={{ fontSize: 20, fontWeight: 600, color: "var(--c-text-1)", letterSpacing: "-0.02em" }}>Rapports</h2>
-          <p style={{ fontSize: 11, color: "var(--c-text-3)", marginTop: 2 }}>
-            {athletes.length} athlète{athletes.length > 1 ? "s" : ""} · {weeks.length} semaine{weeks.length > 1 ? "s" : ""} avec des séances
+          <h2 className="page-title">Rapports</h2>
+          <p className="secondary-text mt-1">
+            {athletes.length} athlète{athletes.length !== 1 ? "s" : ""} · {weeks.length} semaine{weeks.length !== 1 ? "s" : ""} avec des séances
           </p>
         </div>
-        <div className="flex gap-1 rounded-2xl p-1.5" style={{ background: "var(--c-surface)", border: "1px solid var(--c-border)" }}>
+        <div className="grid grid-cols-2 gap-1 rounded-xl p-1 w-full sm:w-auto" style={{ background: "var(--c-surface-2)", border: "1px solid var(--c-border)" }} role="group" aria-label="Période des rapports">
           {[{ id: "week", label: "Semaine" }, { id: "month", label: "Mois" }].map(m => (
-            <button key={m.id} onClick={() => { setViewMode(m.id); setSelectedWeek(null); setSelectedAthlete(null); }}
+            <button type="button" key={m.id} aria-pressed={viewMode === m.id} onClick={() => { setViewMode(m.id); setSelectedWeek(null); setSelectedAthlete(null); }}
               style={{
-                padding: "7px 16px", borderRadius: 12, fontSize: 12, fontWeight: 600,
-                background: viewMode === m.id ? "#1D9E75" : "transparent",
-                color: viewMode === m.id ? "#0A150F" : "var(--c-text-3)",
+                minHeight: 44, padding: "8px 16px", borderRadius: 8, fontSize: 13, fontWeight: 600,
+                background: viewMode === m.id ? "rgba(29,158,117,0.15)" : "transparent",
+                color: viewMode === m.id ? "var(--color-success)" : "var(--c-text-2)",
                 border: "none", cursor: "pointer",
               }}>
               {m.label}
@@ -393,15 +416,31 @@ export default function Rapports() {
         </div>
       </div>
 
+      {latestWeekOverview && (
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 md:gap-4">
+          {[
+            { label: "Dernier rapport", value: `S${latestWeekOverview.week}`, detail: "semaine la plus récente" },
+            { label: "Séances réalisées", value: `${latestWeekOverview.done}/${latestWeekOverview.planned}`, detail: "cumul du groupe" },
+            { label: "Charge cumulée", value: latestWeekOverview.totalLoad, detail: "unités arbitraires" },
+          ].map(item => (
+            <div key={item.label} className="card p-4">
+              <p className="metric-label">{item.label}</p>
+              <p className="metric-value mt-2 text-[var(--c-text-1)]">{item.value}</p>
+              <p className="meta-text mt-1">{item.detail}</p>
+            </div>
+          ))}
+        </div>
+      )}
+
       {/* ── VUE SEMAINE ────────────────────────────────────────────────── */}
       {viewMode === "week" && selectedWeek == null && (
         weeks.length === 0 ? (
           <div className="card p-12 text-center">
             <div style={{ width: 56, height: 56, borderRadius: 18, display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 14px", background: "var(--c-surface-2)" }}>
-              <CalendarDays size={26} color="var(--c-text-4)" strokeWidth={1.5} />
+              <CalendarDays size={26} color="var(--c-text-3)" strokeWidth={1.5} />
             </div>
-            <p style={{ fontSize: 13, fontWeight: 500, color: "var(--c-text-2)" }}>Aucune séance planifiée</p>
-            <p style={{ fontSize: 11, color: "var(--c-text-4)", marginTop: 4 }}>Les rapports apparaîtront dès que des séances seront créées</p>
+            <p className="text-[15px] font-semibold text-[var(--c-text-2)]">Aucune séance planifiée</p>
+            <p className="meta-text mt-1">Les rapports apparaîtront dès que des séances seront créées</p>
           </div>
         ) : (
           <div className="space-y-2.5">
@@ -415,13 +454,12 @@ export default function Rapports() {
 
       {viewMode === "week" && selectedWeek != null && (
         <div className="space-y-3">
-          <button onClick={() => setSelectedWeek(null)} className="tap-feedback"
-            style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, fontWeight: 600, color: "#4DC9A0", background: "none", border: "none", cursor: "pointer", padding: "4px 0" }}>
+          <button type="button" onClick={() => setSelectedWeek(null)} className="tap-feedback min-h-11 flex items-center gap-1.5 text-[13px] font-semibold text-[var(--color-success)]">
             <ChevronLeft size={15} /> Toutes les semaines
           </button>
           <div className="card" style={{ overflow: "hidden" }}>
             <div style={{ padding: "14px 16px", borderBottom: "1px solid var(--c-border)" }}>
-              <p style={{ fontSize: 13.5, fontWeight: 600, color: "var(--c-text-1)" }}>{formatWeekLabel(selectedWeek, selectedWeekMeta?.dateRange)}</p>
+              <p className="card-title">{formatWeekLabel(selectedWeek, selectedWeekMeta?.dateRange)}</p>
             </div>
             {weekReports.map(({ athlete, report }) => (
               <AthleteWeekRow key={athlete.id} athlete={athlete} report={report} onClick={() => setSelectedAthlete(athlete.id)} />
@@ -434,7 +472,7 @@ export default function Rapports() {
       {viewMode === "month" && (
         last4Weeks.length === 0 ? (
           <div className="card p-12 text-center">
-            <p style={{ fontSize: 13, fontWeight: 500, color: "var(--c-text-2)" }}>Pas encore assez de données pour une vue mensuelle</p>
+            <p className="text-[15px] font-semibold text-[var(--c-text-2)]">Pas encore assez de données pour une vue mensuelle</p>
           </div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
