@@ -410,7 +410,7 @@ export default function AthleteApp() {
             {activeView === "social" && (
               <AthleteClub
                 athlete={athlete} allAthletes={allAthletes}
-                clubId={clubId} sessions={sessions} profile={profile}
+                clubId={clubId} sessions={sessions}
               />
             )}
           </div>

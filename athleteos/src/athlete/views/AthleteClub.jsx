@@ -9,10 +9,11 @@
 
 import { useState, useEffect, useMemo, useCallback, useRef, memo } from "react";
 import { createPortal } from "react-dom";
-import { Plus, X, Camera, Send, MessageSquare, Heart, Image, ChevronDown, Trophy, Target, Users as UsersIcon, Award } from "lucide-react";
+import { X, Camera, Send, MessageSquare, Image, Trophy, Target, Users as UsersIcon, Award, Sparkles } from "lucide-react";
 import { supabase } from "../../utils/supabaseClient";
 import { initialsFromName, colorsFor, getISOWeek } from "../shared";
 import { notifyClubNewPost } from "../../utils/notifications";
+import { filterClubPosts, validateSocialImage } from "./clubFeed";
 
 const AVATAR_COLORS = ["#1D9E75","#5B8DEF","#9B84F0","#E8A020","#E05252","#14B8A6","#F97316","#EC4899"];
 const QUICK_REACTIONS = ["🔥","💪","👏","⚡","🎯","❤️"];
@@ -33,13 +34,13 @@ function Toast({ msg, onDismiss }) {
   return (
     <div style={{ position:"fixed", top:16, left:"50%", transform:"translateX(-50%)", zIndex:9999, maxWidth:340, width:"calc(100% - 32px)", animation:"slide-down 0.25s cubic-bezier(0.16,1,0.3,1)" }}>
       <div style={{ background:"var(--c-surface-3)", border:"1px solid var(--c-border-strong)", borderRadius:14, padding:"12px 14px", display:"flex", alignItems:"center", gap:10, boxShadow:"0 8px 32px rgba(0,0,0,0.50)" }}>
-        <div style={{ width:32, height:32, borderRadius:"50%", background:msg.color??"#1D9E75", display:"flex", alignItems:"center", justifyContent:"center", color:"white", fontSize:10, fontWeight:600, flexShrink:0 }}>
+        <div style={{ width:36, height:36, borderRadius:"50%", background:msg.color??"#1D9E75", display:"flex", alignItems:"center", justifyContent:"center", color:"white", fontSize:12, fontWeight:700, flexShrink:0 }}>
           {initialsFromName(msg.name)}
         </div>
-        <p style={{ flex:1, fontSize:12.5, color:"var(--c-text-1)", lineHeight:1.3 }}>
+        <p style={{ flex:1, fontSize:13, color:"var(--c-text-1)", lineHeight:1.4 }}>
           <span style={{ color:"#1D9E75", fontWeight:600 }}>{msg.name.split(" ")[0]}</span> {msg.action}
         </p>
-        <button onClick={onDismiss} style={{ background:"none", border:"none", cursor:"pointer", color:"var(--c-text-4)", padding:2, flexShrink:0 }}><X size={12}/></button>
+        <button type="button" aria-label="Fermer la notification" onClick={onDismiss} style={{ width:44, height:44, display:"flex", alignItems:"center", justifyContent:"center", background:"none", border:"none", cursor:"pointer", color:"var(--c-text-2)", padding:0, flexShrink:0 }}><X size={16}/></button>
       </div>
     </div>
   );
@@ -51,6 +52,7 @@ const CommentsModal = memo(({ post, athlete, allAthletes, onClose, onCommentAdde
   const [input, setInput]       = useState("");
   const [loading, setLoading]   = useState(true);
   const [sending, setSending]   = useState(false);
+  const [error, setError]       = useState(null);
   const endRef = useRef(null);
 
   useEffect(() => {
@@ -70,10 +72,19 @@ const CommentsModal = memo(({ post, athlete, allAthletes, onClose, onCommentAdde
 
   const send = async () => {
     const text = input.trim(); if (!text) return;
-    setInput(""); setSending(true);
-    const { data } = await supabase.from("social_comments")
+    setSending(true); setError(null);
+    const { data, error: sendError } = await supabase.from("social_comments")
       .insert({ post_id:post.id, athlete_id:athlete.id, content:text }).select().single();
-    if (data) { setComments(p => [...p, data]); onCommentAdded(); }
+    if (sendError) {
+      setError("Le commentaire n’a pas pu être envoyé. Réessaie.");
+      setSending(false);
+      return;
+    }
+    if (data) {
+      setInput("");
+      setComments(prev => prev.some(comment => comment.id === data.id) ? prev : [...prev, data]);
+      onCommentAdded();
+    }
     setSending(false);
   };
 
@@ -85,7 +96,7 @@ const CommentsModal = memo(({ post, athlete, allAthletes, onClose, onCommentAdde
   return createPortal(
     <div style={{ position:"fixed", inset:0, zIndex:9999, display:"flex", flexDirection:"column", background:"rgba(0,0,0,0.75)", backdropFilter:"blur(12px)" }}
       onClick={e => e.target===e.currentTarget && onClose()}>
-      <div style={{ marginTop:"auto", background:"var(--c-surface)", borderRadius:"20px 20px 0 0", border:"1px solid var(--c-border)", display:"flex", flexDirection:"column", maxHeight:"88dvh" }}>
+      <div role="dialog" aria-modal="true" aria-labelledby="comments-title" style={{ marginTop:"auto", width:"100%", maxWidth:640, alignSelf:"center", background:"var(--c-surface)", borderRadius:"24px 24px 0 0", border:"1px solid var(--c-border)", display:"flex", flexDirection:"column", maxHeight:"88dvh" }}>
         {/* Handle */}
         <div style={{ display:"flex", justifyContent:"center", padding:"10px 0 4px" }}>
           <div style={{ width:32, height:3, borderRadius:99, background:"var(--c-border-strong)" }}/>
@@ -94,15 +105,15 @@ const CommentsModal = memo(({ post, athlete, allAthletes, onClose, onCommentAdde
         {/* Header */}
         <div style={{ padding:"8px 16px 10px", borderBottom:"1px solid var(--c-border)", display:"flex", alignItems:"center", justifyContent:"space-between", flexShrink:0 }}>
           <div style={{ display:"flex", alignItems:"center", gap:9 }}>
-            <div style={{ width:30, height:30, borderRadius:"50%", background:avatarColor(allAthletes, post.athlete_id), display:"flex", alignItems:"center", justifyContent:"center", color:"white", fontSize:9, fontWeight:600 }}>
+            <div style={{ width:36, height:36, borderRadius:"50%", background:avatarColor(allAthletes, post.athlete_id), display:"flex", alignItems:"center", justifyContent:"center", color:"white", fontSize:12, fontWeight:700 }}>
               {initialsFromName(postAthlete?.name ?? "?")}
             </div>
             <div>
-              <p style={{ fontSize:12.5, fontWeight:500, color:"var(--c-text-1)" }}>{postAthlete?.name?.split(" ")[0]}</p>
-              <p style={{ fontSize:10, color:"var(--c-text-3)" }}>Commentaires</p>
+              <p style={{ fontSize:13, fontWeight:700, color:"var(--c-text-1)" }}>{postAthlete?.name?.split(" ")[0]}</p>
+              <h2 id="comments-title" style={{ fontSize:12, color:"var(--c-text-2)" }}>Commentaires</h2>
             </div>
           </div>
-          <button onClick={onClose} style={{ padding:6, borderRadius:8, background:"var(--c-surface-2)", border:"none", cursor:"pointer", color:"var(--c-text-3)" }}><X size={14}/></button>
+          <button type="button" aria-label="Fermer" onClick={onClose} style={{ width:44, height:44, display:"flex", alignItems:"center", justifyContent:"center", borderRadius:12, background:"var(--c-surface-2)", border:"1px solid var(--c-border)", cursor:"pointer", color:"var(--c-text-2)" }}><X size={17}/></button>
         </div>
 
         {/* Preview post */}
@@ -122,7 +133,7 @@ const CommentsModal = memo(({ post, athlete, allAthletes, onClose, onCommentAdde
           {loading ? (
             <div style={{ textAlign:"center", padding:24 }}><div className="loader-ring" style={{ margin:"0 auto" }}/></div>
           ) : comments.length===0 ? (
-            <p style={{ textAlign:"center", padding:"24px 0", fontSize:12, color:"var(--c-text-3)" }}>Aucun commentaire — sois le premier !</p>
+            <p style={{ textAlign:"center", padding:"24px 0", fontSize:13, color:"var(--c-text-2)" }}>Aucun commentaire — sois le premier !</p>
           ) : comments.map(c => {
             const ca    = allAthletes.find(a => a.id===c.athlete_id);
             const isOwn = c.athlete_id===athlete.id;
@@ -130,15 +141,15 @@ const CommentsModal = memo(({ post, athlete, allAthletes, onClose, onCommentAdde
             const ago   = diff<60?"À l'instant":diff<3600?`${Math.floor(diff/60)}min`:`${Math.floor(diff/3600)}h`;
             return (
               <div key={c.id} style={{ display:"flex", gap:8, flexDirection:isOwn?"row-reverse":"row" }}>
-                <div style={{ width:26, height:26, borderRadius:"50%", background:isOwn?"#1D9E75":avatarColor(allAthletes, c.athlete_id), display:"flex", alignItems:"center", justifyContent:"center", color:"white", fontSize:8.5, fontWeight:600, flexShrink:0 }}>
+                <div style={{ width:32, height:32, borderRadius:"50%", background:isOwn?"#1D9E75":avatarColor(allAthletes, c.athlete_id), display:"flex", alignItems:"center", justifyContent:"center", color:"white", fontSize:12, fontWeight:700, flexShrink:0 }}>
                   {initialsFromName(ca?.name ?? "?")}
                 </div>
                 <div style={{ maxWidth:"78%" }}>
                   <div style={{ background:isOwn?"rgba(29,158,117,0.12)":"var(--c-surface-2)", border:`1px solid ${isOwn?"rgba(29,158,117,0.18)":"var(--c-border)"}`, borderRadius:isOwn?"14px 14px 4px 14px":"14px 14px 14px 4px", padding:"7px 11px" }}>
-                    {!isOwn && <p style={{ fontSize:10, fontWeight:500, color:avatarColor(allAthletes, c.athlete_id), marginBottom:2 }}>{ca?.name?.split(" ")[0]}</p>}
-                    <p style={{ fontSize:12.5, color:"var(--c-text-1)", lineHeight:1.45 }}>{c.content}</p>
+                    {!isOwn && <p style={{ fontSize:12, fontWeight:700, color:avatarColor(allAthletes, c.athlete_id), marginBottom:3 }}>{ca?.name?.split(" ")[0]}</p>}
+                    <p style={{ fontSize:13, color:"var(--c-text-1)", lineHeight:1.5 }}>{c.content}</p>
                   </div>
-                  <p style={{ fontSize:9, color:"var(--c-text-4)", marginTop:2, paddingLeft:4 }}>{ago}</p>
+                  <p style={{ fontSize:12, color:"var(--c-text-3)", marginTop:3, paddingLeft:4 }}>{ago}</p>
                 </div>
               </div>
             );
@@ -148,21 +159,23 @@ const CommentsModal = memo(({ post, athlete, allAthletes, onClose, onCommentAdde
 
         {/* Input */}
         <div style={{ padding:"10px 12px", paddingBottom:"calc(10px + env(safe-area-inset-bottom))", borderTop:"1px solid var(--c-border)", display:"flex", alignItems:"center", gap:8, background:"var(--c-surface)", flexShrink:0 }}>
-          <div style={{ width:26, height:26, borderRadius:"50%", background:"#1D9E75", display:"flex", alignItems:"center", justifyContent:"center", color:"white", fontSize:8.5, fontWeight:600, flexShrink:0 }}>
+          <div style={{ width:32, height:32, borderRadius:"50%", background:"#1D9E75", display:"flex", alignItems:"center", justifyContent:"center", color:"white", fontSize:12, fontWeight:700, flexShrink:0 }}>
             {initialsFromName(athlete.name)}
           </div>
           <div style={{ flex:1, background:"var(--c-surface-2)", borderRadius:20, padding:"8px 14px", border:"1px solid var(--c-border)" }}>
             <input style={{ width:"100%", background:"none", border:"none", outline:"none", fontSize:13, color:"var(--c-text-1)" }}
               placeholder="Ajouter un commentaire…" value={input}
+              maxLength={300}
               onChange={e => setInput(e.target.value)}
               onKeyDown={e => { if (e.key==="Enter") { e.preventDefault(); send(); } }}
               autoFocus/>
           </div>
-          <button onClick={send} disabled={!input.trim()||sending}
-            style={{ width:36, height:36, borderRadius:"50%", background:"#1D9E75", border:"none", cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", opacity:(!input.trim()||sending)?0.35:1, flexShrink:0, boxShadow:"0 2px 8px rgba(29,158,117,0.25)" }}>
-            <Send size={14} color="white" strokeWidth={2.5}/>
+          <button type="button" aria-label="Envoyer le commentaire" onClick={send} disabled={!input.trim()||sending}
+            style={{ width:44, height:44, borderRadius:"50%", background:"#1D9E75", border:"none", cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", opacity:(!input.trim()||sending)?0.35:1, flexShrink:0, boxShadow:"0 2px 8px rgba(29,158,117,0.25)" }}>
+            <Send size={16} color="white" strokeWidth={2.5}/>
           </button>
         </div>
+        {error && <p role="alert" style={{ padding:"0 16px 12px", fontSize:12, color:"#F19A9A" }}>{error}</p>}
       </div>
     </div>,
     document.body
@@ -176,12 +189,23 @@ const QuickPostModal = memo(({ session, athlete, allAthletes, clubId, onClose, o
   const [caption,  setCaption]  = useState(session ? `Séance "${session.title}" ✅` : "");
   const [posting,  setPosting]  = useState(false);
   const [err,      setErr]      = useState(null);
-  const fileRef = useRef(null);
-
   const pickImage = e => {
     const f = e.target.files?.[0]; if (!f) return;
+    const validationError = validateSocialImage(f);
+    if (validationError) {
+      setImage(null);
+      setPreview(null);
+      setErr(validationError);
+      e.target.value = "";
+      return;
+    }
+    setErr(null);
     setImage(f); setPreview(URL.createObjectURL(f));
   };
+
+  useEffect(() => () => {
+    if (preview) URL.revokeObjectURL(preview);
+  }, [preview]);
 
  const post = async () => {
     setPosting(true); setErr(null);
@@ -221,7 +245,7 @@ const QuickPostModal = memo(({ session, athlete, allAthletes, clubId, onClose, o
             is_read:     false,
           }))
         );
-        if (notifErr) throw new Error(notifErr.message);
+        if (notifErr) console.warn("Notification sociale non enregistrée:", notifErr.message);
 
         // 2. L'alerte de notification (Ton Code 1) 👇
         const otherAthleteIds = otherAthletes.map(a => a.id);
@@ -245,18 +269,18 @@ const QuickPostModal = memo(({ session, athlete, allAthletes, clubId, onClose, o
 
       {preview ? (
         /* Mode plein écran photo */
-        <div style={{ flex:1, display:"flex", flexDirection:"column" }}>
+        <div role="dialog" aria-modal="true" aria-label="Prévisualiser la publication" style={{ flex:1, display:"flex", flexDirection:"column" }}>
           {/* Image plein écran */}
           <div style={{ flex:1, position:"relative", overflow:"hidden" }}>
             <img src={preview} alt="" style={{ width:"100%", height:"100%", objectFit:"cover" }}/>
             {/* Overlay haut */}
             <div style={{ position:"absolute", top:0, left:0, right:0, padding:"14px 14px", display:"flex", alignItems:"center", justifyContent:"space-between", background:"linear-gradient(to bottom, rgba(0,0,0,0.55), transparent)" }}>
-              <button onClick={() => { setImage(null); setPreview(null); }}
-                style={{ width:36, height:36, borderRadius:"50%", background:"rgba(0,0,0,0.45)", border:"none", cursor:"pointer", color:"white", display:"flex", alignItems:"center", justifyContent:"center" }}>
-                <X size={16}/>
+              <button type="button" aria-label="Retirer la photo" onClick={() => { setImage(null); setPreview(null); }}
+                style={{ width:44, height:44, borderRadius:"50%", background:"rgba(0,0,0,0.45)", border:"1px solid rgba(255,255,255,0.14)", cursor:"pointer", color:"white", display:"flex", alignItems:"center", justifyContent:"center" }}>
+                <X size={18}/>
               </button>
-              <label style={{ padding:"7px 14px", borderRadius:20, background:"rgba(0,0,0,0.45)", color:"white", fontSize:12, fontWeight:500, cursor:"pointer", display:"flex", alignItems:"center", gap:5 }}>
-                <Camera size={13}/> Changer
+              <label style={{ minHeight:44, padding:"0 14px", borderRadius:22, background:"rgba(0,0,0,0.45)", border:"1px solid rgba(255,255,255,0.14)", color:"white", fontSize:13, fontWeight:700, cursor:"pointer", display:"flex", alignItems:"center", gap:7 }}>
+                <Camera size={15}/> Changer
                 <input type="file" accept="image/*" style={{ display:"none" }} onChange={pickImage}/>
               </label>
             </div>
@@ -264,64 +288,73 @@ const QuickPostModal = memo(({ session, athlete, allAthletes, clubId, onClose, o
 
           {/* Zone saisie + publier */}
           <div style={{ background:"#0D0D0D", padding:"12px 14px", paddingBottom:"calc(12px + env(safe-area-inset-bottom))", display:"flex", flexDirection:"column", gap:10 }}>
-            {err && <p style={{ fontSize:11.5, color:"#E05252" }}>{err}</p>}
+            {err && <p role="alert" style={{ fontSize:13, color:"#F19A9A" }}>{err}</p>}
             {session && (
               <div style={{ display:"flex", alignItems:"center", gap:6, padding:"6px 10px", borderRadius:8, background:"rgba(29,158,117,0.12)", border:"1px solid rgba(29,158,117,0.20)" }}>
                 <div style={{ width:6, height:6, borderRadius:"50%", background:"#1D9E75", flexShrink:0 }}/>
-                <p style={{ fontSize:11, color:"#1D9E75", fontWeight:500 }}>{session.title}</p>
+                <p style={{ fontSize:12, color:"#7BD8B4", fontWeight:700 }}>{session.title}</p>
               </div>
             )}
             <div style={{ display:"flex", alignItems:"center", gap:10 }}>
-              <div style={{ width:30, height:30, borderRadius:"50%", background:"#1D9E75", display:"flex", alignItems:"center", justifyContent:"center", color:"white", fontSize:9, fontWeight:600, flexShrink:0 }}>
+              <div style={{ width:36, height:36, borderRadius:"50%", background:"#1D9E75", display:"flex", alignItems:"center", justifyContent:"center", color:"white", fontSize:12, fontWeight:700, flexShrink:0 }}>
                 {initialsFromName(athlete.name)}
               </div>
               <input
                 style={{ flex:1, background:"rgba(255,255,255,0.10)", border:"none", outline:"none", borderRadius:20, padding:"9px 14px", fontSize:13.5, color:"white", lineHeight:1.4 }}
                 placeholder="Ajouter une légende…"
                 value={caption} onChange={e => setCaption(e.target.value)}
+                maxLength={500}
                 autoFocus
               />
             </div>
-            <button onClick={post} disabled={posting}
-              style={{ width:"100%", padding:"13px", borderRadius:12, background:"#1D9E75", border:"none", cursor:"pointer", color:"white", fontSize:14, fontWeight:600, display:"flex", alignItems:"center", justifyContent:"center", gap:8, boxShadow:"0 4px 14px rgba(29,158,117,0.40)", opacity:posting?0.7:1 }}>
+            <button type="button" onClick={post} disabled={posting}
+              style={{ width:"100%", minHeight:48, padding:"0 16px", borderRadius:12, background:"#1D9E75", border:"none", cursor:"pointer", color:"white", fontSize:14, fontWeight:700, display:"flex", alignItems:"center", justifyContent:"center", gap:8, boxShadow:"0 4px 14px rgba(29,158,117,0.32)", opacity:posting?0.7:1 }}>
               {posting ? <><div style={{ width:16, height:16, border:"2.5px solid rgba(255,255,255,0.3)", borderTopColor:"white", borderRadius:"50%", animation:"spin-smooth 0.65s linear infinite" }}/> Envoi en cours…</> : "Partager avec le club"}
             </button>
           </div>
         </div>
       ) : (
         /* Mode choix photo */
-        <div style={{ marginTop:"auto", background:"var(--c-surface)", borderRadius:"20px 20px 0 0", border:"1px solid var(--c-border)", display:"flex", flexDirection:"column", overflow:"hidden", maxHeight:"70dvh" }}>
+        <div role="dialog" aria-modal="true" aria-labelledby="quick-post-title" style={{ marginTop:"auto", width:"100%", maxWidth:560, alignSelf:"center", background:"var(--c-surface)", borderRadius:"24px 24px 0 0", border:"1px solid var(--c-border)", display:"flex", flexDirection:"column", overflow:"hidden", maxHeight:"82dvh" }}>
           <div style={{ display:"flex", justifyContent:"center", padding:"10px 0 4px" }}>
             <div style={{ width:32, height:3, borderRadius:99, background:"var(--c-border-strong)" }}/>
           </div>
           <div style={{ padding:"12px 16px", borderBottom:"1px solid var(--c-border)", display:"flex", alignItems:"center", justifyContent:"space-between" }}>
             <div>
-              <p style={{ fontSize:14, fontWeight:500, color:"var(--c-text-1)" }}>Partager ma séance</p>
-              {session && <p style={{ fontSize:11, color:"var(--c-accent)", marginTop:2 }}>{session.title}</p>}
+              <h2 id="quick-post-title" style={{ fontSize:17, fontWeight:700, color:"var(--c-text-1)" }}>Partager avec le club</h2>
+              {session && <p style={{ fontSize:12, color:"#7BD8B4", marginTop:3 }}>{session.title}</p>}
             </div>
-            <button onClick={onClose} style={{ padding:6, borderRadius:8, background:"var(--c-surface-2)", border:"none", cursor:"pointer", color:"var(--c-text-3)" }}><X size={14}/></button>
+            <button type="button" aria-label="Fermer" onClick={onClose} style={{ width:44, height:44, display:"flex", alignItems:"center", justifyContent:"center", borderRadius:12, background:"var(--c-surface-2)", border:"1px solid var(--c-border)", cursor:"pointer", color:"var(--c-text-2)" }}><X size={18}/></button>
           </div>
 
           <div style={{ padding:"20px 16px", display:"flex", flexDirection:"column", gap:10, paddingBottom:"calc(20px + env(safe-area-inset-bottom))" }}>
-            {err && <p style={{ fontSize:11.5, color:"#E05252", background:"rgba(224,82,82,0.08)", borderRadius:8, padding:"8px 12px" }}>{err}</p>}
+            {err && <p role="alert" style={{ fontSize:13, color:"#F19A9A", background:"rgba(224,82,82,0.08)", borderRadius:10, padding:"10px 12px" }}>{err}</p>}
+
+            <div>
+              <label htmlFor="club-post-caption" style={{ display:"block", fontSize:12, fontWeight:700, color:"var(--c-text-2)", textTransform:"uppercase", letterSpacing:"0.06em", marginBottom:8 }}>Message</label>
+              <textarea id="club-post-caption" className="input-premium resize-none" rows={3}
+                placeholder="Partage une séance, une sensation ou un encouragement…"
+                maxLength={500}
+                value={caption} onChange={event => setCaption(event.target.value)} />
+            </div>
 
             {/* Bouton caméra — action principale */}
-            <label style={{ display:"flex", alignItems:"center", justifyContent:"center", gap:10, padding:"18px", borderRadius:14, background:"linear-gradient(135deg, #1D9E75, #16826C)", cursor:"pointer", color:"white", fontSize:15, fontWeight:600, boxShadow:"0 4px 14px rgba(29,158,117,0.35)" }}>
+            <label style={{ minHeight:52, display:"flex", alignItems:"center", justifyContent:"center", gap:10, padding:"0 18px", borderRadius:14, background:"linear-gradient(135deg, #1D9E75, #16826C)", cursor:"pointer", color:"white", fontSize:15, fontWeight:700, boxShadow:"0 4px 14px rgba(29,158,117,0.28)" }}>
               <Camera size={22} color="white"/>
               Prendre une photo
               <input type="file" accept="image/*" capture="environment" style={{ display:"none" }} onChange={pickImage}/>
             </label>
 
             {/* Galerie */}
-            <label style={{ display:"flex", alignItems:"center", justifyContent:"center", gap:8, padding:"13px", borderRadius:12, background:"var(--c-surface-2)", border:"1px solid var(--c-border)", cursor:"pointer", color:"var(--c-text-2)", fontSize:13, fontWeight:500 }}>
+            <label style={{ minHeight:48, display:"flex", alignItems:"center", justifyContent:"center", gap:8, padding:"0 14px", borderRadius:12, background:"var(--c-surface-2)", border:"1px solid var(--c-border)", cursor:"pointer", color:"var(--c-text-2)", fontSize:13, fontWeight:700 }}>
               <Image size={16}/>
               Choisir dans la galerie
               <input type="file" accept="image/*" style={{ display:"none" }} onChange={pickImage}/>
             </label>
 
             {/* Publier sans photo */}
-            <button onClick={post} disabled={posting || !caption.trim()}
-              style={{ padding:"11px", borderRadius:12, background:"transparent", border:"1px solid var(--c-border)", cursor:"pointer", color:"var(--c-text-3)", fontSize:12, fontWeight:400 }}>
+            <button type="button" onClick={post} disabled={posting || !caption.trim()}
+              style={{ minHeight:48, padding:"0 14px", borderRadius:12, background:"transparent", border:"1px solid var(--c-border)", cursor:"pointer", color:"var(--c-text-2)", fontSize:13, fontWeight:700, opacity:posting || !caption.trim() ? 0.45 : 1 }}>
               {posting ? "Envoi…" : "Publier sans photo"}
             </button>
           </div>
@@ -346,6 +379,7 @@ const PostCard = memo(({ post, athlete, allAthletes, sessions, onComment, onReac
   const totalLikes  = (post.social_reactions ?? []).length;
   const color       = avatarColor(allAthletes, post.athlete_id);
   const autoCfg     = AUTO_CELEBRATION_CONFIG[post.auto_type] ?? null;
+  const [confirmDelete, setConfirmDelete] = useState(false);
 
   const diff    = (Date.now() - new Date(post.created_at)) / 1000;
   const timeAgo = diff<60?"À l'instant":diff<3600?`${Math.floor(diff/60)}min`:diff<86400?`${Math.floor(diff/3600)}h`:`${Math.floor(diff/86400)}j`;
@@ -355,7 +389,7 @@ const PostCard = memo(({ post, athlete, allAthletes, sessions, onComment, onReac
   const topReactions = Object.entries(rxCounts).sort((a,b)=>b[1]-a[1]).slice(0,3);
 
   return (
-    <div id={`post-${post.id}`} style={{ background:"var(--c-surface)", borderBottom:"1px solid var(--c-border)", scrollMarginTop:60 }}>
+    <article id={`post-${post.id}`} className="card" style={{ overflow:"hidden", scrollMarginTop:80 }}>
       {/* Header auteur — traitement distinct pour les posts auto-générés
           (record battu / objectif atteint), pour qu'ils se distinguent
           visuellement des photos partagées manuellement */}
@@ -369,50 +403,50 @@ const PostCard = memo(({ post, athlete, allAthletes, sessions, onComment, onReac
                 <autoCfg.icon size={19} color="white" strokeWidth={1.8} />
               </div>
               <div>
-                <p style={{ fontSize:8.5, fontWeight:600, letterSpacing:"0.09em", textTransform:"uppercase", color:"rgba(255,255,255,0.55)" }}>{autoCfg.label}</p>
-                <p style={{ fontSize:13.5, fontWeight:600, color:"white", marginTop:3 }}>{postAthlete?.name ?? "Athlète"}</p>
+                <p style={{ fontSize:12, fontWeight:700, letterSpacing:"0.07em", textTransform:"uppercase", color:"rgba(255,255,255,0.72)" }}>{autoCfg.label}</p>
+                <p style={{ fontSize:15, fontWeight:700, color:"white", marginTop:4 }}>{postAthlete?.name ?? "Athlète"}</p>
               </div>
             </div>
             {isOwn && (
-              <button onClick={onDelete} style={{ padding:5, background:"rgba(255,255,255,0.10)", border:"none", borderRadius:8, cursor:"pointer", color:"rgba(255,255,255,0.7)", flexShrink:0 }}><X size={13}/></button>
+              <button type="button" aria-label="Supprimer la publication" onClick={() => setConfirmDelete(true)} style={{ width:44, height:44, display:"flex", alignItems:"center", justifyContent:"center", background:"rgba(255,255,255,0.10)", border:"1px solid rgba(255,255,255,0.10)", borderRadius:12, cursor:"pointer", color:"rgba(255,255,255,0.82)", flexShrink:0 }}><X size={16}/></button>
             )}
           </div>
           <p style={{ position:"relative", fontSize:15, fontWeight:500, color:"white", marginTop:14, lineHeight:1.4 }}>{post.content}</p>
-          <p style={{ position:"relative", fontSize:10.5, color:"rgba(255,255,255,0.45)", marginTop:8 }}>{timeAgo}</p>
+          <p style={{ position:"relative", fontSize:12, color:"rgba(255,255,255,0.68)", marginTop:8 }}>{timeAgo}</p>
         </div>
       ) : (
-        <div style={{ padding:"10px 14px", display:"flex", alignItems:"center", gap:10 }}>
-          <div style={{ width:34, height:34, borderRadius:"50%", background:color, display:"flex", alignItems:"center", justifyContent:"center", color:"white", fontSize:11, fontWeight:600, flexShrink:0, border:isOwn?"2px solid #1D9E75":"none" }}>
+        <div style={{ padding:16, display:"flex", alignItems:"center", gap:12 }}>
+          <div style={{ width:40, height:40, borderRadius:"50%", background:color, display:"flex", alignItems:"center", justifyContent:"center", color:"white", fontSize:13, fontWeight:700, flexShrink:0, border:isOwn?"2px solid #1D9E75":"none" }}>
             {initialsFromName(postAthlete?.name ?? "?")}
           </div>
           <div style={{ flex:1, minWidth:0 }}>
             <div style={{ display:"flex", alignItems:"center", gap:6 }}>
-              <p style={{ fontSize:13, fontWeight:600, color:"var(--c-text-1)" }}>{postAthlete?.name ?? "Athlète"}</p>
-              {isOwn && <span style={{ fontSize:9, fontWeight:500, padding:"1px 5px", borderRadius:4, background:"rgba(29,158,117,0.12)", color:"#1D9E75" }}>Moi</span>}
+              <p style={{ fontSize:14, fontWeight:700, color:"var(--c-text-1)" }}>{postAthlete?.name ?? "Athlète"}</p>
+              {isOwn && <span style={{ fontSize:12, fontWeight:700, padding:"2px 7px", borderRadius:6, background:"rgba(29,158,117,0.12)", color:"#7BD8B4" }}>Moi</span>}
             </div>
             <div style={{ display:"flex", alignItems:"center", gap:5, marginTop:1 }}>
-              <p style={{ fontSize:10, color:"var(--c-text-3)" }}>{timeAgo}</p>
+              <p style={{ fontSize:12, color:"var(--c-text-2)" }}>{timeAgo}</p>
               {linkedSess && (
                 <>
-                  <span style={{ color:"var(--c-text-4)", fontSize:10 }}>·</span>
+                  <span style={{ color:"var(--c-text-3)", fontSize:12 }}>·</span>
                   <div style={{ display:"flex", alignItems:"center", gap:3 }}>
                     <div style={{ width:5, height:5, borderRadius:"50%", background:colorsFor(linkedSess.category).border }}/>
-                    <p style={{ fontSize:10, color:"var(--c-text-3)", maxWidth:120, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{linkedSess.title}</p>
+                    <p style={{ fontSize:12, color:"var(--c-text-2)", maxWidth:180, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{linkedSess.title}</p>
                   </div>
                 </>
               )}
             </div>
           </div>
           {isOwn && (
-            <button onClick={onDelete} style={{ padding:4, background:"none", border:"none", cursor:"pointer", color:"var(--c-text-4)" }}><X size={13}/></button>
+            <button type="button" aria-label="Supprimer la publication" onClick={() => setConfirmDelete(true)} style={{ width:44, height:44, display:"flex", alignItems:"center", justifyContent:"center", background:"none", border:"none", cursor:"pointer", color:"var(--c-text-3)" }}><X size={16}/></button>
           )}
         </div>
       )}
 
       {/* Photo */}
       {post.image_url && (
-        <div style={{ width:"100%", position:"relative", cursor:"pointer" }} onDoubleClick={() => onReact("❤️")}>
-          <img src={post.image_url} alt="" style={{ width:"100%", maxHeight:400, objectFit:"cover", display:"block" }}/>
+        <div style={{ width:"100%", position:"relative", cursor:"pointer", background:"var(--c-surface-2)" }} onDoubleClick={() => onReact("❤️")}>
+          <img src={post.image_url} alt={`Publication de ${postAthlete?.name ?? "un athlète"}`} loading="lazy" style={{ width:"100%", maxHeight:520, objectFit:"cover", display:"block" }}/>
           {/* Réactions en overlay sur la photo (style Instagram) plutôt que sous l'image */}
           {topReactions.length > 0 && (
             <div style={{
@@ -426,7 +460,7 @@ const PostCard = memo(({ post, athlete, allAthletes, sessions, onComment, onReac
                   <span key={emoji} style={{ fontSize:13, marginLeft:i>0?-2:0 }}>{emoji}</span>
                 ))}
               </div>
-              <p style={{ fontSize:11, color:"white", fontWeight:600 }}>{totalLikes}</p>
+              <p style={{ fontSize:12, color:"white", fontWeight:700 }}>{totalLikes}</p>
             </div>
           )}
         </div>
@@ -435,8 +469,8 @@ const PostCard = memo(({ post, athlete, allAthletes, sessions, onComment, onReac
       {/* Légende (posts manuels uniquement — le texte des posts auto est déjà
           affiché dans le header ci-dessus) */}
       {!autoCfg && post.content && (
-        <div style={{ padding:"8px 14px 4px" }}>
-          <p style={{ fontSize:13, color:"var(--c-text-1)", lineHeight:1.5 }}>
+        <div style={{ padding:"14px 16px 4px" }}>
+          <p style={{ fontSize:14, color:"var(--c-text-1)", lineHeight:1.55 }}>
             <span style={{ fontWeight:600, color:"var(--c-text-1)", marginRight:5 }}>{postAthlete?.name?.split(" ")[0]}</span>
             {post.content}
           </p>
@@ -444,7 +478,7 @@ const PostCard = memo(({ post, athlete, allAthletes, sessions, onComment, onReac
       )}
 
       {/* Actions */}
-      <div style={{ padding:"8px 14px 12px" }}>
+      <div style={{ padding:"12px 16px 16px" }}>
         {/* Réactions existantes — seulement si pas de photo (sinon déjà en overlay dessus) */}
         {!post.image_url && topReactions.length > 0 && (
           <div style={{ display:"flex", alignItems:"center", gap:6, marginBottom:8 }}>
@@ -453,48 +487,58 @@ const PostCard = memo(({ post, athlete, allAthletes, sessions, onComment, onReac
                 <span key={emoji} style={{ fontSize:14, marginLeft:i>0?-2:0 }}>{emoji}</span>
               ))}
             </div>
-            <p style={{ fontSize:11, color:"var(--c-text-3)", fontWeight:500 }}>
+            <p style={{ fontSize:12, color:"var(--c-text-2)", fontWeight:600 }}>
               {totalLikes} réaction{totalLikes>1?"s":""}
             </p>
           </div>
         )}
 
         {/* Boutons actions */}
-        <div style={{ display:"flex", alignItems:"center", gap:4, marginBottom:8 }}>
-          {/* Quick reactions */}
-          {QUICK_REACTIONS.map(emoji => (
-            <button key={emoji} onClick={() => onReact(emoji)}
-              style={{
-                width:34, height:34, borderRadius:9, fontSize:15, border:`1px solid ${myReaction?.emoji===emoji?"rgba(29,158,117,0.35)":"var(--c-border)"}`,
-                background:myReaction?.emoji===emoji?"rgba(29,158,117,0.10)":"var(--c-surface-2)",
-                cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center",
-                transform:myReaction?.emoji===emoji?"scale(1.15)":"scale(1)", transition:"transform 0.12s ease",
-                boxShadow:myReaction?.emoji===emoji?"0 2px 6px rgba(29,158,117,0.20)":"none",
-              }}>
-              {emoji}
-            </button>
-          ))}
-          <div style={{ flex:1 }}/>
-          <button onClick={onComment}
-            style={{ display:"flex", alignItems:"center", gap:5, padding:"6px 10px", borderRadius:9, background:"var(--c-surface-2)", border:"1px solid var(--c-border)", cursor:"pointer", color:"var(--c-text-2)", fontSize:11.5, fontWeight:500 }}>
-            <MessageSquare size={12}/>
+        <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:8 }}>
+          <div style={{ display:"flex", alignItems:"center", gap:4, overflowX:"auto", scrollbarWidth:"none", flex:1 }}>
+            {QUICK_REACTIONS.map(emoji => (
+              <button key={emoji} type="button" aria-label={`Réagir ${emoji}`} aria-pressed={myReaction?.emoji===emoji} onClick={() => onReact(emoji)}
+                style={{
+                  width:44, height:44, flexShrink:0, borderRadius:12, fontSize:17, border:`1px solid ${myReaction?.emoji===emoji?"rgba(29,158,117,0.38)":"var(--c-border)"}`,
+                  background:myReaction?.emoji===emoji?"rgba(29,158,117,0.12)":"var(--c-surface-2)",
+                  cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center",
+                  transform:myReaction?.emoji===emoji?"scale(1.06)":"scale(1)", transition:"transform 0.12s ease",
+                  boxShadow:myReaction?.emoji===emoji?"0 2px 8px rgba(29,158,117,0.18)":"none",
+                }}>
+                {emoji}
+              </button>
+            ))}
+          </div>
+          <button type="button" aria-label="Ouvrir les commentaires" onClick={onComment}
+            style={{ minWidth:44, height:44, flexShrink:0, display:"flex", alignItems:"center", justifyContent:"center", gap:6, padding:"0 12px", borderRadius:12, background:"var(--c-surface-2)", border:"1px solid var(--c-border)", cursor:"pointer", color:"var(--c-text-2)", fontSize:12, fontWeight:700 }}>
+            <MessageSquare size={15}/>
             {commentCount>0 && <span>{commentCount}</span>}
           </button>
         </div>
 
         {/* Double-tap hint si image */}
         {post.image_url && (
-          <p style={{ fontSize:9.5, color:"var(--c-text-4)" }}>Double-tap sur la photo pour ❤️</p>
+          <p style={{ fontSize:12, color:"var(--c-text-3)" }}>Double-tap sur la photo pour ❤️</p>
         )}
       </div>
-    </div>
+      {confirmDelete && (
+        <div role="alert" style={{ padding:16, borderTop:"1px solid rgba(224,82,82,0.18)", background:"rgba(224,82,82,0.07)", display:"flex", alignItems:"center", gap:12, flexWrap:"wrap" }}>
+          <p style={{ flex:1, minWidth:180, fontSize:13, fontWeight:700, color:"var(--c-text-1)" }}>Supprimer définitivement cette publication ?</p>
+          <button type="button" onClick={() => setConfirmDelete(false)} className="btn-secondary">Annuler</button>
+          <button type="button" onClick={onDelete}
+            style={{ minHeight:44, padding:"0 14px", borderRadius:12, border:"1px solid rgba(224,82,82,0.24)", background:"rgba(224,82,82,0.12)", color:"#F19A9A", fontSize:13, fontWeight:700, cursor:"pointer" }}>
+            Supprimer
+          </button>
+        </div>
+      )}
+    </article>
   );
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // COMPOSANT PRINCIPAL
 // ═══════════════════════════════════════════════════════════════════════════════
-export default function AthleteClub({ athlete, allAthletes, clubId, sessions, profile }) {
+export default function AthleteClub({ athlete, allAthletes, clubId, sessions }) {
   const [posts,          setPosts]          = useState([]);
   const [loading,        setLoading]        = useState(true);
   const [loadingMore,    setLoadingMore]    = useState(false);
@@ -503,6 +547,8 @@ export default function AthleteClub({ athlete, allAthletes, clubId, sessions, pr
   const [quickPost,      setQuickPost]      = useState(null); // session ou true
   const [toast,          setToast]          = useState(null);
   const [commentCounts,  setCommentCounts]  = useState({});
+  const [feedFilter,     setFeedFilter]     = useState("all");
+  const postsCountRef = useRef(0);
 
   const currentWeek  = getISOWeek(new Date());
   const sevenDaysAgo = useMemo(() => { const d=new Date(); d.setDate(d.getDate()-7); return d.toISOString(); }, []);
@@ -547,7 +593,7 @@ export default function AthleteClub({ athlete, allAthletes, clubId, sessions, pr
   const fetchPosts = useCallback(async (reset = true) => {
     if (!clubId) return;
     if (reset) setLoading(true); else setLoadingMore(true);
-    const offset = reset ? 0 : posts.length;
+    const offset = reset ? 0 : postsCountRef.current;
     const { data, error } = await supabase.from("social_posts")
       .select("*, social_reactions(*)")
       .eq("club_id", clubId)
@@ -569,21 +615,23 @@ export default function AthleteClub({ athlete, allAthletes, clubId, sessions, pr
     }
     setLoading(false);
     setLoadingMore(false);
-  }, [clubId, sevenDaysAgo, posts.length]);
+  }, [clubId, sevenDaysAgo]);
 
-  useEffect(() => { fetchPosts(true); }, [clubId, sevenDaysAgo]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { postsCountRef.current = posts.length; }, [posts.length]);
+  useEffect(() => { fetchPosts(true); }, [fetchPosts]);
 
   // ── Realtime ───────────────────────────────────────────────────────────────
   useEffect(() => {
     if (!clubId) return;
     const ch = supabase.channel("club-feed")
-      .on("postgres_changes", { event:"INSERT", schema:"public", table:"social_posts" }, async payload => {
+      .on("postgres_changes", { event:"INSERT", schema:"public", table:"social_posts", filter:`club_id=eq.${clubId}` }, async payload => {
         fetchPosts();
         if (payload.new.athlete_id !== athlete.id) {
           const { data:a } = await supabase.from("athletes").select("name").eq("id", payload.new.athlete_id).single();
           setToast({ name:a?.name??"Athlète", action:"a partagé une séance 📸", color:avatarColor(allAthletes, payload.new.athlete_id) });
         }
       })
+      .on("postgres_changes", { event:"DELETE", schema:"public", table:"social_posts" }, fetchPosts)
       .on("postgres_changes", { event:"INSERT", schema:"public", table:"social_reactions" }, fetchPosts)
       .on("postgres_changes", { event:"DELETE", schema:"public", table:"social_reactions" }, fetchPosts)
       .on("postgres_changes", { event:"INSERT", schema:"public", table:"social_comments" }, fetchPosts)
@@ -603,18 +651,42 @@ export default function AthleteClub({ athlete, allAthletes, clubId, sessions, pr
       const filtered  = reactions.filter(r => r.athlete_id!==athlete.id);
       return { ...p, social_reactions: [...filtered, { id:`tmp-${Date.now()}`, athlete_id:athlete.id, emoji, post_id:postId }] };
     }));
-    if (existing) { await supabase.from("social_reactions").delete().eq("id", existing.id); }
-    else {
-      await supabase.from("social_reactions").delete().eq("post_id", postId).eq("athlete_id", athlete.id);
-      await supabase.from("social_reactions").insert({ post_id:postId, athlete_id:athlete.id, emoji });
+    let operationError = null;
+    if (existing) {
+      const { error } = await supabase.from("social_reactions").delete().eq("id", existing.id);
+      operationError = error;
+    } else {
+      const { error:deleteError } = await supabase.from("social_reactions").delete().eq("post_id", postId).eq("athlete_id", athlete.id);
+      if (deleteError) operationError = deleteError;
+      if (!operationError) {
+        const { error:insertError } = await supabase.from("social_reactions").insert({ post_id:postId, athlete_id:athlete.id, emoji });
+        operationError = insertError;
+      }
+    }
+    if (operationError) {
+      setPosts(prev => prev.map(item => item.id === postId ? post : item));
+      setToast({ name:"AthleteOS", action:"n’a pas pu enregistrer ta réaction. Réessaie.", color:"#E05252" });
     }
   };
 
   const handleDelete = async postId => {
+    const deletedPost = posts.find(post => post.id === postId);
+    if (!deletedPost) return;
     setPosts(prev => prev.filter(p => p.id!==postId));
-    await supabase.from("social_comments").delete().eq("post_id", postId);
-    await supabase.from("social_reactions").delete().eq("post_id", postId);
-    await supabase.from("social_posts").delete().eq("id", postId);
+    const { error } = await supabase.from("social_posts")
+      .delete()
+      .eq("id", postId)
+      .eq("athlete_id", athlete.id);
+    if (error) {
+      setPosts(prev => [...prev, deletedPost].sort((a,b) => new Date(b.created_at) - new Date(a.created_at)));
+      setToast({ name:"AthleteOS", action:"n’a pas pu supprimer la publication. Elle a été restaurée.", color:"#E05252" });
+      return;
+    }
+    setCommentCounts(prev => {
+      const next = { ...prev };
+      delete next[postId];
+      return next;
+    });
   };
 
   // Séance validée la plus récente pour le bouton rapide
@@ -625,51 +697,71 @@ export default function AthleteClub({ athlete, allAthletes, clubId, sessions, pr
 
   // Est-ce que l'athlète a déjà posté aujourd'hui ?
   const postedToday = posts.some(p => p.athlete_id===athlete.id && (Date.now()-new Date(p.created_at))<86400000);
+  const filteredPosts = useMemo(() => filterClubPosts(posts, feedFilter, athlete.id), [posts, feedFilter, athlete.id]);
+  const activePosterCount = useMemo(() => new Set(posts.map(post => post.athlete_id)).size, [posts]);
+  const feedFilters = [
+    { id:"all", label:"Tout", count:posts.length },
+    { id:"photos", label:"Photos", count:posts.filter(post => post.image_url).length },
+    { id:"highlights", label:"Exploits", count:posts.filter(post => post.auto_type === "record" || post.auto_type === "goal").length },
+    { id:"mine", label:"Mes posts", count:posts.filter(post => post.athlete_id === athlete.id).length },
+  ];
 
   return (
-    <div style={{ maxWidth:540, margin:"0 auto", display:"flex", flexDirection:"column", height:"100%" }}>
+    <div className="p-4 md:p-6 space-y-5 max-w-4xl mx-auto animate-slide-up">
       {toast && <Toast msg={toast} onDismiss={() => setToast(null)}/>}
 
-      {/* ── HEADER ── */}
-      <div className="header-glass" style={{ padding:"10px 14px", display:"flex", alignItems:"center", justifyContent:"space-between", flexShrink:0, position:"sticky", top:0, zIndex:10 }}>
-        <div>
-          <h2 style={{ fontSize:15, fontWeight:600, color:"var(--c-text-1)", letterSpacing:"-0.01em" }}>Mon club</h2>
-          <p style={{ fontSize:10, color:"var(--c-text-3)", marginTop:1 }}>
-            {allAthletes.length} athlètes · fil des 7 derniers jours
-          </p>
+      <section className="card" style={{ position:"relative", overflow:"hidden", padding:20, background:"linear-gradient(145deg, rgba(91,141,239,0.11), var(--c-surface) 50%, rgba(29,158,117,0.07))" }}>
+        <div aria-hidden="true" style={{ position:"absolute", width:260, height:260, right:-120, top:-150, borderRadius:"50%", background:"radial-gradient(circle, rgba(91,141,239,0.18), transparent 68%)" }}/>
+        <div style={{ position:"relative", display:"flex", alignItems:"flex-start", justifyContent:"space-between", gap:16, flexWrap:"wrap" }}>
+          <div>
+            <div style={{ display:"inline-flex", alignItems:"center", gap:6, padding:"4px 9px", borderRadius:99, background:"rgba(91,141,239,0.10)", border:"1px solid rgba(91,141,239,0.18)", marginBottom:12 }}>
+              <Sparkles size={13} color="#8DB1F6" aria-hidden="true"/>
+              <span style={{ fontSize:12, fontWeight:700, color:"#8DB1F6", letterSpacing:"0.05em", textTransform:"uppercase" }}>Club house</span>
+            </div>
+            <h1 className="page-title">Mon club</h1>
+            <p style={{ fontSize:13, lineHeight:1.5, color:"var(--c-text-2)", marginTop:6 }}>Les séances, encouragements et exploits de ton groupe.</p>
+          </div>
+          <button type="button" onClick={() => setQuickPost(lastValidatedSession ?? true)} className="btn-primary" style={{ flexShrink:0 }}>
+            <Camera size={16} aria-hidden="true"/> Partager
+          </button>
         </div>
-        {/* Bouton post rapide */}
-        <button
-          onClick={() => setQuickPost(lastValidatedSession ?? true)}
-          className="btn-primary"
-          style={{ minHeight:34, padding:"0 14px", fontSize:12, gap:5 }}>
-          <Camera size={13}/> Partager
-        </button>
-      </div>
+        <div style={{ position:"relative", display:"grid", gridTemplateColumns:"repeat(3, minmax(0, 1fr))", marginTop:20, paddingTop:16, borderTop:"1px solid var(--c-border)" }}>
+          {[
+            { value:allAthletes.length, label:"Membres" },
+            { value:activePosterCount, label:"Actifs cette semaine" },
+            { value:posts.length, label:"Publications" },
+          ].map((item,index) => (
+            <div key={item.label} style={{ paddingInline:index===0?0:16, borderLeft:index===0?"none":"1px solid var(--c-border)" }}>
+              <p style={{ fontSize:22, fontWeight:700, lineHeight:1, color:"var(--c-text-1)", fontVariantNumeric:"tabular-nums" }}>{item.value}</p>
+              <p style={{ fontSize:12, color:"var(--c-text-2)", marginTop:6 }}>{item.label}</p>
+            </div>
+          ))}
+        </div>
+      </section>
 
       {/* ── RÉCAP SQUAD DE LA SEMAINE ── */}
       {squadStats && squadStats.total > 0 && (
-        <div style={{ margin:"10px 14px 0", borderRadius:14, padding:"12px 14px", background:"var(--c-surface)", border:"1px solid var(--c-border)", flexShrink:0 }}>
+        <section className="card" style={{ padding:20 }}>
           <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between" }}>
             <div style={{ display:"flex", alignItems:"center", gap:9 }}>
-              <div style={{ width:30, height:30, borderRadius:9, background:"rgba(91,141,239,0.14)", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
-                <UsersIcon size={14} color="#5B8DEF" />
+              <div style={{ width:40, height:40, borderRadius:12, background:"rgba(91,141,239,0.14)", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
+                <UsersIcon size={18} color="#8DB1F6" />
               </div>
               <div>
-                <p style={{ fontSize:12.5, fontWeight:600, color:"var(--c-text-1)" }}>Semaine du groupe</p>
-                <p style={{ fontSize:10, color:"var(--c-text-3)" }}>S{currentWeek} · lundi → samedi</p>
+                <p style={{ fontSize:15, fontWeight:700, color:"var(--c-text-1)" }}>Semaine du groupe</p>
+                <p style={{ fontSize:12, color:"var(--c-text-2)", marginTop:3 }}>S{currentWeek} · lundi → samedi</p>
               </div>
             </div>
             <div style={{ textAlign:"right", flexShrink:0 }}>
               <p style={{ fontSize:20, fontWeight:700, lineHeight:1, color: squadStats.pct >= 70 ? "#1D9E75" : squadStats.pct >= 40 ? "#E8A020" : "#E05252" }}>
                 {squadStats.pct}%
               </p>
-              <p style={{ fontSize:9, color:"var(--c-text-4)", marginTop:3 }}>{squadStats.done}/{squadStats.total} séances</p>
+              <p style={{ fontSize:12, color:"var(--c-text-2)", marginTop:4 }}>{squadStats.done}/{squadStats.total} séances</p>
             </div>
           </div>
           {squadStats.ranking.length > 0 && (
             <div style={{ marginTop:14, paddingTop:14, borderTop:"1px solid var(--c-border)" }}>
-              <p style={{ fontSize:9, fontWeight:600, letterSpacing:"0.08em", textTransform:"uppercase", color:"var(--c-text-4)", marginBottom:12, textAlign:"center" }}>
+              <p style={{ fontSize:12, fontWeight:700, letterSpacing:"0.07em", textTransform:"uppercase", color:"var(--c-text-2)", marginBottom:16, textAlign:"center" }}>
                 Les plus réguliers
               </p>
               <div style={{ display:"flex", alignItems:"flex-end", justifyContent:"center", gap:18 }}>
@@ -684,7 +776,7 @@ export default function AthleteClub({ athlete, allAthletes, clubId, sessions, pr
                         <div style={{
                           width:size, height:size, borderRadius:"50%", background:avatarColor(allAthletes, a.id),
                           display:"flex", alignItems:"center", justifyContent:"center", color:"white",
-                          fontSize: rank===1 ? 13 : 11, fontWeight:600, border:`2px solid ${medal}`,
+                          fontSize:13, fontWeight:700, border:`2px solid ${medal}`,
                         }}>
                           {initialsFromName(a.name)}
                         </div>
@@ -692,38 +784,46 @@ export default function AthleteClub({ athlete, allAthletes, clubId, sessions, pr
                           <Award size={9} color="white" strokeWidth={2.5} />
                         </div>
                       </div>
-                      <p style={{ fontSize:10.5, fontWeight:500, color:"var(--c-text-2)" }}>{a.name.split(" ")[0]}</p>
-                      <p style={{ fontSize:11.5, fontWeight:700, color:medal }}>{a.done}/{a.total}</p>
+                      <p style={{ fontSize:12, fontWeight:600, color:"var(--c-text-2)" }}>{a.name.split(" ")[0]}</p>
+                      <p style={{ fontSize:13, fontWeight:700, color:medal }}>{a.done}/{a.total}</p>
                     </div>
                   );
                 })}
               </div>
             </div>
           )}
-        </div>
+        </section>
       )}
 
       {/* ── PROMPT POST (si séance validée & pas encore posté) ── */}
       {lastValidatedSession && !postedToday && (
-        <div style={{ margin:"10px 14px 0", borderRadius:12, padding:"10px 14px", background:"rgba(29,158,117,0.08)", border:"1px solid rgba(29,158,117,0.15)", display:"flex", alignItems:"center", gap:10, flexShrink:0 }}>
-          <div style={{ width:34, height:34, borderRadius:10, background:"rgba(29,158,117,0.15)", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
+        <section style={{ borderRadius:16, padding:16, background:"rgba(29,158,117,0.08)", border:"1px solid rgba(29,158,117,0.16)", display:"flex", alignItems:"center", gap:12 }}>
+          <div style={{ width:44, height:44, borderRadius:13, background:"rgba(29,158,117,0.15)", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
             <Camera size={16} color="#1D9E75"/>
           </div>
           <div style={{ flex:1, minWidth:0 }}>
-            <p style={{ fontSize:12.5, fontWeight:500, color:"var(--c-text-1)", lineHeight:1.3 }}>Séance terminée !</p>
-            <p style={{ fontSize:10.5, color:"var(--c-accent)" }} className="truncate">{lastValidatedSession.title}</p>
+            <p style={{ fontSize:14, fontWeight:700, color:"var(--c-text-1)", lineHeight:1.3 }}>Séance terminée</p>
+            <p style={{ fontSize:12, color:"#7BD8B4", marginTop:3 }} className="truncate">{lastValidatedSession.title}</p>
           </div>
-          <button onClick={() => setQuickPost(lastValidatedSession)} className="btn-primary" style={{ flexShrink:0, minHeight:32, padding:"0 12px", fontSize:11.5, gap:4 }}>
+          <button type="button" onClick={() => setQuickPost(lastValidatedSession)} className="btn-primary" style={{ flexShrink:0 }}>
             📸 Partager
           </button>
-        </div>
+        </section>
       )}
 
       {/* ── AVATARS MEMBRES — anneau plein + cliquable pour qui a posté */}
       {/* AUJOURD'HUI (façon stories), anneau discret pour qui a posté dans   */}
       {/* les 7 jours mais pas aujourd'hui, transparent sinon.               */}
-      <div style={{ padding:"10px 14px", display:"flex", alignItems:"center", gap:8, overflowX:"auto", scrollbarWidth:"none", flexShrink:0 }}>
-        {allAthletes.map((a, idx) => {
+      <section className="card" style={{ padding:16, overflow:"hidden" }}>
+        <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", gap:12, marginBottom:14 }}>
+          <div>
+            <h2 className="card-title">Membres du club</h2>
+            <p style={{ fontSize:12, color:"var(--c-text-2)", marginTop:3 }}>Un anneau vert signale une publication aujourd’hui.</p>
+          </div>
+          <span style={{ fontSize:12, color:"var(--c-text-2)" }}>{activePosterCount} actif{activePosterCount>1?"s":""}</span>
+        </div>
+        <div style={{ display:"flex", alignItems:"center", gap:12, overflowX:"auto", scrollbarWidth:"none" }}>
+          {allAthletes.map((a, idx) => {
           const isMe          = a.id===athlete.id;
           const postedToday   = posts.some(p => p.athlete_id===a.id && isSameCalendarDay(new Date(p.created_at), new Date()));
           const postedThisWeek = !postedToday && posts.some(p => p.athlete_id===a.id);
@@ -734,8 +834,9 @@ export default function AthleteClub({ athlete, allAthletes, clubId, sessions, pr
             document.getElementById(`post-${mine[0]?.id}`)?.scrollIntoView({ behavior:"smooth", block:"start" });
           };
           return (
-            <div key={a.id} onClick={goToStory}
-              style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:4, flexShrink:0, cursor:postedToday?"pointer":"default" }}>
+            <button key={a.id} type="button" onClick={goToStory} disabled={!postedToday}
+              aria-label={postedToday ? `Voir la publication de ${a.name}` : `${a.name} n’a pas publié aujourd’hui`}
+              style={{ minWidth:56, background:"none", border:"none", padding:0, display:"flex", flexDirection:"column", alignItems:"center", gap:6, flexShrink:0, cursor:postedToday?"pointer":"default", opacity:postedToday||isMe?1:0.72 }}>
               <div className={postedToday ? "story-ring-pulse" : undefined} style={{
                 width:44, height:44, borderRadius:"50%", background:color,
                 display:"flex", alignItems:"center", justifyContent:"center", color:"white", fontSize:13, fontWeight:600,
@@ -744,16 +845,38 @@ export default function AthleteClub({ athlete, allAthletes, clubId, sessions, pr
               }}>
                 {initialsFromName(a.name)}
               </div>
-              <p style={{ fontSize:8.5, color:isMe?"#1D9E75":"var(--c-text-3)", fontWeight:isMe?600:400, maxWidth:44, textAlign:"center", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
+              <p style={{ fontSize:12, color:isMe?"#7BD8B4":"var(--c-text-2)", fontWeight:isMe?700:500, maxWidth:56, textAlign:"center", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
                 {isMe?"Moi":a.name.split(" ")[0]}
               </p>
-            </div>
+            </button>
           );
         })}
+        </div>
+      </section>
+
+      <div style={{ display:"flex", alignItems:"flex-end", justifyContent:"space-between", gap:12 }}>
+        <div>
+          <h2 className="section-title">Fil du club</h2>
+          <p style={{ fontSize:13, color:"var(--c-text-2)", marginTop:4 }}>Les 7 derniers jours de vie du groupe.</p>
+        </div>
       </div>
 
+      <nav aria-label="Filtrer les publications" style={{ display:"flex", gap:8, overflowX:"auto", scrollbarWidth:"none" }}>
+        {feedFilters.map(filter => {
+          const active = feedFilter === filter.id;
+          return (
+            <button key={filter.id} type="button" aria-pressed={active} onClick={() => setFeedFilter(filter.id)}
+              className="tap-feedback"
+              style={{ minHeight:44, flexShrink:0, display:"flex", alignItems:"center", gap:7, padding:"0 14px", borderRadius:12, border:`1px solid ${active?"rgba(77,201,160,0.30)":"var(--c-border)"}`, background:active?"rgba(29,158,117,0.14)":"var(--c-surface)", color:active?"#7BD8B4":"var(--c-text-2)", fontSize:13, fontWeight:700, cursor:"pointer" }}>
+              {filter.label}
+              <span style={{ minWidth:20, padding:"2px 6px", borderRadius:99, background:active?"rgba(77,201,160,0.12)":"var(--c-surface-2)", fontSize:12 }}>{filter.count}</span>
+            </button>
+          );
+        })}
+      </nav>
+
       {/* ── FIL POSTS ── */}
-      <div style={{ flex:1, overflowY:"auto" }}>
+      <div className="space-y-4">
         {loading ? (
           <div style={{ textAlign:"center", padding:"48px 0" }}>
             <div className="loader-ring" style={{ margin:"0 auto 10px" }}/>
@@ -762,17 +885,23 @@ export default function AthleteClub({ athlete, allAthletes, clubId, sessions, pr
         ) : posts.length===0 ? (
           <div style={{ display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", padding:"60px 20px", gap:14 }}>
             <div style={{ width:56, height:56, borderRadius:16, background:"var(--c-surface-2)", display:"flex", alignItems:"center", justifyContent:"center" }}>
-              <Camera size={26} color="var(--c-text-4)" strokeWidth={1.5}/>
+              <Camera size={26} color="var(--c-text-3)" strokeWidth={1.5}/>
             </div>
             <div style={{ textAlign:"center" }}>
-              <p style={{ fontSize:15, fontWeight:500, color:"var(--c-text-2)", marginBottom:6 }}>Fil vide</p>
-              <p style={{ fontSize:12, color:"var(--c-text-3)" }}>Sois le premier à partager ta séance !</p>
+              <p style={{ fontSize:15, fontWeight:700, color:"var(--c-text-1)", marginBottom:6 }}>Fil vide</p>
+              <p style={{ fontSize:13, color:"var(--c-text-2)" }}>Sois le premier à partager ta séance !</p>
             </div>
-            <button onClick={() => setQuickPost(lastValidatedSession ?? true)} className="btn-primary">
+            <button type="button" onClick={() => setQuickPost(lastValidatedSession ?? true)} className="btn-primary">
               <Camera size={14}/> Partager maintenant
             </button>
           </div>
-        ) : posts.map(post => (
+        ) : filteredPosts.length===0 ? (
+          <div className="card" style={{ padding:32, textAlign:"center" }}>
+            <p style={{ fontSize:15, fontWeight:700, color:"var(--c-text-1)" }}>Aucune publication dans ce filtre</p>
+            <p style={{ fontSize:13, color:"var(--c-text-2)", marginTop:5 }}>Choisis un autre filtre ou partage quelque chose avec le club.</p>
+            <button type="button" onClick={() => setFeedFilter("all")} className="btn-secondary" style={{ margin:"16px auto 0" }}>Voir tout le fil</button>
+          </div>
+        ) : filteredPosts.map(post => (
           <PostCard
             key={post.id}
             post={post}
@@ -788,14 +917,14 @@ export default function AthleteClub({ athlete, allAthletes, clubId, sessions, pr
 
         {posts.length>0 && hasMorePosts && (
           <div style={{ textAlign:"center", padding:"8px 0 24px" }}>
-            <button onClick={() => fetchPosts(false)} disabled={loadingMore} className="tap-feedback"
-              style={{ fontSize:12, fontWeight:600, color:"#4DC9A0", background:"var(--c-surface-2)", border:"1px solid var(--c-border)", borderRadius:99, padding:"9px 20px", cursor:"pointer" }}>
+            <button type="button" onClick={() => fetchPosts(false)} disabled={loadingMore} className="tap-feedback"
+              style={{ minHeight:44, fontSize:13, fontWeight:700, color:"#7BD8B4", background:"var(--c-surface-2)", border:"1px solid var(--c-border)", borderRadius:99, padding:"0 20px", cursor:"pointer" }}>
               {loadingMore ? <><div className="loader-ring loader-ring-sm" style={{ display:"inline-block", marginRight:6 }}/>Chargement…</> : "Charger plus"}
             </button>
           </div>
         )}
         {posts.length>0 && !hasMorePosts && (
-          <p style={{ textAlign:"center", fontSize:10.5, color:"var(--c-text-4)", padding:"16px 0 24px" }}>
+          <p style={{ textAlign:"center", fontSize:12, color:"var(--c-text-3)", padding:"16px 0 24px" }}>
             Posts visibles 7 jours
           </p>
         )}
