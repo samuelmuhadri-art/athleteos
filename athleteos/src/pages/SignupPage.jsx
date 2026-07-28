@@ -9,8 +9,9 @@
 // ============================================================
 
 import { useState, useRef } from "react";
-import { Zap, Mail, Lock, User, Building2, KeyRound, AlertCircle, ArrowLeft } from "lucide-react";
+import { Mail, Lock, User, Building2, KeyRound, AlertCircle, ArrowLeft } from "lucide-react";
 import { supabase } from "../utils/supabaseClient";
+import AthleteOSLogo from "../components/brand/AthleteOSLogo";
 
 export default function SignupPage({ onBack }) {
   const [mode, setMode] = useState("create_club"); // "create_club" | "join_club"
@@ -94,14 +95,10 @@ export default function SignupPage({ onBack }) {
 
         {/* ── Logo ─────────────────────────────────────────────────────── */}
         <div className="flex flex-col items-center gap-3 mb-6">
-          <div
-            className="w-14 h-14 rounded-2xl flex items-center justify-center shadow-sm"
-            style={{ background: "linear-gradient(135deg, #1D9E75 0%, #16826C 100%)" }}
-          >
-            <Zap size={24} color="white" strokeWidth={2.5} />
-          </div>
+          <h1 style={{ margin: 0 }}>
+            <AthleteOSLogo size={56} wordmarkSize={24} direction="column" />
+          </h1>
           <div className="text-center">
-            <h1 className="text-[24px] font-bold tracking-tight" style={{ color: "var(--c-text-1)" }}>AthleteOS</h1>
             <p className="text-[13px] mt-0.5" style={{ color: "var(--c-text-3)" }}>Crée ton espace en 30 secondes</p>
           </div>
         </div>

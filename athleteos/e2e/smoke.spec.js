@@ -11,6 +11,7 @@ import { test, expect } from "@playwright/test";
 
 test("l'app démarre et affiche l'écran de connexion", async ({ page }) => {
   await page.goto("/");
+  await expect(page.getByRole("heading", { name: "AthleteOS" })).toBeVisible();
   await expect(page.getByPlaceholder("coach@club.be")).toBeVisible();
   await expect(page.getByPlaceholder("••••••••")).toBeVisible();
   await expect(page.getByRole("button", { name: "Se connecter" })).toBeVisible();

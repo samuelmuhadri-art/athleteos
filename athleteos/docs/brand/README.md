@@ -1,6 +1,10 @@
 # Étude du logo AthleteOS
 
-Cette étude applique la phase 16 du document `AthleteOS_Redesign_UI_UX_Premium_2026.pdf` sans modifier le logo actif de l’application.
+Cette étude applique la phase 16 du document `AthleteOS_Redesign_UI_UX_Premium_2026.pdf`.
+
+## Direction retenue
+
+La direction **A — Orbit AO** a été sélectionnée pour l’identité active. Le dessin final referme davantage l’anneau pour renforcer la lecture du `O`, personnalise la construction du `A` et reste composé d’un seul tracé monochrome sans effet décoratif indispensable.
 
 ## Pourquoi l’éclair actuel doit évoluer
 
@@ -39,11 +43,9 @@ Deux formes géométriques montantes construisent un sommet et une ouverture cen
 - Force : la direction la plus statutaire et la plus premium.
 - Vigilance : sa signification sportive est moins immédiate sans le nom AthleteOS.
 
-## Recommandation de départ
+## Décision
 
-`A — Orbit AO` est la piste la plus complète pour AthleteOS : elle est propriétaire, compacte, lisible, compatible avec une icône d’application et associe naturellement le nom au symbole. `B — Lane` est la meilleure alternative si la marque doit paraître plus sportive que technologique.
-
-Cette recommandation n’est pas encore une sélection. Le PDF demande un choix humain explicite avant de remplacer le logo actif, le favicon ou les icônes PWA.
+`A — Orbit AO` a été retenue parce qu’elle est propriétaire, compacte, lisible et directement issue du nom AthleteOS. Les pistes B, C et D restent archivées pour documenter la décision, mais ne sont pas utilisées dans l’application.
 
 ## Fichiers
 
@@ -61,4 +63,4 @@ Chaque concept utilise des formes SVG simples, sans filtre et avec `currentColor
 2. Choisir les deux plus mémorisables.
 3. Les comparer à 16, 24, 32, 48, 192 et 512 px.
 4. Les montrer à cinq personnes sans donner le concept.
-5. Retenir une direction, puis seulement générer les assets actifs et remplacer `Zap` dans les shells et les pages d’authentification.
+5. Vérifier après intégration que le même dessin est utilisé dans les shells, l’authentification, le favicon et les assets PWA.

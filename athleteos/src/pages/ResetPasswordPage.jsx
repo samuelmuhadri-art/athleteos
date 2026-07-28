@@ -7,8 +7,9 @@
 // ============================================================
 
 import { useState } from "react";
-import { Zap, Lock, AlertCircle, CheckCircle } from "lucide-react";
+import { Lock, AlertCircle, CheckCircle } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
+import { AthleteOSBadge } from "../components/brand/AthleteOSLogo";
 
 export default function ResetPasswordPage() {
   const { updatePassword, signOut } = useAuth();
@@ -39,9 +40,7 @@ export default function ResetPasswordPage() {
     <div className="min-h-screen flex items-center justify-center p-4" style={{ background: "var(--c-bg)", fontFamily: "'DM Sans', system-ui, sans-serif" }}>
       <div className="w-full max-w-sm">
         <div className="flex flex-col items-center gap-3 mb-8">
-          <div className="w-14 h-14 rounded-2xl flex items-center justify-center shadow-sm" style={{ background: "linear-gradient(135deg, #1D9E75 0%, #16826C 100%)" }}>
-            <Zap size={24} color="white" strokeWidth={2.5} />
-          </div>
+          <AthleteOSBadge size={56} />
           <div className="text-center">
             <h1 className="text-[24px] font-bold tracking-tight" style={{ color: "var(--c-text-1)" }}>Nouveau mot de passe</h1>
             <p className="text-[13px] mt-0.5" style={{ color: "var(--c-text-3)" }}>Choisis un mot de passe pour ton compte</p>

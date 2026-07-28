@@ -7,7 +7,7 @@
 import { useState, useCallback, useEffect, useRef } from "react";
 import {
   LayoutDashboard, CalendarDays, TrendingUp, MessageSquare,
-  Zap, LogOut, Users, Bell, Settings
+  LogOut, Users, Bell, Settings
 } from "lucide-react";
 import { supabase }  from "./utils/supabaseClient";
 import { useAuth }   from "./context/AuthContext";
@@ -26,6 +26,7 @@ import InjuryReportModal from "./athlete/components/InjuryReportModal";
 import NotificationBanner from "./athlete/components/NotificationBanner";
 import NotificationCenter from "./athlete/components/NotificationCenter";
 import AccountSettingsModal from "./components/ui/AccountSettingsModal";
+import { AthleteOSBadge, AthleteOSWordmark } from "./components/brand/AthleteOSLogo";
 import { getNotificationPresentation, mergeIncomingNotification } from "./athlete/notificationPresentation";
 
 const NAV_ITEMS = [
@@ -260,10 +261,7 @@ export default function AthleteApp() {
   if (loading) return (
     <div className="min-h-screen flex flex-col items-center justify-center gap-5"
       style={{ background: "var(--c-bg)" }}>
-      <div className="w-14 h-14 rounded-2xl flex items-center justify-center"
-        style={{ background: "linear-gradient(135deg, #1D9E75, #16826C)" }}>
-        <Zap size={24} color="white" strokeWidth={2} />
-      </div>
+      <AthleteOSBadge size={56} />
       <div className="flex flex-col items-center gap-2">
         <div className="loader-ring" />
         <span style={{ fontSize: 12, color: "var(--c-text-3)", letterSpacing: "0.02em" }}>
@@ -314,13 +312,8 @@ export default function AthleteApp() {
         {/* Logo */}
         <div className="flex items-center gap-3 px-4 flex-shrink-0"
           style={{ height: 64, borderBottom: "1px solid var(--c-border)" }}>
-          <div className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0"
-            style={{ background: "linear-gradient(135deg, #1D9E75, #16826C)" }}>
-            <Zap size={15} color="white" strokeWidth={2} />
-          </div>
-          <span style={{ fontWeight: 600, fontSize: 14, color: "var(--c-text-1)", letterSpacing: "-0.01em" }}>
-            AthleteOS
-          </span>
+          <AthleteOSBadge size={32} title={null} />
+          <AthleteOSWordmark size={14} />
         </div>
 
         {/* Nav items */}
@@ -406,13 +399,8 @@ export default function AthleteApp() {
           style={{ height: 56 }}>
           {/* Logo mobile */}
           <div className="flex md:hidden items-center gap-2.5">
-            <div className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0"
-              style={{ background: "linear-gradient(135deg, #1D9E75, #16826C)" }}>
-              <Zap size={13} color="white" strokeWidth={2} />
-            </div>
-            <span style={{ fontWeight: 600, fontSize: 14, color: "var(--c-text-1)", letterSpacing: "-0.01em" }}>
-              AthleteOS
-            </span>
+            <AthleteOSBadge size={28} title={null} />
+            <AthleteOSWordmark size={14} />
           </div>
           {/* Titre vue — desktop */}
           <div className="hidden md:flex items-center gap-2.5">

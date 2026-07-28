@@ -3,8 +3,9 @@
 // ============================================================
 
 import { useState } from "react";
-import { Zap, Mail, Lock, AlertCircle, CheckCircle } from "lucide-react";
+import { Mail, Lock, AlertCircle, CheckCircle } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
+import AthleteOSLogo from "../components/brand/AthleteOSLogo";
 
 export default function LoginPage({ onSignupClick }) {
   const { signIn, sendPasswordReset } = useAuth();
@@ -62,14 +63,10 @@ export default function LoginPage({ onSignupClick }) {
 
         {/* ── Logo ─────────────────────────────────────────────────────── */}
         <div className="flex flex-col items-center gap-3 mb-8">
-          <div
-            className="w-14 h-14 rounded-2xl flex items-center justify-center shadow-sm"
-            style={{ background: "linear-gradient(135deg, #1D9E75 0%, #16826C 100%)" }}
-          >
-            <Zap size={24} color="white" strokeWidth={2.5} />
-          </div>
+          <h1 style={{ margin: 0 }}>
+            <AthleteOSLogo size={56} wordmarkSize={24} direction="column" />
+          </h1>
           <div className="text-center">
-            <h1 className="text-[24px] font-bold tracking-tight" style={{ color: "var(--c-text-1)" }}>AthleteOS</h1>
             <p className="text-[13px] mt-0.5" style={{ color: "var(--c-text-3)" }}>
               {mode === "forgot" ? "Récupère l'accès à ton compte" : "Connecte-toi pour accéder à ton espace"}
             </p>

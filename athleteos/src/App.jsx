@@ -6,7 +6,7 @@ import { useState, useCallback, useEffect, Suspense, lazy } from "react";
 import {
   LayoutDashboard, CalendarDays, Users, TrendingUp,
   Activity, Trophy, Bell, MessageSquare, FileText,
-  ChevronLeft, ChevronRight, Menu, X, Zap, LogOut,
+  ChevronLeft, ChevronRight, Menu, X, LogOut,
   UserPlus, Copy, Check, Settings,
 } from "lucide-react";
 
@@ -16,6 +16,7 @@ import LoginPage      from "./pages/LoginPage";
 import SignupPage     from "./pages/SignupPage";
 import ResetPasswordPage from "./pages/ResetPasswordPage";
 import AccountSettingsModal from "./components/ui/AccountSettingsModal";
+import { AthleteOSBadge, AthleteOSWordmark } from "./components/brand/AthleteOSLogo";
 import AthleteApp     from "./AthleteApp";
 import { usePushNotifications, PushToggleButton } from "./hooks/usePushNotifications";
 import { useUrlView } from "./hooks/useUrlView";
@@ -81,12 +82,7 @@ function AuthLoader() {
   return (
     <div className="min-h-screen flex flex-col items-center justify-center gap-5" style={{ background: "var(--c-bg)" }}>
       {/* Logo animé */}
-      <div
-        className="w-14 h-14 rounded-2xl flex items-center justify-center shadow-lg"
-        style={{ background: "linear-gradient(135deg, #1D9E75 0%, #16826C 100%)" }}
-      >
-        <Zap size={24} color="white" strokeWidth={2.5} />
-      </div>
+      <AthleteOSBadge size={56} />
       <div className="flex flex-col items-center gap-2">
         <div className="loader-ring" />
         <span className="text-[12px] font-semibold tracking-wide" style={{ color: "var(--c-text-3)" }}>
@@ -179,19 +175,12 @@ function CoachShell({ user, profile, clubId, signOut }) {
       >
         {/* ── Logo ── */}
         <div className="flex items-center gap-3 px-4 h-16 flex-shrink-0" style={{ borderBottom: "1px solid var(--c-border)" }}>
-          <div
-            className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 shadow-sm"
-            style={{ background: "linear-gradient(135deg, #1D9E75 0%, #16826C 100%)" }}
-          >
-            <Zap size={17} color="white" strokeWidth={2.5} />
-          </div>
+          <AthleteOSBadge size={36} title={null} />
           <div
             className="overflow-hidden transition-all duration-300"
             style={{ width: sidebarOpen ? "auto" : 0, opacity: sidebarOpen ? 1 : 0 }}
           >
-            <span className="font-bold text-[15px] tracking-tight whitespace-nowrap" style={{ color: "var(--c-text-1)" }}>
-              AthleteOS
-            </span>
+            <AthleteOSWordmark size={15} />
           </div>
         </div>
 

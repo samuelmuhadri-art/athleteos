@@ -55,8 +55,13 @@ e2e/
   global-setup.mjs
   smoke.spec.js
 public/
+  favicon.svg
   icon-192.png
   icon-512.png
+  icon-maskable-192.png
+  icon-maskable-512.png
+  icon-maskable.svg
+  icon.svg
   manifest.json
   sw.js
 src/
@@ -96,6 +101,9 @@ src/
     shared.js
     shared.test.js
   components/
+    brand/
+      AthleteOSLogo.jsx
+      AthleteOSLogo.test.jsx
     ui/
       AccountSettingsModal.jsx
       AxisRadarCard.jsx
@@ -261,8 +269,8 @@ This section contains the contents of the repository's files.
   <title id="title">AthleteOS — Orbit AO</title>
   <desc id="desc">Monogramme A et O formé par un anneau ouvert et un sommet central.</desc>
   <g fill="none" stroke="currentColor" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round">
-    <path d="M47.5 14.5A23 23 0 1 0 51 44"/>
-    <path d="M20 44 32 18l12 26M25 34h14"/>
+    <path d="M48 16A23 23 0 1 0 54 32"/>
+    <path d="M19 45 31.2 17.2c.4-.9 1.7-.9 2.1 0L46 45M25 35h15"/>
   </g>
 </svg>
 </file>
@@ -298,8 +306,8 @@ This section contains the contents of the repository's files.
 
     <symbol id="orbit" viewBox="0 0 64 64">
       <g fill="none" stroke="currentColor" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round">
-        <path d="M47.5 14.5A23 23 0 1 0 51 44"/>
-        <path d="M20 44 32 18l12 26M25 34h14"/>
+        <path d="M48 16A23 23 0 1 0 54 32"/>
+        <path d="M19 45 31.2 17.2c.4-.9 1.7-.9 2.1 0L46 45M25 35h15"/>
       </g>
     </symbol>
     <symbol id="lane" viewBox="0 0 64 64">
@@ -337,7 +345,7 @@ This section contains the contents of the repository's files.
 
     <!-- Card A -->
     <g transform="translate(80 220)" filter="url(#shadow)">
-      <rect width="700" height="380" rx="28" fill="#0E1E15" stroke="#EBF7EF" stroke-opacity=".11"/>
+      <rect width="700" height="380" rx="28" fill="#0E1E15" stroke="#43C99B" stroke-opacity=".38"/>
       <rect x="28" y="28" width="58" height="32" rx="16" fill="#24A87D" fill-opacity=".13"/>
       <text x="57" y="50" text-anchor="middle" fill="#43C99B" font-size="15" font-weight="700">A</text>
       <text x="104" y="52" fill="#F2F7F4" font-size="22" font-weight="650">Orbit AO</text>
@@ -423,7 +431,7 @@ This section contains the contents of the repository's files.
       <text x="238" y="342" fill="#8D9C92" font-size="14">16 · 24 · 32 · 48 px</text>
     </g>
 
-    <text x="80" y="1072" fill="#8D9C92" font-size="15">Aucun logo actif, favicon ou asset PWA n’a été remplacé · prochaine étape : choix explicite d’une direction</text>
+    <text x="80" y="1072" fill="#8D9C92" font-size="15">Direction A sélectionnée · symbole final partagé par l’interface, le favicon et les assets PWA</text>
     <text x="1520" y="1072" text-anchor="end" fill="#43C99B" font-size="15" font-weight="650">ATHLETEOS · 2026</text>
   </g>
 </svg>
@@ -432,7 +440,11 @@ This section contains the contents of the repository's files.
 <file path="docs/brand/README.md">
 # Étude du logo AthleteOS
 
-Cette étude applique la phase 16 du document `AthleteOS_Redesign_UI_UX_Premium_2026.pdf` sans modifier le logo actif de l’application.
+Cette étude applique la phase 16 du document `AthleteOS_Redesign_UI_UX_Premium_2026.pdf`.
+
+## Direction retenue
+
+La direction **A — Orbit AO** a été sélectionnée pour l’identité active. Le dessin final referme davantage l’anneau pour renforcer la lecture du `O`, personnalise la construction du `A` et reste composé d’un seul tracé monochrome sans effet décoratif indispensable.
 
 ## Pourquoi l’éclair actuel doit évoluer
 
@@ -471,11 +483,9 @@ Deux formes géométriques montantes construisent un sommet et une ouverture cen
 - Force : la direction la plus statutaire et la plus premium.
 - Vigilance : sa signification sportive est moins immédiate sans le nom AthleteOS.
 
-## Recommandation de départ
+## Décision
 
-`A — Orbit AO` est la piste la plus complète pour AthleteOS : elle est propriétaire, compacte, lisible, compatible avec une icône d’application et associe naturellement le nom au symbole. `B — Lane` est la meilleure alternative si la marque doit paraître plus sportive que technologique.
-
-Cette recommandation n’est pas encore une sélection. Le PDF demande un choix humain explicite avant de remplacer le logo actif, le favicon ou les icônes PWA.
+`A — Orbit AO` a été retenue parce qu’elle est propriétaire, compacte, lisible et directement issue du nom AthleteOS. Les pistes B, C et D restent archivées pour documenter la décision, mais ne sont pas utilisées dans l’application.
 
 ## Fichiers
 
@@ -493,7 +503,7 @@ Chaque concept utilise des formes SVG simples, sans filtre et avec `currentColor
 2. Choisir les deux plus mémorisables.
 3. Les comparer à 16, 24, 32, 48, 192 et 512 px.
 4. Les montrer à cinq personnes sans donner le concept.
-5. Retenir une direction, puis seulement générer les assets actifs et remplacer `Zap` dans les shells et les pages d’authentification.
+5. Vérifier après intégration que le même dessin est utilisé dans les shells, l’authentification, le favicon et les assets PWA.
 </file>
 
 <file path="e2e/athlete-journey.spec.js">
@@ -677,6 +687,7 @@ import { test, expect } from "@playwright/test";
 
 test("l'app démarre et affiche l'écran de connexion", async ({ page }) => {
   await page.goto("/");
+  await expect(page.getByRole("heading", { name: "AthleteOS" })).toBeVisible();
   await expect(page.getByPlaceholder("coach@club.be")).toBeVisible();
   await expect(page.getByPlaceholder("••••••••")).toBeVisible();
   await expect(page.getByRole("button", { name: "Se connecter" })).toBeVisible();
@@ -698,17 +709,52 @@ test("un identifiant invalide affiche une erreur, ne fait pas planter l'app", as
 });
 </file>
 
+<file path="public/favicon.svg">
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64" role="img" aria-label="AthleteOS">
+  <rect width="64" height="64" rx="16" fill="#07120C"/>
+  <g fill="none" stroke="#43C99B" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M48 16A23 23 0 1 0 54 32"/>
+    <path d="M19 45 31.2 17.2c.4-.9 1.7-.9 2.1 0L46 45M25 35h15"/>
+  </g>
+</svg>
+</file>
+
+<file path="public/icon-maskable.svg">
+<svg xmlns="http://www.w3.org/2000/svg" width="100%" height="100%" viewBox="0 0 512 512" role="img" aria-label="AthleteOS">
+  <rect width="512" height="512" fill="#07120C"/>
+  <circle cx="256" cy="256" r="220" fill="#0E1E15"/>
+  <g transform="translate(89.6 89.6) scale(5.2)" fill="none" stroke="#43C99B" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M48 16A23 23 0 1 0 54 32"/>
+    <path d="M19 45 31.2 17.2c.4-.9 1.7-.9 2.1 0L46 45M25 35h15"/>
+  </g>
+</svg>
+</file>
+
+<file path="public/icon.svg">
+<svg xmlns="http://www.w3.org/2000/svg" width="100%" height="100%" viewBox="0 0 512 512" role="img" aria-label="AthleteOS">
+  <rect width="512" height="512" fill="#07120C"/>
+  <rect x="8" y="8" width="496" height="496" rx="120" fill="#07120C" stroke="#43C99B" stroke-opacity=".18" stroke-width="8"/>
+  <g transform="translate(51.2 51.2) scale(6.4)" fill="none" stroke="#43C99B" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M48 16A23 23 0 1 0 54 32"/>
+    <path d="M19 45 31.2 17.2c.4-.9 1.7-.9 2.1 0L46 45M25 35h15"/>
+  </g>
+</svg>
+</file>
+
 <file path="public/manifest.json">
 {
   "name": "AthleteOS",
   "short_name": "AthleteOS",
+  "lang": "fr",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#09150E",
-  "theme_color": "#09150E",
+  "background_color": "#07120C",
+  "theme_color": "#07120C",
   "icons": [
-    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" },
-    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png" }
+    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/icon-maskable-192.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable" },
+    { "src": "/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
   ]
 }
 </file>
@@ -8470,6 +8516,158 @@ describe("pctOfReference — % du PR, sens correct par discipline", () => {
 
   it("cible absente -> null", () => {
     expect(pctOfReference(11.0, null, "100m")).toBeNull();
+  });
+});
+</file>
+
+<file path="src/components/brand/AthleteOSLogo.jsx">
+import { memo } from "react";
+
+export const BRAND_NAME = "AthleteOS";
+
+export const AthleteOSMark = memo(function AthleteOSMark({
+  size = 32,
+  color = "var(--color-success)",
+  title,
+  className,
+  style,
+}) {
+  return (
+    <svg
+      viewBox="0 0 64 64"
+      width={size}
+      height={size}
+      className={className}
+      style={{ display: "block", color, flexShrink: 0, ...style }}
+      role={title ? "img" : undefined}
+      aria-label={title}
+      aria-hidden={title ? undefined : "true"}
+      focusable="false"
+    >
+      <g
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="5.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      >
+        <path d="M48 16A23 23 0 1 0 54 32" />
+        <path d="M19 45 31.2 17.2c.4-.9 1.7-.9 2.1 0L46 45M25 35h15" />
+      </g>
+    </svg>
+  );
+});
+
+export const AthleteOSBadge = memo(function AthleteOSBadge({ size = 36, title = BRAND_NAME, style }) {
+  const radius = Math.max(8, Math.round(size * 0.29));
+  return (
+    <span
+      style={{
+        width: size,
+        height: size,
+        borderRadius: radius,
+        display: "inline-flex",
+        alignItems: "center",
+        justifyContent: "center",
+        flexShrink: 0,
+        color: "var(--color-success)",
+        background: "var(--c-surface-2)",
+        border: "1px solid rgba(67,201,155,0.20)",
+        boxShadow: "inset 0 1px 0 rgba(255,255,255,0.045), var(--shadow-xs)",
+        ...style,
+      }}
+    >
+      <AthleteOSMark size={Math.round(size * 0.67)} color="currentColor" title={title} />
+    </span>
+  );
+});
+
+export const AthleteOSWordmark = memo(function AthleteOSWordmark({
+  size = 15,
+  color = "var(--c-text-1)",
+  accentColor = "var(--color-success)",
+  className,
+  style,
+}) {
+  return (
+    <span
+      className={className}
+      aria-label={BRAND_NAME}
+      style={{
+        display: "inline-flex",
+        alignItems: "baseline",
+        color,
+        fontSize: size,
+        fontWeight: 650,
+        lineHeight: 1,
+        letterSpacing: "-0.035em",
+        whiteSpace: "nowrap",
+        ...style,
+      }}
+    >
+      Athlete<span style={{ color: accentColor }}>OS</span>
+    </span>
+  );
+});
+
+const AthleteOSLogo = memo(function AthleteOSLogo({
+  size = 36,
+  wordmarkSize = 15,
+  direction = "row",
+  showWordmark = true,
+  title = BRAND_NAME,
+  className,
+  style,
+}) {
+  const vertical = direction === "column";
+  return (
+    <span
+      className={className}
+      style={{
+        display: "inline-flex",
+        flexDirection: vertical ? "column" : "row",
+        alignItems: "center",
+        gap: vertical ? 12 : 10,
+        ...style,
+      }}
+    >
+      <AthleteOSBadge size={size} title={showWordmark ? null : title} />
+      {showWordmark && <AthleteOSWordmark size={wordmarkSize} />}
+    </span>
+  );
+});
+
+export default AthleteOSLogo;
+</file>
+
+<file path="src/components/brand/AthleteOSLogo.test.jsx">
+import { afterEach, describe, expect, it } from "vitest";
+import { cleanup, render, screen } from "@testing-library/react";
+import AthleteOSLogo, { AthleteOSBadge, AthleteOSMark, AthleteOSWordmark } from "./AthleteOSLogo";
+
+afterEach(cleanup);
+
+describe("AthleteOSLogo", () => {
+  it("expose un nom accessible quand le symbole porte la marque", () => {
+    render(<AthleteOSMark title="AthleteOS" />);
+    expect(screen.getByRole("img", { name: "AthleteOS" })).toBeTruthy();
+  });
+
+  it("cache les symboles purement décoratifs aux technologies d'assistance", () => {
+    const { container } = render(<AthleteOSMark />);
+    expect(container.querySelector("svg")?.getAttribute("aria-hidden")).toBe("true");
+  });
+
+  it("compose le badge et le mot-symbole sans transformer le nom", () => {
+    render(<AthleteOSLogo direction="column" size={56} wordmarkSize={24} />);
+    expect(screen.getByText(/Athlete/).textContent).toBe("AthleteOS");
+    expect(screen.queryByRole("img")).toBeNull();
+  });
+
+  it("permet d'utiliser séparément le badge et le wordmark", () => {
+    render(<><AthleteOSBadge title="Marque AthleteOS" /><AthleteOSWordmark /></>);
+    expect(screen.getByRole("img", { name: "Marque AthleteOS" })).toBeTruthy();
+    expect(screen.getByText(/Athlete/).textContent).toBe("AthleteOS");
   });
 });
 </file>
@@ -18567,8 +18765,9 @@ export default SessionModal;
 // ============================================================
 
 import { useState } from "react";
-import { Zap, Mail, Lock, AlertCircle, CheckCircle } from "lucide-react";
+import { Mail, Lock, AlertCircle, CheckCircle } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
+import AthleteOSLogo from "../components/brand/AthleteOSLogo";
 
 export default function LoginPage({ onSignupClick }) {
   const { signIn, sendPasswordReset } = useAuth();
@@ -18626,14 +18825,10 @@ export default function LoginPage({ onSignupClick }) {
 
         {/* ── Logo ─────────────────────────────────────────────────────── */}
         <div className="flex flex-col items-center gap-3 mb-8">
-          <div
-            className="w-14 h-14 rounded-2xl flex items-center justify-center shadow-sm"
-            style={{ background: "linear-gradient(135deg, #1D9E75 0%, #16826C 100%)" }}
-          >
-            <Zap size={24} color="white" strokeWidth={2.5} />
-          </div>
+          <h1 style={{ margin: 0 }}>
+            <AthleteOSLogo size={56} wordmarkSize={24} direction="column" />
+          </h1>
           <div className="text-center">
-            <h1 className="text-[24px] font-bold tracking-tight" style={{ color: "var(--c-text-1)" }}>AthleteOS</h1>
             <p className="text-[13px] mt-0.5" style={{ color: "var(--c-text-3)" }}>
               {mode === "forgot" ? "Récupère l'accès à ton compte" : "Connecte-toi pour accéder à ton espace"}
             </p>
@@ -18809,8 +19004,9 @@ export default function LoginPage({ onSignupClick }) {
 // ============================================================
 
 import { useState } from "react";
-import { Zap, Lock, AlertCircle, CheckCircle } from "lucide-react";
+import { Lock, AlertCircle, CheckCircle } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
+import { AthleteOSBadge } from "../components/brand/AthleteOSLogo";
 
 export default function ResetPasswordPage() {
   const { updatePassword, signOut } = useAuth();
@@ -18841,9 +19037,7 @@ export default function ResetPasswordPage() {
     <div className="min-h-screen flex items-center justify-center p-4" style={{ background: "var(--c-bg)", fontFamily: "'DM Sans', system-ui, sans-serif" }}>
       <div className="w-full max-w-sm">
         <div className="flex flex-col items-center gap-3 mb-8">
-          <div className="w-14 h-14 rounded-2xl flex items-center justify-center shadow-sm" style={{ background: "linear-gradient(135deg, #1D9E75 0%, #16826C 100%)" }}>
-            <Zap size={24} color="white" strokeWidth={2.5} />
-          </div>
+          <AthleteOSBadge size={56} />
           <div className="text-center">
             <h1 className="text-[24px] font-bold tracking-tight" style={{ color: "var(--c-text-1)" }}>Nouveau mot de passe</h1>
             <p className="text-[13px] mt-0.5" style={{ color: "var(--c-text-3)" }}>Choisis un mot de passe pour ton compte</p>
@@ -18921,8 +19115,9 @@ export default function ResetPasswordPage() {
 // ============================================================
 
 import { useState, useRef } from "react";
-import { Zap, Mail, Lock, User, Building2, KeyRound, AlertCircle, ArrowLeft } from "lucide-react";
+import { Mail, Lock, User, Building2, KeyRound, AlertCircle, ArrowLeft } from "lucide-react";
 import { supabase } from "../utils/supabaseClient";
+import AthleteOSLogo from "../components/brand/AthleteOSLogo";
 
 export default function SignupPage({ onBack }) {
   const [mode, setMode] = useState("create_club"); // "create_club" | "join_club"
@@ -19006,14 +19201,10 @@ export default function SignupPage({ onBack }) {
 
         {/* ── Logo ─────────────────────────────────────────────────────── */}
         <div className="flex flex-col items-center gap-3 mb-6">
-          <div
-            className="w-14 h-14 rounded-2xl flex items-center justify-center shadow-sm"
-            style={{ background: "linear-gradient(135deg, #1D9E75 0%, #16826C 100%)" }}
-          >
-            <Zap size={24} color="white" strokeWidth={2.5} />
-          </div>
+          <h1 style={{ margin: 0 }}>
+            <AthleteOSLogo size={56} wordmarkSize={24} direction="column" />
+          </h1>
           <div className="text-center">
-            <h1 className="text-[24px] font-bold tracking-tight" style={{ color: "var(--c-text-1)" }}>AthleteOS</h1>
             <p className="text-[13px] mt-0.5" style={{ color: "var(--c-text-3)" }}>Crée ton espace en 30 secondes</p>
           </div>
         </div>
@@ -22449,7 +22640,7 @@ import { useState, useCallback, useEffect, Suspense, lazy } from "react";
 import {
   LayoutDashboard, CalendarDays, Users, TrendingUp,
   Activity, Trophy, Bell, MessageSquare, FileText,
-  ChevronLeft, ChevronRight, Menu, X, Zap, LogOut,
+  ChevronLeft, ChevronRight, Menu, X, LogOut,
   UserPlus, Copy, Check, Settings,
 } from "lucide-react";
 
@@ -22459,6 +22650,7 @@ import LoginPage      from "./pages/LoginPage";
 import SignupPage     from "./pages/SignupPage";
 import ResetPasswordPage from "./pages/ResetPasswordPage";
 import AccountSettingsModal from "./components/ui/AccountSettingsModal";
+import { AthleteOSBadge, AthleteOSWordmark } from "./components/brand/AthleteOSLogo";
 import AthleteApp     from "./AthleteApp";
 import { usePushNotifications, PushToggleButton } from "./hooks/usePushNotifications";
 import { useUrlView } from "./hooks/useUrlView";
@@ -22524,12 +22716,7 @@ function AuthLoader() {
   return (
     <div className="min-h-screen flex flex-col items-center justify-center gap-5" style={{ background: "var(--c-bg)" }}>
       {/* Logo animé */}
-      <div
-        className="w-14 h-14 rounded-2xl flex items-center justify-center shadow-lg"
-        style={{ background: "linear-gradient(135deg, #1D9E75 0%, #16826C 100%)" }}
-      >
-        <Zap size={24} color="white" strokeWidth={2.5} />
-      </div>
+      <AthleteOSBadge size={56} />
       <div className="flex flex-col items-center gap-2">
         <div className="loader-ring" />
         <span className="text-[12px] font-semibold tracking-wide" style={{ color: "var(--c-text-3)" }}>
@@ -22622,19 +22809,12 @@ function CoachShell({ user, profile, clubId, signOut }) {
       >
         {/* ── Logo ── */}
         <div className="flex items-center gap-3 px-4 h-16 flex-shrink-0" style={{ borderBottom: "1px solid var(--c-border)" }}>
-          <div
-            className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 shadow-sm"
-            style={{ background: "linear-gradient(135deg, #1D9E75 0%, #16826C 100%)" }}
-          >
-            <Zap size={17} color="white" strokeWidth={2.5} />
-          </div>
+          <AthleteOSBadge size={36} title={null} />
           <div
             className="overflow-hidden transition-all duration-300"
             style={{ width: sidebarOpen ? "auto" : 0, opacity: sidebarOpen ? 1 : 0 }}
           >
-            <span className="font-bold text-[15px] tracking-tight whitespace-nowrap" style={{ color: "var(--c-text-1)" }}>
-              AthleteOS
-            </span>
+            <AthleteOSWordmark size={15} />
           </div>
         </div>
 
@@ -22932,7 +23112,7 @@ export default function App() {
 import { useState, useCallback, useEffect, useRef } from "react";
 import {
   LayoutDashboard, CalendarDays, TrendingUp, MessageSquare,
-  Zap, LogOut, Users, Bell, Settings
+  LogOut, Users, Bell, Settings
 } from "lucide-react";
 import { supabase }  from "./utils/supabaseClient";
 import { useAuth }   from "./context/AuthContext";
@@ -22951,6 +23131,7 @@ import InjuryReportModal from "./athlete/components/InjuryReportModal";
 import NotificationBanner from "./athlete/components/NotificationBanner";
 import NotificationCenter from "./athlete/components/NotificationCenter";
 import AccountSettingsModal from "./components/ui/AccountSettingsModal";
+import { AthleteOSBadge, AthleteOSWordmark } from "./components/brand/AthleteOSLogo";
 import { getNotificationPresentation, mergeIncomingNotification } from "./athlete/notificationPresentation";
 
 const NAV_ITEMS = [
@@ -23185,10 +23366,7 @@ export default function AthleteApp() {
   if (loading) return (
     <div className="min-h-screen flex flex-col items-center justify-center gap-5"
       style={{ background: "var(--c-bg)" }}>
-      <div className="w-14 h-14 rounded-2xl flex items-center justify-center"
-        style={{ background: "linear-gradient(135deg, #1D9E75, #16826C)" }}>
-        <Zap size={24} color="white" strokeWidth={2} />
-      </div>
+      <AthleteOSBadge size={56} />
       <div className="flex flex-col items-center gap-2">
         <div className="loader-ring" />
         <span style={{ fontSize: 12, color: "var(--c-text-3)", letterSpacing: "0.02em" }}>
@@ -23239,13 +23417,8 @@ export default function AthleteApp() {
         {/* Logo */}
         <div className="flex items-center gap-3 px-4 flex-shrink-0"
           style={{ height: 64, borderBottom: "1px solid var(--c-border)" }}>
-          <div className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0"
-            style={{ background: "linear-gradient(135deg, #1D9E75, #16826C)" }}>
-            <Zap size={15} color="white" strokeWidth={2} />
-          </div>
-          <span style={{ fontWeight: 600, fontSize: 14, color: "var(--c-text-1)", letterSpacing: "-0.01em" }}>
-            AthleteOS
-          </span>
+          <AthleteOSBadge size={32} title={null} />
+          <AthleteOSWordmark size={14} />
         </div>
 
         {/* Nav items */}
@@ -23331,13 +23504,8 @@ export default function AthleteApp() {
           style={{ height: 56 }}>
           {/* Logo mobile */}
           <div className="flex md:hidden items-center gap-2.5">
-            <div className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0"
-              style={{ background: "linear-gradient(135deg, #1D9E75, #16826C)" }}>
-              <Zap size={13} color="white" strokeWidth={2} />
-            </div>
-            <span style={{ fontWeight: 600, fontSize: 14, color: "var(--c-text-1)", letterSpacing: "-0.01em" }}>
-              AthleteOS
-            </span>
+            <AthleteOSBadge size={28} title={null} />
+            <AthleteOSWordmark size={14} />
           </div>
           {/* Titre vue — desktop */}
           <div className="hidden md:flex items-center gap-2.5">
@@ -28533,24 +28701,18 @@ Toujours créer une **nouvelle** migration plutôt que modifier un fichier déj�
     <meta property="og:description" content="Plateforme de suivi scientifique de la performance athlétique." />
     <meta property="og:type" content="website" />
 
-    <meta name="theme-color" content="#09150E" />
+    <meta name="theme-color" content="#07120C" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="AthleteOS" />
-    <link rel="manifest" href="/manifest.json" />
     <link rel="apple-touch-icon" href="/icon-192.png" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
 
     <!-- Fond sombre appliqué avant même le chargement de index.css — sans
          ça l'écran flashe en blanc (fond par défaut du navigateur) pendant
          une fraction de seconde à chaque lancement, surtout perceptible en
          PWA installée ou sur connexion lente. -->
-    <style>html,body{background:#09150E}</style>
-
-    <!-- Favicon SVG inline -->
-    <link
-      rel="icon"
-      href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='8' fill='%231D9E75'/><path d='M10 22 L16 10 L22 22' stroke='white' stroke-width='2.5' fill='none' stroke-linecap='round' stroke-linejoin='round'/><circle cx='16' cy='10' r='2' fill='white'/></svg>"
-    />
+    <style>html,body{background:#07120C}</style>
 
     <!-- Google Fonts : DM Sans -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -31329,15 +31491,18 @@ export default defineConfig({
       manifest: {
         name: 'AthleteOS',
         short_name: 'AthleteOS',
+        lang: 'fr',
         description: 'Plateforme de suivi de performance sportive',
         start_url: '/',
         display: 'standalone',
-        background_color: '#09150E',
-        theme_color: '#09150E',
+        background_color: '#07120C',
+        theme_color: '#07120C',
         orientation: 'portrait',
         icons: [
-          { src: '/icon-192.png', sizes: '192x192', type: 'image/png', purpose: 'any maskable' },
-          { src: '/icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'any maskable' },
+          { src: '/icon-192.png', sizes: '192x192', type: 'image/png', purpose: 'any' },
+          { src: '/icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'any' },
+          { src: '/icon-maskable-192.png', sizes: '192x192', type: 'image/png', purpose: 'maskable' },
+          { src: '/icon-maskable-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
         ],
       },
       injectManifest: {
