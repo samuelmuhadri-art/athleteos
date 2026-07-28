@@ -13,7 +13,7 @@ import { useState, useMemo, useEffect, memo } from "react";
 import {
   CalendarDays, TrendingUp, TrendingDown, Zap, CheckCircle,
   Activity, FileText, HeartPulse, Trophy, ChevronRight, Minus,
-  Star, MessageSquare, Clock,
+  Star, Clock,
 } from "lucide-react";
 import {
   getAthleteMetricsForWeek, getStatusLabel,
@@ -41,7 +41,7 @@ function getDiscType(discName) {
 }
 
 // ─── Badges — zéro emoji, icônes lucide ──────────────────────────────────────
-function computeBadges({ athlete, weeklyCharge, sessions, competitions, myPerformances, streak, currentWeek }) {
+function computeBadges({ athlete, weeklyCharge, sessions, competitions, myPerformances, streak }) {
   const badges = [];
   const myComps   = (competitions ?? []).filter(c => c.athleteIds?.includes(athlete.id));
   const myPerfs   = myPerformances ?? [];
@@ -119,8 +119,8 @@ const BadgeItem = memo(({ badge }) => (
       style={{ background: badge.unlocked ? badge.color + "18" : "rgba(255,255,255,0.04)" }}>
       <BadgeIcon icon={badge.icon} color={badge.unlocked ? badge.color : "var(--c-text-4)"} />
     </div>
-    <p style={{ fontSize: 10, fontWeight: 500, color: "var(--c-text-1)", lineHeight: 1.2 }}>{badge.label}</p>
-    <p style={{ fontSize: 8.5, color: "var(--c-text-3)", lineHeight: 1.2 }}>{badge.desc}</p>
+    <p style={{ fontSize: "var(--text-meta)", fontWeight: 600, color: "var(--c-text-1)", lineHeight: "var(--leading-meta)" }}>{badge.label}</p>
+    <p style={{ fontSize: "var(--text-meta)", color: "var(--c-text-3)", lineHeight: "var(--leading-meta)" }}>{badge.desc}</p>
   </div>
 ));
 // Ring héro readiness — se remplit de 0 à sa valeur au montage, façon
@@ -169,7 +169,7 @@ const ReadinessRing = memo(({ value, color, size = 128 }) => {
         <span style={{ fontSize: Math.round(size * 0.27), fontWeight: 700, color, lineHeight: 1, letterSpacing: "-0.03em", fontVariantNumeric: "tabular-nums" }}>
           {displayValue}
         </span>
-        <span style={{ fontSize: 9, fontWeight: 500, letterSpacing: "0.10em", textTransform: "uppercase", color: "rgba(255,255,255,0.30)", marginTop: 3 }}>
+        <span style={{ fontSize: "var(--text-meta)", fontWeight: 600, letterSpacing: "0.07em", textTransform: "uppercase", color: "var(--c-text-3)", marginTop: "var(--space-1)" }}>
           Readiness
         </span>
       </div>
@@ -186,7 +186,7 @@ export default function AthleteDashboard({
   onOpenInjuryReport, allAthletes, onRpeChange, onStatusChange,
   onFeelingChange, onCommentChange,
 }) {
-  const today       = new Date();
+  const today       = useMemo(() => new Date(), []);
   const currentWeek = getISOWeek(today);
   const [openTodaySession, setOpenTodaySession] = useState(false);
 
@@ -200,7 +200,7 @@ export default function AthleteDashboard({
     competitions
       .filter(c => c.athleteIds.includes(athlete.id) && new Date(c.date) >= today)
       .sort((a, b) => new Date(a.date) - new Date(b.date))[0] ?? null,
-  [competitions, athlete.id]);
+  [competitions, athlete.id, today]);
 
   const weekSessions = useMemo(() =>
     sessions.filter(s => s.week === currentWeek).sort((a, b) => (a.time ?? "").localeCompare(b.time ?? "")),
@@ -210,7 +210,7 @@ export default function AthleteDashboard({
   // juste sous le ring plutôt que noyée dans la liste de la semaine.
   const todaySessions = useMemo(() =>
     weekSessions.filter(s => s.sessionDate && isSameDay(parseLocalDate(s.sessionDate), today)),
-  [weekSessions]); // eslint-disable-line react-hooks/exhaustive-deps
+  [weekSessions, today]);
   const heroSession = todaySessions[0] ?? null;
   const heroValidation = heroSession?.validations?.find(v => v.athleteId === athlete.id) ?? null;
   const heroDone = heroValidation?.status === "done";
@@ -252,8 +252,8 @@ export default function AthleteDashboard({
   );
 
   const badges = useMemo(() =>
-    computeBadges({ athlete, weeklyCharge, sessions, competitions, myPerformances, streak, currentWeek }),
-  [athlete, weeklyCharge, sessions, competitions, myPerformances, streak, currentWeek]);
+    computeBadges({ athlete, weeklyCharge, sessions, competitions, myPerformances, streak }),
+  [athlete, weeklyCharge, sessions, competitions, myPerformances, streak]);
 
   const unlockedBadges = badges.filter(b =>  b.unlocked);
   const lockedBadges   = badges.filter(b => !b.unlocked);
@@ -286,36 +286,31 @@ export default function AthleteDashboard({
     t => metrics.readiness >= t.min && metrics.readiness <= t.max
   );
 
-  // ── Séparateur de section ──────────────────────────────────────────────────
-  const SectionDivider = ({ label, action, onAction }) => (
-    <div className="flex items-center justify-between mb-3 mt-5 first:mt-0">
-      <p style={{ fontSize: 9, fontWeight: 500, letterSpacing: "0.09em", textTransform: "uppercase", color: "var(--c-text-3)" }}>
-        {label}
-      </p>
-      {action && (
-        <button onClick={onAction} className="btn-ghost" style={{ minHeight: "auto", padding: "0", fontSize: 11 }}>
-          {action}
-        </button>
-      )}
-    </div>
-  );
-
   // ══════════════════════════════════════════════════════════════════════════
   return (
-    <div className="p-4 md:p-5 space-y-3 max-w-4xl mx-auto animate-slide-up">
+    <div className="page-container py-4 md:py-5 space-y-4 md:space-y-5 max-w-5xl mx-auto animate-slide-up">
+
+      <header className="flex items-end justify-between gap-4">
+        <div>
+          <p className="meta-text mb-1">Aujourd’hui</p>
+          <h1 className="page-title">Bonjour {athlete.name.split(" ")[0]}</h1>
+          <p className="secondary-text mt-1">Voici ce qui compte pour ton entraînement.</p>
+        </div>
+        <span className="meta-text hidden sm:block">Semaine {currentWeek}</span>
+      </header>
 
       {/* ══════════════════════════════════════════════════════════════════════
           HERO — vert-noir profond, chiffres sobres
          ══════════════════════════════════════════════════════════════════════ */}
-      <div className="rounded-2xl overflow-hidden select-none"
-        style={{ background: "linear-gradient(160deg, #0B1D14 0%, #0D2219 55%, #081611 100%)" }}>
+      <div className="rounded-2xl overflow-hidden select-none border"
+        style={{ background: "linear-gradient(160deg, var(--c-surface) 0%, var(--c-surface-2) 55%, var(--c-bg) 100%)", borderColor: "var(--c-border)" }}>
         {/* Grille décorative — très subtile */}
         <div className="absolute pointer-events-none" style={{
           inset: 0, position: "relative",
           backgroundImage: "linear-gradient(rgba(29,158,117,0.03) 1px, transparent 1px), linear-gradient(90deg, rgba(29,158,117,0.03) 1px, transparent 1px)",
           backgroundSize: "24px 24px",
         }} />
-        <div style={{ padding: "20px 20px 20px" }}>
+        <div style={{ padding: "var(--card-padding-comfortable)" }}>
           {/* Identité */}
           <div className="flex items-start justify-between gap-3 mb-5">
             <div className="flex items-center gap-3">
@@ -329,13 +324,11 @@ export default function AthleteDashboard({
                 </span>
               </div>
               <div>
-                <p style={{ fontSize: 8.5, fontWeight: 500, letterSpacing: "0.11em", color: "rgba(255,255,255,0.25)", textTransform: "uppercase", marginBottom: 3 }}>
-                  Mon espace · S{currentWeek}
+                <p className="meta-text" style={{ fontWeight: 600, letterSpacing: "0.07em", textTransform: "uppercase", marginBottom: "var(--space-1)" }}>
+                  État du jour · S{currentWeek}
                 </p>
-                <h1 style={{ fontSize: 20, fontWeight: 600, color: "white", letterSpacing: "-0.03em", lineHeight: 1 }}>
-                  {athlete.name.split(" ")[0]}
-                </h1>
-                <p style={{ fontSize: 10.5, color: "rgba(255,255,255,0.28)", marginTop: 3 }}>
+                <p className="section-title">{status.label}</p>
+                <p className="meta-text" style={{ marginTop: "var(--space-1)" }}>
                   {athlete.mainDiscipline ?? "Athlète"}{athlete.group ? ` · ${athlete.group}` : ""}
                 </p>
               </div>
@@ -347,7 +340,7 @@ export default function AthleteDashboard({
               background: `${statusColor}12`, border: `1px solid ${statusColor}22`,
             }}>
               <div style={{ width: 5, height: 5, borderRadius: "50%", background: statusColor, flexShrink: 0 }} />
-              <span style={{ fontSize: 10, fontWeight: 500, color: statusColor }}>{status.label}</span>
+              <span style={{ fontSize: "var(--text-meta)", fontWeight: 600, color: statusColor }}>Readiness {metrics.readiness}</span>
             </div>
           </div>
 
@@ -358,7 +351,7 @@ export default function AthleteDashboard({
 
             <div style={{ flex: 1, minWidth: 190 }}>
               {readinessThreshold && (
-                <p style={{ fontSize: 12.5, color: "rgba(255,255,255,0.78)", lineHeight: 1.45, marginBottom: 13 }}>
+                <p style={{ fontSize: "var(--text-body)", color: "var(--c-text-2)", lineHeight: "var(--leading-body)", marginBottom: "var(--space-4)" }}>
                   {readinessThreshold.advice}
                 </p>
               )}
@@ -378,9 +371,9 @@ export default function AthleteDashboard({
                         <span style={{ fontSize: 17, fontWeight: 600, color: col, fontVariantNumeric: "tabular-nums", letterSpacing: "-0.03em", lineHeight: 1 }}>
                           {s.value}
                         </span>
-                        {s.unit && <span style={{ fontSize: 7.5, color: "rgba(255,255,255,0.18)", fontWeight: 400, marginBottom: 1 }}>{s.unit}</span>}
+                        {s.unit && <span style={{ fontSize: "var(--text-meta)", color: "var(--c-text-3)", fontWeight: 400, marginBottom: 1 }}>{s.unit}</span>}
                       </div>
-                      <p style={{ fontSize: 7.5, fontWeight: 500, letterSpacing: "0.10em", textTransform: "uppercase", color: "rgba(255,255,255,0.20)" }}>
+                      <p style={{ fontSize: "var(--text-meta)", fontWeight: 600, letterSpacing: "0.06em", textTransform: "uppercase", color: "var(--c-text-3)" }}>
                         {s.label}
                       </p>
                       <div style={{ height: 1.5, background: "rgba(255,255,255,0.05)", borderRadius: 99, marginTop: 6, overflow: "hidden" }}>
@@ -399,7 +392,7 @@ export default function AthleteDashboard({
           SÉANCE DU JOUR — la chose la plus importante à faire aujourd'hui,
           juste sous le ring, pas noyée dans la liste de la semaine.
          ══════════════════════════════════════════════════════════════════════ */}
-      {heroSession && (
+      {heroSession ? (
         <div className="card p-4" style={heroDone ? undefined : { borderColor: "rgba(29,158,117,0.30)" }}>
           <div className="flex items-center justify-between gap-3">
             <div className="flex items-center gap-3 min-w-0">
@@ -413,23 +406,39 @@ export default function AthleteDashboard({
                   : <Clock size={18} color={colorsFor(heroSession.category).border} strokeWidth={2} />}
               </div>
               <div className="min-w-0">
-                <p style={{ fontSize: 9, fontWeight: 500, letterSpacing: "0.09em", textTransform: "uppercase", color: "var(--c-text-3)", marginBottom: 2 }}>
+                <p className="meta-text" style={{ fontWeight: 600, letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: "var(--space-1)" }}>
                   Séance du jour{todaySessions.length > 1 ? ` · +${todaySessions.length - 1} autre${todaySessions.length > 2 ? "s" : ""}` : ""}
                 </p>
-                <p style={{ fontSize: 13.5, fontWeight: 600, color: "var(--c-text-1)" }} className="truncate">{heroSession.title}</p>
-                <p style={{ fontSize: 10.5, color: "var(--c-text-3)", marginTop: 1 }}>
+                <p className="card-title truncate">{heroSession.title}</p>
+                <p className="meta-text" style={{ marginTop: "var(--space-1)" }}>
                   {heroSession.time}{heroSession.durationMinutes ? ` · ${heroSession.durationMinutes} min` : ""}
                 </p>
               </div>
             </div>
             {heroDone ? (
-              <span style={{ fontSize: 11, fontWeight: 600, color: "#4DC9A0", flexShrink: 0, whiteSpace: "nowrap" }}>Validée</span>
+              <span style={{ fontSize: "var(--text-secondary)", fontWeight: 600, color: "var(--color-success)", flexShrink: 0, whiteSpace: "nowrap" }}>Validée</span>
             ) : (
               <button onClick={() => setOpenTodaySession(true)} className="btn-primary" style={{ flexShrink: 0 }}>
                 Valider
               </button>
             )}
           </div>
+        </div>
+      ) : (
+        <div className="card card-content flex items-center justify-between gap-4">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
+              style={{ background: "var(--c-surface-2)" }}>
+              <CalendarDays size={18} color="var(--c-text-2)" strokeWidth={1.8} />
+            </div>
+            <div className="min-w-0">
+              <p className="card-title">Aucune séance prévue aujourd’hui</p>
+              <p className="card-subtitle">Consulte ton planning pour voir la suite de la semaine.</p>
+            </div>
+          </div>
+          <button onClick={() => onNavigate("planning")} className="btn-secondary flex-shrink-0">
+            Planning
+          </button>
         </div>
       )}
 
@@ -453,11 +462,11 @@ export default function AthleteDashboard({
                 <span style={{ fontSize: 16, fontWeight: 600, color: "#7C67C8", fontVariantNumeric: "tabular-nums", letterSpacing: "-0.02em" }}>
                   {metrics.wellnessScore}
                 </span>
-                <span style={{ fontSize: 8.5, color: "#7C67C8", marginLeft: 1 }}>/100</span>
+                <span style={{ fontSize: "var(--text-meta)", color: "#9B84F0", marginLeft: 2 }}>/100</span>
               </div>
             )}
           </div>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(5,1fr)", gap: 6 }}>
+          <div className="grid grid-cols-5 gap-2">
             {WELLNESS_QUESTIONS.map(q => {
               const val  = wellnessToday[q.key];
               const Icon = q.icon;
@@ -465,21 +474,21 @@ export default function AthleteDashboard({
               const bad  = q.inverted ? val >= 4 : val <= 2;
               const col  = good ? "#1D9E75" : bad ? "#C0392B" : "#C8890A";
               return (
-                <div key={q.key} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4, padding: "8px 4px", borderRadius: 8, background: "var(--c-surface-2)" }}>
-                  <Icon size={11} color={q.color} strokeWidth={2} />
+                <div key={q.key} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "var(--space-1)", padding: "var(--space-2) var(--space-1)", borderRadius: 8, background: "var(--c-surface-2)" }}>
+                  <Icon size={13} color={q.color} strokeWidth={2} />
                   <span style={{ fontSize: 15, fontWeight: 600, color: col, fontVariantNumeric: "tabular-nums", lineHeight: 1 }}>{val}</span>
-                  <span style={{ fontSize: 7.5, color: "var(--c-text-3)", textAlign: "center", lineHeight: 1.2 }}>{q.label.split(" ")[0]}</span>
+                  <span style={{ fontSize: "var(--text-meta)", color: "var(--c-text-3)", textAlign: "center", lineHeight: "var(--leading-meta)" }}>{q.label.split(" ")[0]}</span>
                 </div>
               );
             })}
           </div>
           {wellnessToday.notes && (
-            <p style={{ marginTop: 10, fontSize: 11, color: "var(--c-text-3)", fontStyle: "italic", borderTop: "1px solid var(--c-border)", paddingTop: 10 }}>
+            <p className="meta-text" style={{ marginTop: "var(--space-3)", fontStyle: "italic", borderTop: "1px solid var(--c-border)", paddingTop: "var(--space-3)" }}>
               {wellnessToday.notes}
             </p>
           )}
-          <button onClick={onOpenWellness} style={{ marginTop: 8, fontSize: 10.5, fontWeight: 400, color: "var(--c-text-3)", background: "none", border: "none", cursor: "pointer", padding: 0 }}>
-            Modifier →
+          <button onClick={onOpenWellness} className="btn-ghost" style={{ marginTop: "var(--space-2)", minHeight: 36, paddingInline: 0 }}>
+            Modifier
           </button>
         </div>
       ) : (
@@ -489,8 +498,8 @@ export default function AthleteDashboard({
               <Activity size={15} color="#1D9E75" strokeWidth={2} />
             </div>
             <div>
-              <p style={{ fontSize: 13, fontWeight: 500, color: "rgba(255,255,255,0.80)" }}>Questionnaire matinal</p>
-              <p style={{ fontSize: 11, color: "rgba(255,255,255,0.45)", marginTop: 1 }}>30 secondes · Améliore ton Readiness</p>
+              <p className="card-title">Questionnaire matinal</p>
+              <p className="card-subtitle">30 secondes · Améliore ton Readiness</p>
             </div>
           </div>
           <button onClick={onOpenWellness} className="btn-primary" style={{ flexShrink: 0 }}>
@@ -502,8 +511,12 @@ export default function AthleteDashboard({
       {/* ══════════════════════════════════════════════════════════════════════
           GRILLE PRINCIPALE
          ══════════════════════════════════════════════════════════════════════ */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
-        <div className="lg:col-span-2 space-y-3">
+      <div>
+        <p className="section-title">À explorer</p>
+        <p className="secondary-text mt-1">Tes tendances, tes progrès et les informations de ton équipe.</p>
+      </div>
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 md:gap-5">
+        <div className="lg:col-span-2 space-y-4 md:space-y-5">
 
           {/* ── Charge d'entraînement ───────────────────────────────────────── */}
           {hasCharge && chargeHistory.length > 0 && (
@@ -521,7 +534,7 @@ export default function AthleteDashboard({
                   <div style={{ display: "flex", alignItems: "center", gap: 4, padding: "3px 9px", borderRadius: 8, flexShrink: 0,
                     background: chargeTrend > 15 ? "rgba(224,82,82,0.15)" : chargeTrend > 0 ? "rgba(232,160,32,0.15)" : "rgba(29,158,117,0.15)",
                     color: chargeTrend > 15 ? "#E05252" : chargeTrend > 0 ? "#E8A020" : "#4DC9A0",
-                    fontSize: 10.5, fontWeight: 500,
+                    fontSize: "var(--text-meta)", fontWeight: 600,
                   }}>
                     {chargeTrend > 0 ? <TrendingUp size={10} /> : chargeTrend < 0 ? <TrendingDown size={10} /> : <Minus size={10} />}
                     {chargeTrend > 0 ? "+" : ""}{chargeTrend}% vs S-1
@@ -542,7 +555,7 @@ export default function AthleteDashboard({
                         <div style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "flex-end", width: "100%", paddingBottom: 4 }}>
                           {/* Valeur uniquement sur barre courante */}
                           {isCurrent && (
-                            <span style={{ fontSize: 9, fontWeight: 600, color: w.color, textAlign: "center", display: "block", marginBottom: 4, fontVariantNumeric: "tabular-nums" }}>
+                            <span style={{ fontSize: "var(--text-meta)", fontWeight: 600, color: w.color, textAlign: "center", display: "block", marginBottom: 4, fontVariantNumeric: "tabular-nums" }}>
                               {Math.round(w.charge)}
                             </span>
                           )}
@@ -564,7 +577,7 @@ export default function AthleteDashboard({
                         </div>
                         {/* Label semaine */}
                         <span style={{
-                          fontSize: 8, lineHeight: 1, paddingTop: 5, paddingBottom: 2,
+                          fontSize: "var(--text-meta)", lineHeight: "var(--leading-meta)", paddingTop: 5, paddingBottom: 2,
                           color: isCurrent ? "var(--c-text-2)" : "var(--c-text-4)",
                           fontWeight: isCurrent ? 500 : 400,
                           textAlign: "center", display: "block",
@@ -591,17 +604,17 @@ export default function AthleteDashboard({
                     <p style={{ fontSize: 17, fontWeight: 600, color: s.color, fontVariantNumeric: "tabular-nums", letterSpacing: "-0.025em", lineHeight: 1 }}>
                       {s.value}
                     </p>
-                    <p style={{ fontSize: 8, fontWeight: 500, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--c-text-3)", marginTop: 3 }}>
+                    <p style={{ fontSize: "var(--text-meta)", fontWeight: 600, letterSpacing: "0.06em", textTransform: "uppercase", color: "var(--c-text-3)", marginTop: 4 }}>
                       {s.label}
                     </p>
-                    <p style={{ fontSize: 8, color: "var(--c-text-4)", marginTop: 1 }}>{s.sub}</p>
+                    <p style={{ fontSize: "var(--text-meta)", color: "var(--c-text-4)", marginTop: 2 }}>{s.sub}</p>
                   </div>
                 ))}
               </div>
 
               {/* Réglette ACWR */}
               <div style={{ padding: "0 16px 14px" }}>
-                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 8.5, color: "var(--c-text-3)", marginBottom: 5 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: "var(--text-meta)", color: "var(--c-text-3)", marginBottom: 6 }}>
                   <span>Sous-charge</span>
                   <span style={{ color: "#1D9E75", fontWeight: 500 }}>Zone optimale</span>
                   <span>Surcharge</span>
@@ -614,7 +627,7 @@ export default function AthleteDashboard({
                     transition: "left 0.7s cubic-bezier(0.16,1,0.3,1)",
                   }} />
                 </div>
-                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 7.5, color: "var(--c-text-4)", marginTop: 4 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: "var(--text-meta)", color: "var(--c-text-4)", marginTop: 4 }}>
                   <span>0</span><span>0.8</span><span>1.3</span><span>2.0</span>
                 </div>
               </div>
@@ -632,7 +645,7 @@ export default function AthleteDashboard({
             <div className="card p-4">
               <div className="flex items-center justify-between mb-1">
                 <p className="card-title">État de forme</p>
-                <span style={{ fontSize: 9, color: "var(--c-text-4)", fontWeight: 400 }}>Tap pour le détail</span>
+                <span className="meta-text">Ouvrir pour le détail</span>
               </div>
               <p className="card-subtitle mb-4">Basé sur ta charge réelle</p>
               <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
@@ -655,7 +668,7 @@ export default function AthleteDashboard({
                         <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
                           <span style={{ fontSize: 12.5, fontWeight: 400, color: "var(--c-text-1)" }}>{s.label}</span>
                           {thresh && (
-                            <span style={{ fontSize: 9, fontWeight: 500, padding: "1px 6px", borderRadius: 4, background: thresh.color + "10", color: thresh.color }}>
+                            <span style={{ fontSize: "var(--text-meta)", fontWeight: 600, padding: "2px 7px", borderRadius: 6, background: thresh.color + "10", color: thresh.color }}>
                               {thresh.label}
                             </span>
                           )}
@@ -673,7 +686,7 @@ export default function AthleteDashboard({
                   );
                 })}
               </div>
-              <p style={{ fontSize: 8.5, color: "var(--c-text-4)", marginTop: 12, textAlign: "center" }}>
+              <p className="meta-text" style={{ marginTop: "var(--space-3)", textAlign: "center" }}>
                 ACWR : Gabbett (2016) · Récup. : Hasegawa (2024) · Banister (1975)
               </p>
             </div>
@@ -686,8 +699,8 @@ export default function AthleteDashboard({
                 <p className="card-title">Cette semaine</p>
                 <p className="card-subtitle">{doneThisWeek}/{weekSessions.length} réalisée{weekSessions.length > 1 ? "s" : ""}</p>
               </div>
-              <button onClick={() => onNavigate("planning")} className="btn-ghost" style={{ minHeight: "auto", padding: 0, fontSize: 11 }}>
-                Voir tout →
+              <button onClick={() => onNavigate("planning")} className="btn-ghost" style={{ minHeight: 36, padding: 0 }}>
+                Voir tout
               </button>
             </div>
             {weekSessions.length === 0 ? (
@@ -711,7 +724,7 @@ export default function AthleteDashboard({
                   <div style={{ width: 2, alignSelf: "stretch", borderRadius: 2, flexShrink: 0, background: c.border }} />
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <p style={{ fontSize: 12.5, fontWeight: 500, color: "var(--c-text-1)" }} className="truncate">{s.title}</p>
-                    <p style={{ fontSize: 10.5, color: "var(--c-text-3)", marginTop: 1 }}>
+                    <p className="meta-text" style={{ marginTop: "var(--space-1)" }}>
                       {s.sessionDate
                         ? new Date(s.sessionDate).toLocaleDateString("fr-BE", { weekday: "short", day: "numeric", month: "short" })
                         : s.day} · {s.time}
@@ -719,11 +732,11 @@ export default function AthleteDashboard({
                   </div>
                   {s.pdfUrl && (
                     <button type="button" onClick={() => openSessionPdf(s.pdfUrl)}
-                      style={{ display: "flex", alignItems: "center", gap: 3, padding: "2px 6px", borderRadius: 5, background: "rgba(91,141,239,0.15)", color: "#5B8DEF", fontSize: 9.5, fontWeight: 500, flexShrink: 0, border: "none", cursor: "pointer" }}>
-                      <FileText size={9} />PDF
+                      style={{ display: "flex", alignItems: "center", gap: 4, minHeight: 32, padding: "4px 8px", borderRadius: 7, background: "rgba(91,141,239,0.15)", color: "var(--color-info)", fontSize: "var(--text-meta)", fontWeight: 600, flexShrink: 0, border: "none", cursor: "pointer" }}>
+                      <FileText size={12} />PDF
                     </button>
                   )}
-                  <span style={{ flexShrink: 0, padding: "2px 8px", borderRadius: 6, background: stCfg.bg, color: stCfg.color, fontSize: 10, fontWeight: 500 }}>
+                  <span style={{ flexShrink: 0, padding: "3px 8px", borderRadius: 6, background: stCfg.bg, color: stCfg.color, fontSize: "var(--text-meta)", fontWeight: 600 }}>
                     {stCfg.label}
                   </span>
                 </div>
@@ -740,13 +753,13 @@ export default function AthleteDashboard({
                   <Trophy size={18} color="white" strokeWidth={1.8} />
                 </div>
                 <div>
-                  <p style={{ fontSize: 8.5, fontWeight: 500, letterSpacing: "0.09em", textTransform: "uppercase", color: "rgba(255,255,255,0.55)", marginBottom: 3 }}>
+                  <p style={{ fontSize: "var(--text-meta)", fontWeight: 600, letterSpacing: "0.06em", textTransform: "uppercase", color: "rgba(255,255,255,0.80)", marginBottom: 4 }}>
                     Nouveau record personnel
                   </p>
                   <p style={{ fontSize: 16, fontWeight: 600, color: "white", letterSpacing: "-0.02em", lineHeight: 1.2 }}>
                     {latestPR.discipline} — {latestPR.value}
                   </p>
-                  <p style={{ fontSize: 10.5, color: "rgba(255,255,255,0.50)", marginTop: 3 }}>
+                  <p style={{ fontSize: "var(--text-meta)", color: "rgba(255,255,255,0.78)", marginTop: 4 }}>
                     {new Date(latestPR.performance_date).toLocaleDateString("fr-BE", { day: "numeric", month: "long" })}
                   </p>
                 </div>
@@ -759,8 +772,8 @@ export default function AthleteDashboard({
             <div className="card overflow-hidden">
               <div style={{ padding: "12px 16px", borderBottom: "1px solid var(--c-border)", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                 <p className="card-title">Mes records</p>
-                <button onClick={() => onNavigate("performances")} className="btn-ghost" style={{ minHeight: "auto", padding: 0, fontSize: 11 }}>
-                  Tout voir →
+                <button onClick={() => onNavigate("performances")} className="btn-ghost" style={{ minHeight: 36, padding: 0 }}>
+                  Tout voir
                 </button>
               </div>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr" }}>
@@ -774,12 +787,12 @@ export default function AthleteDashboard({
                     }}>
                       <div style={{ display: "flex", alignItems: "center", gap: 5, marginBottom: 6 }}>
                         <div style={{ width: 5, height: 5, borderRadius: "50%", background: c.dot, flexShrink: 0 }} />
-                        <p style={{ fontSize: 9.5, fontWeight: 500, color: "var(--c-text-3)", textTransform: "uppercase", letterSpacing: "0.06em" }}>{disc}</p>
+                        <p style={{ fontSize: "var(--text-meta)", fontWeight: 600, color: "var(--c-text-3)", textTransform: "uppercase", letterSpacing: "0.05em" }}>{disc}</p>
                       </div>
                       <p style={{ fontSize: 20, fontWeight: 600, color: c.border, letterSpacing: "-0.03em", fontVariantNumeric: "tabular-nums", lineHeight: 1 }}>
                         {r.pr}
                       </p>
-                      <p style={{ fontSize: 10.5, color: "var(--c-text-3)", marginTop: 4 }}>
+                      <p className="meta-text" style={{ marginTop: "var(--space-1)" }}>
                         SB : <span style={{ color: "var(--c-text-2)", fontWeight: 500 }}>{r.sb}</span>
                       </p>
                     </div>
@@ -808,15 +821,15 @@ export default function AthleteDashboard({
               </div>
             ) : (
               <>
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 7, marginBottom: unlockedBadges.length > 0 && lockedBadges.length > 0 ? 12 : 0 }}>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2" style={{ marginBottom: unlockedBadges.length > 0 && lockedBadges.length > 0 ? 12 : 0 }}>
                   {unlockedBadges.slice(0, 8).map(b => <BadgeItem key={b.id} badge={b} />)}
                 </div>
                 {lockedBadges.length > 0 && (
                   <>
-                    <p style={{ fontSize: 8.5, fontWeight: 500, letterSpacing: "0.09em", textTransform: "uppercase", color: "var(--c-text-4)", marginBottom: 7 }}>
+                    <p className="meta-text" style={{ fontWeight: 600, letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: "var(--space-2)" }}>
                       À débloquer
                     </p>
-                    <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 7 }}>
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                       {lockedBadges.slice(0, 4).map(b => <BadgeItem key={b.id} badge={b} />)}
                     </div>
                   </>
@@ -827,7 +840,7 @@ export default function AthleteDashboard({
         </div>
 
         {/* ── COLONNE DROITE ─────────────────────────────────────────────── */}
-        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-4)" }}>
 
           {/* Prochaine compétition */}
           {nextComp && (() => {
@@ -838,14 +851,14 @@ export default function AthleteDashboard({
                 <div style={{ position: "relative" }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 10 }}>
                     <Trophy size={11} color="rgba(255,255,255,0.40)" strokeWidth={2} />
-                    <span style={{ fontSize: 8.5, fontWeight: 500, letterSpacing: "0.10em", textTransform: "uppercase", color: "rgba(255,255,255,0.35)" }}>
+                    <span style={{ fontSize: "var(--text-meta)", fontWeight: 600, letterSpacing: "0.06em", textTransform: "uppercase", color: "rgba(255,255,255,0.80)" }}>
                       Prochaine compétition
                     </span>
                   </div>
                   <p style={{ fontSize: 15, fontWeight: 600, color: "white", letterSpacing: "-0.02em", lineHeight: 1.2, marginBottom: 3 }}>
                     {nextComp.name}
                   </p>
-                  <p style={{ fontSize: 10.5, color: "rgba(255,255,255,0.38)", marginBottom: 12 }}>
+                  <p style={{ fontSize: "var(--text-meta)", color: "rgba(255,255,255,0.78)", marginBottom: 12 }}>
                     {new Date(nextComp.date).toLocaleDateString("fr-BE", { day: "numeric", month: "long", year: "numeric" })}
                   </p>
                   <div style={{ borderRadius: 10, padding: "10px 12px", textAlign: "center", marginBottom: 10, background: "rgba(255,255,255,0.09)" }}>
@@ -853,13 +866,13 @@ export default function AthleteDashboard({
                     <p style={{ fontSize: 38, fontWeight: 700, color: "white", letterSpacing: "-0.04em", fontVariantNumeric: "tabular-nums", lineHeight: 1 }}>
                       {days}
                     </p>
-                    <p style={{ fontSize: 8.5, fontWeight: 500, letterSpacing: "0.10em", textTransform: "uppercase", color: "rgba(255,255,255,0.35)", marginTop: 4 }}>
+                    <p style={{ fontSize: "var(--text-meta)", fontWeight: 600, letterSpacing: "0.06em", textTransform: "uppercase", color: "rgba(255,255,255,0.80)", marginTop: 4 }}>
                       jours
                     </p>
                   </div>
                   {nextComp.plannedEvents?.[athlete.id] && (
                     <div style={{ borderRadius: 8, padding: "8px 10px", background: "rgba(255,255,255,0.09)" }}>
-                      <p style={{ fontSize: 8.5, color: "rgba(255,255,255,0.38)", fontWeight: 500, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 3 }}>
+                      <p style={{ fontSize: "var(--text-meta)", color: "rgba(255,255,255,0.78)", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 4 }}>
                         Épreuve prévue
                       </p>
                       <p style={{ fontSize: 13, fontWeight: 500, color: "white" }}>{nextComp.plannedEvents[athlete.id]}</p>
@@ -888,11 +901,11 @@ export default function AthleteDashboard({
                 </span>
                 <span style={{ fontSize: 12, fontWeight: 400, color: "var(--c-text-3)", marginBottom: 3 }}>sem.</span>
               </div>
-              <p style={{ fontSize: 10.5, color: "var(--c-text-3)", marginBottom: 8 }}>avec au moins 1 séance validée</p>
+              <p className="meta-text" style={{ marginBottom: "var(--space-2)" }}>avec au moins 1 séance validée</p>
               <div className="progress-bar">
                 <div className="progress-fill" style={{ width: `${Math.min(100,streak*10)}%`, background: "#C8890A" }} />
               </div>
-              <p style={{ fontSize: 8.5, color: "var(--c-text-4)", textAlign: "right", marginTop: 4 }}>{streak}/10 badge Maestro</p>
+              <p className="meta-text" style={{ textAlign: "right", marginTop: "var(--space-1)" }}>{streak}/10 badge Maestro</p>
             </div>
           )}
 
@@ -904,24 +917,24 @@ export default function AthleteDashboard({
                 <p style={{ fontSize: 12.5, fontWeight: 500, color: "var(--c-dim-alerte)" }}>Blessures en cours</p>
               </div>
               {onOpenInjuryReport && (
-                <button onClick={onOpenInjuryReport} style={{ fontSize: 10.5, fontWeight: 500, color: "#E8A020", background: "none", border: "none", cursor: "pointer", padding: 0 }}>
+                <button onClick={onOpenInjuryReport} className="btn-ghost" style={{ minHeight: 36, padding: 0, color: "var(--color-warning)" }}>
                   + Signaler
                 </button>
               )}
             </div>
             {activeInjuries.length === 0 ? (
-              <p style={{ fontSize: 11.5, color: "var(--c-text-3)" }}>Aucune blessure signalée. Tant mieux !</p>
+              <p className="secondary-text">Aucune blessure signalée. Tant mieux !</p>
             ) : (
               <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
                 {activeInjuries.map(inj => (
                   <div key={inj.id} style={{ borderRadius: 10, padding: "10px 12px", background: "var(--c-surface-3)", border: "1px solid rgba(200,137,10,0.08)" }}>
                     <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
                       <p style={{ fontSize: 12, fontWeight: 500, color: "var(--c-text-1)" }}>{inj.name}</p>
-                      <span style={{ fontSize: 9.5, fontWeight: 500, padding: "1px 6px", borderRadius: 5, background: "rgba(232,160,32,0.15)", color: "#E8A020" }}>
+                      <span style={{ fontSize: "var(--text-meta)", fontWeight: 600, padding: "2px 7px", borderRadius: 6, background: "rgba(232,160,32,0.15)", color: "var(--color-warning)" }}>
                         {inj.intensity}/10
                       </span>
                     </div>
-                    <p style={{ fontSize: 10.5, color: "var(--c-text-3)", marginBottom: 6 }}>{inj.location}</p>
+                    <p className="meta-text" style={{ marginBottom: "var(--space-2)" }}>{inj.location}</p>
                     <div className="progress-bar">
                       <div className="progress-fill" style={{
                         width: `${(inj.intensity/10)*100}%`,
@@ -939,22 +952,22 @@ export default function AthleteDashboard({
             <div className="card p-4">
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
-                  <div style={{ width: 32, height: 32, borderRadius: "50%", background: "linear-gradient(135deg,#1D9E75,#16826C)", display: "flex", alignItems: "center", justifyContent: "center", color: "white", fontSize: 10, fontWeight: 600, flexShrink: 0 }}>
+                  <div style={{ width: 32, height: 32, borderRadius: "50%", background: "linear-gradient(135deg,var(--c-accent),var(--c-accent-dark))", display: "flex", alignItems: "center", justifyContent: "center", color: "white", fontSize: "var(--text-meta)", fontWeight: 600, flexShrink: 0 }}>
                     {initialsFromName(coachName ?? "C")}
                   </div>
                   <div>
                     <p style={{ fontSize: 12.5, fontWeight: 500, color: "var(--c-text-1)" }}>{coachName?.split(" ")[0] ?? "Coach"}</p>
-                    <p style={{ fontSize: 10, color: "var(--c-text-3)" }}>Message récent</p>
+                    <p className="meta-text">Message récent</p>
                   </div>
                 </div>
-                <button onClick={() => onNavigate("messagerie")} className="btn-ghost" style={{ minHeight: "auto", padding: 0, fontSize: 11 }}>
-                  Répondre →
+                <button onClick={() => onNavigate("messagerie")} className="btn-ghost" style={{ minHeight: 36, padding: 0 }}>
+                  Répondre
                 </button>
               </div>
               {lastMessages.slice(0, 2).map(m => (
                 <div key={m.id} style={{ borderRadius: 10, padding: "9px 11px", marginBottom: 6, background: "var(--c-surface-2)" }}>
                   <p style={{ fontSize: 12, color: "var(--c-text-2)", lineHeight: 1.5 }} className="line-clamp-2">{m.content}</p>
-                  <p style={{ fontSize: 9.5, color: "var(--c-text-4)", marginTop: 4 }}>
+                  <p className="meta-text" style={{ marginTop: "var(--space-1)" }}>
                     {new Date(m.created_at).toLocaleDateString("fr-BE", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}
                   </p>
                 </div>
