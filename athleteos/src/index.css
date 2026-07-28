@@ -11,35 +11,87 @@
    ═══════════════════════════════════════════════════════════════════════════════ */
 
 :root {
+  /* AthleteOS v6 — canonical semantic palette. Legacy --c-* tokens below
+     remain aliases so every existing screen keeps working during migration. */
+  --color-bg:                  #07120C;
+  --color-surface:             #0E1E15;
+  --color-surface-raised:      #14281C;
+  --color-surface-interactive: #1B3325;
+  --color-surface-sunken:      #050D08;
+
+  --color-border:        rgba(235, 247, 239, 0.10);
+  --color-border-strong: rgba(235, 247, 239, 0.17);
+
+  --color-text:           #F2F7F4;
+  --color-text-secondary: #B8C5BD;
+  --color-text-muted:     #8D9C92;
+  --color-text-subtle:    #7E8C83;
+  --color-text-disabled:  #5F6B63;
+
+  --color-accent:        #24A87D;
+  --color-accent-strong: #198B6D;
+  --color-success:       #43C99B;
+  --color-warning:       #F0B44D;
+  --color-danger:        #EF6A6A;
+  --color-info:          #6B9FF2;
+
+  /* Type scale: useful interface text never goes below 12px. */
+  --text-display:       32px;
+  --text-screen-title:  24px;
+  --text-section-title: 17px;
+  --text-card-title:    15px;
+  --text-body:          15px;
+  --text-secondary:     13px;
+  --text-meta:          12px;
+  --leading-display: 36px;
+  --leading-title:   30px;
+  --leading-section: 22px;
+  --leading-card:    20px;
+  --leading-body:    22px;
+  --leading-small:   18px;
+  --leading-meta:    16px;
+
+  /* 4px spacing grid. */
+  --space-1:  4px;
+  --space-2:  8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --page-gutter: var(--space-4);
+  --card-padding: var(--space-4);
+  --card-padding-comfortable: var(--space-5);
   /* ── Accent ── */
-  --c-accent:       #1D9E75;
-  --c-accent-dark:  #16826C;
-  --c-accent-light: rgba(29,158,117,0.15);
-  --c-accent-glow:  rgba(29,158,117,0.20);
+  --c-accent:       var(--color-accent);
+  --c-accent-dark:  var(--color-accent-strong);
+  --c-accent-light: rgba(36,168,125,0.15);
+  --c-accent-glow:  rgba(36,168,125,0.20);
 
   /* ── Dimensions sémantiques ── */
-  --c-dim-forme:   #1D9E75;
-  --c-dim-charge:  #5B8DEF;
+  --c-dim-forme:   var(--color-success);
+  --c-dim-charge:  var(--color-info);
   --c-dim-mental:  #9B84F0;
-  --c-dim-alerte:  #E8A020;
-  --c-dim-danger:  #E05252;
+  --c-dim-alerte:  var(--color-warning);
+  --c-dim-danger:  var(--color-danger);
 
   /* ── Fond & surfaces — dark vert-noir ── */
-  --c-bg:           #09150E;   /* fond app : vert-noir très profond */
-  --c-surface:      #0F2017;   /* cards : vert-noir légèrement clair */
-  --c-surface-2:    #162B1E;   /* surface secondaire, inputs */
-  --c-surface-3:    #1C3526;   /* hover, zone enfoncée */
-  --c-surface-dark: #060F09;   /* zones encore plus sombres */
+  --c-bg:           var(--color-bg);
+  --c-surface:      var(--color-surface);
+  --c-surface-2:    var(--color-surface-raised);
+  --c-surface-3:    var(--color-surface-interactive);
+  --c-surface-dark: var(--color-surface-sunken);
 
   /* ── Bordures — quasi invisibles ── */
-  --c-border:        rgba(255,255,255,0.07);
-  --c-border-strong: rgba(255,255,255,0.12);
+  --c-border:        var(--color-border);
+  --c-border-strong: var(--color-border-strong);
 
   /* ── Texte — hiérarchie 4 niveaux sur fond sombre ── */
-  --c-text-1: rgba(255,255,255,0.92);   /* primaire */
-  --c-text-2: rgba(255,255,255,0.55);   /* secondaire */
-  --c-text-3: rgba(255,255,255,0.32);   /* tertiaire, meta */
-  --c-text-4: rgba(255,255,255,0.18);   /* désactivé, placeholder */
+  --c-text-1: var(--color-text);
+  --c-text-2: var(--color-text-secondary);
+  --c-text-3: var(--color-text-muted);
+  --c-text-4: var(--color-text-subtle);
 
   /* ── Ombres — sur fond sombre, ombres vertes subtiles ── */
   --shadow-xs: 0 1px 2px rgba(0,0,0,0.30);
@@ -78,6 +130,7 @@
   --dur-fast: 150ms;
   --dur-base: 220ms;
   --dur-slow: 350ms;
+
 }
 
 /* ─── Reset ─────────────────────────────────────────────────────────────────── */
@@ -99,9 +152,13 @@ body {
   text-rendering: optimizeLegibility;
   -webkit-tap-highlight-color: transparent;
   touch-action: manipulation;
-  font-size: 14px;
-  line-height: 1.5;
+  font-size: var(--text-body);
+  line-height: var(--leading-body);
   font-weight: 400;
+}
+
+@media (min-width: 768px) {
+  body { font-size: 14px; line-height: 20px; }
 }
 
 /* ─── Scrollbar ──────────────────────────────────────────────────────────────── */
@@ -184,9 +241,9 @@ body {
 .btn-primary {
   display: inline-flex; align-items: center; justify-content: center; gap: 6px;
   min-height: var(--touch); padding: 0 18px;
-  background: linear-gradient(135deg, #1D9E75, #16826C);
+  background: linear-gradient(135deg, var(--c-accent), var(--c-accent-dark));
   color: #fff; border: none; border-radius: var(--r-md);
-  font-family: inherit; font-size: 13px; font-weight: 500;
+  font-family: inherit; font-size: 14px; font-weight: 600;
   letter-spacing: -0.01em; cursor: pointer; white-space: nowrap;
   box-shadow: 0 0 0 1px rgba(29,158,117,0.30), 0 4px 16px rgba(29,158,117,0.25);
   transition: all var(--dur-base) var(--spring);
@@ -204,7 +261,7 @@ body {
   min-height: var(--touch); padding: 0 16px;
   background: var(--c-surface-2); color: var(--c-text-2);
   border: 1px solid var(--c-border); border-radius: var(--r-md);
-  font-family: inherit; font-size: 13px; font-weight: 400; cursor: pointer;
+  font-family: inherit; font-size: 14px; font-weight: 500; cursor: pointer;
   transition: all var(--dur-base) var(--spring); user-select: none; white-space: nowrap;
 }
 .btn-secondary:hover  { background: var(--c-surface-3); color: var(--c-text-1); border-color: var(--c-border-strong); }
@@ -215,7 +272,7 @@ body {
   display: inline-flex; align-items: center; gap: 5px;
   min-height: var(--touch); padding: 0 8px;
   background: none; border: none; color: var(--c-accent);
-  font-family: inherit; font-size: 12px; font-weight: 500; cursor: pointer;
+  font-family: inherit; font-size: var(--text-secondary); font-weight: 600; cursor: pointer;
   border-radius: var(--r-md); transition: all var(--dur-fast) ease;
 }
 .btn-ghost:hover  { background: var(--c-accent-light); }
@@ -338,7 +395,7 @@ body {
 .input-premium {
   width: 100%; border: 1.5px solid var(--c-border-strong);
   border-radius: var(--r-md); min-height: var(--touch); padding: 0 13px;
-  font-family: inherit; font-size: 13.5px; font-weight: 400;
+  font-family: inherit; font-size: var(--text-body); font-weight: 400;
   color: var(--c-text-1); background: var(--c-surface-2);
   transition: border-color var(--dur-fast) ease, box-shadow var(--dur-fast) ease;
   outline: none; -webkit-appearance: none; appearance: none;
@@ -348,7 +405,7 @@ body {
   box-shadow: 0 0 0 3px rgba(29,158,117,0.12);
 }
 .input-premium::placeholder { color: var(--c-text-4); font-weight: 400; }
-.input-premium:disabled { background: var(--c-surface); color: var(--c-text-4); cursor: not-allowed; }
+.input-premium:disabled { background: var(--c-surface); color: var(--color-text-disabled); cursor: not-allowed; }
 
 select.input-premium {
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='rgba(255,255,255,0.30)' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
@@ -364,14 +421,40 @@ select.input-premium {
 .metric-value    { font-size: 22px; font-weight: 600; letter-spacing: -0.025em; line-height: 1; font-variant-numeric: tabular-nums; }
 .metric-value-sm { font-size: 17px; font-weight: 600; letter-spacing: -0.02em; line-height: 1; font-variant-numeric: tabular-nums; }
 
+.page-title {
+  font-size: var(--text-screen-title); font-weight: 700;
+  line-height: var(--leading-title); letter-spacing: -0.025em;
+  color: var(--c-text-1);
+}
+.section-title {
+  font-size: var(--text-section-title); font-weight: 600;
+  line-height: var(--leading-section); letter-spacing: -0.015em;
+  color: var(--c-text-1);
+}
+.body-text { font-size: var(--text-body); line-height: var(--leading-body); color: var(--c-text-1); }
+.secondary-text { font-size: var(--text-secondary); line-height: var(--leading-small); color: var(--c-text-2); }
+.meta-text { font-size: var(--text-meta); line-height: var(--leading-meta); color: var(--c-text-3); }
+
 .metric-label {
-  font-size: 9px; font-weight: 500;
-  letter-spacing: 0.09em; text-transform: uppercase;
-  color: var(--c-text-3); line-height: 1.2;
+  font-size: var(--text-meta); font-weight: 600;
+  letter-spacing: 0.06em; text-transform: uppercase;
+  color: var(--c-text-3); line-height: var(--leading-meta);
 }
 
-.card-title    { font-size: 13px; font-weight: 500; letter-spacing: -0.01em; color: var(--c-text-1); line-height: 1.3; }
-.card-subtitle { font-size: 11px; font-weight: 400; color: var(--c-text-3); line-height: 1.4; margin-top: 1px; }
+.card-title {
+  font-size: var(--text-card-title); font-weight: 600;
+  letter-spacing: -0.01em; color: var(--c-text-1); line-height: var(--leading-card);
+}
+.card-subtitle {
+  font-size: var(--text-secondary); font-weight: 400;
+  color: var(--c-text-3); line-height: var(--leading-small); margin-top: var(--space-1);
+}
+
+/* Opt-in layout utilities for progressive screen migration. They do not add
+   padding to existing .card elements, which would otherwise double spacing. */
+.page-container { width: 100%; padding-inline: var(--page-gutter); }
+.card-content { padding: var(--card-padding); }
+.card-content-comfortable { padding: var(--card-padding-comfortable); }
 
 /* ═══════════════════════════════════════════════════════════════════════════════
    CHIPS — fond semi-transparent, jamais de couleur vive plein fond
