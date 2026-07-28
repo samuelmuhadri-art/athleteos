@@ -65,17 +65,6 @@ function dimColor(metric, val) {
   }
 }
 
-// Conservées pour compatibilité avec d'éventuels appels existants ailleurs
-function scoreColor(val, inv = false) {
-  if (inv) { if (val > 70) return "#E24B4A"; if (val > 45) return "#EF9F27"; return "#1D9E75"; }
-  if (val >= 75) return "#1D9E75"; if (val >= 50) return "#EF9F27"; return "#E24B4A";
-}
-function acwrColor(v) {
-  if (v > 1.5) return "#E24B4A";
-  if (v > 1.3) return "#EF9F27";
-  return "#378ADD";
-}
-
 function getGreeting() {
   const h = new Date().getHours();
   if (h < 12) return "Bonjour";
@@ -124,18 +113,18 @@ function MetricCard({ icon: Icon, label, value, sub, color, badge, onClick }) {
           </p>
           {badge && (
             <span
-              className="mb-0.5 text-[9.5px] font-bold px-2 py-0.5 rounded-full text-white"
+              className="mb-0.5 text-[12px] font-bold px-2 py-0.5 rounded-full text-white"
               style={{ background: badge.color }}
             >
               {badge.label}
             </span>
           )}
         </div>
-        <p className="text-[9.5px] font-bold uppercase tracking-[0.09em] mt-1" style={{ color: "var(--c-text-3)" }}>
+        <p className="meta-text font-bold uppercase tracking-[0.09em] mt-1">
           {label}
         </p>
         {sub && (
-          <p className="text-[10.5px] mt-0.5 font-medium" style={{ color: "var(--c-text-3)" }}>{sub}</p>
+          <p className="meta-text mt-0.5 font-medium">{sub}</p>
         )}
       </div>
 
@@ -201,7 +190,7 @@ function AthleteStatusCard({ athlete, weeklyCharge, currentWeek, injuries, sessi
       {/* Header avec avatar en dégradé */}
       <div className="flex items-center gap-2.5">
         <div
-          className="w-9 h-9 rounded-xl flex items-center justify-center text-white text-[10px] font-bold flex-shrink-0 shadow-sm"
+          className="w-9 h-9 rounded-xl flex items-center justify-center text-white text-[12px] font-bold flex-shrink-0 shadow-sm"
           style={{ background: `linear-gradient(135deg, ${status.color} 0%, ${status.color}CC 100%)` }}
         >
           {initialsFromName(athlete.name)}
@@ -210,7 +199,7 @@ function AthleteStatusCard({ athlete, weeklyCharge, currentWeek, injuries, sessi
           <p className="text-[12.5px] font-semibold truncate leading-tight" style={{ color: "var(--c-text-1)" }}>
             {athlete.name.split(" ")[0]}
           </p>
-          <p className="text-[10px] truncate" style={{ color: "var(--c-text-3)" }}>{athlete.mainDiscipline ?? "—"}</p>
+          <p className="meta-text truncate">{athlete.mainDiscipline ?? "—"}</p>
         </div>
         {/* Dot statut */}
         <div
@@ -234,7 +223,7 @@ function AthleteStatusCard({ athlete, weeklyCharge, currentWeek, injuries, sessi
               >
                 {s.val}
               </p>
-              <p className="text-[7.5px] font-bold uppercase tracking-wider mt-1" style={{ color: "var(--c-text-3)" }}>
+              <p className="text-[12px] font-bold uppercase tracking-wide mt-1" style={{ color: "var(--c-text-2)" }}>
                 {s.lbl}
               </p>
               <div className="mt-1.5 h-0.5 bg-[var(--c-surface-3)] rounded-full overflow-hidden">
@@ -248,7 +237,7 @@ function AthleteStatusCard({ athlete, weeklyCharge, currentWeek, injuries, sessi
         </div>
       ) : (
         <div className="bg-[var(--c-surface-2)] rounded-xl px-3 py-2 text-center">
-          <p className="text-[10px] font-medium" style={{ color: "var(--c-text-3)" }}>Pas encore de données</p>
+          <p className="meta-text font-medium">Pas encore de données</p>
         </div>
       )}
 
@@ -260,7 +249,7 @@ function AthleteStatusCard({ athlete, weeklyCharge, currentWeek, injuries, sessi
         <div className="flex items-center gap-1.5 flex-wrap">
           {activeInj.length > 0 && (
             <span
-              className="flex items-center gap-1 text-[9.5px] font-bold border px-2 py-0.5 rounded-full"
+              className="flex items-center gap-1 text-[12px] font-bold border px-2 py-0.5 rounded-full"
               style={{ color: "#F0CB61", background: "rgba(239,159,39,0.15)", borderColor: "#EF9F27" }}
             >
               <HeartPulse size={8} /> {activeInj.length} blessure{activeInj.length > 1 ? "s" : ""}
@@ -268,7 +257,7 @@ function AthleteStatusCard({ athlete, weeklyCharge, currentWeek, injuries, sessi
           )}
           {weekSess.length > 0 && (
             <span
-              className="flex items-center gap-1 text-[9.5px] font-semibold border px-2 py-0.5 rounded-full"
+              className="flex items-center gap-1 text-[12px] font-semibold border px-2 py-0.5 rounded-full"
               style={{ color: "var(--c-text-2)", background: "var(--c-surface-3)", borderColor: "var(--c-border)" }}
             >
               <CheckCircle size={9} /> {doneCount}/{weekSess.length}
@@ -302,13 +291,13 @@ function CoachFeedSection({ items, onNavigate }) {
     <div className="card overflow-hidden">
       <div className="px-5 py-4 border-b border-[color:var(--c-border)] flex items-center justify-between">
         <div>
-          <h3 className="text-[14px] font-semibold" style={{ color: "var(--c-text-1)" }}>Fil du coach</h3>
-          <p className="text-[11px] mt-0.5" style={{ color: "var(--c-text-3)" }}>
-            {items.length > 0 ? "Priorisé automatiquement" : "Rien à signaler cette semaine"}
+          <h2 className="card-title">À traiter aujourd'hui</h2>
+          <p className="card-subtitle mt-0.5">
+            {items.length > 0 ? "Signaux triés automatiquement par priorité" : "Rien à signaler cette semaine"}
           </p>
         </div>
         {items.length > 0 && (
-          <span className="text-[9.5px] font-bold px-2 py-0.5 rounded-full chip chip-warning">
+          <span className="text-[12px] font-bold px-2 py-0.5 rounded-full chip chip-warning">
             {items.length} signal{items.length > 1 ? "aux" : ""}
           </span>
         )}
@@ -337,14 +326,14 @@ function CoachFeedSection({ items, onNavigate }) {
               <p className="flex-1 text-[12.5px] leading-relaxed" style={{ color: "var(--c-text-2)" }}>
                 {item.sentence}
               </p>
-              <ChevronRight size={14} className="flex-shrink-0 mt-1" style={{ color: "var(--c-text-4)" }} />
+              <ChevronRight size={14} className="flex-shrink-0 mt-1" style={{ color: "var(--c-text-3)" }} />
             </button>
           ))}
         </div>
       )}
       {items.length > shown.length && (
         <div className="px-5 py-2.5 text-center border-t border-[color:var(--c-border)]">
-          <span className="text-[10.5px]" style={{ color: "var(--c-text-4)" }}>
+          <span className="meta-text">
             +{items.length - shown.length} autre{items.length - shown.length > 1 ? "s" : ""} signal{items.length - shown.length > 1 ? "aux" : ""}
           </span>
         </div>
@@ -374,12 +363,13 @@ function Dashboard({ onNavigate }) {
     if (!clubId) return;
     try {
       setLoading(true); setError(null);
+      const requestDate = new Date();
 
       const [athletesRes, sessionsRes, alertsRes, compsRes, injuriesRes, goalsRes] = await Promise.all([
         supabase.from("athletes").select("id, name, main_discipline, profile_data, group_name").eq("club_id", clubId),
         supabase.from("sessions").select("*, session_athletes(*)").eq("club_id", clubId),
         supabase.from("alerts").select("id, is_read, severity, type").eq("club_id", clubId),
-        supabase.from("competitions").select("id, name, date, competition_athletes(athlete_id)").eq("club_id", clubId).gte("date", toLocalDateStr(today)).order("date").limit(3),
+        supabase.from("competitions").select("id, name, date, competition_athletes(athlete_id)").eq("club_id", clubId).gte("date", toLocalDateStr(requestDate)).order("date").limit(3),
         supabase.from("injuries").select("id, athlete_id, name, intensity, status, location").eq("status", "actif"),
         supabase.from("athlete_goals").select("*").eq("club_id", clubId).eq("achieved", false),
       ]);
@@ -453,7 +443,7 @@ function Dashboard({ onNavigate }) {
     } catch (err) {
       setError(err.message ?? "Erreur inconnue");
     } finally { setLoading(false); }
-  }, [clubId]);
+  }, [clubId, currentWeek, profile?.id]);
 
   useEffect(() => { fetchAll(); }, [fetchAll]);
 
@@ -476,7 +466,7 @@ function Dashboard({ onNavigate }) {
     const validationRate = totalExpected > 0 ? Math.round((totalDone / totalExpected) * 100) : null;
     const pendingAthleteSession = sessions.filter(s => s.createdByAthlete).length;
     return { avgCharge, trend, actifs, unreadAlerts, validationRate, pendingAthleteSession };
-  }, [athletes, weeklyCharge, sessions, alerts, currentWeek]);
+  }, [weeklyCharge, sessions, alerts, currentWeek]);
 
   // Les anciens blocs "surcharge"/"blessés" (chiffres bruts) sont remplacés
   // par ce fil narrativisé et priorisé — voir src/utils/coachFeed.js.
@@ -504,9 +494,20 @@ function Dashboard({ onNavigate }) {
   if (error)   return <ErrorState  message={error} onRetry={fetchAll} />;
 
   return (
-    <div className="p-4 md:p-6 space-y-5 max-w-7xl mx-auto animate-slide-up">
+    <div className="page-container py-4 md:py-6 space-y-4 md:space-y-5 max-w-7xl mx-auto animate-slide-up">
+      <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <p className="meta-text font-bold uppercase tracking-[0.12em] mb-1">Vue coach</p>
+          <h1 className="page-title">{getGreeting()}, {firstName}</h1>
+          <p className="secondary-text mt-1">Les priorités et l'état de votre groupe en un coup d'œil.</p>
+        </div>
+        <button type="button" className="btn-primary self-start sm:self-auto" onClick={() => onNavigate("planning")}>
+          Planifier une séance
+          <ChevronRight size={16} />
+        </button>
+      </header>
 
-      {/* ── Hero greeting — fond sombre cohérent avec l'espace athlète ─────── */}
+      {/* ── Synthèse de la semaine ────────────────────────────────────────── */}
       <div
         className="rounded-3xl overflow-hidden relative"
         style={{ background: "#0A1810" }}
@@ -526,16 +527,14 @@ function Dashboard({ onNavigate }) {
         />
 
         <div className="relative p-5 md:p-6">
-          {/* Ligne identité */}
+          {/* Ligne de contexte */}
           <div className="flex items-start justify-between gap-4 flex-wrap mb-5">
             <div>
-              <p className="text-white/35 text-[9.5px] font-bold uppercase tracking-[0.15em] mb-1">
+              <p className="text-[12px] font-bold uppercase tracking-[0.12em] mb-1" style={{ color: "rgba(255,255,255,0.68)" }}>
                 {today.toLocaleDateString("fr-BE", { weekday: "long", day: "numeric", month: "long" })}
               </p>
-              <h2 className="text-[20px] md:text-[22px] font-bold text-white tracking-tight leading-tight">
-                {getGreeting()}, {firstName}
-              </h2>
-              <p className="text-white/35 text-[11px] font-medium mt-1">
+              <h2 className="text-[20px] md:text-[22px] font-bold text-white tracking-tight leading-tight">Synthèse de la semaine</h2>
+              <p className="text-[12px] font-medium mt-1" style={{ color: "rgba(255,255,255,0.68)" }}>
                 Semaine {currentWeek} · {athletes.length} athlète{athletes.length > 1 ? "s" : ""} suivi{athletes.length > 1 ? "s" : ""}
               </p>
             </div>
@@ -593,11 +592,11 @@ function Dashboard({ onNavigate }) {
                 >
                   {s.value}
                 </p>
-                <p className="text-[8.5px] font-bold text-white/25 uppercase tracking-[0.09em] mt-1.5">
+                <p className="text-[12px] font-bold uppercase tracking-[0.07em] mt-1.5" style={{ color: "rgba(255,255,255,0.72)" }}>
                   {s.label}
                 </p>
                 {s.sub && (
-                  <p className="text-[9px] text-white/20 mt-0.5">{s.sub}</p>
+                  <p className="text-[12px] mt-0.5" style={{ color: "rgba(255,255,255,0.62)" }}>{s.sub}</p>
                 )}
               </div>
             ))}
@@ -605,33 +604,39 @@ function Dashboard({ onNavigate }) {
         </div>
       </div>
 
-      {/* ── Fil du coach ─────────────────────────────────────────────────── */}
+      {/* ── Priorités coach ──────────────────────────────────────────────── */}
       <CoachFeedSection items={coachFeed} onNavigate={onNavigate} />
 
       {/* ── KPIs — icône + liseré + glow au survol ────────────────────────── */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <MetricCard
-          icon={Users} label="Athlètes actifs" color="#1D9E75"
-          value={metrics.actifs} sub={`/${athletes.length} total`}
-          onClick={() => onNavigate("athletes")}
-        />
-        <MetricCard
-          icon={Zap} label="Charge moyenne" color="#378ADD"
-          value={metrics.avgCharge ?? "—"}
-          sub={metrics.trend != null ? `${metrics.trend > 0 ? "+" : ""}${metrics.trend}% vs S-1` : "pas de données"}
-          badge={metrics.trend > 20 ? { label: "↑ Élevée", color: "#E24B4A" } : metrics.trend < -20 ? { label: "↓ Baisse", color: "#378ADD" } : undefined}
-        />
-        <MetricCard
-          icon={Bell} label="Alertes non lues" color="#E24B4A"
-          value={metrics.unreadAlerts} sub="à traiter"
-          onClick={() => onNavigate("alerts")}
-        />
-        <MetricCard
-          icon={CheckCircle} label="Taux de validation" color="#EF9F27"
-          value={metrics.validationRate != null ? `${metrics.validationRate}%` : "—"}
-          sub="séances cette semaine"
-        />
-      </div>
+      <section className="space-y-3" aria-labelledby="overview-title">
+        <div>
+          <h2 id="overview-title" className="section-title">Vue d'ensemble</h2>
+          <p className="secondary-text mt-0.5">Les indicateurs essentiels de la semaine.</p>
+        </div>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <MetricCard
+            icon={Users} label="Athlètes actifs" color="#1D9E75"
+            value={metrics.actifs} sub={`/${athletes.length} total`}
+            onClick={() => onNavigate("athletes")}
+          />
+          <MetricCard
+            icon={Zap} label="Charge moyenne" color="#378ADD"
+            value={metrics.avgCharge ?? "—"}
+            sub={metrics.trend != null ? `${metrics.trend > 0 ? "+" : ""}${metrics.trend}% vs S-1` : "pas de données"}
+            badge={metrics.trend > 20 ? { label: "↑ Élevée", color: "#E24B4A" } : metrics.trend < -20 ? { label: "↓ Baisse", color: "#378ADD" } : undefined}
+          />
+          <MetricCard
+            icon={Bell} label="Alertes non lues" color="#E24B4A"
+            value={metrics.unreadAlerts} sub="à traiter"
+            onClick={() => onNavigate("alerts")}
+          />
+          <MetricCard
+            icon={CheckCircle} label="Taux de validation" color="#EF9F27"
+            value={metrics.validationRate != null ? `${metrics.validationRate}%` : "—"}
+            sub="séances cette semaine"
+          />
+        </div>
+      </section>
 
       {/* ── Layout 2 colonnes ─────────────────────────────────────────────── */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
@@ -640,10 +645,10 @@ function Dashboard({ onNavigate }) {
         <div className="lg:col-span-2 space-y-3">
           <div className="flex items-center justify-between">
             <div>
-              <h3 className="text-[15px] font-semibold tracking-tight" style={{ color: "var(--c-text-1)" }}>
+              <h2 className="section-title">
                 État du groupe
-              </h3>
-              <p className="text-[11px] mt-0.5" style={{ color: "var(--c-text-3)" }}>
+              </h2>
+              <p className="secondary-text mt-0.5">
                 Semaine {currentWeek} · données en temps réel
               </p>
             </div>
@@ -684,10 +689,10 @@ function Dashboard({ onNavigate }) {
           {competitions.length > 0 && (
             <div className="card overflow-hidden">
               <div className="px-5 py-4 border-b border-[color:var(--c-border)] flex items-center justify-between">
-                <h3 className="text-[14px] font-semibold" style={{ color: "var(--c-text-1)" }}>Compétitions</h3>
+                <h3 className="card-title">Compétitions</h3>
                 <button
                   onClick={() => onNavigate("competitions")}
-                  className="text-[11px] font-semibold text-emerald-600 hover:text-emerald-700 transition-colors flex items-center gap-1"
+                  className="text-[12px] font-semibold text-emerald-600 hover:text-emerald-700 transition-colors flex items-center gap-1"
                 >
                   Voir tout <ArrowUpRight size={11} />
                 </button>
@@ -706,13 +711,13 @@ function Dashboard({ onNavigate }) {
                       </div>
                       <div className="flex-1 min-w-0">
                         <p className="text-[12.5px] font-semibold truncate" style={{ color: "var(--c-text-1)" }}>{c.name}</p>
-                        <p className="text-[10.5px] mt-0.5" style={{ color: "var(--c-text-3)" }}>
+                        <p className="meta-text mt-0.5">
                           {new Date(c.date).toLocaleDateString("fr-BE", { day: "numeric", month: "short" })}
                           {" · "}{c.athleteIds.length} athlète{c.athleteIds.length > 1 ? "s" : ""}
                         </p>
                       </div>
                       <span
-                        className="text-[11px] font-bold px-2.5 py-1 rounded-xl flex-shrink-0"
+                        className="text-[12px] font-bold px-2.5 py-1 rounded-xl flex-shrink-0"
                         style={{
                           background: isUrgent ? "rgba(224,82,82,0.15)" : "rgba(29,158,117,0.15)",
                           color:      isUrgent ? "#E24B4A" : "#1D9E75",
@@ -731,8 +736,8 @@ function Dashboard({ onNavigate }) {
           {goals.length > 0 && (
             <div className="card overflow-hidden">
               <div className="px-5 py-4 border-b border-[color:var(--c-border)] flex items-center justify-between">
-                <h3 className="text-[14px] font-semibold" style={{ color: "var(--c-text-1)" }}>Objectifs saison</h3>
-                <span className="text-[9.5px] font-bold px-2 py-0.5 rounded-full chip chip-success">
+                <h3 className="card-title">Objectifs saison</h3>
+                <span className="text-[12px] font-bold px-2 py-0.5 rounded-full chip chip-success">
                   {goals.length} actif{goals.length > 1 ? "s" : ""}
                 </span>
               </div>
@@ -748,13 +753,13 @@ function Dashboard({ onNavigate }) {
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-1.5 mb-0.5">
                           <p className="text-[12px] font-semibold" style={{ color: "var(--c-text-1)" }}>{athlete?.name?.split(" ")[0] ?? "?"}</p>
-                          <span className="text-[10px]" style={{ color: "var(--c-text-3)" }}>·</span>
-                          <p className="text-[11px] truncate" style={{ color: "var(--c-text-2)" }}>{g.discipline}</p>
+                          <span className="meta-text">·</span>
+                          <p className="meta-text truncate" style={{ color: "var(--c-text-2)" }}>{g.discipline}</p>
                         </div>
                         <p className="text-[15px] font-bold text-emerald-600 leading-tight">{g.target_value}</p>
                       </div>
                       {daysLeft !== null && (
-                        <span className="text-[10px] font-semibold flex-shrink-0" style={{ color: "var(--c-text-3)" }}>
+                        <span className="meta-text font-semibold flex-shrink-0">
                           {daysLeft > 0 ? `J-${daysLeft}` : "Échu"}
                         </span>
                       )}
@@ -769,15 +774,15 @@ function Dashboard({ onNavigate }) {
           {recentFeedbacks.length > 0 && (
             <div className="card overflow-hidden">
               <div className="px-5 py-4 border-b border-[color:var(--c-border)]">
-                <h3 className="text-[14px] font-semibold" style={{ color: "var(--c-text-1)" }}>Feedbacks récents</h3>
-                <p className="text-[11px] mt-0.5" style={{ color: "var(--c-text-3)" }}>{recentFeedbacks.length} retour{recentFeedbacks.length > 1 ? "s" : ""} athlète</p>
+                <h3 className="card-title">Feedbacks récents</h3>
+                <p className="card-subtitle mt-0.5">{recentFeedbacks.length} retour{recentFeedbacks.length > 1 ? "s" : ""} athlète</p>
               </div>
               <div className="divide-y divide-[color:var(--c-border)]">
                 {recentFeedbacks.map(({ session, validation, athlete }, i) => (
                   <div key={i} className="px-5 py-3.5 flex items-start gap-3 hover:bg-[var(--c-surface-2)] transition-colors">
                     {/* Avatar avec dégradé */}
                     <div
-                      className="w-8 h-8 rounded-full flex items-center justify-center text-white text-[10px] font-bold flex-shrink-0 shadow-sm"
+                      className="w-8 h-8 rounded-full flex items-center justify-center text-white text-[12px] font-bold flex-shrink-0 shadow-sm"
                       style={{ background: "linear-gradient(135deg, #1D9E75, #16826C)" }}
                     >
                       {initialsFromName(athlete.name)}
@@ -785,7 +790,7 @@ function Dashboard({ onNavigate }) {
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap mb-1">
                         <span className="text-[12px] font-semibold" style={{ color: "var(--c-text-1)" }}>{athlete.name.split(" ")[0]}</span>
-                        <span className="text-[10.5px] truncate max-w-[100px]" style={{ color: "var(--c-text-3)" }}>{session.title}</span>
+                        <span className="meta-text truncate max-w-[100px]">{session.title}</span>
                         <ValidationBadge status={validation.status} />
                       </div>
                       {validation.feeling != null && (
@@ -800,11 +805,11 @@ function Dashboard({ onNavigate }) {
                         </div>
                       )}
                       {validation.comment && (
-                        <p className="text-[11px] italic truncate" style={{ color: "var(--c-text-3)" }}>« {validation.comment} »</p>
+                        <p className="meta-text italic truncate">« {validation.comment} »</p>
                       )}
                     </div>
                     {validation.rpe != null && (
-                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-lg flex-shrink-0" style={{ background: "var(--c-surface-3)", color: "var(--c-text-2)" }}>
+                      <span className="text-[12px] font-bold px-2 py-0.5 rounded-lg flex-shrink-0" style={{ background: "var(--c-surface-3)", color: "var(--c-text-2)" }}>
                         RPE {validation.rpe}
                       </span>
                     )}
@@ -819,7 +824,7 @@ function Dashboard({ onNavigate }) {
             <div className="card p-8 text-center">
               <BarChart2 size={28} className="mx-auto mb-3" strokeWidth={1.5} style={{ color: "var(--c-text-4)" }} />
               <p className="text-[12px] font-semibold" style={{ color: "var(--c-text-2)" }}>Les données apparaîtront ici</p>
-              <p className="text-[11px] mt-1" style={{ color: "var(--c-text-3)" }}>
+              <p className="meta-text mt-1">
                 Compétitions, objectifs et feedbacks s'afficheront au fur et à mesure.
               </p>
             </div>
