@@ -101,6 +101,11 @@ src/
     shared.js
     shared.test.js
   components/
+    auth/
+      AuthFormControls.jsx
+      authFormUtils.js
+      authFormUtils.test.js
+      AuthShell.jsx
     brand/
       AthleteOSLogo.jsx
       AthleteOSLogo.test.jsx
@@ -110,6 +115,7 @@ src/
       MobileNavigation.test.jsx
     ui/
       AccountSettingsModal.jsx
+      AccountSettingsModal.test.jsx
       AxisRadarCard.jsx
       ErrorBoundary.jsx
       ErrorState.jsx
@@ -123,6 +129,7 @@ src/
     disciplines.js
     disciplines.test.js
   hooks/
+    PushToggleButton.test.jsx
     usePushNotifications.jsx
     useUrlView.js
   modules/
@@ -155,6 +162,7 @@ src/
     mobileNavigation.js
     mobileNavigation.test.js
   pages/
+    AuthPages.test.jsx
     LoginPage.jsx
     ResetPasswordPage.jsx
     SignupPage.jsx
@@ -562,6 +570,9 @@ test.describe("navigation mobile athlète", () => {
     await expect(mobileNav).toBeVisible({ timeout: 15000 });
     await expect(mobileNav.getByRole("button")).toHaveCount(5);
     await expect(mobileNav.getByRole("button", { name: /Notifs/i })).toHaveCount(0);
+    await page.getByRole("button", { name: "Ouvrir les réglages du compte" }).click();
+    await expect(page.getByRole("dialog", { name: "Réglages" })).toBeVisible();
+    await page.getByRole("button", { name: "Fermer les réglages" }).click();
 
     const notificationBell = page.getByRole("button", { name: /^Notifications/ });
     await expect(notificationBell).toBeVisible();
@@ -652,6 +663,9 @@ test.describe("navigation mobile coach", () => {
     await expect(mobileNav).toBeVisible({ timeout: 15000 });
     await expect(mobileNav.getByRole("button")).toHaveCount(5);
     await expect(page.locator("aside.sidebar-premium")).toBeHidden();
+    await page.getByRole("button", { name: "Ouvrir les réglages du compte" }).click();
+    await expect(page.getByRole("dialog", { name: "Réglages" })).toBeVisible();
+    await page.getByRole("button", { name: "Fermer les réglages" }).click();
 
     const primaryRoutes = [
       ["Accueil", "dashboard"],
@@ -764,7 +778,7 @@ import { test, expect } from "@playwright/test";
 
 test("l'app démarre et affiche l'écran de connexion", async ({ page }) => {
   await page.goto("/");
-  await expect(page.getByRole("heading", { name: "AthleteOS" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Connecte-toi à ton espace" })).toBeVisible();
   await expect(page.getByPlaceholder("coach@club.be")).toBeVisible();
   await expect(page.getByPlaceholder("••••••••")).toBeVisible();
   await expect(page.getByRole("button", { name: "Se connecter" })).toBeVisible();
@@ -783,6 +797,34 @@ test("un identifiant invalide affiche une erreur, ne fait pas planter l'app", as
   await page.getByPlaceholder("••••••••").fill("mot-de-passe-invalide");
   await page.getByRole("button", { name: "Se connecter" }).click();
   await expect(page.getByText("Email ou mot de passe incorrect.")).toBeVisible({ timeout: 10000 });
+});
+
+test.describe("authentification mobile", () => {
+  test.use({ viewport: { width: 360, height: 740 } });
+
+  test("les champs restent lisibles, tactiles et sans débordement", async ({ page }) => {
+    await page.goto("/");
+    const email = page.getByLabel("Adresse email");
+    const password = page.getByLabel("Mot de passe", { exact: true });
+
+    await expect(email).toBeVisible();
+    await expect(password).toBeVisible();
+    expect((await email.boundingBox()).height).toBeGreaterThanOrEqual(44);
+    expect((await password.boundingBox()).height).toBeGreaterThanOrEqual(44);
+    expect(await page.evaluate(() => globalThis.document.documentElement.scrollWidth <= globalThis.document.documentElement.clientWidth)).toBe(true);
+
+    await page.getByRole("button", { name: "Afficher le mot de passe" }).click();
+    await expect(password).toHaveAttribute("type", "text");
+  });
+
+  test("le choix Coach ou Athlète précède le formulaire d'inscription", async ({ page }) => {
+    await page.goto("/");
+    await page.getByText("Pas encore de compte ?").click();
+    await expect(page.getByRole("button", { name: /Coach.*Créer mon club/ })).toHaveAttribute("aria-pressed", "true");
+    await page.getByRole("button", { name: /Athlète.*Rejoindre mon club/ }).click();
+    await expect(page.getByLabel("Code d’invitation")).toBeVisible();
+    expect(await page.evaluate(() => globalThis.document.documentElement.scrollWidth <= globalThis.document.documentElement.clientWidth)).toBe(true);
+  });
 });
 </file>
 
@@ -8597,6 +8639,244 @@ describe("pctOfReference — % du PR, sens correct par discipline", () => {
 });
 </file>
 
+<file path="src/components/auth/AuthFormControls.jsx">
+import { useState } from "react";
+import { AlertCircle, CheckCircle2, Eye, EyeOff, LoaderCircle, ShieldCheck } from "lucide-react";
+import { getPasswordStrength } from "./authFormUtils";
+
+export function AuthField({
+  id,
+  label,
+  icon: Icon,
+  hint,
+  error,
+  className = "",
+  endAdornment = null,
+  ...inputProps
+}) {
+  const describedBy = [hint ? `${id}-hint` : null, error ? `${id}-error` : null].filter(Boolean).join(" ") || undefined;
+
+  return (
+    <div className={["auth-field", className].join(" ")}>
+      <label htmlFor={id}>{label}</label>
+      <div className={["auth-input-wrap", error ? "has-error" : ""].join(" ")}>
+        {Icon && <Icon className="auth-input-icon" size={18} aria-hidden="true" />}
+        <input
+          id={id}
+          className="auth-input"
+          aria-invalid={error ? "true" : undefined}
+          aria-describedby={describedBy}
+          {...inputProps}
+        />
+        {endAdornment}
+      </div>
+      {error ? (
+        <p id={`${id}-error`} className="auth-field-error">{error}</p>
+      ) : hint ? (
+        <p id={`${id}-hint`} className="auth-field-hint">{hint}</p>
+      ) : null}
+    </div>
+  );
+}
+
+export function AuthPasswordField({ id, label, showStrength = false, value = "", ...props }) {
+  const [visible, setVisible] = useState(false);
+
+  return (
+    <>
+      <AuthField
+        id={id}
+        label={label}
+        type={visible ? "text" : "password"}
+        value={value}
+        endAdornment={(
+          <button
+            type="button"
+            className="auth-password-toggle"
+            onClick={() => setVisible((current) => !current)}
+            aria-label={visible ? "Masquer le mot de passe" : "Afficher le mot de passe"}
+            aria-pressed={visible}
+          >
+            {visible ? <EyeOff size={18} aria-hidden="true" /> : <Eye size={18} aria-hidden="true" />}
+          </button>
+        )}
+        {...props}
+      />
+      {showStrength && <PasswordStrength password={value} />}
+    </>
+  );
+}
+
+export function PasswordStrength({ password }) {
+  const strength = getPasswordStrength(password);
+  if (!password) return null;
+
+  return (
+    <div className="password-strength" aria-live="polite">
+      <div className="password-strength-track" aria-hidden="true">
+        {[1, 2, 3, 4].map((level) => (
+          <span key={level} className={level <= strength.score ? strength.tone : ""} />
+        ))}
+      </div>
+      <div className="password-strength-copy">
+        <span>{strength.label}</span>
+        <span>{password.length < 8 ? `${8 - password.length} caractère${8 - password.length > 1 ? "s" : ""} restant${8 - password.length > 1 ? "s" : ""}` : "Longueur suffisante"}</span>
+      </div>
+    </div>
+  );
+}
+
+export function AuthFeedback({ type = "error", children, id }) {
+  const isError = type === "error";
+  const Icon = isError ? AlertCircle : CheckCircle2;
+
+  return (
+    <div
+      id={id}
+      className={["auth-feedback", isError ? "error" : "success"].join(" ")}
+      role={isError ? "alert" : "status"}
+      aria-live={isError ? "assertive" : "polite"}
+    >
+      <Icon size={18} aria-hidden="true" />
+      <p>{children}</p>
+    </div>
+  );
+}
+
+export function AuthSubmitButton({ loading, loadingLabel, children, ...buttonProps }) {
+  return (
+    <button type="submit" className="auth-submit tap-feedback" aria-busy={loading} {...buttonProps}>
+      {loading ? (
+        <>
+          <LoaderCircle size={18} className="animate-spin" aria-hidden="true" />
+          {loadingLabel}
+        </>
+      ) : children}
+    </button>
+  );
+}
+
+export function AuthTrustNote({ children }) {
+  return (
+    <div className="auth-trust-note">
+      <ShieldCheck size={17} aria-hidden="true" />
+      <p>{children}</p>
+    </div>
+  );
+}
+</file>
+
+<file path="src/components/auth/authFormUtils.js">
+const AUTH_ERROR_MESSAGES = Object.freeze({
+  "Invalid login credentials": "Email ou mot de passe incorrect.",
+  "Email not confirmed": "Confirme ton adresse email avant de te connecter.",
+  "User already registered": "Un compte existe déjà avec cette adresse email.",
+  "Password should be at least 6 characters": "Choisis un mot de passe d’au moins 8 caractères.",
+  "Failed to fetch": "Connexion impossible. Vérifie ton réseau puis réessaie.",
+});
+
+export function translateAuthError(error, fallback = "Une erreur est survenue. Réessaie dans un instant.") {
+  const message = typeof error === "string" ? error : error?.message;
+  if (!message) return fallback;
+  return AUTH_ERROR_MESSAGES[message] ?? message;
+}
+
+export function getPasswordStrength(password = "") {
+  if (!password) return { score: 0, label: "", tone: "" };
+
+  let score = 0;
+  if (password.length >= 8) score += 1;
+  if (password.length >= 12) score += 1;
+  if (/[a-z]/.test(password) && /[A-Z]/.test(password)) score += 1;
+  if (/\d/.test(password) || /[^A-Za-z0-9]/.test(password)) score += 1;
+
+  if (score <= 1) return { score: 1, label: "Mot de passe fragile", tone: "weak" };
+  if (score === 2) return { score: 2, label: "Mot de passe correct", tone: "fair" };
+  if (score === 3) return { score: 3, label: "Bon mot de passe", tone: "good" };
+  return { score: 4, label: "Mot de passe robuste", tone: "strong" };
+}
+</file>
+
+<file path="src/components/auth/authFormUtils.test.js">
+import { describe, expect, it } from "vitest";
+import { getPasswordStrength, translateAuthError } from "./authFormUtils";
+
+describe("authFormUtils", () => {
+  it("traduit les erreurs Supabase connues sans masquer un message métier", () => {
+    expect(translateAuthError({ message: "Invalid login credentials" })).toBe("Email ou mot de passe incorrect.");
+    expect(translateAuthError({ message: "Club introuvable." })).toBe("Club introuvable.");
+    expect(translateAuthError(null)).toMatch(/Une erreur est survenue/);
+  });
+
+  it("mesure la robustesse sans imposer de nouvelle règle serveur", () => {
+    expect(getPasswordStrength("").score).toBe(0);
+    expect(getPasswordStrength("court").score).toBe(1);
+    expect(getPasswordStrength("athleteos").score).toBe(1);
+    expect(getPasswordStrength("AthleteOS2026!").score).toBe(4);
+  });
+});
+</file>
+
+<file path="src/components/auth/AuthShell.jsx">
+import { ShieldCheck, Sparkles, UsersRound } from "lucide-react";
+import AthleteOSLogo from "../brand/AthleteOSLogo";
+
+const PRODUCT_POINTS = [
+  { icon: Sparkles, text: "Les actions importantes restent visibles au bon moment." },
+  { icon: UsersRound, text: "Coach et athlètes partagent le même suivi, chacun à son niveau." },
+  { icon: ShieldCheck, text: "Chaque membre accède uniquement à l’espace de son club." },
+];
+
+export default function AuthShell({ eyebrow, title, description, children, footer }) {
+  return (
+    <main className="auth-shell">
+      <div className="auth-orbit auth-orbit-one" aria-hidden="true" />
+      <div className="auth-orbit auth-orbit-two" aria-hidden="true" />
+
+      <div className="auth-layout">
+        <aside className="auth-story" aria-label="Présentation AthleteOS">
+          <AthleteOSLogo direction="row" size={44} wordmarkSize={21} />
+          <div className="auth-story-copy">
+            <p className="auth-kicker">Le quotidien sportif, clarifié</p>
+            <h2>Le club avance quand chacun sait quoi faire.</h2>
+            <p>
+              Planning, suivi, communication et progression réunis dans une expérience calme,
+              lisible et pensée pour le terrain.
+            </p>
+          </div>
+          <div className="auth-product-points">
+            {PRODUCT_POINTS.map(({ icon: Icon, text }) => (
+              <div key={text} className="auth-product-point">
+                <span><Icon size={16} aria-hidden="true" /></span>
+                <p>{text}</p>
+              </div>
+            ))}
+          </div>
+          <p className="auth-story-footnote">AthleteOS · Espace club sécurisé</p>
+        </aside>
+
+        <section className="auth-workspace" aria-labelledby="auth-page-title">
+          <div className="auth-mobile-brand">
+            <AthleteOSLogo direction="row" size={38} wordmarkSize={18} />
+          </div>
+
+          <div className="auth-card">
+            <header className="auth-card-header">
+              <p className="auth-kicker">{eyebrow}</p>
+              <h1 id="auth-page-title">{title}</h1>
+              <p>{description}</p>
+            </header>
+            {children}
+          </div>
+
+          {footer && <div className="auth-footer">{footer}</div>}
+        </section>
+      </div>
+    </main>
+  );
+}
+</file>
+
 <file path="src/components/brand/AthleteOSLogo.jsx">
 import { memo } from "react";
 
@@ -8998,54 +9278,131 @@ describe("MobileMoreSheet", () => {
 </file>
 
 <file path="src/components/ui/AccountSettingsModal.jsx">
-// ============================================================
-// AthleteOS — src/components/ui/AccountSettingsModal.jsx
-// Réglages de compte partagés coach + athlète : nom, email, mot de
-// passe pour tout le monde ; nom du club + code d'invitation réservés
-// au HEAD COACH (tâche 4 — un simple coach ne doit plus voir ces
-// actions structurelles). Les actions sensibles (renommer le club,
-// régénérer le code) passent par l'Edge Function admin-actions
-// (service role, revérifie le rôle côté serveur — cet écran ne fait que
-// masquer l'UI, la sécurité réelle est côté serveur).
-// ============================================================
-
-import { useState, useEffect } from "react";
-import { X, User, Mail, Lock, Building2, RefreshCw, Copy, Check, AlertCircle, CheckCircle } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import {
+  Building2,
+  Check,
+  Copy,
+  KeyRound,
+  Lock,
+  Mail,
+  RefreshCw,
+  Settings,
+  User,
+  X,
+} from "lucide-react";
 import { supabase } from "../../utils/supabaseClient";
 import { useAuth } from "../../context/AuthContext";
+import {
+  AuthFeedback,
+  AuthField,
+  AuthPasswordField,
+} from "../auth/AuthFormControls";
+import { translateAuthError } from "../auth/authFormUtils";
 
-function Field({ label, children }) {
+const FOCUSABLE_SELECTOR = [
+  "button:not([disabled])",
+  "input:not([disabled])",
+  "select:not([disabled])",
+  "textarea:not([disabled])",
+  "[href]",
+  "[tabindex]:not([tabindex='-1'])",
+].join(",");
+
+function SettingsSectionHeader({ icon: Icon, title, description }) {
   return (
-    <div className="space-y-1.5">
-      <label className="block text-[11px] font-bold uppercase tracking-wider" style={{ color: "var(--c-text-3)" }}>{label}</label>
-      {children}
+    <div className="settings-section-header">
+      <span><Icon size={18} aria-hidden="true" /></span>
+      <div>
+        <h3>{title}</h3>
+        <p>{description}</p>
+      </div>
     </div>
   );
 }
 
-const inputCls = "w-full pl-10 pr-4 py-2.5 rounded-lg border text-[14px] focus:outline-none focus:ring-2 focus:ring-emerald-400 transition-all";
-const inputStyle = { background: "var(--c-surface-2)", borderColor: "var(--c-border-strong)", color: "var(--c-text-1)" };
+function ActionRow({ children, action }) {
+  return (
+    <div className="settings-action-row">
+      <div className="min-w-0">{children}</div>
+      {action}
+    </div>
+  );
+}
 
 export default function AccountSettingsModal({ onClose }) {
   const { user, profile, clubId } = useAuth();
   const isHeadCoach = profile?.role === "head_coach";
-
-  const [name, setName]   = useState(profile?.name ?? "");
+  const [activeSection, setActiveSection] = useState("account");
+  const [name, setName] = useState(profile?.name ?? "");
   const [email, setEmail] = useState(user?.email ?? "");
   const [password, setPassword] = useState("");
-
-  const [clubName, setClubName]     = useState("");
+  const [clubName, setClubName] = useState("");
   const [inviteCode, setInviteCode] = useState(null);
-  const [copied, setCopied]         = useState(false);
+  const [clubLoading, setClubLoading] = useState(Boolean(clubId));
+  const [copied, setCopied] = useState(false);
+  const [confirmRegeneration, setConfirmRegeneration] = useState(false);
+  const [message, setMessage] = useState(null);
+  const [busy, setBusy] = useState(null);
+  const dialogRef = useRef(null);
+  const restoreFocusRef = useRef(typeof document !== "undefined" ? document.activeElement : null);
 
-  const [msg, setMsg] = useState(null); // { type: "error"|"success", text }
-  const [busy, setBusy] = useState(null); // clé de l'action en cours
+  const requestClose = () => {
+    if (!busy) onClose();
+  };
 
   useEffect(() => {
-    if (!clubId) return;
+    if (!clubId) {
+      setClubLoading(false);
+      return;
+    }
+
+    let active = true;
+    setClubLoading(true);
     supabase.from("clubs").select("name, invite_code").eq("id", clubId).single()
-      .then(({ data }) => { if (data) { setClubName(data.name ?? ""); setInviteCode(data.invite_code ?? null); } });
+      .then(({ data, error }) => {
+        if (!active) return;
+        if (error) {
+          setMessage({ type: "error", text: "Les informations du club n’ont pas pu être chargées." });
+        } else if (data) {
+          setClubName(data.name ?? "");
+          setInviteCode(data.invite_code ?? null);
+        }
+        setClubLoading(false);
+      });
+    return () => { active = false; };
   }, [clubId]);
+
+  useEffect(() => {
+    const previousFocus = restoreFocusRef.current;
+    return () => previousFocus?.focus?.();
+  }, []);
+
+  useEffect(() => {
+    const handleKeyDown = (event) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        requestClose();
+        return;
+      }
+      if (event.key !== "Tab" || !dialogRef.current) return;
+
+      const focusable = [...dialogRef.current.querySelectorAll(FOCUSABLE_SELECTOR)];
+      if (!focusable.length) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  });
 
   const callAdmin = async (payload) => {
     const { data, error } = await supabase.functions.invoke("admin-actions", { body: payload });
@@ -9054,172 +9411,379 @@ export default function AccountSettingsModal({ onClose }) {
     return data;
   };
 
-  const saveName = async () => {
+  const runAction = async (key, action, successText) => {
+    setBusy(key);
+    setMessage(null);
+    try {
+      await action();
+      setMessage({ type: "success", text: successText });
+    } catch (actionError) {
+      setMessage({ type: "error", text: translateAuthError(actionError) });
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const saveName = () => {
     if (!name.trim()) return;
-    setBusy("name"); setMsg(null);
-    try {
-      await callAdmin({ action: "update_profile", name: name.trim() });
-      setMsg({ type: "success", text: "Nom mis à jour." });
-    } catch (e) { setMsg({ type: "error", text: e.message }); }
-    setBusy(null);
+    runAction(
+      "name",
+      () => callAdmin({ action: "update_profile", name: name.trim() }),
+      "Ton nom a bien été mis à jour.",
+    );
   };
 
-  const saveEmail = async () => {
+  const saveEmail = () => {
     if (!email.trim() || email.trim() === user?.email) return;
-    setBusy("email"); setMsg(null);
-    try {
-      const { error } = await supabase.auth.updateUser({ email: email.trim() });
+    runAction("email", async () => {
+      const normalizedEmail = email.trim();
+      const { error } = await supabase.auth.updateUser({ email: normalizedEmail });
       if (error) throw error;
-      await supabase.from("users").update({ email: email.trim() }).eq("id", profile.id);
-      setMsg({ type: "success", text: "Vérifie ta boîte mail pour confirmer le changement d'adresse." });
-    } catch (e) { setMsg({ type: "error", text: e.message }); }
-    setBusy(null);
+      await supabase.from("users").update({ email: normalizedEmail }).eq("id", profile.id);
+    }, "Vérifie ta boîte mail pour confirmer la nouvelle adresse.");
   };
 
-  const savePassword = async () => {
-    if (password.length < 8) { setMsg({ type: "error", text: "Le mot de passe doit faire au moins 8 caractères." }); return; }
-    setBusy("password"); setMsg(null);
-    try {
+  const savePassword = () => {
+    if (password.length < 8) {
+      setMessage({ type: "error", text: "Le mot de passe doit contenir au moins 8 caractères." });
+      return;
+    }
+    runAction("password", async () => {
       const { error } = await supabase.auth.updateUser({ password });
       if (error) throw error;
       setPassword("");
-      setMsg({ type: "success", text: "Mot de passe mis à jour." });
-    } catch (e) { setMsg({ type: "error", text: e.message }); }
-    setBusy(null);
+    }, "Ton mot de passe a bien été mis à jour.");
   };
 
-  const saveClubName = async () => {
+  const saveClubName = () => {
     if (!clubName.trim()) return;
-    setBusy("club"); setMsg(null);
-    try {
-      // Clé d'idempotence : un double-clic ou un retry réseau sur ce
-      // même clic ne renomme pas le club une seconde fois côté serveur.
-      await callAdmin({ action: "rename_club", clubName: clubName.trim(), idempotencyKey: crypto.randomUUID() });
-      setMsg({ type: "success", text: "Nom du club mis à jour." });
-    } catch (e) { setMsg({ type: "error", text: e.message }); }
-    setBusy(null);
+    runAction(
+      "club",
+      () => callAdmin({
+        action: "rename_club",
+        clubName: clubName.trim(),
+        idempotencyKey: crypto.randomUUID(),
+      }),
+      "Le nom du club a bien été mis à jour.",
+    );
   };
 
-  const regenerateCode = async () => {
-    setBusy("code"); setMsg(null);
-    try {
-      const data = await callAdmin({ action: "regenerate_invite_code", idempotencyKey: crypto.randomUUID() });
+  const regenerateCode = () => {
+    runAction("code", async () => {
+      const data = await callAdmin({
+        action: "regenerate_invite_code",
+        idempotencyKey: crypto.randomUUID(),
+      });
       setInviteCode(data.inviteCode);
-      setMsg({ type: "success", text: "Nouveau code généré — l'ancien ne fonctionne plus." });
-    } catch (e) { setMsg({ type: "error", text: e.message }); }
-    setBusy(null);
+      setConfirmRegeneration(false);
+    }, "Nouveau code généré. L’ancien code ne fonctionne plus.");
   };
 
-  const copyCode = () => {
+  const copyCode = async () => {
     if (!inviteCode) return;
-    navigator.clipboard?.writeText(inviteCode).then(() => { setCopied(true); setTimeout(() => setCopied(false), 2000); });
+    try {
+      if (!navigator.clipboard) throw new Error("Clipboard unavailable");
+      await navigator.clipboard.writeText(inviteCode);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      setMessage({ type: "error", text: "Le code n’a pas pu être copié. Sélectionne-le manuellement." });
+    }
+  };
+
+  const switchSection = (section) => {
+    setActiveSection(section);
+    setMessage(null);
+    setConfirmRegeneration(false);
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 modal-backdrop"
-      onClick={e => e.target === e.currentTarget && onClose()}>
-      <div className="rounded-2xl shadow-2xl w-full max-w-md max-h-[88vh] flex flex-col modal-content overflow-hidden"
-        style={{ background: "var(--c-surface)", border: "1px solid var(--c-border)" }}>
-
-        <div className="px-6 py-5 flex items-center justify-between flex-shrink-0" style={{ borderBottom: "1px solid var(--c-border)" }}>
-          <h3 className="text-[15px] font-bold" style={{ color: "var(--c-text-1)" }}>Réglages du compte</h3>
-          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-[var(--c-surface-3)] transition-colors">
-            <X size={16} style={{ color: "var(--c-text-3)" }} />
+    <div
+      className="account-settings-backdrop modal-backdrop"
+      onMouseDown={(event) => event.target === event.currentTarget && requestClose()}
+    >
+      <section
+        ref={dialogRef}
+        className="account-settings-dialog modal-content"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="account-settings-title"
+        aria-describedby="account-settings-description"
+        aria-busy={Boolean(busy)}
+      >
+        <header className="account-settings-header">
+          <div className="account-settings-heading">
+            <span><Settings size={18} aria-hidden="true" /></span>
+            <div>
+              <p className="meta-text">ESPACE PERSONNEL</p>
+              <h2 id="account-settings-title">Réglages</h2>
+              <p id="account-settings-description">Gère ton compte et les informations de ton club.</p>
+            </div>
+          </div>
+          <button
+            type="button"
+            autoFocus
+            onClick={requestClose}
+            disabled={Boolean(busy)}
+            className="icon-btn"
+            aria-label="Fermer les réglages"
+          >
+            <X size={18} aria-hidden="true" />
           </button>
-        </div>
+        </header>
 
-        <div className="flex-1 overflow-y-auto px-6 py-5 space-y-5">
-          {msg && (
-            <div className="flex items-start gap-2.5 rounded-lg px-3.5 py-3"
-              style={msg.type === "error"
-                ? { background: "rgba(226,75,74,0.1)", border: "1px solid rgba(226,75,74,0.2)" }
-                : { background: "rgba(29,158,117,0.1)", border: "1px solid rgba(29,158,117,0.2)" }}>
-              {msg.type === "error"
-                ? <AlertCircle size={15} color="#F19A9A" className="flex-shrink-0 mt-0.5" />
-                : <CheckCircle size={15} color="#4DC9A0" className="flex-shrink-0 mt-0.5" />}
-              <p className="text-[13px]" style={{ color: msg.type === "error" ? "#F19A9A" : "#4DC9A0" }}>{msg.text}</p>
+        {isHeadCoach && (
+          <nav className="account-settings-tabs" role="tablist" aria-label="Sections des réglages">
+            <button
+              type="button"
+              role="tab"
+              id="settings-account-tab"
+              aria-selected={activeSection === "account"}
+              aria-controls="settings-account-panel"
+              className={activeSection === "account" ? "active" : ""}
+              onClick={() => switchSection("account")}
+            >
+              <User size={16} aria-hidden="true" /> Compte
+            </button>
+            <button
+              type="button"
+              role="tab"
+              id="settings-club-tab"
+              aria-selected={activeSection === "club"}
+              aria-controls="settings-club-panel"
+              className={activeSection === "club" ? "active" : ""}
+              onClick={() => switchSection("club")}
+            >
+              <Building2 size={16} aria-hidden="true" /> Club
+            </button>
+          </nav>
+        )}
+
+        <div className="account-settings-content">
+          {message && <AuthFeedback type={message.type}>{message.text}</AuthFeedback>}
+
+          {activeSection === "account" ? (
+            <div
+              id="settings-account-panel"
+              role={isHeadCoach ? "tabpanel" : undefined}
+              aria-labelledby={isHeadCoach ? "settings-account-tab" : undefined}
+              className="settings-panel"
+            >
+              <SettingsSectionHeader
+                icon={User}
+                title="Informations du compte"
+                description="Ces informations identifient ton profil dans AthleteOS."
+              />
+
+              <ActionRow action={(
+                <button type="button" onClick={saveName} disabled={Boolean(busy) || !name.trim() || name.trim() === profile?.name} className="btn-secondary">
+                  {busy === "name" ? "Enregistrement…" : "Enregistrer"}
+                </button>
+              )}>
+                <AuthField
+                  id="settings-name"
+                  label="Prénom et nom"
+                  icon={User}
+                  autoComplete="name"
+                  value={name}
+                  maxLength={100}
+                  onChange={(event) => setName(event.target.value)}
+                  disabled={Boolean(busy)}
+                />
+              </ActionRow>
+
+              <ActionRow action={(
+                <button type="button" onClick={saveEmail} disabled={Boolean(busy) || !email.trim() || email.trim() === user?.email} className="btn-secondary">
+                  {busy === "email" ? "Envoi…" : "Changer l’email"}
+                </button>
+              )}>
+                <AuthField
+                  id="settings-email"
+                  label="Adresse email"
+                  icon={Mail}
+                  type="email"
+                  inputMode="email"
+                  autoComplete="email"
+                  hint="La nouvelle adresse devra être confirmée par email."
+                  value={email}
+                  maxLength={254}
+                  onChange={(event) => setEmail(event.target.value)}
+                  disabled={Boolean(busy)}
+                />
+              </ActionRow>
+
+              <ActionRow action={(
+                <button type="button" onClick={savePassword} disabled={Boolean(busy) || !password} className="btn-secondary">
+                  {busy === "password" ? "Mise à jour…" : "Changer le mot de passe"}
+                </button>
+              )}>
+                <AuthPasswordField
+                  id="settings-password"
+                  label="Nouveau mot de passe"
+                  icon={Lock}
+                  autoComplete="new-password"
+                  placeholder="8 caractères minimum"
+                  value={password}
+                  maxLength={128}
+                  onChange={(event) => setPassword(event.target.value)}
+                  disabled={Boolean(busy)}
+                  showStrength
+                />
+              </ActionRow>
+            </div>
+          ) : (
+            <div
+              id="settings-club-panel"
+              role="tabpanel"
+              aria-labelledby="settings-club-tab"
+              className="settings-panel"
+            >
+              <SettingsSectionHeader
+                icon={Building2}
+                title="Identité du club"
+                description="Ces actions sont réservées au head coach."
+              />
+
+              {clubLoading ? (
+                <div className="settings-loading" role="status">
+                  <RefreshCw size={18} className="animate-spin" aria-hidden="true" />
+                  Chargement des informations du club…
+                </div>
+              ) : (
+                <>
+                  <ActionRow action={(
+                    <button type="button" onClick={saveClubName} disabled={Boolean(busy) || !clubName.trim()} className="btn-secondary">
+                      {busy === "club" ? "Enregistrement…" : "Enregistrer"}
+                    </button>
+                  )}>
+                    <AuthField
+                      id="settings-club-name"
+                      label="Nom du club"
+                      icon={Building2}
+                      autoComplete="organization"
+                      value={clubName}
+                      maxLength={100}
+                      onChange={(event) => setClubName(event.target.value)}
+                      disabled={Boolean(busy)}
+                    />
+                  </ActionRow>
+
+                  <div className="settings-invite-card">
+                    <div className="settings-invite-copy">
+                      <span><KeyRound size={18} aria-hidden="true" /></span>
+                      <div>
+                        <h4>Code d’invitation</h4>
+                        <p>Partage ce code avec les athlètes qui doivent rejoindre ton club.</p>
+                      </div>
+                    </div>
+                    <div className="settings-code-row">
+                      <output aria-label="Code d’invitation actuel">{inviteCode ?? "Indisponible"}</output>
+                      <button type="button" onClick={copyCode} disabled={!inviteCode || Boolean(busy)} className="icon-btn" aria-label="Copier le code d’invitation">
+                        {copied ? <Check size={18} aria-hidden="true" /> : <Copy size={18} aria-hidden="true" />}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setConfirmRegeneration(true)}
+                        disabled={Boolean(busy)}
+                        className="icon-btn"
+                        aria-label="Générer un nouveau code"
+                      >
+                        <RefreshCw size={18} aria-hidden="true" />
+                      </button>
+                    </div>
+                  </div>
+
+                  {confirmRegeneration && (
+                    <div className="settings-confirm" role="alert" aria-labelledby="regenerate-code-title">
+                      <div>
+                        <h4 id="regenerate-code-title">Remplacer le code actuel ?</h4>
+                        <p>L’ancien code sera invalidé immédiatement.</p>
+                      </div>
+                      <div>
+                        <button type="button" className="btn-ghost" onClick={() => setConfirmRegeneration(false)} disabled={Boolean(busy)}>Annuler</button>
+                        <button type="button" className="btn-secondary" onClick={regenerateCode} disabled={Boolean(busy)}>
+                          {busy === "code" ? "Génération…" : "Générer le nouveau code"}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
             </div>
           )}
-
-          <Field label="Ton nom">
-            <div className="flex gap-2">
-              <div className="relative flex-1">
-                <User size={15} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: "var(--c-text-4)" }} />
-                <input value={name} onChange={e => setName(e.target.value)} className={inputCls} style={inputStyle} />
-              </div>
-              <button onClick={saveName} disabled={busy === "name" || !name.trim() || name.trim() === profile?.name}
-                className="btn-secondary !px-4 disabled:opacity-40">
-                {busy === "name" ? "…" : "Enregistrer"}
-              </button>
-            </div>
-          </Field>
-
-          <Field label="Email">
-            <div className="flex gap-2">
-              <div className="relative flex-1">
-                <Mail size={15} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: "var(--c-text-4)" }} />
-                <input type="email" value={email} onChange={e => setEmail(e.target.value)} className={inputCls} style={inputStyle} />
-              </div>
-              <button onClick={saveEmail} disabled={busy === "email" || !email.trim() || email.trim() === user?.email}
-                className="btn-secondary !px-4 disabled:opacity-40">
-                {busy === "email" ? "…" : "Changer"}
-              </button>
-            </div>
-          </Field>
-
-          <Field label="Nouveau mot de passe">
-            <div className="flex gap-2">
-              <div className="relative flex-1">
-                <Lock size={15} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: "var(--c-text-4)" }} />
-                <input type="password" placeholder="8 caractères minimum" value={password} onChange={e => setPassword(e.target.value)} className={inputCls} style={inputStyle} />
-              </div>
-              <button onClick={savePassword} disabled={busy === "password" || !password}
-                className="btn-secondary !px-4 disabled:opacity-40">
-                {busy === "password" ? "…" : "Changer"}
-              </button>
-            </div>
-          </Field>
-
-          {isHeadCoach && (
-            <>
-              <div className="pt-1" style={{ borderTop: "1px solid var(--c-border)" }} />
-              <Field label="Nom du club">
-                <div className="flex gap-2">
-                  <div className="relative flex-1">
-                    <Building2 size={15} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: "var(--c-text-4)" }} />
-                    <input value={clubName} onChange={e => setClubName(e.target.value)} className={inputCls} style={inputStyle} />
-                  </div>
-                  <button onClick={saveClubName} disabled={busy === "club" || !clubName.trim()}
-                    className="btn-secondary !px-4 disabled:opacity-40">
-                    {busy === "club" ? "…" : "Enregistrer"}
-                  </button>
-                </div>
-              </Field>
-
-              <Field label="Code d'invitation">
-                <div className="flex items-center gap-2">
-                  <div className="flex-1 rounded-xl px-4 py-2.5 text-center" style={{ background: "var(--c-surface-2)", border: "1px solid var(--c-border-strong)" }}>
-                    <span className="text-[16px] font-bold" style={{ color: "var(--c-text-1)", letterSpacing: "0.1em" }}>{inviteCode ?? "…"}</span>
-                  </div>
-                  <button onClick={copyCode} className="flex items-center justify-center w-10 h-10 rounded-lg flex-shrink-0 transition-all tap-feedback"
-                    style={{ background: copied ? "rgba(29,158,117,0.15)" : "var(--c-surface-2)", border: "1px solid var(--c-border-strong)" }}>
-                    {copied ? <Check size={14} color="#1D9E75" /> : <Copy size={13} style={{ color: "var(--c-text-2)" }} />}
-                  </button>
-                  <button onClick={regenerateCode} disabled={busy === "code"}
-                    className="flex items-center justify-center w-10 h-10 rounded-lg flex-shrink-0 transition-all tap-feedback disabled:opacity-40"
-                    style={{ background: "var(--c-surface-2)", border: "1px solid var(--c-border-strong)" }} title="Générer un nouveau code">
-                    <RefreshCw size={13} style={{ color: "var(--c-text-2)" }} className={busy === "code" ? "animate-spin" : ""} />
-                  </button>
-                </div>
-                <p className="text-[10.5px]" style={{ color: "var(--c-text-4)" }}>Régénérer invalide l'ancien code immédiatement.</p>
-              </Field>
-            </>
-          )}
         </div>
-      </div>
+      </section>
     </div>
   );
 }
+</file>
+
+<file path="src/components/ui/AccountSettingsModal.test.jsx">
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import AccountSettingsModal from "./AccountSettingsModal";
+
+const mocks = vi.hoisted(() => ({
+  invoke: vi.fn(),
+  from: vi.fn(),
+  updateUser: vi.fn(),
+}));
+
+vi.mock("../../context/AuthContext", () => ({
+  useAuth: () => ({
+    user: { id: "coach-1", email: "coach@club.be" },
+    profile: { id: "coach-1", name: "Coach Martin", role: "head_coach" },
+    clubId: "club-1",
+  }),
+}));
+
+vi.mock("../../utils/supabaseClient", () => ({
+  supabase: {
+    functions: { invoke: mocks.invoke },
+    auth: { updateUser: mocks.updateUser },
+    from: mocks.from,
+  },
+}));
+
+beforeEach(() => {
+  vi.clearAllMocks();
+  mocks.invoke.mockResolvedValue({ data: { success: true, inviteCode: "NEWCODE1" }, error: null });
+  mocks.updateUser.mockResolvedValue({ error: null });
+  mocks.from.mockImplementation((table) => {
+    if (table === "clubs") {
+      return {
+        select: () => ({
+          eq: () => ({
+            single: () => Promise.resolve({ data: { name: "Athletic Club", invite_code: "OLDCODE1" }, error: null }),
+          }),
+        }),
+      };
+    }
+    return { update: () => ({ eq: () => Promise.resolve({ error: null }) }) };
+  });
+});
+
+afterEach(cleanup);
+
+describe("AccountSettingsModal", () => {
+  it("sépare Compte et Club et confirme avant d'invalider le code", async () => {
+    render(<AccountSettingsModal onClose={vi.fn()} />);
+    expect(screen.getByRole("dialog", { name: "Réglages" })).toBeTruthy();
+    expect(screen.getByRole("tab", { name: "Compte" }).getAttribute("aria-selected")).toBe("true");
+
+    fireEvent.click(screen.getByRole("tab", { name: "Club" }));
+    expect(await screen.findByText("OLDCODE1")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Générer un nouveau code" }));
+    expect(mocks.invoke).not.toHaveBeenCalled();
+    expect(screen.getByText("L’ancien code sera invalidé immédiatement.")).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "Générer le nouveau code" }));
+    await waitFor(() => expect(mocks.invoke).toHaveBeenCalledWith("admin-actions", {
+      body: expect.objectContaining({ action: "regenerate_invite_code" }),
+    }));
+    expect(await screen.findByText("NEWCODE1")).toBeTruthy();
+  });
+});
 </file>
 
 <file path="src/components/ui/AxisRadarCard.jsx">
@@ -11035,6 +11599,40 @@ describe("compat — les façades existantes délèguent au même registre (pas 
 });
 </file>
 
+<file path="src/hooks/PushToggleButton.test.jsx">
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { PushToggleButton } from "./usePushNotifications";
+
+beforeEach(() => {
+  Object.defineProperty(navigator, "serviceWorker", { configurable: true, value: {} });
+  vi.stubGlobal("PushManager", function PushManager() {});
+});
+
+afterEach(() => {
+  cleanup();
+  delete navigator.serviceWorker;
+  vi.unstubAllGlobals();
+});
+
+describe("PushToggleButton", () => {
+  it("garde la même action dans sa variante compacte mobile", () => {
+    const onToggle = vi.fn();
+    render(<PushToggleButton subscribed={false} onToggle={onToggle} permissionState="default" compact />);
+
+    const button = screen.getByRole("button", { name: "Activer les notifications" });
+    expect(screen.queryByText("Activer les notifs")).toBeNull();
+    fireEvent.click(button);
+    expect(onToggle).toHaveBeenCalledOnce();
+  });
+
+  it("reste désactivé quand la permission est refusée", () => {
+    render(<PushToggleButton subscribed={false} onToggle={vi.fn()} permissionState="denied" compact />);
+    expect(screen.getByRole("button", { name: "Notifications bloquées par le navigateur" }).disabled).toBe(true);
+  });
+});
+</file>
+
 <file path="src/hooks/usePushNotifications.jsx">
 // ============================================================
 // AthleteOS — src/hooks/usePushNotifications.jsx
@@ -11165,7 +11763,7 @@ export function usePushNotifications(athleteId, clubId, userId = null) {
 }
 
 // ── Bouton toggle ──────────────────────────────────────────────────────────
-export function PushToggleButton({ subscribed, onToggle, permissionState }) {
+export function PushToggleButton({ subscribed, onToggle, permissionState, compact = false }) {
   const noSupport = !("serviceWorker" in navigator) || !("PushManager" in window);
   if (noSupport) return null;
   const denied = permissionState === "denied";
@@ -11175,8 +11773,11 @@ export function PushToggleButton({ subscribed, onToggle, permissionState }) {
       type="button"
       onClick={onToggle}
       disabled={subscribed || denied}
+      aria-label={compact ? (subscribed ? "Notifications actives" : denied ? "Notifications bloquées par le navigateur" : "Activer les notifications") : undefined}
+      title={compact ? (subscribed ? "Notifications actives" : denied ? "Notifications bloquées" : "Activer les notifications") : undefined}
       className={[
-        "flex items-center gap-2 px-3 py-2 rounded-xl text-[12px] font-semibold border transition-all",
+        "flex items-center justify-center rounded-xl text-[12px] font-semibold border transition-all",
+        compact ? "w-11 h-11 p-0" : "gap-2 px-3 py-2",
         subscribed || denied ? "cursor-default" : "hover:border-[var(--c-border-strong)]",
       ].join(" ")}
       style={
@@ -11187,8 +11788,8 @@ export function PushToggleButton({ subscribed, onToggle, permissionState }) {
             : { background: "var(--c-surface-2)", borderColor: "var(--c-border)", color: "var(--c-text-2)" }
       }
     >
-      <span>{subscribed ? "🔔" : "🔕"}</span>
-      <span>{subscribed ? "Notifs actives" : denied ? "Bloquées par le navigateur" : "Activer les notifs"}</span>
+      <span aria-hidden={compact ? "true" : undefined}>{subscribed ? "🔔" : "🔕"}</span>
+      {!compact && <span>{subscribed ? "Notifs actives" : denied ? "Bloquées par le navigateur" : "Activer les notifs"}</span>}
     </button>
   );
 }
@@ -19158,390 +19759,477 @@ describe("mobile navigation configuration", () => {
 });
 </file>
 
-<file path="src/pages/LoginPage.jsx">
-// ============================================================
-// AthleteOS — src/pages/LoginPage.jsx  ★ DARK MODE
-// ============================================================
+<file path="src/pages/AuthPages.test.jsx">
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import LoginPage from "./LoginPage";
+import SignupPage from "./SignupPage";
+import ResetPasswordPage from "./ResetPasswordPage";
 
+const mocks = vi.hoisted(() => ({
+  signIn: vi.fn(),
+  sendPasswordReset: vi.fn(),
+  updatePassword: vi.fn(),
+  signOut: vi.fn(),
+  invoke: vi.fn(),
+  signInWithPassword: vi.fn(),
+}));
+
+vi.mock("../context/AuthContext", () => ({
+  useAuth: () => ({
+    signIn: mocks.signIn,
+    sendPasswordReset: mocks.sendPasswordReset,
+    updatePassword: mocks.updatePassword,
+    signOut: mocks.signOut,
+  }),
+}));
+
+vi.mock("../utils/supabaseClient", () => ({
+  supabase: {
+    functions: { invoke: mocks.invoke },
+    auth: { signInWithPassword: mocks.signInWithPassword },
+  },
+}));
+
+beforeEach(() => {
+  vi.clearAllMocks();
+  mocks.signIn.mockResolvedValue({ error: null });
+  mocks.sendPasswordReset.mockResolvedValue({ error: null });
+  mocks.updatePassword.mockResolvedValue({ error: null });
+  mocks.invoke.mockResolvedValue({ data: { success: true }, error: null });
+  mocks.signInWithPassword.mockResolvedValue({ error: null });
+});
+
+afterEach(cleanup);
+
+describe("LoginPage", () => {
+  it("associe les labels, permet d'afficher le mot de passe et traduit l'erreur de connexion", async () => {
+    mocks.signIn.mockResolvedValue({ error: { message: "Invalid login credentials" } });
+    render(<LoginPage onSignupClick={vi.fn()} />);
+
+    const email = screen.getByLabelText("Adresse email");
+    const password = screen.getByLabelText("Mot de passe");
+    expect(password.getAttribute("type")).toBe("password");
+    fireEvent.click(screen.getByRole("button", { name: "Afficher le mot de passe" }));
+    expect(password.getAttribute("type")).toBe("text");
+
+    fireEvent.change(email, { target: { value: "coach@club.be" } });
+    fireEvent.change(password, { target: { value: "mot-de-passe" } });
+    fireEvent.click(screen.getByRole("button", { name: "Se connecter" }));
+
+    expect((await screen.findByRole("alert")).textContent).toContain("Email ou mot de passe incorrect.");
+  });
+
+  it("conserve l'email et confirme l'envoi du lien de réinitialisation", async () => {
+    render(<LoginPage onSignupClick={vi.fn()} />);
+    fireEvent.change(screen.getByLabelText("Adresse email"), { target: { value: "coach@club.be" } });
+    fireEvent.click(screen.getByRole("button", { name: "Mot de passe oublié ?" }));
+    fireEvent.click(screen.getByRole("button", { name: "Envoyer le lien de réinitialisation" }));
+
+    await waitFor(() => expect(mocks.sendPasswordReset).toHaveBeenCalledWith("coach@club.be"));
+    expect(screen.getByRole("status").textContent).toContain("Email envoyé");
+  });
+});
+
+describe("SignupPage", () => {
+  it("rend le choix de rôle explicite et conserve le payload athlète existant", async () => {
+    render(<SignupPage onBack={vi.fn()} />);
+    fireEvent.click(screen.getByRole("button", { name: /Athlète.*Rejoindre mon club/i }));
+
+    fireEvent.change(screen.getByLabelText("Code d’invitation"), { target: { value: "a3f7k9p2" } });
+    fireEvent.change(screen.getByLabelText("Prénom et nom"), { target: { value: "Alice Martin" } });
+    fireEvent.change(screen.getByLabelText("Adresse email"), { target: { value: "alice@club.be" } });
+    fireEvent.change(screen.getByLabelText("Mot de passe"), { target: { value: "AthleteOS2026!" } });
+    fireEvent.click(screen.getByRole("button", { name: "Rejoindre mon club" }));
+
+    await waitFor(() => expect(mocks.invoke).toHaveBeenCalledOnce());
+    expect(mocks.invoke.mock.calls[0][0]).toBe("signup");
+    expect(mocks.invoke.mock.calls[0][1].body).toMatchObject({
+      mode: "join_club",
+      name: "Alice Martin",
+      email: "alice@club.be",
+      password: "AthleteOS2026!",
+      inviteCode: "A3F7K9P2",
+    });
+    expect(mocks.signInWithPassword).toHaveBeenCalledWith({
+      email: "alice@club.be",
+      password: "AthleteOS2026!",
+    });
+  });
+});
+
+describe("ResetPasswordPage", () => {
+  it("bloque les mots de passe différents puis confirme la mise à jour", async () => {
+    render(<ResetPasswordPage />);
+    fireEvent.change(screen.getByLabelText("Nouveau mot de passe"), { target: { value: "AthleteOS2026!" } });
+    fireEvent.change(screen.getByLabelText("Confirmer le mot de passe"), { target: { value: "different" } });
+    expect(screen.getByText("Les deux mots de passe ne correspondent pas.")).toBeTruthy();
+
+    fireEvent.change(screen.getByLabelText("Confirmer le mot de passe"), { target: { value: "AthleteOS2026!" } });
+    fireEvent.click(screen.getByRole("button", { name: "Définir le nouveau mot de passe" }));
+
+    await waitFor(() => expect(mocks.updatePassword).toHaveBeenCalledWith("AthleteOS2026!"));
+    expect(screen.getByRole("status").textContent).toContain("mis à jour");
+  });
+});
+</file>
+
+<file path="src/pages/LoginPage.jsx">
 import { useState } from "react";
-import { Mail, Lock, AlertCircle, CheckCircle } from "lucide-react";
+import { ArrowLeft, Lock, Mail } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
-import AthleteOSLogo from "../components/brand/AthleteOSLogo";
+import AuthShell from "../components/auth/AuthShell";
+import {
+  AuthFeedback,
+  AuthField,
+  AuthPasswordField,
+  AuthSubmitButton,
+  AuthTrustNote,
+} from "../components/auth/AuthFormControls";
+import { translateAuthError } from "../components/auth/authFormUtils";
 
 export default function LoginPage({ onSignupClick }) {
   const { signIn, sendPasswordReset } = useAuth();
-
-  const [mode,     setMode]     = useState("login"); // "login" | "forgot"
-  const [email,    setEmail]    = useState("");
+  const [mode, setMode] = useState("login");
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [loading,  setLoading]  = useState(false);
-  const [error,    setError]    = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
   const [resetSent, setResetSent] = useState(false);
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    if (!email.trim() || !password) return;
+  const updateEmail = (value) => {
+    setEmail(value);
+    if (error) setError(null);
+  };
+
+  const handleSubmit = async (event) => {
+    event.preventDefault();
+    if (!email.trim() || !password || loading) return;
 
     setLoading(true);
     setError(null);
-
-    const { error: authError } = await signIn(email.trim(), password);
-
-    if (authError) {
-      const msg =
-        authError.message === "Invalid login credentials"
-          ? "Email ou mot de passe incorrect."
-          : authError.message === "Email not confirmed"
-          ? "Confirme ton adresse email avant de te connecter."
-          : authError.message;
-      setError(msg);
+    try {
+      const { error: authError } = await signIn(email.trim(), password);
+      if (authError) {
+        setError(translateAuthError(authError));
+        setLoading(false);
+      }
+    } catch (authError) {
+      setError(translateAuthError(authError));
       setLoading(false);
     }
   };
 
-  const handleForgotSubmit = async (e) => {
-    e.preventDefault();
-    if (!email.trim()) return;
+  const handleForgotSubmit = async (event) => {
+    event.preventDefault();
+    if (!email.trim() || loading) return;
+
     setLoading(true);
     setError(null);
-    const { error: resetError } = await sendPasswordReset(email.trim());
-    setLoading(false);
-    if (resetError) { setError(resetError.message); return; }
-    setResetSent(true);
+    try {
+      const { error: resetError } = await sendPasswordReset(email.trim());
+      setLoading(false);
+      if (resetError) {
+        setError(translateAuthError(resetError, "Le lien n’a pas pu être envoyé. Réessaie dans un instant."));
+        return;
+      }
+      setResetSent(true);
+    } catch (resetError) {
+      setLoading(false);
+      setError(translateAuthError(resetError, "Le lien n’a pas pu être envoyé. Réessaie dans un instant."));
+    }
   };
 
-  const inputCls = [
-    "w-full pl-10 pr-4 py-2.5 rounded-lg border text-[14px]",
-    "focus:outline-none focus:ring-2 focus:ring-emerald-400 transition-all",
-  ].join(" ");
+  const returnToLogin = () => {
+    setMode("login");
+    setError(null);
+    setResetSent(false);
+  };
+
+  const footer = mode === "login" && onSignupClick ? (
+    <button type="button" onClick={onSignupClick} className="auth-text-action">
+      Pas encore de compte ? Créer ou rejoindre un club
+    </button>
+  ) : null;
 
   return (
-    <div
-      className="min-h-screen flex items-center justify-center p-4"
-      style={{ background: "var(--c-bg)", fontFamily: "'DM Sans', system-ui, sans-serif" }}
+    <AuthShell
+      eyebrow={mode === "forgot" ? "Récupération" : "Bon retour"}
+      title={mode === "forgot" ? "Retrouve l’accès à ton compte" : "Connecte-toi à ton espace"}
+      description={mode === "forgot"
+        ? "Indique ton email. Nous t’enverrons un lien pour choisir un nouveau mot de passe."
+        : "Retrouve ton planning, ton groupe et les actions qui comptent aujourd’hui."}
+      footer={footer}
     >
-      <div className="w-full max-w-sm">
-
-        {/* ── Logo ─────────────────────────────────────────────────────── */}
-        <div className="flex flex-col items-center gap-3 mb-8">
-          <h1 style={{ margin: 0 }}>
-            <AthleteOSLogo size={56} wordmarkSize={24} direction="column" />
-          </h1>
-          <div className="text-center">
-            <p className="text-[13px] mt-0.5" style={{ color: "var(--c-text-3)" }}>
-              {mode === "forgot" ? "Récupère l'accès à ton compte" : "Connecte-toi pour accéder à ton espace"}
-            </p>
-          </div>
-        </div>
-
-        {/* ── Mot de passe oublié ──────────────────────────────────────── */}
-        {mode === "forgot" ? (
-          <form
-            onSubmit={handleForgotSubmit}
-            className="rounded-2xl shadow-sm p-6 space-y-4"
-            style={{ background: "var(--c-surface)", border: "1px solid var(--c-border)" }}
-          >
-            {error && (
-              <div className="flex items-start gap-2.5 rounded-lg px-3.5 py-3" style={{ background: "rgba(226,75,74,0.1)", border: "1px solid rgba(226,75,74,0.2)" }}>
-                <AlertCircle size={15} color="#F19A9A" className="flex-shrink-0 mt-0.5" />
-                <p className="text-[13px]" style={{ color: "#F19A9A" }}>{error}</p>
-              </div>
-            )}
-            {resetSent ? (
-              <div className="flex items-start gap-2.5 rounded-lg px-3.5 py-3" style={{ background: "rgba(29,158,117,0.1)", border: "1px solid rgba(29,158,117,0.2)" }}>
-                <CheckCircle size={15} color="#4DC9A0" className="flex-shrink-0 mt-0.5" />
-                <p className="text-[13px]" style={{ color: "#4DC9A0" }}>
-                  Email envoyé à {email} — clique sur le lien qu'il contient pour choisir un nouveau mot de passe.
-                </p>
-              </div>
-            ) : (
-              <>
-                <div className="space-y-1.5">
-                  <label className="block text-[11px] font-bold uppercase tracking-wider" style={{ color: "var(--c-text-3)" }}>
-                    Email
-                  </label>
-                  <div className="relative">
-                    <Mail size={15} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: "var(--c-text-4)" }} />
-                    <input
-                      type="email" autoComplete="email" placeholder="coach@club.be"
-                      value={email} onChange={(e) => setEmail(e.target.value)}
-                      className={inputCls}
-                      style={{ background: "var(--c-surface-2)", borderColor: "var(--c-border-strong)", color: "var(--c-text-1)" }}
-                      required disabled={loading}
-                    />
-                  </div>
-                </div>
-                <button
-                  type="submit"
-                  disabled={loading || !email.trim()}
-                  className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg text-[14px] font-semibold text-white transition-all tap-feedback disabled:opacity-50 disabled:cursor-not-allowed"
-                  style={{ background: "linear-gradient(135deg, #1D9E75, #16826C)", boxShadow: "0 2px 8px rgba(29,158,117,0.25)" }}
-                >
-                  {loading ? (
-                    <>
-                      <div className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
-                      Envoi…
-                    </>
-                  ) : "Envoyer le lien de réinitialisation"}
-                </button>
-              </>
-            )}
-            <button type="button" onClick={() => { setMode("login"); setError(null); setResetSent(false); }}
-              className="block text-center text-[12px] w-full tap-feedback" style={{ color: "var(--c-text-3)", background: "none", border: "none", cursor: "pointer" }}>
-              ← Retour à la connexion
-            </button>
-          </form>
-        ) : (
-        <>
-        {/* ── Formulaire ───────────────────────────────────────────────── */}
-        <form
-          onSubmit={handleSubmit}
-          className="rounded-2xl shadow-sm p-6 space-y-4"
-          style={{ background: "var(--c-surface)", border: "1px solid var(--c-border)" }}
-        >
-          {/* Erreur auth */}
-          {error && (
-            <div className="flex items-start gap-2.5 rounded-lg px-3.5 py-3" style={{ background: "rgba(226,75,74,0.1)", border: "1px solid rgba(226,75,74,0.2)" }}>
-              <AlertCircle size={15} color="#F19A9A" className="flex-shrink-0 mt-0.5" />
-              <p className="text-[13px]" style={{ color: "#F19A9A" }}>{error}</p>
-            </div>
-          )}
-
-          {/* Email */}
-          <div className="space-y-1.5">
-            <label className="block text-[11px] font-bold uppercase tracking-wider" style={{ color: "var(--c-text-3)" }}>
-              Email
-            </label>
-            <div className="relative">
-              <Mail size={15} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: "var(--c-text-4)" }} />
-              <input
+      {mode === "forgot" ? (
+        <form className="auth-form" onSubmit={handleForgotSubmit} noValidate>
+          {error && <AuthFeedback>{error}</AuthFeedback>}
+          {resetSent ? (
+            <>
+              <AuthFeedback type="success">
+                Email envoyé à <strong>{email}</strong>. Ouvre le lien reçu pour choisir ton nouveau mot de passe.
+              </AuthFeedback>
+              <button type="button" onClick={returnToLogin} className="auth-submit tap-feedback">
+                Retour à la connexion
+              </button>
+            </>
+          ) : (
+            <>
+              <AuthField
+                id="reset-email"
+                label="Adresse email"
+                icon={Mail}
                 type="email"
+                inputMode="email"
                 autoComplete="email"
                 placeholder="coach@club.be"
                 value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className={inputCls}
-                style={{ background: "var(--c-surface-2)", borderColor: "var(--c-border-strong)", color: "var(--c-text-1)" }}
-                required
+                onChange={(event) => updateEmail(event.target.value)}
                 disabled={loading}
+                required
               />
-            </div>
-          </div>
+              <AuthSubmitButton loading={loading} loadingLabel="Envoi du lien…" disabled={loading || !email.trim()}>
+                Envoyer le lien de réinitialisation
+              </AuthSubmitButton>
+              <button type="button" onClick={returnToLogin} className="auth-text-action subtle">
+                <ArrowLeft size={15} aria-hidden="true" /> Retour à la connexion
+              </button>
+            </>
+          )}
+        </form>
+      ) : (
+        <form className="auth-form" onSubmit={handleSubmit} noValidate>
+          {error && <AuthFeedback>{error}</AuthFeedback>}
 
-          {/* Mot de passe */}
-          <div className="space-y-1.5">
-            <label className="block text-[11px] font-bold uppercase tracking-wider" style={{ color: "var(--c-text-3)" }}>
-              Mot de passe
-            </label>
-            <div className="relative">
-              <Lock size={15} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: "var(--c-text-4)" }} />
-              <input
-                type="password"
-                autoComplete="current-password"
-                placeholder="••••••••"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className={inputCls}
-                style={{ background: "var(--c-surface-2)", borderColor: "var(--c-border-strong)", color: "var(--c-text-1)" }}
-                required
-                disabled={loading}
-              />
-            </div>
-            <button type="button" onClick={() => { setMode("forgot"); setError(null); }}
-              className="block text-[11.5px] tap-feedback" style={{ color: "var(--c-text-3)", background: "none", border: "none", cursor: "pointer" }}>
+          <AuthField
+            id="login-email"
+            label="Adresse email"
+            icon={Mail}
+            type="email"
+            inputMode="email"
+            autoComplete="username"
+            placeholder="coach@club.be"
+            value={email}
+            onChange={(event) => updateEmail(event.target.value)}
+            disabled={loading}
+            required
+          />
+
+          <div>
+            <AuthPasswordField
+              id="login-password"
+              label="Mot de passe"
+              icon={Lock}
+              autoComplete="current-password"
+              placeholder="••••••••"
+              value={password}
+              onChange={(event) => {
+                setPassword(event.target.value);
+                if (error) setError(null);
+              }}
+              disabled={loading}
+              required
+            />
+            <button
+              type="button"
+              onClick={() => { setMode("forgot"); setError(null); }}
+              className="auth-text-action auth-forgot-link"
+            >
               Mot de passe oublié ?
             </button>
           </div>
 
-          {/* Submit */}
-          <button
-            type="submit"
+          <AuthSubmitButton
+            loading={loading}
+            loadingLabel="Connexion…"
             disabled={loading || !email.trim() || !password}
-            className={[
-              "w-full flex items-center justify-center gap-2 py-2.5 rounded-lg",
-              "text-[14px] font-semibold text-white transition-all tap-feedback",
-              "disabled:opacity-50 disabled:cursor-not-allowed",
-            ].join(" ")}
-            style={{ background: "linear-gradient(135deg, #1D9E75, #16826C)", boxShadow: "0 2px 8px rgba(29,158,117,0.25)" }}
           >
-            {loading ? (
-              <>
-                <div className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
-                Connexion…
-              </>
-            ) : (
-              "Se connecter"
-            )}
-          </button>
-        </form>
+            Se connecter
+          </AuthSubmitButton>
 
-        {onSignupClick ? (
-          <button onClick={onSignupClick} className="block text-center text-[12px] mt-6 mx-auto tap-feedback"
-            style={{ color: "var(--c-accent)", background: "none", border: "none", cursor: "pointer" }}>
-            Pas encore de compte ? Créer mon club ou rejoindre avec un code →
-          </button>
-        ) : (
-          <p className="text-center text-[11px] mt-6" style={{ color: "var(--c-text-4)" }}>
-            Accès réservé aux membres — contacte ton coach ou ton club pour un compte.
-          </p>
-        )}
-        </>
-        )}
-      </div>
-    </div>
+          <AuthTrustNote>
+            Tu seras automatiquement dirigé vers ton espace coach ou athlète.
+          </AuthTrustNote>
+        </form>
+      )}
+    </AuthShell>
   );
 }
 </file>
 
 <file path="src/pages/ResetPasswordPage.jsx">
-// ============================================================
-// AthleteOS — src/pages/ResetPasswordPage.jsx
-// Affiché quand AuthContext détecte l'événement PASSWORD_RECOVERY
-// (l'utilisateur vient de cliquer le lien reçu par email) — tant que
-// ce nouveau mot de passe n'est pas défini, on ne route jamais vers
-// le dashboard normal.
-// ============================================================
-
 import { useState } from "react";
-import { Lock, AlertCircle, CheckCircle } from "lucide-react";
+import { Lock } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
-import { AthleteOSBadge } from "../components/brand/AthleteOSLogo";
+import AuthShell from "../components/auth/AuthShell";
+import {
+  AuthFeedback,
+  AuthPasswordField,
+  AuthSubmitButton,
+  AuthTrustNote,
+} from "../components/auth/AuthFormControls";
+import { translateAuthError } from "../components/auth/authFormUtils";
 
 export default function ResetPasswordPage() {
   const { updatePassword, signOut } = useAuth();
-  const [password,  setPassword]  = useState("");
-  const [confirm,   setConfirm]   = useState("");
-  const [loading,   setLoading]   = useState(false);
-  const [error,     setError]     = useState(null);
-  const [done,      setDone]      = useState(false);
+  const [password, setPassword] = useState("");
+  const [confirm, setConfirm] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+  const [done, setDone] = useState(false);
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    if (password.length < 8) { setError("Le mot de passe doit faire au moins 8 caractères."); return; }
-    if (password !== confirm) { setError("Les deux mots de passe ne correspondent pas."); return; }
-    setLoading(true); setError(null);
-    const { error: err } = await updatePassword(password);
-    setLoading(false);
-    if (err) { setError(err.message); return; }
-    setDone(true);
+  const passwordsMatch = Boolean(confirm) && password === confirm;
+  const confirmError = confirm && password !== confirm ? "Les deux mots de passe ne correspondent pas." : null;
+  const canSubmit = password.length >= 8 && passwordsMatch;
+
+  const handleSubmit = async (event) => {
+    event.preventDefault();
+    if (!canSubmit || loading) {
+      if (password.length < 8) setError("Le mot de passe doit contenir au moins 8 caractères.");
+      else if (!passwordsMatch) setError("Les deux mots de passe ne correspondent pas.");
+      return;
+    }
+
+    setLoading(true);
+    setError(null);
+    try {
+      const { error: updateError } = await updatePassword(password);
+      setLoading(false);
+      if (updateError) {
+        setError(translateAuthError(updateError, "Le mot de passe n’a pas pu être mis à jour."));
+        return;
+      }
+      setDone(true);
+    } catch (updateError) {
+      setLoading(false);
+      setError(translateAuthError(updateError, "Le mot de passe n’a pas pu être mis à jour."));
+    }
   };
 
-  const inputCls = [
-    "w-full pl-10 pr-4 py-2.5 rounded-lg border text-[14px]",
-    "focus:outline-none focus:ring-2 focus:ring-emerald-400 transition-all",
-  ].join(" ");
-  const inputStyle = { background: "var(--c-surface-2)", borderColor: "var(--c-border-strong)", color: "var(--c-text-1)" };
-
   return (
-    <div className="min-h-screen flex items-center justify-center p-4" style={{ background: "var(--c-bg)", fontFamily: "'DM Sans', system-ui, sans-serif" }}>
-      <div className="w-full max-w-sm">
-        <div className="flex flex-col items-center gap-3 mb-8">
-          <AthleteOSBadge size={56} />
-          <div className="text-center">
-            <h1 className="text-[24px] font-bold tracking-tight" style={{ color: "var(--c-text-1)" }}>Nouveau mot de passe</h1>
-            <p className="text-[13px] mt-0.5" style={{ color: "var(--c-text-3)" }}>Choisis un mot de passe pour ton compte</p>
-          </div>
+    <AuthShell
+      eyebrow="Sécurité du compte"
+      title={done ? "Ton mot de passe est prêt" : "Choisis un nouveau mot de passe"}
+      description={done
+        ? "La modification est enregistrée. Reconnecte-toi maintenant avec ton nouveau mot de passe."
+        : "Utilise au moins 8 caractères. Une phrase courte et unique est plus facile à retenir."}
+    >
+      {done ? (
+        <div className="auth-form">
+          <AuthFeedback type="success">Ton mot de passe a bien été mis à jour.</AuthFeedback>
+          <button type="button" onClick={signOut} className="auth-submit tap-feedback">
+            Aller à la connexion
+          </button>
         </div>
+      ) : (
+        <form className="auth-form" onSubmit={handleSubmit} noValidate>
+          {error && <AuthFeedback>{error}</AuthFeedback>}
 
-        <form onSubmit={handleSubmit} className="rounded-2xl shadow-sm p-6 space-y-4" style={{ background: "var(--c-surface)", border: "1px solid var(--c-border)" }}>
-          {error && (
-            <div className="flex items-start gap-2.5 rounded-lg px-3.5 py-3" style={{ background: "rgba(226,75,74,0.1)", border: "1px solid rgba(226,75,74,0.2)" }}>
-              <AlertCircle size={15} color="#F19A9A" className="flex-shrink-0 mt-0.5" />
-              <p className="text-[13px]" style={{ color: "#F19A9A" }}>{error}</p>
-            </div>
-          )}
+          <AuthPasswordField
+            id="new-password"
+            label="Nouveau mot de passe"
+            icon={Lock}
+            autoComplete="new-password"
+            placeholder="8 caractères minimum"
+            value={password}
+            onChange={(event) => {
+              setPassword(event.target.value);
+              if (error) setError(null);
+            }}
+            disabled={loading}
+            required
+            showStrength
+          />
 
-          {done ? (
-            <>
-              <div className="flex items-start gap-2.5 rounded-lg px-3.5 py-3" style={{ background: "rgba(29,158,117,0.1)", border: "1px solid rgba(29,158,117,0.2)" }}>
-                <CheckCircle size={15} color="#4DC9A0" className="flex-shrink-0 mt-0.5" />
-                <p className="text-[13px]" style={{ color: "#4DC9A0" }}>Mot de passe mis à jour. Reconnecte-toi avec le nouveau.</p>
-              </div>
-              <button type="button" onClick={signOut}
-                className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg text-[14px] font-semibold text-white transition-all tap-feedback"
-                style={{ background: "linear-gradient(135deg, #1D9E75, #16826C)", boxShadow: "0 2px 8px rgba(29,158,117,0.25)" }}>
-                Aller à la connexion
-              </button>
-            </>
-          ) : (
-            <>
-              <div className="space-y-1.5">
-                <label className="block text-[11px] font-bold uppercase tracking-wider" style={{ color: "var(--c-text-3)" }}>Nouveau mot de passe</label>
-                <div className="relative">
-                  <Lock size={15} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: "var(--c-text-4)" }} />
-                  <input type="password" autoComplete="new-password" placeholder="8 caractères minimum"
-                    value={password} onChange={e => setPassword(e.target.value)}
-                    className={inputCls} style={inputStyle} required disabled={loading} />
-                </div>
-              </div>
-              <div className="space-y-1.5">
-                <label className="block text-[11px] font-bold uppercase tracking-wider" style={{ color: "var(--c-text-3)" }}>Confirme-le</label>
-                <div className="relative">
-                  <Lock size={15} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: "var(--c-text-4)" }} />
-                  <input type="password" autoComplete="new-password" placeholder="••••••••"
-                    value={confirm} onChange={e => setConfirm(e.target.value)}
-                    className={inputCls} style={inputStyle} required disabled={loading} />
-                </div>
-              </div>
-              <button type="submit" disabled={loading || !password || !confirm}
-                className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg text-[14px] font-semibold text-white transition-all tap-feedback disabled:opacity-50 disabled:cursor-not-allowed"
-                style={{ background: "linear-gradient(135deg, #1D9E75, #16826C)", boxShadow: "0 2px 8px rgba(29,158,117,0.25)" }}>
-                {loading ? (
-                  <>
-                    <div className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
-                    Mise à jour…
-                  </>
-                ) : "Définir le mot de passe"}
-              </button>
-            </>
-          )}
+          <AuthPasswordField
+            id="confirm-password"
+            label="Confirmer le mot de passe"
+            icon={Lock}
+            autoComplete="new-password"
+            placeholder="••••••••"
+            value={confirm}
+            onChange={(event) => {
+              setConfirm(event.target.value);
+              if (error) setError(null);
+            }}
+            error={confirmError}
+            disabled={loading}
+            required
+          />
+
+          <AuthSubmitButton loading={loading} loadingLabel="Mise à jour…" disabled={loading || !canSubmit}>
+            Définir le nouveau mot de passe
+          </AuthSubmitButton>
+
+          <AuthTrustNote>
+            Après la modification, les autres sessions pourront demander une nouvelle connexion.
+          </AuthTrustNote>
         </form>
-      </div>
-    </div>
+      )}
+    </AuthShell>
   );
 }
 </file>
 
 <file path="src/pages/SignupPage.jsx">
-// ============================================================
-// AthleteOS — src/pages/SignupPage.jsx
-// Inscription en libre-service, deux parcours :
-//   - "create_club" : un coach crée son propre club (nouvel univers vide)
-//   - "join_club"   : un athlète rejoint un club existant via son code
-// La création réelle (auth user + club + users + athletes) se fait
-// côté serveur (Edge Function "signup", clé service role) — jamais
-// directement depuis le client via les tables protégées par RLS.
-// ============================================================
-
-import { useState, useRef } from "react";
-import { Mail, Lock, User, Building2, KeyRound, AlertCircle, ArrowLeft } from "lucide-react";
+import { useRef, useState } from "react";
+import { ArrowLeft, Building2, KeyRound, Lock, Mail, User, UsersRound } from "lucide-react";
 import { supabase } from "../utils/supabaseClient";
-import AthleteOSLogo from "../components/brand/AthleteOSLogo";
+import AuthShell from "../components/auth/AuthShell";
+import {
+  AuthFeedback,
+  AuthField,
+  AuthPasswordField,
+  AuthSubmitButton,
+  AuthTrustNote,
+} from "../components/auth/AuthFormControls";
+import { translateAuthError } from "../components/auth/authFormUtils";
+
+const SIGNUP_MODES = Object.freeze([
+  {
+    id: "create_club",
+    role: "Coach",
+    title: "Créer mon club",
+    description: "Démarre un nouvel espace et invite ensuite tes athlètes.",
+    icon: Building2,
+  },
+  {
+    id: "join_club",
+    role: "Athlète",
+    title: "Rejoindre mon club",
+    description: "Utilise le code transmis par ton coach pour retrouver ton groupe.",
+    icon: UsersRound,
+  },
+]);
 
 export default function SignupPage({ onBack }) {
-  const [mode, setMode] = useState("create_club"); // "create_club" | "join_club"
+  const [mode, setMode] = useState("create_club");
   const [form, setForm] = useState({ name: "", email: "", password: "", clubName: "", inviteCode: "" });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
-  // Anti-bot léger (voir supabase/functions/signup) : "company" est un piège
-  // à bots — invisible et inatteignable au clavier pour un humain, souvent
-  // rempli automatiquement par les bots de spam. formLoadedAt sert à rejeter
-  // les soumissions trop rapides pour être humaines.
   const [honeypot, setHoneypot] = useState("");
   const formLoadedAt = useRef(Date.now());
 
-  const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+  const setField = (field, value) => {
+    setForm((current) => ({ ...current, [field]: value }));
+    if (error) setError(null);
+  };
 
-  const canSubmit = form.name.trim() && form.email.trim() && form.password.length >= 8 &&
-    (mode === "create_club" ? form.clubName.trim() : form.inviteCode.trim());
+  const canSubmit = Boolean(
+    form.name.trim()
+    && form.email.trim()
+    && form.password.length >= 8
+    && (mode === "create_club" ? form.clubName.trim() : form.inviteCode.trim()),
+  );
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    if (!canSubmit) return;
+  const handleSubmit = async (event) => {
+    event.preventDefault();
+    if (!canSubmit || loading) return;
+
     setLoading(true);
     setError(null);
     try {
-      const { data, error: fnError } = await supabase.functions.invoke("signup", {
+      const { data, error: functionError } = await supabase.functions.invoke("signup", {
         body: {
           mode,
           name: form.name.trim(),
@@ -19553,176 +20241,166 @@ export default function SignupPage({ onBack }) {
           formLoadedAt: formLoadedAt.current,
         },
       });
-      if (fnError) throw fnError;
+      if (functionError) throw functionError;
       if (!data?.success) throw new Error(data?.error ?? "Une erreur est survenue.");
 
-      // Si l'email existait déjà, la fonction répond quand même "success"
-      // (anti-énumération — voir supabase/functions/signup) sans rien créer.
-      // signInWithPassword tranche silencieusement : ça marche si c'était
-      // vraiment le propriétaire du compte avec le bon mot de passe, sinon
-      // échec générique identique à un mauvais mot de passe classique.
-      const { error: signInErr } = await supabase.auth.signInWithPassword({
-        email: form.email.trim(), password: form.password,
+      const { error: signInError } = await supabase.auth.signInWithPassword({
+        email: form.email.trim(),
+        password: form.password,
       });
-      if (signInErr) throw signInErr;
-      // AuthContext prend le relais tout seul (onAuthStateChange) et route
-      // automatiquement vers l'espace coach ou athlète selon le rôle.
-    } catch (err) {
-      let message = err?.message ?? "Une erreur est survenue.";
-      // Depuis la tâche 3, l'Edge Function renvoie de vrais codes HTTP
-      // (400/403/413/429/500) au lieu de toujours 200 — supabase-js lève
-      // alors une FunctionsHttpError dont .context est la Response brute,
-      // pas encore lue : on peut y lire notre message métier directement.
-      if (err?.context?.json) {
+      if (signInError) throw signInError;
+    } catch (signupError) {
+      let message = translateAuthError(signupError);
+      if (signupError?.context?.json) {
         try {
-          const body = await err.context.json();
+          const body = await signupError.context.json();
           if (body?.error) message = body.error;
-        } catch { /* corps non-JSON, on garde le message générique */ }
+        } catch {
+          // Le corps n'est pas du JSON : le message normalisé reste affiché.
+        }
       }
       setError(message);
       setLoading(false);
     }
   };
 
-  const inputCls = [
-    "w-full pl-10 pr-4 py-2.5 rounded-lg border text-[14px]",
-    "focus:outline-none focus:ring-2 focus:ring-emerald-400 transition-all",
-  ].join(" ");
-  const inputStyle = { background: "var(--c-surface-2)", borderColor: "var(--c-border-strong)", color: "var(--c-text-1)" };
-  const labelCls = "block text-[11px] font-bold uppercase tracking-wider mb-1.5";
+  const footer = (
+    <button type="button" onClick={onBack} className="auth-text-action subtle">
+      <ArrowLeft size={15} aria-hidden="true" /> J’ai déjà un compte
+    </button>
+  );
 
   return (
-    <div
-      className="min-h-screen flex items-center justify-center p-4"
-      style={{ background: "var(--c-bg)", fontFamily: "'DM Sans', system-ui, sans-serif" }}
+    <AuthShell
+      eyebrow="Premiers pas"
+      title="Commence avec le bon espace"
+      description="Choisis ton rôle, puis renseigne uniquement les informations nécessaires pour démarrer."
+      footer={footer}
     >
-      <div className="w-full max-w-sm">
+      <fieldset className="auth-role-fieldset" disabled={loading}>
+        <legend>Je souhaite utiliser AthleteOS comme</legend>
+        <div className="auth-role-picker">
+          {SIGNUP_MODES.map((option) => {
+            const Icon = option.icon;
+            const selected = mode === option.id;
+            return (
+              <button
+                key={option.id}
+                type="button"
+                className={["auth-role-option", selected ? "active" : ""].join(" ")}
+                onClick={() => { setMode(option.id); setError(null); }}
+                aria-pressed={selected}
+                aria-label={`${option.role} — ${option.title}`}
+              >
+                <span className="auth-role-icon"><Icon size={19} aria-hidden="true" /></span>
+                <span>
+                  <strong>{option.role}</strong>
+                  <small>{option.title}</small>
+                </span>
+              </button>
+            );
+          })}
+        </div>
+        <p className="auth-role-description">
+          {SIGNUP_MODES.find((option) => option.id === mode)?.description}
+        </p>
+      </fieldset>
 
-        {/* ── Logo ─────────────────────────────────────────────────────── */}
-        <div className="flex flex-col items-center gap-3 mb-6">
-          <h1 style={{ margin: 0 }}>
-            <AthleteOSLogo size={56} wordmarkSize={24} direction="column" />
-          </h1>
-          <div className="text-center">
-            <p className="text-[13px] mt-0.5" style={{ color: "var(--c-text-3)" }}>Crée ton espace en 30 secondes</p>
-          </div>
+      <form className="auth-form auth-signup-form" onSubmit={handleSubmit} noValidate>
+        {error && <AuthFeedback>{error}</AuthFeedback>}
+
+        <div className="auth-honeypot" aria-hidden="true">
+          <input
+            type="text"
+            name="company"
+            tabIndex={-1}
+            autoComplete="off"
+            value={honeypot}
+            onChange={(event) => setHoneypot(event.target.value)}
+          />
         </div>
 
-        {/* ── Toggle mode ──────────────────────────────────────────────── */}
-        <div className="flex rounded-xl p-1 mb-4" style={{ background: "var(--c-surface-2)", border: "1px solid var(--c-border)" }}>
-          {[
-            { id: "create_club", label: "Je crée mon club" },
-            { id: "join_club",   label: "J'ai un code d'invitation" },
-          ].map(m => (
-            <button key={m.id} type="button" onClick={() => { setMode(m.id); setError(null); }}
-              className="flex-1 py-2 rounded-lg text-[12.5px] font-semibold transition-all tap-feedback"
-              style={mode === m.id
-                ? { background: "#1D9E75", color: "white" }
-                : { background: "transparent", color: "var(--c-text-3)" }}>
-              {m.label}
-            </button>
-          ))}
-        </div>
+        {mode === "create_club" ? (
+          <AuthField
+            id="signup-club-name"
+            label="Nom du club"
+            icon={Building2}
+            autoComplete="organization"
+            placeholder="Ex. Athletic Club Namur"
+            value={form.clubName}
+            maxLength={100}
+            onChange={(event) => setField("clubName", event.target.value)}
+            disabled={loading}
+            required
+          />
+        ) : (
+          <AuthField
+            id="signup-invite-code"
+            label="Code d’invitation"
+            icon={KeyRound}
+            autoComplete="one-time-code"
+            autoCapitalize="characters"
+            placeholder="Ex. A3F7K9P2"
+            hint="Ce code de 8 caractères est disponible auprès de ton coach."
+            value={form.inviteCode}
+            maxLength={8}
+            onChange={(event) => setField("inviteCode", event.target.value.toUpperCase())}
+            disabled={loading}
+            required
+          />
+        )}
 
-        {/* ── Formulaire ───────────────────────────────────────────────── */}
-        <form
-          onSubmit={handleSubmit}
-          className="rounded-2xl shadow-sm p-6 space-y-4"
-          style={{ background: "var(--c-surface)", border: "1px solid var(--c-border)" }}
-        >
-          {error && (
-            <div className="flex items-start gap-2.5 rounded-lg px-3.5 py-3" style={{ background: "rgba(226,75,74,0.1)", border: "1px solid rgba(226,75,74,0.2)" }}>
-              <AlertCircle size={15} color="#F19A9A" className="flex-shrink-0 mt-0.5" />
-              <p className="text-[13px]" style={{ color: "#F19A9A" }}>{error}</p>
-            </div>
-          )}
+        <AuthField
+          id="signup-name"
+          label="Prénom et nom"
+          icon={User}
+          autoComplete="name"
+          placeholder="Prénom Nom"
+          value={form.name}
+          maxLength={100}
+          onChange={(event) => setField("name", event.target.value)}
+          disabled={loading}
+          required
+        />
 
-          {/* Piège à bots : invisible et inatteignable au clavier/lecteur
-              d'écran pour un humain (pas display:none — certains bots
-              l'ignorent — mais hors-écran + non focusable + aria-hidden). */}
-          <div style={{ position: "absolute", left: "-9999px", width: "1px", height: "1px", overflow: "hidden" }} aria-hidden="true">
-            <input type="text" name="company" tabIndex={-1} autoComplete="off"
-              value={honeypot} onChange={e => setHoneypot(e.target.value)} />
-          </div>
+        <AuthField
+          id="signup-email"
+          label="Adresse email"
+          icon={Mail}
+          type="email"
+          inputMode="email"
+          autoComplete="email"
+          placeholder="toi@exemple.be"
+          value={form.email}
+          maxLength={254}
+          onChange={(event) => setField("email", event.target.value)}
+          disabled={loading}
+          required
+        />
 
-          {mode === "create_club" ? (
-            <div className="space-y-1.5">
-              <label className={labelCls} style={{ color: "var(--c-text-3)" }}>Nom du club</label>
-              <div className="relative">
-                <Building2 size={15} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: "var(--c-text-4)" }} />
-                <input placeholder="Ex: Athletic Club Namur" value={form.clubName} maxLength={100}
-                  onChange={e => set("clubName", e.target.value)}
-                  className={inputCls} style={inputStyle} disabled={loading} required />
-              </div>
-            </div>
-          ) : (
-            <div className="space-y-1.5">
-              <label className={labelCls} style={{ color: "var(--c-text-3)" }}>Code d'invitation</label>
-              <div className="relative">
-                <KeyRound size={15} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: "var(--c-text-4)" }} />
-                <input placeholder="Ex: A3F7K9P2" value={form.inviteCode} maxLength={8}
-                  onChange={e => set("inviteCode", e.target.value.toUpperCase())}
-                  className={inputCls} style={{ ...inputStyle, letterSpacing: "0.08em", fontWeight: 600 }} disabled={loading} required />
-              </div>
-              <p className="text-[10.5px]" style={{ color: "var(--c-text-4)" }}>Demande ce code à ton coach.</p>
-            </div>
-          )}
+        <AuthPasswordField
+          id="signup-password"
+          label="Mot de passe"
+          icon={Lock}
+          autoComplete="new-password"
+          placeholder="8 caractères minimum"
+          value={form.password}
+          maxLength={128}
+          onChange={(event) => setField("password", event.target.value)}
+          disabled={loading}
+          required
+          showStrength
+        />
 
-          <div className="space-y-1.5">
-            <label className={labelCls} style={{ color: "var(--c-text-3)" }}>Ton nom</label>
-            <div className="relative">
-              <User size={15} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: "var(--c-text-4)" }} />
-              <input placeholder="Prénom Nom" value={form.name} maxLength={100}
-                onChange={e => set("name", e.target.value)}
-                className={inputCls} style={inputStyle} disabled={loading} required />
-            </div>
-          </div>
+        <AuthSubmitButton loading={loading} loadingLabel="Création de l’espace…" disabled={loading || !canSubmit}>
+          {mode === "create_club" ? "Créer mon club" : "Rejoindre mon club"}
+        </AuthSubmitButton>
 
-          <div className="space-y-1.5">
-            <label className={labelCls} style={{ color: "var(--c-text-3)" }}>Email</label>
-            <div className="relative">
-              <Mail size={15} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: "var(--c-text-4)" }} />
-              <input type="email" autoComplete="email" placeholder="toi@exemple.be" value={form.email} maxLength={254}
-                onChange={e => set("email", e.target.value)}
-                className={inputCls} style={inputStyle} disabled={loading} required />
-            </div>
-          </div>
-
-          <div className="space-y-1.5">
-            <label className={labelCls} style={{ color: "var(--c-text-3)" }}>Mot de passe</label>
-            <div className="relative">
-              <Lock size={15} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: "var(--c-text-4)" }} />
-              <input type="password" autoComplete="new-password" placeholder="8 caractères minimum" value={form.password} maxLength={128}
-                onChange={e => set("password", e.target.value)}
-                className={inputCls} style={inputStyle} disabled={loading} required />
-            </div>
-          </div>
-
-          <button
-            type="submit"
-            disabled={loading || !canSubmit}
-            className={[
-              "w-full flex items-center justify-center gap-2 py-2.5 rounded-lg",
-              "text-[14px] font-semibold text-white transition-all tap-feedback",
-              "disabled:opacity-50 disabled:cursor-not-allowed",
-            ].join(" ")}
-            style={{ background: "linear-gradient(135deg, #1D9E75, #16826C)", boxShadow: "0 2px 8px rgba(29,158,117,0.25)" }}
-          >
-            {loading ? (
-              <>
-                <div className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
-                Création…
-              </>
-            ) : mode === "create_club" ? "Créer mon club" : "Rejoindre le club"}
-          </button>
-        </form>
-
-        <button onClick={onBack} className="flex items-center gap-1.5 justify-center w-full mt-6 text-[12px] tap-feedback"
-          style={{ color: "var(--c-text-3)", background: "none", border: "none", cursor: "pointer" }}>
-          <ArrowLeft size={13} /> J'ai déjà un compte
-        </button>
-      </div>
-    </div>
+        <AuthTrustNote>
+          Aucune permission de notification ou de montre ne sera demandée pendant cette inscription.
+        </AuthTrustNote>
+      </form>
+    </AuthShell>
   );
 }
 </file>
@@ -23371,9 +24049,9 @@ function CoachShell({ user, profile, clubId, signOut }) {
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
 
         {/* ── Header glassmorphism ── */}
-        <header className="h-16 header-glass flex items-center gap-4 px-5 flex-shrink-0 z-10">
+        <header className="h-16 header-glass flex items-center gap-2 sm:gap-4 px-4 sm:px-5 flex-shrink-0 z-10">
           {/* Titre de la vue */}
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 min-w-0">
             {(() => {
               const Icon = currentNav?.icon;
               return Icon ? (
@@ -23385,7 +24063,7 @@ function CoachShell({ user, profile, clubId, signOut }) {
                 </div>
               ) : null;
             })()}
-            <h1 className="text-[16px] font-bold tracking-tight" style={{ color: "var(--c-text-1)" }}>
+            <h1 className="text-[16px] font-bold tracking-tight truncate" style={{ color: "var(--c-text-1)" }}>
               {currentNav?.label ?? "AthleteOS"}
             </h1>
           </div>
@@ -23395,6 +24073,7 @@ function CoachShell({ user, profile, clubId, signOut }) {
           {/* Inviter un athlète */}
           <button
             onClick={() => setShowInvite(true)}
+            aria-label="Inviter un athlète"
             className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-[12px] font-semibold transition-all tap-feedback"
             style={{ background: "rgba(29,158,117,0.10)", border: "1px solid rgba(29,158,117,0.20)", color: "#4DC9A0" }}
           >
@@ -23403,11 +24082,30 @@ function CoachShell({ user, profile, clubId, signOut }) {
           </button>
 
           {/* Push toggle */}
-          <PushToggleButton
-            subscribed={subscribed}
-            onToggle={subscribe}
-            permissionState={permissionState}
-          />
+          <div className="md:hidden">
+            <PushToggleButton
+              subscribed={subscribed}
+              onToggle={subscribe}
+              permissionState={permissionState}
+              compact
+            />
+          </div>
+          <div className="hidden md:block">
+            <PushToggleButton
+              subscribed={subscribed}
+              onToggle={subscribe}
+              permissionState={permissionState}
+            />
+          </div>
+
+          <button
+            type="button"
+            onClick={() => setShowSettings(true)}
+            className="mobile-account-action md:hidden"
+            aria-label="Ouvrir les réglages du compte"
+          >
+            {coachInitials}
+          </button>
 
           {/* Date */}
           <div className="hidden sm:flex items-center gap-2 text-[11.5px] px-3 py-2 rounded-xl" style={{ background: "var(--c-surface)", border: "1px solid var(--c-border)", color: "var(--c-text-3)" }}>
@@ -23974,6 +24672,14 @@ export default function AthleteApp() {
               </span>
             )}
           </button>
+          <button
+            type="button"
+            onClick={() => setShowSettings(true)}
+            className="mobile-account-action md:hidden"
+            aria-label="Ouvrir les réglages du compte"
+          >
+            {initialsFromName(athlete.name)}
+          </button>
           <div className="hidden md:block">
             <PushToggleButton subscribed={subscribed} onToggle={subscribe} permissionState={permissionState} />
           </div>
@@ -24357,6 +25063,17 @@ body {
 .btn-ghost:hover  { background: var(--c-accent-light); }
 .btn-ghost:active { opacity: 0.7; transform: scale(0.97); }
 
+.icon-btn {
+  width: var(--touch); height: var(--touch); padding: 0; flex-shrink: 0;
+  display: inline-flex; align-items: center; justify-content: center;
+  border: 1px solid var(--c-border); border-radius: var(--r-md);
+  background: var(--c-surface-2); color: var(--c-text-2); cursor: pointer;
+  transition: color var(--dur-fast) ease, background var(--dur-fast) ease, border-color var(--dur-fast) ease, transform var(--dur-fast) var(--spring);
+}
+.icon-btn:hover:not(:disabled) { color: var(--c-text-1); background: var(--c-surface-3); border-color: var(--c-border-strong); }
+.icon-btn:active:not(:disabled) { transform: scale(0.94); }
+.icon-btn:disabled { opacity: 0.38; cursor: not-allowed; }
+
 /* ═══════════════════════════════════════════════════════════════════════════════
    NAVIGATION SIDEBAR — dark
    ═══════════════════════════════════════════════════════════════════════════════ */
@@ -24447,6 +25164,16 @@ body {
   color: var(--c-accent); border-color: rgba(29,158,117,0.30);
   background: rgba(29,158,117,0.10);
 }
+.mobile-account-action {
+  width: var(--touch); height: var(--touch); flex-shrink: 0;
+  display: inline-flex; align-items: center; justify-content: center;
+  border: 1px solid rgba(36,168,125,0.24); border-radius: 50%;
+  background: linear-gradient(135deg, rgba(36,168,125,0.24), rgba(25,139,109,0.16));
+  color: #B9F0DB; font: inherit; font-size: var(--text-meta); line-height: 1; font-weight: 700; cursor: pointer;
+  transition: transform var(--dur-fast) var(--spring), border-color var(--dur-fast) ease;
+}
+.mobile-account-action:active { transform: scale(0.94); }
+.mobile-account-action:hover { border-color: rgba(36,168,125,0.44); }
 .mobile-header-badge {
   position: absolute; top: 2px; right: 1px;
   min-width: 20px; height: 20px; padding: 0 5px;
@@ -24544,6 +25271,335 @@ body {
     grid-column: span 1 / span 1;
     min-height: 72px;
   }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════════
+   AUTHENTIFICATION — shell et contrôles partagés
+   ════════════════════════════════════════════════════════════════════════════════ */
+
+.auth-shell {
+  position: relative; min-height: 100dvh; overflow-x: hidden;
+  color: var(--c-text-1); background:
+    radial-gradient(circle at 12% 12%, rgba(36,168,125,0.13), transparent 32%),
+    radial-gradient(circle at 88% 88%, rgba(107,159,242,0.08), transparent 28%),
+    linear-gradient(145deg, var(--c-bg), var(--color-surface-sunken));
+}
+.auth-shell::before {
+  content: ''; position: absolute; inset: 0; pointer-events: none; opacity: 0.22;
+  background-image:
+    linear-gradient(rgba(255,255,255,0.025) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,0.025) 1px, transparent 1px);
+  background-size: 40px 40px;
+  mask-image: linear-gradient(to bottom, rgba(0,0,0,0.7), transparent 82%);
+}
+.auth-orbit {
+  position: absolute; border: 1px solid rgba(36,168,125,0.10);
+  border-radius: 50%; pointer-events: none;
+}
+.auth-orbit-one { width: 380px; height: 380px; top: -210px; right: -110px; }
+.auth-orbit-two { width: 240px; height: 240px; bottom: -150px; left: -90px; }
+.auth-layout {
+  position: relative; z-index: 1; width: min(1180px, 100%); min-height: 100dvh;
+  margin: 0 auto; display: grid; align-items: center;
+}
+.auth-story { display: none; }
+.auth-workspace {
+  width: 100%; max-width: 480px; margin: 0 auto;
+  padding: calc(24px + var(--safe-top)) 16px calc(24px + var(--safe-bottom));
+}
+.auth-mobile-brand { display: flex; justify-content: center; margin-bottom: 24px; }
+.auth-card {
+  padding: 24px 20px; border: 1px solid var(--c-border-strong); border-top-color: rgba(255,255,255,0.14);
+  border-radius: var(--r-xl); background:
+    linear-gradient(180deg, rgba(255,255,255,0.025), transparent 38%),
+    rgba(14,30,21,0.94);
+  box-shadow: var(--shadow-xl); backdrop-filter: blur(24px); -webkit-backdrop-filter: blur(24px);
+}
+.auth-card-header { margin-bottom: 24px; }
+.auth-kicker {
+  color: var(--c-accent); font-size: var(--text-meta); line-height: var(--leading-meta);
+  font-weight: 700; letter-spacing: 0.10em; text-transform: uppercase;
+}
+.auth-card-header h1 {
+  margin-top: 6px; color: var(--c-text-1); font-size: var(--text-screen-title);
+  line-height: var(--leading-title); font-weight: 700; letter-spacing: -0.03em;
+}
+.auth-card-header > p:last-child {
+  margin-top: 8px; color: var(--c-text-2); font-size: var(--text-secondary);
+  line-height: var(--leading-small);
+}
+.auth-form { display: flex; flex-direction: column; gap: 16px; }
+.auth-field { min-width: 0; }
+.auth-field > label {
+  display: block; margin-bottom: 8px; color: var(--c-text-2);
+  font-size: var(--text-meta); line-height: var(--leading-meta); font-weight: 600;
+}
+.auth-input-wrap { position: relative; }
+.auth-input-icon {
+  position: absolute; left: 14px; top: 50%; z-index: 1;
+  transform: translateY(-50%); color: var(--c-text-3); pointer-events: none;
+}
+.auth-input {
+  width: 100%; min-height: 52px; padding: 0 48px 0 44px;
+  border: 1px solid var(--c-border-strong); border-radius: var(--r-md);
+  background: var(--c-surface-2); color: var(--c-text-1);
+  font: inherit; font-size: var(--text-body); line-height: var(--leading-body);
+  outline: none; appearance: none; -webkit-appearance: none;
+  transition: border-color var(--dur-fast) ease, box-shadow var(--dur-fast) ease, background var(--dur-fast) ease;
+}
+.auth-input:hover:not(:disabled) { border-color: rgba(235,247,239,0.25); }
+.auth-input:focus {
+  border-color: var(--c-accent); background: var(--color-surface-interactive);
+  box-shadow: 0 0 0 3px rgba(36,168,125,0.14);
+}
+.auth-input::placeholder { color: var(--c-text-4); opacity: 1; }
+.auth-input:disabled { color: var(--color-text-disabled); cursor: not-allowed; opacity: 0.72; }
+.auth-input-wrap.has-error .auth-input {
+  border-color: rgba(239,106,106,0.65); box-shadow: 0 0 0 3px rgba(239,106,106,0.10);
+}
+.auth-password-toggle {
+  position: absolute; right: 4px; top: 4px; width: 44px; height: 44px;
+  display: inline-flex; align-items: center; justify-content: center;
+  border: 0; border-radius: 10px; background: transparent; color: var(--c-text-3); cursor: pointer;
+}
+.auth-password-toggle:hover { color: var(--c-text-1); background: rgba(255,255,255,0.04); }
+.auth-field-hint, .auth-field-error {
+  margin-top: 6px; font-size: var(--text-meta); line-height: var(--leading-meta);
+}
+.auth-field-hint { color: var(--c-text-3); }
+.auth-field-error { color: #F59A9A; }
+.auth-feedback {
+  display: flex; align-items: flex-start; gap: 10px; padding: 12px 14px;
+  border: 1px solid; border-radius: var(--r-md);
+  font-size: var(--text-secondary); line-height: var(--leading-small);
+}
+.auth-feedback > svg { flex-shrink: 0; margin-top: 1px; }
+.auth-feedback.error { color: #F6A7A7; border-color: rgba(239,106,106,0.25); background: rgba(239,106,106,0.09); }
+.auth-feedback.success { color: #78DDB8; border-color: rgba(67,201,155,0.25); background: rgba(67,201,155,0.09); }
+.auth-submit {
+  width: 100%; min-height: 52px; padding: 0 18px;
+  display: inline-flex; align-items: center; justify-content: center; gap: 9px;
+  border: 1px solid rgba(255,255,255,0.10); border-radius: var(--r-md);
+  background: linear-gradient(135deg, var(--c-accent), var(--c-accent-dark)); color: #fff;
+  box-shadow: 0 8px 24px rgba(36,168,125,0.20);
+  font: inherit; font-size: var(--text-body); font-weight: 700; cursor: pointer;
+  transition: transform var(--dur-fast) var(--spring), filter var(--dur-fast) ease, opacity var(--dur-fast) ease;
+}
+.auth-submit:hover:not(:disabled) { filter: brightness(1.08); }
+.auth-submit:active:not(:disabled) { transform: scale(0.985); }
+.auth-submit:disabled { opacity: 0.45; cursor: not-allowed; box-shadow: none; }
+.auth-text-action {
+  min-height: var(--touch); padding: 0 4px; border: 0; background: transparent;
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  color: var(--c-accent); font: inherit; font-size: var(--text-secondary); font-weight: 600; cursor: pointer;
+}
+.auth-text-action.subtle { color: var(--c-text-2); }
+.auth-text-action:hover { color: #74D9B5; }
+.auth-forgot-link { min-height: 36px; margin-top: 4px; padding: 0; }
+.auth-footer {
+  display: flex; justify-content: center; margin-top: 16px;
+  color: var(--c-text-2); text-align: center;
+}
+.auth-trust-note {
+  display: flex; align-items: flex-start; gap: 9px; padding-top: 4px;
+  color: var(--c-text-3); font-size: var(--text-meta); line-height: var(--leading-meta);
+}
+.auth-trust-note svg { flex-shrink: 0; color: var(--c-accent); }
+.password-strength { margin-top: 8px; }
+.password-strength-track { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; }
+.password-strength-track span { height: 3px; border-radius: 99px; background: var(--c-border-strong); }
+.password-strength-track span.weak { background: var(--color-danger); }
+.password-strength-track span.fair { background: var(--color-warning); }
+.password-strength-track span.good, .password-strength-track span.strong { background: var(--color-success); }
+.password-strength-copy {
+  display: flex; justify-content: space-between; gap: 12px; margin-top: 6px;
+  color: var(--c-text-3); font-size: var(--text-meta); line-height: var(--leading-meta);
+}
+.auth-role-fieldset { min-width: 0; margin: 0 0 24px; padding: 0 0 24px; border: 0; border-bottom: 1px solid var(--c-border); }
+.auth-role-fieldset > legend {
+  margin-bottom: 10px; color: var(--c-text-2);
+  font-size: var(--text-meta); line-height: var(--leading-meta); font-weight: 600;
+}
+.auth-role-picker { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.auth-role-option {
+  min-height: 72px; padding: 10px;
+  display: flex; align-items: center; gap: 10px; min-width: 0;
+  border: 1px solid var(--c-border); border-radius: var(--r-md);
+  background: var(--c-surface-2); color: var(--c-text-2); text-align: left; cursor: pointer;
+  transition: border-color var(--dur-fast) ease, background var(--dur-fast) ease, transform var(--dur-fast) var(--spring);
+}
+.auth-role-option:active { transform: scale(0.98); }
+.auth-role-option.active { border-color: rgba(36,168,125,0.40); background: rgba(36,168,125,0.10); }
+.auth-role-icon {
+  width: 36px; height: 36px; flex-shrink: 0; display: inline-flex; align-items: center; justify-content: center;
+  border-radius: 11px; background: var(--c-surface-3); color: var(--c-text-3);
+}
+.auth-role-option.active .auth-role-icon { background: rgba(36,168,125,0.16); color: var(--c-accent); }
+.auth-role-option strong, .auth-role-option small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.auth-role-option strong { color: var(--c-text-1); font-size: var(--text-secondary); line-height: var(--leading-small); font-weight: 700; }
+.auth-role-option small { margin-top: 1px; color: var(--c-text-3); font-size: var(--text-meta); line-height: var(--leading-meta); }
+.auth-role-description {
+  margin-top: 10px; color: var(--c-text-3);
+  font-size: var(--text-meta); line-height: var(--leading-meta);
+}
+.auth-honeypot {
+  position: absolute; left: -9999px; width: 1px; height: 1px; overflow: hidden;
+}
+
+@media (min-width: 640px) {
+  .auth-workspace { padding-left: 24px; padding-right: 24px; }
+  .auth-card { padding: 32px; }
+}
+
+@media (min-width: 960px) {
+  .auth-layout { grid-template-columns: minmax(0, 1fr) 480px; gap: 72px; padding: 40px; }
+  .auth-story {
+    min-height: 640px; padding: 24px 12px; display: flex; flex-direction: column;
+  }
+  .auth-story-copy { margin-top: auto; max-width: 560px; }
+  .auth-story-copy h2 {
+    max-width: 540px; margin-top: 12px; color: var(--c-text-1);
+    font-size: clamp(38px, 4vw, 56px); line-height: 1.04; font-weight: 700; letter-spacing: -0.045em;
+  }
+  .auth-story-copy > p:last-child {
+    max-width: 520px; margin-top: 20px; color: var(--c-text-2);
+    font-size: 16px; line-height: 24px;
+  }
+  .auth-product-points { display: grid; gap: 12px; margin-top: 32px; max-width: 540px; }
+  .auth-product-point {
+    display: flex; align-items: center; gap: 12px; color: var(--c-text-2);
+    font-size: var(--text-secondary); line-height: var(--leading-small);
+  }
+  .auth-product-point > span {
+    width: 36px; height: 36px; flex-shrink: 0; display: inline-flex; align-items: center; justify-content: center;
+    border: 1px solid rgba(36,168,125,0.18); border-radius: 11px;
+    background: rgba(36,168,125,0.08); color: var(--c-accent);
+  }
+  .auth-story-footnote {
+    margin-top: auto; padding-top: 40px; color: var(--c-text-3);
+    font-size: var(--text-meta); line-height: var(--leading-meta); letter-spacing: 0.04em;
+  }
+  .auth-mobile-brand { display: none; }
+  .auth-workspace { max-width: 480px; padding: 0; }
+}
+
+/* Réglages partagés coach / athlète. */
+.account-settings-backdrop {
+  position: fixed; inset: 0; z-index: 120;
+  display: flex; align-items: flex-end; justify-content: center;
+}
+.account-settings-dialog {
+  width: 100%; max-height: min(92dvh, 780px); min-height: min(76dvh, 620px);
+  display: flex; flex-direction: column; overflow: hidden;
+  border: 1px solid var(--c-border-strong); border-bottom: 0;
+  border-radius: 24px 24px 0 0; background: var(--c-surface); box-shadow: var(--shadow-xl);
+  padding-bottom: var(--safe-bottom);
+}
+.account-settings-header {
+  padding: 18px 20px; flex-shrink: 0;
+  display: flex; align-items: flex-start; justify-content: space-between; gap: 16px;
+  border-bottom: 1px solid var(--c-border);
+  background: linear-gradient(145deg, rgba(36,168,125,0.07), transparent 65%);
+}
+.account-settings-heading { display: flex; align-items: flex-start; gap: 12px; min-width: 0; }
+.account-settings-heading > span {
+  width: 40px; height: 40px; flex-shrink: 0; display: inline-flex; align-items: center; justify-content: center;
+  border: 1px solid rgba(36,168,125,0.18); border-radius: 12px;
+  background: rgba(36,168,125,0.10); color: var(--c-accent);
+}
+.account-settings-heading h2 {
+  margin-top: 2px; color: var(--c-text-1);
+  font-size: var(--text-section-title); line-height: var(--leading-section); font-weight: 700;
+}
+.account-settings-heading > div > p:last-child {
+  margin-top: 3px; color: var(--c-text-3);
+  font-size: var(--text-meta); line-height: var(--leading-meta);
+}
+.account-settings-tabs {
+  flex-shrink: 0; padding: 8px 12px; display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px;
+  border-bottom: 1px solid var(--c-border); background: var(--c-surface-dark);
+}
+.account-settings-tabs button {
+  min-height: var(--touch); padding: 0 14px; display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  border: 1px solid transparent; border-radius: var(--r-md); background: transparent;
+  color: var(--c-text-3); font: inherit; font-size: var(--text-secondary); font-weight: 600; cursor: pointer;
+}
+.account-settings-tabs button.active {
+  border-color: rgba(36,168,125,0.22); background: rgba(36,168,125,0.10); color: var(--c-accent);
+}
+.account-settings-content {
+  flex: 1; overflow-y: auto; overscroll-behavior: contain;
+  padding: 20px 16px calc(20px + var(--safe-bottom));
+}
+.account-settings-content > .auth-feedback { margin-bottom: 20px; }
+.settings-panel { display: flex; flex-direction: column; gap: 24px; }
+.settings-section-header { display: flex; align-items: flex-start; gap: 12px; }
+.settings-section-header > span {
+  width: 38px; height: 38px; flex-shrink: 0; display: inline-flex; align-items: center; justify-content: center;
+  border-radius: 12px; background: var(--c-surface-2); color: var(--c-text-2);
+}
+.settings-section-header h3 {
+  color: var(--c-text-1); font-size: var(--text-card-title); line-height: var(--leading-card); font-weight: 700;
+}
+.settings-section-header p {
+  margin-top: 3px; color: var(--c-text-3); font-size: var(--text-meta); line-height: var(--leading-meta);
+}
+.settings-action-row {
+  padding: 16px; display: grid; gap: 12px;
+  border: 1px solid var(--c-border); border-radius: var(--r-lg); background: var(--c-surface-dark);
+}
+.settings-action-row > .btn-secondary { width: 100%; min-height: var(--touch); }
+.settings-loading {
+  min-height: 160px; display: flex; align-items: center; justify-content: center; gap: 10px;
+  color: var(--c-text-3); font-size: var(--text-secondary); line-height: var(--leading-small);
+}
+.settings-invite-card {
+  padding: 16px; border: 1px solid var(--c-border); border-radius: var(--r-lg);
+  background: var(--c-surface-dark);
+}
+.settings-invite-copy { display: flex; align-items: flex-start; gap: 12px; }
+.settings-invite-copy > span {
+  width: 38px; height: 38px; flex-shrink: 0; display: inline-flex; align-items: center; justify-content: center;
+  border-radius: 12px; background: rgba(36,168,125,0.10); color: var(--c-accent);
+}
+.settings-invite-copy h4, .settings-confirm h4 {
+  color: var(--c-text-1); font-size: var(--text-card-title); line-height: var(--leading-card); font-weight: 700;
+}
+.settings-invite-copy p, .settings-confirm p {
+  margin-top: 3px; color: var(--c-text-3); font-size: var(--text-meta); line-height: var(--leading-meta);
+}
+.settings-code-row { display: grid; grid-template-columns: minmax(0, 1fr) 44px 44px; gap: 8px; margin-top: 16px; }
+.settings-code-row output {
+  min-height: var(--touch); padding: 0 12px; display: flex; align-items: center; justify-content: center;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  border: 1px solid var(--c-border-strong); border-radius: var(--r-md); background: var(--c-surface-2);
+  color: var(--c-text-1); font-size: 16px; line-height: 20px; font-weight: 700; letter-spacing: 0.10em;
+}
+.settings-confirm {
+  padding: 16px; display: flex; flex-direction: column; gap: 16px;
+  border: 1px solid rgba(240,180,77,0.26); border-radius: var(--r-lg); background: rgba(240,180,77,0.07);
+}
+.settings-confirm > div:last-child { display: flex; flex-direction: column-reverse; gap: 8px; }
+
+@media (min-width: 640px) {
+  .account-settings-backdrop { align-items: center; padding: 24px; }
+  .account-settings-dialog {
+    max-width: 680px; min-height: 580px; border-bottom: 1px solid var(--c-border-strong);
+    border-radius: var(--r-xl); padding-bottom: 0;
+  }
+  .account-settings-header { padding: 20px 24px; }
+  .account-settings-tabs { padding-left: 24px; padding-right: 24px; }
+  .account-settings-content { padding: 24px; }
+  .settings-action-row { grid-template-columns: minmax(0, 1fr) auto; align-items: end; padding: 18px; }
+  .settings-action-row > .btn-secondary { width: auto; margin-bottom: 2px; }
+  .settings-confirm { flex-direction: row; align-items: center; justify-content: space-between; }
+  .settings-confirm > div:last-child { flex-direction: row; flex-shrink: 0; }
+}
+
+@media (max-width: 379px) {
+  .auth-role-picker { grid-template-columns: minmax(0, 1fr); }
+  .auth-role-option { min-height: 64px; }
+  .password-strength-copy { flex-direction: column; gap: 2px; }
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════════

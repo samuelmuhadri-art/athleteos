@@ -65,6 +65,9 @@ test.describe("navigation mobile coach", () => {
     await expect(mobileNav).toBeVisible({ timeout: 15000 });
     await expect(mobileNav.getByRole("button")).toHaveCount(5);
     await expect(page.locator("aside.sidebar-premium")).toBeHidden();
+    await page.getByRole("button", { name: "Ouvrir les réglages du compte" }).click();
+    await expect(page.getByRole("dialog", { name: "Réglages" })).toBeVisible();
+    await page.getByRole("button", { name: "Fermer les réglages" }).click();
 
     const primaryRoutes = [
       ["Accueil", "dashboard"],

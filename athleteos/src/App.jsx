@@ -338,9 +338,9 @@ function CoachShell({ user, profile, clubId, signOut }) {
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
 
         {/* ── Header glassmorphism ── */}
-        <header className="h-16 header-glass flex items-center gap-4 px-5 flex-shrink-0 z-10">
+        <header className="h-16 header-glass flex items-center gap-2 sm:gap-4 px-4 sm:px-5 flex-shrink-0 z-10">
           {/* Titre de la vue */}
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 min-w-0">
             {(() => {
               const Icon = currentNav?.icon;
               return Icon ? (
@@ -352,7 +352,7 @@ function CoachShell({ user, profile, clubId, signOut }) {
                 </div>
               ) : null;
             })()}
-            <h1 className="text-[16px] font-bold tracking-tight" style={{ color: "var(--c-text-1)" }}>
+            <h1 className="text-[16px] font-bold tracking-tight truncate" style={{ color: "var(--c-text-1)" }}>
               {currentNav?.label ?? "AthleteOS"}
             </h1>
           </div>
@@ -362,6 +362,7 @@ function CoachShell({ user, profile, clubId, signOut }) {
           {/* Inviter un athlète */}
           <button
             onClick={() => setShowInvite(true)}
+            aria-label="Inviter un athlète"
             className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-[12px] font-semibold transition-all tap-feedback"
             style={{ background: "rgba(29,158,117,0.10)", border: "1px solid rgba(29,158,117,0.20)", color: "#4DC9A0" }}
           >
@@ -370,11 +371,30 @@ function CoachShell({ user, profile, clubId, signOut }) {
           </button>
 
           {/* Push toggle */}
-          <PushToggleButton
-            subscribed={subscribed}
-            onToggle={subscribe}
-            permissionState={permissionState}
-          />
+          <div className="md:hidden">
+            <PushToggleButton
+              subscribed={subscribed}
+              onToggle={subscribe}
+              permissionState={permissionState}
+              compact
+            />
+          </div>
+          <div className="hidden md:block">
+            <PushToggleButton
+              subscribed={subscribed}
+              onToggle={subscribe}
+              permissionState={permissionState}
+            />
+          </div>
+
+          <button
+            type="button"
+            onClick={() => setShowSettings(true)}
+            className="mobile-account-action md:hidden"
+            aria-label="Ouvrir les réglages du compte"
+          >
+            {coachInitials}
+          </button>
 
           {/* Date */}
           <div className="hidden sm:flex items-center gap-2 text-[11.5px] px-3 py-2 rounded-xl" style={{ background: "var(--c-surface)", border: "1px solid var(--c-border)", color: "var(--c-text-3)" }}>

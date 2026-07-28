@@ -1,0 +1,112 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import LoginPage from "./LoginPage";
+import SignupPage from "./SignupPage";
+import ResetPasswordPage from "./ResetPasswordPage";
+
+const mocks = vi.hoisted(() => ({
+  signIn: vi.fn(),
+  sendPasswordReset: vi.fn(),
+  updatePassword: vi.fn(),
+  signOut: vi.fn(),
+  invoke: vi.fn(),
+  signInWithPassword: vi.fn(),
+}));
+
+vi.mock("../context/AuthContext", () => ({
+  useAuth: () => ({
+    signIn: mocks.signIn,
+    sendPasswordReset: mocks.sendPasswordReset,
+    updatePassword: mocks.updatePassword,
+    signOut: mocks.signOut,
+  }),
+}));
+
+vi.mock("../utils/supabaseClient", () => ({
+  supabase: {
+    functions: { invoke: mocks.invoke },
+    auth: { signInWithPassword: mocks.signInWithPassword },
+  },
+}));
+
+beforeEach(() => {
+  vi.clearAllMocks();
+  mocks.signIn.mockResolvedValue({ error: null });
+  mocks.sendPasswordReset.mockResolvedValue({ error: null });
+  mocks.updatePassword.mockResolvedValue({ error: null });
+  mocks.invoke.mockResolvedValue({ data: { success: true }, error: null });
+  mocks.signInWithPassword.mockResolvedValue({ error: null });
+});
+
+afterEach(cleanup);
+
+describe("LoginPage", () => {
+  it("associe les labels, permet d'afficher le mot de passe et traduit l'erreur de connexion", async () => {
+    mocks.signIn.mockResolvedValue({ error: { message: "Invalid login credentials" } });
+    render(<LoginPage onSignupClick={vi.fn()} />);
+
+    const email = screen.getByLabelText("Adresse email");
+    const password = screen.getByLabelText("Mot de passe");
+    expect(password.getAttribute("type")).toBe("password");
+    fireEvent.click(screen.getByRole("button", { name: "Afficher le mot de passe" }));
+    expect(password.getAttribute("type")).toBe("text");
+
+    fireEvent.change(email, { target: { value: "coach@club.be" } });
+    fireEvent.change(password, { target: { value: "mot-de-passe" } });
+    fireEvent.click(screen.getByRole("button", { name: "Se connecter" }));
+
+    expect((await screen.findByRole("alert")).textContent).toContain("Email ou mot de passe incorrect.");
+  });
+
+  it("conserve l'email et confirme l'envoi du lien de réinitialisation", async () => {
+    render(<LoginPage onSignupClick={vi.fn()} />);
+    fireEvent.change(screen.getByLabelText("Adresse email"), { target: { value: "coach@club.be" } });
+    fireEvent.click(screen.getByRole("button", { name: "Mot de passe oublié ?" }));
+    fireEvent.click(screen.getByRole("button", { name: "Envoyer le lien de réinitialisation" }));
+
+    await waitFor(() => expect(mocks.sendPasswordReset).toHaveBeenCalledWith("coach@club.be"));
+    expect(screen.getByRole("status").textContent).toContain("Email envoyé");
+  });
+});
+
+describe("SignupPage", () => {
+  it("rend le choix de rôle explicite et conserve le payload athlète existant", async () => {
+    render(<SignupPage onBack={vi.fn()} />);
+    fireEvent.click(screen.getByRole("button", { name: /Athlète.*Rejoindre mon club/i }));
+
+    fireEvent.change(screen.getByLabelText("Code d’invitation"), { target: { value: "a3f7k9p2" } });
+    fireEvent.change(screen.getByLabelText("Prénom et nom"), { target: { value: "Alice Martin" } });
+    fireEvent.change(screen.getByLabelText("Adresse email"), { target: { value: "alice@club.be" } });
+    fireEvent.change(screen.getByLabelText("Mot de passe"), { target: { value: "AthleteOS2026!" } });
+    fireEvent.click(screen.getByRole("button", { name: "Rejoindre mon club" }));
+
+    await waitFor(() => expect(mocks.invoke).toHaveBeenCalledOnce());
+    expect(mocks.invoke.mock.calls[0][0]).toBe("signup");
+    expect(mocks.invoke.mock.calls[0][1].body).toMatchObject({
+      mode: "join_club",
+      name: "Alice Martin",
+      email: "alice@club.be",
+      password: "AthleteOS2026!",
+      inviteCode: "A3F7K9P2",
+    });
+    expect(mocks.signInWithPassword).toHaveBeenCalledWith({
+      email: "alice@club.be",
+      password: "AthleteOS2026!",
+    });
+  });
+});
+
+describe("ResetPasswordPage", () => {
+  it("bloque les mots de passe différents puis confirme la mise à jour", async () => {
+    render(<ResetPasswordPage />);
+    fireEvent.change(screen.getByLabelText("Nouveau mot de passe"), { target: { value: "AthleteOS2026!" } });
+    fireEvent.change(screen.getByLabelText("Confirmer le mot de passe"), { target: { value: "different" } });
+    expect(screen.getByText("Les deux mots de passe ne correspondent pas.")).toBeTruthy();
+
+    fireEvent.change(screen.getByLabelText("Confirmer le mot de passe"), { target: { value: "AthleteOS2026!" } });
+    fireEvent.click(screen.getByRole("button", { name: "Définir le nouveau mot de passe" }));
+
+    await waitFor(() => expect(mocks.updatePassword).toHaveBeenCalledWith("AthleteOS2026!"));
+    expect(screen.getByRole("status").textContent).toContain("mis à jour");
+  });
+});

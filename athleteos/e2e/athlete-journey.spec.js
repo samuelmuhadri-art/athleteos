@@ -46,6 +46,9 @@ test.describe("navigation mobile athlète", () => {
     await expect(mobileNav).toBeVisible({ timeout: 15000 });
     await expect(mobileNav.getByRole("button")).toHaveCount(5);
     await expect(mobileNav.getByRole("button", { name: /Notifs/i })).toHaveCount(0);
+    await page.getByRole("button", { name: "Ouvrir les réglages du compte" }).click();
+    await expect(page.getByRole("dialog", { name: "Réglages" })).toBeVisible();
+    await page.getByRole("button", { name: "Fermer les réglages" }).click();
 
     const notificationBell = page.getByRole("button", { name: /^Notifications/ });
     await expect(notificationBell).toBeVisible();

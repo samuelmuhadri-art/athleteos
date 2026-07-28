@@ -438,6 +438,14 @@ export default function AthleteApp() {
               </span>
             )}
           </button>
+          <button
+            type="button"
+            onClick={() => setShowSettings(true)}
+            className="mobile-account-action md:hidden"
+            aria-label="Ouvrir les réglages du compte"
+          >
+            {initialsFromName(athlete.name)}
+          </button>
           <div className="hidden md:block">
             <PushToggleButton subscribed={subscribed} onToggle={subscribe} permissionState={permissionState} />
           </div>

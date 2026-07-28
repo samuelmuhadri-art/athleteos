@@ -1,232 +1,180 @@
-// ============================================================
-// AthleteOS — src/pages/LoginPage.jsx  ★ DARK MODE
-// ============================================================
-
 import { useState } from "react";
-import { Mail, Lock, AlertCircle, CheckCircle } from "lucide-react";
+import { ArrowLeft, Lock, Mail } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
-import AthleteOSLogo from "../components/brand/AthleteOSLogo";
+import AuthShell from "../components/auth/AuthShell";
+import {
+  AuthFeedback,
+  AuthField,
+  AuthPasswordField,
+  AuthSubmitButton,
+  AuthTrustNote,
+} from "../components/auth/AuthFormControls";
+import { translateAuthError } from "../components/auth/authFormUtils";
 
 export default function LoginPage({ onSignupClick }) {
   const { signIn, sendPasswordReset } = useAuth();
-
-  const [mode,     setMode]     = useState("login"); // "login" | "forgot"
-  const [email,    setEmail]    = useState("");
+  const [mode, setMode] = useState("login");
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [loading,  setLoading]  = useState(false);
-  const [error,    setError]    = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
   const [resetSent, setResetSent] = useState(false);
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    if (!email.trim() || !password) return;
+  const updateEmail = (value) => {
+    setEmail(value);
+    if (error) setError(null);
+  };
+
+  const handleSubmit = async (event) => {
+    event.preventDefault();
+    if (!email.trim() || !password || loading) return;
 
     setLoading(true);
     setError(null);
-
-    const { error: authError } = await signIn(email.trim(), password);
-
-    if (authError) {
-      const msg =
-        authError.message === "Invalid login credentials"
-          ? "Email ou mot de passe incorrect."
-          : authError.message === "Email not confirmed"
-          ? "Confirme ton adresse email avant de te connecter."
-          : authError.message;
-      setError(msg);
+    try {
+      const { error: authError } = await signIn(email.trim(), password);
+      if (authError) {
+        setError(translateAuthError(authError));
+        setLoading(false);
+      }
+    } catch (authError) {
+      setError(translateAuthError(authError));
       setLoading(false);
     }
   };
 
-  const handleForgotSubmit = async (e) => {
-    e.preventDefault();
-    if (!email.trim()) return;
+  const handleForgotSubmit = async (event) => {
+    event.preventDefault();
+    if (!email.trim() || loading) return;
+
     setLoading(true);
     setError(null);
-    const { error: resetError } = await sendPasswordReset(email.trim());
-    setLoading(false);
-    if (resetError) { setError(resetError.message); return; }
-    setResetSent(true);
+    try {
+      const { error: resetError } = await sendPasswordReset(email.trim());
+      setLoading(false);
+      if (resetError) {
+        setError(translateAuthError(resetError, "Le lien n’a pas pu être envoyé. Réessaie dans un instant."));
+        return;
+      }
+      setResetSent(true);
+    } catch (resetError) {
+      setLoading(false);
+      setError(translateAuthError(resetError, "Le lien n’a pas pu être envoyé. Réessaie dans un instant."));
+    }
   };
 
-  const inputCls = [
-    "w-full pl-10 pr-4 py-2.5 rounded-lg border text-[14px]",
-    "focus:outline-none focus:ring-2 focus:ring-emerald-400 transition-all",
-  ].join(" ");
+  const returnToLogin = () => {
+    setMode("login");
+    setError(null);
+    setResetSent(false);
+  };
+
+  const footer = mode === "login" && onSignupClick ? (
+    <button type="button" onClick={onSignupClick} className="auth-text-action">
+      Pas encore de compte ? Créer ou rejoindre un club
+    </button>
+  ) : null;
 
   return (
-    <div
-      className="min-h-screen flex items-center justify-center p-4"
-      style={{ background: "var(--c-bg)", fontFamily: "'DM Sans', system-ui, sans-serif" }}
+    <AuthShell
+      eyebrow={mode === "forgot" ? "Récupération" : "Bon retour"}
+      title={mode === "forgot" ? "Retrouve l’accès à ton compte" : "Connecte-toi à ton espace"}
+      description={mode === "forgot"
+        ? "Indique ton email. Nous t’enverrons un lien pour choisir un nouveau mot de passe."
+        : "Retrouve ton planning, ton groupe et les actions qui comptent aujourd’hui."}
+      footer={footer}
     >
-      <div className="w-full max-w-sm">
-
-        {/* ── Logo ─────────────────────────────────────────────────────── */}
-        <div className="flex flex-col items-center gap-3 mb-8">
-          <h1 style={{ margin: 0 }}>
-            <AthleteOSLogo size={56} wordmarkSize={24} direction="column" />
-          </h1>
-          <div className="text-center">
-            <p className="text-[13px] mt-0.5" style={{ color: "var(--c-text-3)" }}>
-              {mode === "forgot" ? "Récupère l'accès à ton compte" : "Connecte-toi pour accéder à ton espace"}
-            </p>
-          </div>
-        </div>
-
-        {/* ── Mot de passe oublié ──────────────────────────────────────── */}
-        {mode === "forgot" ? (
-          <form
-            onSubmit={handleForgotSubmit}
-            className="rounded-2xl shadow-sm p-6 space-y-4"
-            style={{ background: "var(--c-surface)", border: "1px solid var(--c-border)" }}
-          >
-            {error && (
-              <div className="flex items-start gap-2.5 rounded-lg px-3.5 py-3" style={{ background: "rgba(226,75,74,0.1)", border: "1px solid rgba(226,75,74,0.2)" }}>
-                <AlertCircle size={15} color="#F19A9A" className="flex-shrink-0 mt-0.5" />
-                <p className="text-[13px]" style={{ color: "#F19A9A" }}>{error}</p>
-              </div>
-            )}
-            {resetSent ? (
-              <div className="flex items-start gap-2.5 rounded-lg px-3.5 py-3" style={{ background: "rgba(29,158,117,0.1)", border: "1px solid rgba(29,158,117,0.2)" }}>
-                <CheckCircle size={15} color="#4DC9A0" className="flex-shrink-0 mt-0.5" />
-                <p className="text-[13px]" style={{ color: "#4DC9A0" }}>
-                  Email envoyé à {email} — clique sur le lien qu'il contient pour choisir un nouveau mot de passe.
-                </p>
-              </div>
-            ) : (
-              <>
-                <div className="space-y-1.5">
-                  <label className="block text-[11px] font-bold uppercase tracking-wider" style={{ color: "var(--c-text-3)" }}>
-                    Email
-                  </label>
-                  <div className="relative">
-                    <Mail size={15} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: "var(--c-text-4)" }} />
-                    <input
-                      type="email" autoComplete="email" placeholder="coach@club.be"
-                      value={email} onChange={(e) => setEmail(e.target.value)}
-                      className={inputCls}
-                      style={{ background: "var(--c-surface-2)", borderColor: "var(--c-border-strong)", color: "var(--c-text-1)" }}
-                      required disabled={loading}
-                    />
-                  </div>
-                </div>
-                <button
-                  type="submit"
-                  disabled={loading || !email.trim()}
-                  className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg text-[14px] font-semibold text-white transition-all tap-feedback disabled:opacity-50 disabled:cursor-not-allowed"
-                  style={{ background: "linear-gradient(135deg, #1D9E75, #16826C)", boxShadow: "0 2px 8px rgba(29,158,117,0.25)" }}
-                >
-                  {loading ? (
-                    <>
-                      <div className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
-                      Envoi…
-                    </>
-                  ) : "Envoyer le lien de réinitialisation"}
-                </button>
-              </>
-            )}
-            <button type="button" onClick={() => { setMode("login"); setError(null); setResetSent(false); }}
-              className="block text-center text-[12px] w-full tap-feedback" style={{ color: "var(--c-text-3)", background: "none", border: "none", cursor: "pointer" }}>
-              ← Retour à la connexion
-            </button>
-          </form>
-        ) : (
-        <>
-        {/* ── Formulaire ───────────────────────────────────────────────── */}
-        <form
-          onSubmit={handleSubmit}
-          className="rounded-2xl shadow-sm p-6 space-y-4"
-          style={{ background: "var(--c-surface)", border: "1px solid var(--c-border)" }}
-        >
-          {/* Erreur auth */}
-          {error && (
-            <div className="flex items-start gap-2.5 rounded-lg px-3.5 py-3" style={{ background: "rgba(226,75,74,0.1)", border: "1px solid rgba(226,75,74,0.2)" }}>
-              <AlertCircle size={15} color="#F19A9A" className="flex-shrink-0 mt-0.5" />
-              <p className="text-[13px]" style={{ color: "#F19A9A" }}>{error}</p>
-            </div>
-          )}
-
-          {/* Email */}
-          <div className="space-y-1.5">
-            <label className="block text-[11px] font-bold uppercase tracking-wider" style={{ color: "var(--c-text-3)" }}>
-              Email
-            </label>
-            <div className="relative">
-              <Mail size={15} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: "var(--c-text-4)" }} />
-              <input
+      {mode === "forgot" ? (
+        <form className="auth-form" onSubmit={handleForgotSubmit} noValidate>
+          {error && <AuthFeedback>{error}</AuthFeedback>}
+          {resetSent ? (
+            <>
+              <AuthFeedback type="success">
+                Email envoyé à <strong>{email}</strong>. Ouvre le lien reçu pour choisir ton nouveau mot de passe.
+              </AuthFeedback>
+              <button type="button" onClick={returnToLogin} className="auth-submit tap-feedback">
+                Retour à la connexion
+              </button>
+            </>
+          ) : (
+            <>
+              <AuthField
+                id="reset-email"
+                label="Adresse email"
+                icon={Mail}
                 type="email"
+                inputMode="email"
                 autoComplete="email"
                 placeholder="coach@club.be"
                 value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className={inputCls}
-                style={{ background: "var(--c-surface-2)", borderColor: "var(--c-border-strong)", color: "var(--c-text-1)" }}
-                required
+                onChange={(event) => updateEmail(event.target.value)}
                 disabled={loading}
+                required
               />
-            </div>
-          </div>
+              <AuthSubmitButton loading={loading} loadingLabel="Envoi du lien…" disabled={loading || !email.trim()}>
+                Envoyer le lien de réinitialisation
+              </AuthSubmitButton>
+              <button type="button" onClick={returnToLogin} className="auth-text-action subtle">
+                <ArrowLeft size={15} aria-hidden="true" /> Retour à la connexion
+              </button>
+            </>
+          )}
+        </form>
+      ) : (
+        <form className="auth-form" onSubmit={handleSubmit} noValidate>
+          {error && <AuthFeedback>{error}</AuthFeedback>}
 
-          {/* Mot de passe */}
-          <div className="space-y-1.5">
-            <label className="block text-[11px] font-bold uppercase tracking-wider" style={{ color: "var(--c-text-3)" }}>
-              Mot de passe
-            </label>
-            <div className="relative">
-              <Lock size={15} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: "var(--c-text-4)" }} />
-              <input
-                type="password"
-                autoComplete="current-password"
-                placeholder="••••••••"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className={inputCls}
-                style={{ background: "var(--c-surface-2)", borderColor: "var(--c-border-strong)", color: "var(--c-text-1)" }}
-                required
-                disabled={loading}
-              />
-            </div>
-            <button type="button" onClick={() => { setMode("forgot"); setError(null); }}
-              className="block text-[11.5px] tap-feedback" style={{ color: "var(--c-text-3)", background: "none", border: "none", cursor: "pointer" }}>
+          <AuthField
+            id="login-email"
+            label="Adresse email"
+            icon={Mail}
+            type="email"
+            inputMode="email"
+            autoComplete="username"
+            placeholder="coach@club.be"
+            value={email}
+            onChange={(event) => updateEmail(event.target.value)}
+            disabled={loading}
+            required
+          />
+
+          <div>
+            <AuthPasswordField
+              id="login-password"
+              label="Mot de passe"
+              icon={Lock}
+              autoComplete="current-password"
+              placeholder="••••••••"
+              value={password}
+              onChange={(event) => {
+                setPassword(event.target.value);
+                if (error) setError(null);
+              }}
+              disabled={loading}
+              required
+            />
+            <button
+              type="button"
+              onClick={() => { setMode("forgot"); setError(null); }}
+              className="auth-text-action auth-forgot-link"
+            >
               Mot de passe oublié ?
             </button>
           </div>
 
-          {/* Submit */}
-          <button
-            type="submit"
+          <AuthSubmitButton
+            loading={loading}
+            loadingLabel="Connexion…"
             disabled={loading || !email.trim() || !password}
-            className={[
-              "w-full flex items-center justify-center gap-2 py-2.5 rounded-lg",
-              "text-[14px] font-semibold text-white transition-all tap-feedback",
-              "disabled:opacity-50 disabled:cursor-not-allowed",
-            ].join(" ")}
-            style={{ background: "linear-gradient(135deg, #1D9E75, #16826C)", boxShadow: "0 2px 8px rgba(29,158,117,0.25)" }}
           >
-            {loading ? (
-              <>
-                <div className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
-                Connexion…
-              </>
-            ) : (
-              "Se connecter"
-            )}
-          </button>
-        </form>
+            Se connecter
+          </AuthSubmitButton>
 
-        {onSignupClick ? (
-          <button onClick={onSignupClick} className="block text-center text-[12px] mt-6 mx-auto tap-feedback"
-            style={{ color: "var(--c-accent)", background: "none", border: "none", cursor: "pointer" }}>
-            Pas encore de compte ? Créer mon club ou rejoindre avec un code →
-          </button>
-        ) : (
-          <p className="text-center text-[11px] mt-6" style={{ color: "var(--c-text-4)" }}>
-            Accès réservé aux membres — contacte ton coach ou ton club pour un compte.
-          </p>
-        )}
-        </>
-        )}
-      </div>
-    </div>
+          <AuthTrustNote>
+            Tu seras automatiquement dirigé vers ton espace coach ou athlète.
+          </AuthTrustNote>
+        </form>
+      )}
+    </AuthShell>
   );
 }

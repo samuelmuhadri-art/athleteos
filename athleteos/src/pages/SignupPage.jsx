@@ -1,42 +1,61 @@
-// ============================================================
-// AthleteOS — src/pages/SignupPage.jsx
-// Inscription en libre-service, deux parcours :
-//   - "create_club" : un coach crée son propre club (nouvel univers vide)
-//   - "join_club"   : un athlète rejoint un club existant via son code
-// La création réelle (auth user + club + users + athletes) se fait
-// côté serveur (Edge Function "signup", clé service role) — jamais
-// directement depuis le client via les tables protégées par RLS.
-// ============================================================
-
-import { useState, useRef } from "react";
-import { Mail, Lock, User, Building2, KeyRound, AlertCircle, ArrowLeft } from "lucide-react";
+import { useRef, useState } from "react";
+import { ArrowLeft, Building2, KeyRound, Lock, Mail, User, UsersRound } from "lucide-react";
 import { supabase } from "../utils/supabaseClient";
-import AthleteOSLogo from "../components/brand/AthleteOSLogo";
+import AuthShell from "../components/auth/AuthShell";
+import {
+  AuthFeedback,
+  AuthField,
+  AuthPasswordField,
+  AuthSubmitButton,
+  AuthTrustNote,
+} from "../components/auth/AuthFormControls";
+import { translateAuthError } from "../components/auth/authFormUtils";
+
+const SIGNUP_MODES = Object.freeze([
+  {
+    id: "create_club",
+    role: "Coach",
+    title: "Créer mon club",
+    description: "Démarre un nouvel espace et invite ensuite tes athlètes.",
+    icon: Building2,
+  },
+  {
+    id: "join_club",
+    role: "Athlète",
+    title: "Rejoindre mon club",
+    description: "Utilise le code transmis par ton coach pour retrouver ton groupe.",
+    icon: UsersRound,
+  },
+]);
 
 export default function SignupPage({ onBack }) {
-  const [mode, setMode] = useState("create_club"); // "create_club" | "join_club"
+  const [mode, setMode] = useState("create_club");
   const [form, setForm] = useState({ name: "", email: "", password: "", clubName: "", inviteCode: "" });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
-  // Anti-bot léger (voir supabase/functions/signup) : "company" est un piège
-  // à bots — invisible et inatteignable au clavier pour un humain, souvent
-  // rempli automatiquement par les bots de spam. formLoadedAt sert à rejeter
-  // les soumissions trop rapides pour être humaines.
   const [honeypot, setHoneypot] = useState("");
   const formLoadedAt = useRef(Date.now());
 
-  const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+  const setField = (field, value) => {
+    setForm((current) => ({ ...current, [field]: value }));
+    if (error) setError(null);
+  };
 
-  const canSubmit = form.name.trim() && form.email.trim() && form.password.length >= 8 &&
-    (mode === "create_club" ? form.clubName.trim() : form.inviteCode.trim());
+  const canSubmit = Boolean(
+    form.name.trim()
+    && form.email.trim()
+    && form.password.length >= 8
+    && (mode === "create_club" ? form.clubName.trim() : form.inviteCode.trim()),
+  );
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    if (!canSubmit) return;
+  const handleSubmit = async (event) => {
+    event.preventDefault();
+    if (!canSubmit || loading) return;
+
     setLoading(true);
     setError(null);
     try {
-      const { data, error: fnError } = await supabase.functions.invoke("signup", {
+      const { data, error: functionError } = await supabase.functions.invoke("signup", {
         body: {
           mode,
           name: form.name.trim(),
@@ -48,175 +67,165 @@ export default function SignupPage({ onBack }) {
           formLoadedAt: formLoadedAt.current,
         },
       });
-      if (fnError) throw fnError;
+      if (functionError) throw functionError;
       if (!data?.success) throw new Error(data?.error ?? "Une erreur est survenue.");
 
-      // Si l'email existait déjà, la fonction répond quand même "success"
-      // (anti-énumération — voir supabase/functions/signup) sans rien créer.
-      // signInWithPassword tranche silencieusement : ça marche si c'était
-      // vraiment le propriétaire du compte avec le bon mot de passe, sinon
-      // échec générique identique à un mauvais mot de passe classique.
-      const { error: signInErr } = await supabase.auth.signInWithPassword({
-        email: form.email.trim(), password: form.password,
+      const { error: signInError } = await supabase.auth.signInWithPassword({
+        email: form.email.trim(),
+        password: form.password,
       });
-      if (signInErr) throw signInErr;
-      // AuthContext prend le relais tout seul (onAuthStateChange) et route
-      // automatiquement vers l'espace coach ou athlète selon le rôle.
-    } catch (err) {
-      let message = err?.message ?? "Une erreur est survenue.";
-      // Depuis la tâche 3, l'Edge Function renvoie de vrais codes HTTP
-      // (400/403/413/429/500) au lieu de toujours 200 — supabase-js lève
-      // alors une FunctionsHttpError dont .context est la Response brute,
-      // pas encore lue : on peut y lire notre message métier directement.
-      if (err?.context?.json) {
+      if (signInError) throw signInError;
+    } catch (signupError) {
+      let message = translateAuthError(signupError);
+      if (signupError?.context?.json) {
         try {
-          const body = await err.context.json();
+          const body = await signupError.context.json();
           if (body?.error) message = body.error;
-        } catch { /* corps non-JSON, on garde le message générique */ }
+        } catch {
+          // Le corps n'est pas du JSON : le message normalisé reste affiché.
+        }
       }
       setError(message);
       setLoading(false);
     }
   };
 
-  const inputCls = [
-    "w-full pl-10 pr-4 py-2.5 rounded-lg border text-[14px]",
-    "focus:outline-none focus:ring-2 focus:ring-emerald-400 transition-all",
-  ].join(" ");
-  const inputStyle = { background: "var(--c-surface-2)", borderColor: "var(--c-border-strong)", color: "var(--c-text-1)" };
-  const labelCls = "block text-[11px] font-bold uppercase tracking-wider mb-1.5";
+  const footer = (
+    <button type="button" onClick={onBack} className="auth-text-action subtle">
+      <ArrowLeft size={15} aria-hidden="true" /> J’ai déjà un compte
+    </button>
+  );
 
   return (
-    <div
-      className="min-h-screen flex items-center justify-center p-4"
-      style={{ background: "var(--c-bg)", fontFamily: "'DM Sans', system-ui, sans-serif" }}
+    <AuthShell
+      eyebrow="Premiers pas"
+      title="Commence avec le bon espace"
+      description="Choisis ton rôle, puis renseigne uniquement les informations nécessaires pour démarrer."
+      footer={footer}
     >
-      <div className="w-full max-w-sm">
+      <fieldset className="auth-role-fieldset" disabled={loading}>
+        <legend>Je souhaite utiliser AthleteOS comme</legend>
+        <div className="auth-role-picker">
+          {SIGNUP_MODES.map((option) => {
+            const Icon = option.icon;
+            const selected = mode === option.id;
+            return (
+              <button
+                key={option.id}
+                type="button"
+                className={["auth-role-option", selected ? "active" : ""].join(" ")}
+                onClick={() => { setMode(option.id); setError(null); }}
+                aria-pressed={selected}
+                aria-label={`${option.role} — ${option.title}`}
+              >
+                <span className="auth-role-icon"><Icon size={19} aria-hidden="true" /></span>
+                <span>
+                  <strong>{option.role}</strong>
+                  <small>{option.title}</small>
+                </span>
+              </button>
+            );
+          })}
+        </div>
+        <p className="auth-role-description">
+          {SIGNUP_MODES.find((option) => option.id === mode)?.description}
+        </p>
+      </fieldset>
 
-        {/* ── Logo ─────────────────────────────────────────────────────── */}
-        <div className="flex flex-col items-center gap-3 mb-6">
-          <h1 style={{ margin: 0 }}>
-            <AthleteOSLogo size={56} wordmarkSize={24} direction="column" />
-          </h1>
-          <div className="text-center">
-            <p className="text-[13px] mt-0.5" style={{ color: "var(--c-text-3)" }}>Crée ton espace en 30 secondes</p>
-          </div>
+      <form className="auth-form auth-signup-form" onSubmit={handleSubmit} noValidate>
+        {error && <AuthFeedback>{error}</AuthFeedback>}
+
+        <div className="auth-honeypot" aria-hidden="true">
+          <input
+            type="text"
+            name="company"
+            tabIndex={-1}
+            autoComplete="off"
+            value={honeypot}
+            onChange={(event) => setHoneypot(event.target.value)}
+          />
         </div>
 
-        {/* ── Toggle mode ──────────────────────────────────────────────── */}
-        <div className="flex rounded-xl p-1 mb-4" style={{ background: "var(--c-surface-2)", border: "1px solid var(--c-border)" }}>
-          {[
-            { id: "create_club", label: "Je crée mon club" },
-            { id: "join_club",   label: "J'ai un code d'invitation" },
-          ].map(m => (
-            <button key={m.id} type="button" onClick={() => { setMode(m.id); setError(null); }}
-              className="flex-1 py-2 rounded-lg text-[12.5px] font-semibold transition-all tap-feedback"
-              style={mode === m.id
-                ? { background: "#1D9E75", color: "white" }
-                : { background: "transparent", color: "var(--c-text-3)" }}>
-              {m.label}
-            </button>
-          ))}
-        </div>
+        {mode === "create_club" ? (
+          <AuthField
+            id="signup-club-name"
+            label="Nom du club"
+            icon={Building2}
+            autoComplete="organization"
+            placeholder="Ex. Athletic Club Namur"
+            value={form.clubName}
+            maxLength={100}
+            onChange={(event) => setField("clubName", event.target.value)}
+            disabled={loading}
+            required
+          />
+        ) : (
+          <AuthField
+            id="signup-invite-code"
+            label="Code d’invitation"
+            icon={KeyRound}
+            autoComplete="one-time-code"
+            autoCapitalize="characters"
+            placeholder="Ex. A3F7K9P2"
+            hint="Ce code de 8 caractères est disponible auprès de ton coach."
+            value={form.inviteCode}
+            maxLength={8}
+            onChange={(event) => setField("inviteCode", event.target.value.toUpperCase())}
+            disabled={loading}
+            required
+          />
+        )}
 
-        {/* ── Formulaire ───────────────────────────────────────────────── */}
-        <form
-          onSubmit={handleSubmit}
-          className="rounded-2xl shadow-sm p-6 space-y-4"
-          style={{ background: "var(--c-surface)", border: "1px solid var(--c-border)" }}
-        >
-          {error && (
-            <div className="flex items-start gap-2.5 rounded-lg px-3.5 py-3" style={{ background: "rgba(226,75,74,0.1)", border: "1px solid rgba(226,75,74,0.2)" }}>
-              <AlertCircle size={15} color="#F19A9A" className="flex-shrink-0 mt-0.5" />
-              <p className="text-[13px]" style={{ color: "#F19A9A" }}>{error}</p>
-            </div>
-          )}
+        <AuthField
+          id="signup-name"
+          label="Prénom et nom"
+          icon={User}
+          autoComplete="name"
+          placeholder="Prénom Nom"
+          value={form.name}
+          maxLength={100}
+          onChange={(event) => setField("name", event.target.value)}
+          disabled={loading}
+          required
+        />
 
-          {/* Piège à bots : invisible et inatteignable au clavier/lecteur
-              d'écran pour un humain (pas display:none — certains bots
-              l'ignorent — mais hors-écran + non focusable + aria-hidden). */}
-          <div style={{ position: "absolute", left: "-9999px", width: "1px", height: "1px", overflow: "hidden" }} aria-hidden="true">
-            <input type="text" name="company" tabIndex={-1} autoComplete="off"
-              value={honeypot} onChange={e => setHoneypot(e.target.value)} />
-          </div>
+        <AuthField
+          id="signup-email"
+          label="Adresse email"
+          icon={Mail}
+          type="email"
+          inputMode="email"
+          autoComplete="email"
+          placeholder="toi@exemple.be"
+          value={form.email}
+          maxLength={254}
+          onChange={(event) => setField("email", event.target.value)}
+          disabled={loading}
+          required
+        />
 
-          {mode === "create_club" ? (
-            <div className="space-y-1.5">
-              <label className={labelCls} style={{ color: "var(--c-text-3)" }}>Nom du club</label>
-              <div className="relative">
-                <Building2 size={15} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: "var(--c-text-4)" }} />
-                <input placeholder="Ex: Athletic Club Namur" value={form.clubName} maxLength={100}
-                  onChange={e => set("clubName", e.target.value)}
-                  className={inputCls} style={inputStyle} disabled={loading} required />
-              </div>
-            </div>
-          ) : (
-            <div className="space-y-1.5">
-              <label className={labelCls} style={{ color: "var(--c-text-3)" }}>Code d'invitation</label>
-              <div className="relative">
-                <KeyRound size={15} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: "var(--c-text-4)" }} />
-                <input placeholder="Ex: A3F7K9P2" value={form.inviteCode} maxLength={8}
-                  onChange={e => set("inviteCode", e.target.value.toUpperCase())}
-                  className={inputCls} style={{ ...inputStyle, letterSpacing: "0.08em", fontWeight: 600 }} disabled={loading} required />
-              </div>
-              <p className="text-[10.5px]" style={{ color: "var(--c-text-4)" }}>Demande ce code à ton coach.</p>
-            </div>
-          )}
+        <AuthPasswordField
+          id="signup-password"
+          label="Mot de passe"
+          icon={Lock}
+          autoComplete="new-password"
+          placeholder="8 caractères minimum"
+          value={form.password}
+          maxLength={128}
+          onChange={(event) => setField("password", event.target.value)}
+          disabled={loading}
+          required
+          showStrength
+        />
 
-          <div className="space-y-1.5">
-            <label className={labelCls} style={{ color: "var(--c-text-3)" }}>Ton nom</label>
-            <div className="relative">
-              <User size={15} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: "var(--c-text-4)" }} />
-              <input placeholder="Prénom Nom" value={form.name} maxLength={100}
-                onChange={e => set("name", e.target.value)}
-                className={inputCls} style={inputStyle} disabled={loading} required />
-            </div>
-          </div>
+        <AuthSubmitButton loading={loading} loadingLabel="Création de l’espace…" disabled={loading || !canSubmit}>
+          {mode === "create_club" ? "Créer mon club" : "Rejoindre mon club"}
+        </AuthSubmitButton>
 
-          <div className="space-y-1.5">
-            <label className={labelCls} style={{ color: "var(--c-text-3)" }}>Email</label>
-            <div className="relative">
-              <Mail size={15} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: "var(--c-text-4)" }} />
-              <input type="email" autoComplete="email" placeholder="toi@exemple.be" value={form.email} maxLength={254}
-                onChange={e => set("email", e.target.value)}
-                className={inputCls} style={inputStyle} disabled={loading} required />
-            </div>
-          </div>
-
-          <div className="space-y-1.5">
-            <label className={labelCls} style={{ color: "var(--c-text-3)" }}>Mot de passe</label>
-            <div className="relative">
-              <Lock size={15} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: "var(--c-text-4)" }} />
-              <input type="password" autoComplete="new-password" placeholder="8 caractères minimum" value={form.password} maxLength={128}
-                onChange={e => set("password", e.target.value)}
-                className={inputCls} style={inputStyle} disabled={loading} required />
-            </div>
-          </div>
-
-          <button
-            type="submit"
-            disabled={loading || !canSubmit}
-            className={[
-              "w-full flex items-center justify-center gap-2 py-2.5 rounded-lg",
-              "text-[14px] font-semibold text-white transition-all tap-feedback",
-              "disabled:opacity-50 disabled:cursor-not-allowed",
-            ].join(" ")}
-            style={{ background: "linear-gradient(135deg, #1D9E75, #16826C)", boxShadow: "0 2px 8px rgba(29,158,117,0.25)" }}
-          >
-            {loading ? (
-              <>
-                <div className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
-                Création…
-              </>
-            ) : mode === "create_club" ? "Créer mon club" : "Rejoindre le club"}
-          </button>
-        </form>
-
-        <button onClick={onBack} className="flex items-center gap-1.5 justify-center w-full mt-6 text-[12px] tap-feedback"
-          style={{ color: "var(--c-text-3)", background: "none", border: "none", cursor: "pointer" }}>
-          <ArrowLeft size={13} /> J'ai déjà un compte
-        </button>
-      </div>
-    </div>
+        <AuthTrustNote>
+          Aucune permission de notification ou de montre ne sera demandée pendant cette inscription.
+        </AuthTrustNote>
+      </form>
+    </AuthShell>
   );
 }

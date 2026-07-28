@@ -1,51 +1,128 @@
-// ============================================================
-// AthleteOS — src/components/ui/AccountSettingsModal.jsx
-// Réglages de compte partagés coach + athlète : nom, email, mot de
-// passe pour tout le monde ; nom du club + code d'invitation réservés
-// au HEAD COACH (tâche 4 — un simple coach ne doit plus voir ces
-// actions structurelles). Les actions sensibles (renommer le club,
-// régénérer le code) passent par l'Edge Function admin-actions
-// (service role, revérifie le rôle côté serveur — cet écran ne fait que
-// masquer l'UI, la sécurité réelle est côté serveur).
-// ============================================================
-
-import { useState, useEffect } from "react";
-import { X, User, Mail, Lock, Building2, RefreshCw, Copy, Check, AlertCircle, CheckCircle } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import {
+  Building2,
+  Check,
+  Copy,
+  KeyRound,
+  Lock,
+  Mail,
+  RefreshCw,
+  Settings,
+  User,
+  X,
+} from "lucide-react";
 import { supabase } from "../../utils/supabaseClient";
 import { useAuth } from "../../context/AuthContext";
+import {
+  AuthFeedback,
+  AuthField,
+  AuthPasswordField,
+} from "../auth/AuthFormControls";
+import { translateAuthError } from "../auth/authFormUtils";
 
-function Field({ label, children }) {
+const FOCUSABLE_SELECTOR = [
+  "button:not([disabled])",
+  "input:not([disabled])",
+  "select:not([disabled])",
+  "textarea:not([disabled])",
+  "[href]",
+  "[tabindex]:not([tabindex='-1'])",
+].join(",");
+
+function SettingsSectionHeader({ icon: Icon, title, description }) {
   return (
-    <div className="space-y-1.5">
-      <label className="block text-[11px] font-bold uppercase tracking-wider" style={{ color: "var(--c-text-3)" }}>{label}</label>
-      {children}
+    <div className="settings-section-header">
+      <span><Icon size={18} aria-hidden="true" /></span>
+      <div>
+        <h3>{title}</h3>
+        <p>{description}</p>
+      </div>
     </div>
   );
 }
 
-const inputCls = "w-full pl-10 pr-4 py-2.5 rounded-lg border text-[14px] focus:outline-none focus:ring-2 focus:ring-emerald-400 transition-all";
-const inputStyle = { background: "var(--c-surface-2)", borderColor: "var(--c-border-strong)", color: "var(--c-text-1)" };
+function ActionRow({ children, action }) {
+  return (
+    <div className="settings-action-row">
+      <div className="min-w-0">{children}</div>
+      {action}
+    </div>
+  );
+}
 
 export default function AccountSettingsModal({ onClose }) {
   const { user, profile, clubId } = useAuth();
   const isHeadCoach = profile?.role === "head_coach";
-
-  const [name, setName]   = useState(profile?.name ?? "");
+  const [activeSection, setActiveSection] = useState("account");
+  const [name, setName] = useState(profile?.name ?? "");
   const [email, setEmail] = useState(user?.email ?? "");
   const [password, setPassword] = useState("");
-
-  const [clubName, setClubName]     = useState("");
+  const [clubName, setClubName] = useState("");
   const [inviteCode, setInviteCode] = useState(null);
-  const [copied, setCopied]         = useState(false);
+  const [clubLoading, setClubLoading] = useState(Boolean(clubId));
+  const [copied, setCopied] = useState(false);
+  const [confirmRegeneration, setConfirmRegeneration] = useState(false);
+  const [message, setMessage] = useState(null);
+  const [busy, setBusy] = useState(null);
+  const dialogRef = useRef(null);
+  const restoreFocusRef = useRef(typeof document !== "undefined" ? document.activeElement : null);
 
-  const [msg, setMsg] = useState(null); // { type: "error"|"success", text }
-  const [busy, setBusy] = useState(null); // clé de l'action en cours
+  const requestClose = () => {
+    if (!busy) onClose();
+  };
 
   useEffect(() => {
-    if (!clubId) return;
+    if (!clubId) {
+      setClubLoading(false);
+      return;
+    }
+
+    let active = true;
+    setClubLoading(true);
     supabase.from("clubs").select("name, invite_code").eq("id", clubId).single()
-      .then(({ data }) => { if (data) { setClubName(data.name ?? ""); setInviteCode(data.invite_code ?? null); } });
+      .then(({ data, error }) => {
+        if (!active) return;
+        if (error) {
+          setMessage({ type: "error", text: "Les informations du club n’ont pas pu être chargées." });
+        } else if (data) {
+          setClubName(data.name ?? "");
+          setInviteCode(data.invite_code ?? null);
+        }
+        setClubLoading(false);
+      });
+    return () => { active = false; };
   }, [clubId]);
+
+  useEffect(() => {
+    const previousFocus = restoreFocusRef.current;
+    return () => previousFocus?.focus?.();
+  }, []);
+
+  useEffect(() => {
+    const handleKeyDown = (event) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        requestClose();
+        return;
+      }
+      if (event.key !== "Tab" || !dialogRef.current) return;
+
+      const focusable = [...dialogRef.current.querySelectorAll(FOCUSABLE_SELECTOR)];
+      if (!focusable.length) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  });
 
   const callAdmin = async (payload) => {
     const { data, error } = await supabase.functions.invoke("admin-actions", { body: payload });
@@ -54,169 +131,308 @@ export default function AccountSettingsModal({ onClose }) {
     return data;
   };
 
-  const saveName = async () => {
+  const runAction = async (key, action, successText) => {
+    setBusy(key);
+    setMessage(null);
+    try {
+      await action();
+      setMessage({ type: "success", text: successText });
+    } catch (actionError) {
+      setMessage({ type: "error", text: translateAuthError(actionError) });
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const saveName = () => {
     if (!name.trim()) return;
-    setBusy("name"); setMsg(null);
-    try {
-      await callAdmin({ action: "update_profile", name: name.trim() });
-      setMsg({ type: "success", text: "Nom mis à jour." });
-    } catch (e) { setMsg({ type: "error", text: e.message }); }
-    setBusy(null);
+    runAction(
+      "name",
+      () => callAdmin({ action: "update_profile", name: name.trim() }),
+      "Ton nom a bien été mis à jour.",
+    );
   };
 
-  const saveEmail = async () => {
+  const saveEmail = () => {
     if (!email.trim() || email.trim() === user?.email) return;
-    setBusy("email"); setMsg(null);
-    try {
-      const { error } = await supabase.auth.updateUser({ email: email.trim() });
+    runAction("email", async () => {
+      const normalizedEmail = email.trim();
+      const { error } = await supabase.auth.updateUser({ email: normalizedEmail });
       if (error) throw error;
-      await supabase.from("users").update({ email: email.trim() }).eq("id", profile.id);
-      setMsg({ type: "success", text: "Vérifie ta boîte mail pour confirmer le changement d'adresse." });
-    } catch (e) { setMsg({ type: "error", text: e.message }); }
-    setBusy(null);
+      await supabase.from("users").update({ email: normalizedEmail }).eq("id", profile.id);
+    }, "Vérifie ta boîte mail pour confirmer la nouvelle adresse.");
   };
 
-  const savePassword = async () => {
-    if (password.length < 8) { setMsg({ type: "error", text: "Le mot de passe doit faire au moins 8 caractères." }); return; }
-    setBusy("password"); setMsg(null);
-    try {
+  const savePassword = () => {
+    if (password.length < 8) {
+      setMessage({ type: "error", text: "Le mot de passe doit contenir au moins 8 caractères." });
+      return;
+    }
+    runAction("password", async () => {
       const { error } = await supabase.auth.updateUser({ password });
       if (error) throw error;
       setPassword("");
-      setMsg({ type: "success", text: "Mot de passe mis à jour." });
-    } catch (e) { setMsg({ type: "error", text: e.message }); }
-    setBusy(null);
+    }, "Ton mot de passe a bien été mis à jour.");
   };
 
-  const saveClubName = async () => {
+  const saveClubName = () => {
     if (!clubName.trim()) return;
-    setBusy("club"); setMsg(null);
-    try {
-      // Clé d'idempotence : un double-clic ou un retry réseau sur ce
-      // même clic ne renomme pas le club une seconde fois côté serveur.
-      await callAdmin({ action: "rename_club", clubName: clubName.trim(), idempotencyKey: crypto.randomUUID() });
-      setMsg({ type: "success", text: "Nom du club mis à jour." });
-    } catch (e) { setMsg({ type: "error", text: e.message }); }
-    setBusy(null);
+    runAction(
+      "club",
+      () => callAdmin({
+        action: "rename_club",
+        clubName: clubName.trim(),
+        idempotencyKey: crypto.randomUUID(),
+      }),
+      "Le nom du club a bien été mis à jour.",
+    );
   };
 
-  const regenerateCode = async () => {
-    setBusy("code"); setMsg(null);
-    try {
-      const data = await callAdmin({ action: "regenerate_invite_code", idempotencyKey: crypto.randomUUID() });
+  const regenerateCode = () => {
+    runAction("code", async () => {
+      const data = await callAdmin({
+        action: "regenerate_invite_code",
+        idempotencyKey: crypto.randomUUID(),
+      });
       setInviteCode(data.inviteCode);
-      setMsg({ type: "success", text: "Nouveau code généré — l'ancien ne fonctionne plus." });
-    } catch (e) { setMsg({ type: "error", text: e.message }); }
-    setBusy(null);
+      setConfirmRegeneration(false);
+    }, "Nouveau code généré. L’ancien code ne fonctionne plus.");
   };
 
-  const copyCode = () => {
+  const copyCode = async () => {
     if (!inviteCode) return;
-    navigator.clipboard?.writeText(inviteCode).then(() => { setCopied(true); setTimeout(() => setCopied(false), 2000); });
+    try {
+      if (!navigator.clipboard) throw new Error("Clipboard unavailable");
+      await navigator.clipboard.writeText(inviteCode);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      setMessage({ type: "error", text: "Le code n’a pas pu être copié. Sélectionne-le manuellement." });
+    }
+  };
+
+  const switchSection = (section) => {
+    setActiveSection(section);
+    setMessage(null);
+    setConfirmRegeneration(false);
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 modal-backdrop"
-      onClick={e => e.target === e.currentTarget && onClose()}>
-      <div className="rounded-2xl shadow-2xl w-full max-w-md max-h-[88vh] flex flex-col modal-content overflow-hidden"
-        style={{ background: "var(--c-surface)", border: "1px solid var(--c-border)" }}>
-
-        <div className="px-6 py-5 flex items-center justify-between flex-shrink-0" style={{ borderBottom: "1px solid var(--c-border)" }}>
-          <h3 className="text-[15px] font-bold" style={{ color: "var(--c-text-1)" }}>Réglages du compte</h3>
-          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-[var(--c-surface-3)] transition-colors">
-            <X size={16} style={{ color: "var(--c-text-3)" }} />
+    <div
+      className="account-settings-backdrop modal-backdrop"
+      onMouseDown={(event) => event.target === event.currentTarget && requestClose()}
+    >
+      <section
+        ref={dialogRef}
+        className="account-settings-dialog modal-content"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="account-settings-title"
+        aria-describedby="account-settings-description"
+        aria-busy={Boolean(busy)}
+      >
+        <header className="account-settings-header">
+          <div className="account-settings-heading">
+            <span><Settings size={18} aria-hidden="true" /></span>
+            <div>
+              <p className="meta-text">ESPACE PERSONNEL</p>
+              <h2 id="account-settings-title">Réglages</h2>
+              <p id="account-settings-description">Gère ton compte et les informations de ton club.</p>
+            </div>
+          </div>
+          <button
+            type="button"
+            autoFocus
+            onClick={requestClose}
+            disabled={Boolean(busy)}
+            className="icon-btn"
+            aria-label="Fermer les réglages"
+          >
+            <X size={18} aria-hidden="true" />
           </button>
-        </div>
+        </header>
 
-        <div className="flex-1 overflow-y-auto px-6 py-5 space-y-5">
-          {msg && (
-            <div className="flex items-start gap-2.5 rounded-lg px-3.5 py-3"
-              style={msg.type === "error"
-                ? { background: "rgba(226,75,74,0.1)", border: "1px solid rgba(226,75,74,0.2)" }
-                : { background: "rgba(29,158,117,0.1)", border: "1px solid rgba(29,158,117,0.2)" }}>
-              {msg.type === "error"
-                ? <AlertCircle size={15} color="#F19A9A" className="flex-shrink-0 mt-0.5" />
-                : <CheckCircle size={15} color="#4DC9A0" className="flex-shrink-0 mt-0.5" />}
-              <p className="text-[13px]" style={{ color: msg.type === "error" ? "#F19A9A" : "#4DC9A0" }}>{msg.text}</p>
+        {isHeadCoach && (
+          <nav className="account-settings-tabs" role="tablist" aria-label="Sections des réglages">
+            <button
+              type="button"
+              role="tab"
+              id="settings-account-tab"
+              aria-selected={activeSection === "account"}
+              aria-controls="settings-account-panel"
+              className={activeSection === "account" ? "active" : ""}
+              onClick={() => switchSection("account")}
+            >
+              <User size={16} aria-hidden="true" /> Compte
+            </button>
+            <button
+              type="button"
+              role="tab"
+              id="settings-club-tab"
+              aria-selected={activeSection === "club"}
+              aria-controls="settings-club-panel"
+              className={activeSection === "club" ? "active" : ""}
+              onClick={() => switchSection("club")}
+            >
+              <Building2 size={16} aria-hidden="true" /> Club
+            </button>
+          </nav>
+        )}
+
+        <div className="account-settings-content">
+          {message && <AuthFeedback type={message.type}>{message.text}</AuthFeedback>}
+
+          {activeSection === "account" ? (
+            <div
+              id="settings-account-panel"
+              role={isHeadCoach ? "tabpanel" : undefined}
+              aria-labelledby={isHeadCoach ? "settings-account-tab" : undefined}
+              className="settings-panel"
+            >
+              <SettingsSectionHeader
+                icon={User}
+                title="Informations du compte"
+                description="Ces informations identifient ton profil dans AthleteOS."
+              />
+
+              <ActionRow action={(
+                <button type="button" onClick={saveName} disabled={Boolean(busy) || !name.trim() || name.trim() === profile?.name} className="btn-secondary">
+                  {busy === "name" ? "Enregistrement…" : "Enregistrer"}
+                </button>
+              )}>
+                <AuthField
+                  id="settings-name"
+                  label="Prénom et nom"
+                  icon={User}
+                  autoComplete="name"
+                  value={name}
+                  maxLength={100}
+                  onChange={(event) => setName(event.target.value)}
+                  disabled={Boolean(busy)}
+                />
+              </ActionRow>
+
+              <ActionRow action={(
+                <button type="button" onClick={saveEmail} disabled={Boolean(busy) || !email.trim() || email.trim() === user?.email} className="btn-secondary">
+                  {busy === "email" ? "Envoi…" : "Changer l’email"}
+                </button>
+              )}>
+                <AuthField
+                  id="settings-email"
+                  label="Adresse email"
+                  icon={Mail}
+                  type="email"
+                  inputMode="email"
+                  autoComplete="email"
+                  hint="La nouvelle adresse devra être confirmée par email."
+                  value={email}
+                  maxLength={254}
+                  onChange={(event) => setEmail(event.target.value)}
+                  disabled={Boolean(busy)}
+                />
+              </ActionRow>
+
+              <ActionRow action={(
+                <button type="button" onClick={savePassword} disabled={Boolean(busy) || !password} className="btn-secondary">
+                  {busy === "password" ? "Mise à jour…" : "Changer le mot de passe"}
+                </button>
+              )}>
+                <AuthPasswordField
+                  id="settings-password"
+                  label="Nouveau mot de passe"
+                  icon={Lock}
+                  autoComplete="new-password"
+                  placeholder="8 caractères minimum"
+                  value={password}
+                  maxLength={128}
+                  onChange={(event) => setPassword(event.target.value)}
+                  disabled={Boolean(busy)}
+                  showStrength
+                />
+              </ActionRow>
+            </div>
+          ) : (
+            <div
+              id="settings-club-panel"
+              role="tabpanel"
+              aria-labelledby="settings-club-tab"
+              className="settings-panel"
+            >
+              <SettingsSectionHeader
+                icon={Building2}
+                title="Identité du club"
+                description="Ces actions sont réservées au head coach."
+              />
+
+              {clubLoading ? (
+                <div className="settings-loading" role="status">
+                  <RefreshCw size={18} className="animate-spin" aria-hidden="true" />
+                  Chargement des informations du club…
+                </div>
+              ) : (
+                <>
+                  <ActionRow action={(
+                    <button type="button" onClick={saveClubName} disabled={Boolean(busy) || !clubName.trim()} className="btn-secondary">
+                      {busy === "club" ? "Enregistrement…" : "Enregistrer"}
+                    </button>
+                  )}>
+                    <AuthField
+                      id="settings-club-name"
+                      label="Nom du club"
+                      icon={Building2}
+                      autoComplete="organization"
+                      value={clubName}
+                      maxLength={100}
+                      onChange={(event) => setClubName(event.target.value)}
+                      disabled={Boolean(busy)}
+                    />
+                  </ActionRow>
+
+                  <div className="settings-invite-card">
+                    <div className="settings-invite-copy">
+                      <span><KeyRound size={18} aria-hidden="true" /></span>
+                      <div>
+                        <h4>Code d’invitation</h4>
+                        <p>Partage ce code avec les athlètes qui doivent rejoindre ton club.</p>
+                      </div>
+                    </div>
+                    <div className="settings-code-row">
+                      <output aria-label="Code d’invitation actuel">{inviteCode ?? "Indisponible"}</output>
+                      <button type="button" onClick={copyCode} disabled={!inviteCode || Boolean(busy)} className="icon-btn" aria-label="Copier le code d’invitation">
+                        {copied ? <Check size={18} aria-hidden="true" /> : <Copy size={18} aria-hidden="true" />}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setConfirmRegeneration(true)}
+                        disabled={Boolean(busy)}
+                        className="icon-btn"
+                        aria-label="Générer un nouveau code"
+                      >
+                        <RefreshCw size={18} aria-hidden="true" />
+                      </button>
+                    </div>
+                  </div>
+
+                  {confirmRegeneration && (
+                    <div className="settings-confirm" role="alert" aria-labelledby="regenerate-code-title">
+                      <div>
+                        <h4 id="regenerate-code-title">Remplacer le code actuel ?</h4>
+                        <p>L’ancien code sera invalidé immédiatement.</p>
+                      </div>
+                      <div>
+                        <button type="button" className="btn-ghost" onClick={() => setConfirmRegeneration(false)} disabled={Boolean(busy)}>Annuler</button>
+                        <button type="button" className="btn-secondary" onClick={regenerateCode} disabled={Boolean(busy)}>
+                          {busy === "code" ? "Génération…" : "Générer le nouveau code"}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
             </div>
           )}
-
-          <Field label="Ton nom">
-            <div className="flex gap-2">
-              <div className="relative flex-1">
-                <User size={15} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: "var(--c-text-4)" }} />
-                <input value={name} onChange={e => setName(e.target.value)} className={inputCls} style={inputStyle} />
-              </div>
-              <button onClick={saveName} disabled={busy === "name" || !name.trim() || name.trim() === profile?.name}
-                className="btn-secondary !px-4 disabled:opacity-40">
-                {busy === "name" ? "…" : "Enregistrer"}
-              </button>
-            </div>
-          </Field>
-
-          <Field label="Email">
-            <div className="flex gap-2">
-              <div className="relative flex-1">
-                <Mail size={15} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: "var(--c-text-4)" }} />
-                <input type="email" value={email} onChange={e => setEmail(e.target.value)} className={inputCls} style={inputStyle} />
-              </div>
-              <button onClick={saveEmail} disabled={busy === "email" || !email.trim() || email.trim() === user?.email}
-                className="btn-secondary !px-4 disabled:opacity-40">
-                {busy === "email" ? "…" : "Changer"}
-              </button>
-            </div>
-          </Field>
-
-          <Field label="Nouveau mot de passe">
-            <div className="flex gap-2">
-              <div className="relative flex-1">
-                <Lock size={15} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: "var(--c-text-4)" }} />
-                <input type="password" placeholder="8 caractères minimum" value={password} onChange={e => setPassword(e.target.value)} className={inputCls} style={inputStyle} />
-              </div>
-              <button onClick={savePassword} disabled={busy === "password" || !password}
-                className="btn-secondary !px-4 disabled:opacity-40">
-                {busy === "password" ? "…" : "Changer"}
-              </button>
-            </div>
-          </Field>
-
-          {isHeadCoach && (
-            <>
-              <div className="pt-1" style={{ borderTop: "1px solid var(--c-border)" }} />
-              <Field label="Nom du club">
-                <div className="flex gap-2">
-                  <div className="relative flex-1">
-                    <Building2 size={15} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: "var(--c-text-4)" }} />
-                    <input value={clubName} onChange={e => setClubName(e.target.value)} className={inputCls} style={inputStyle} />
-                  </div>
-                  <button onClick={saveClubName} disabled={busy === "club" || !clubName.trim()}
-                    className="btn-secondary !px-4 disabled:opacity-40">
-                    {busy === "club" ? "…" : "Enregistrer"}
-                  </button>
-                </div>
-              </Field>
-
-              <Field label="Code d'invitation">
-                <div className="flex items-center gap-2">
-                  <div className="flex-1 rounded-xl px-4 py-2.5 text-center" style={{ background: "var(--c-surface-2)", border: "1px solid var(--c-border-strong)" }}>
-                    <span className="text-[16px] font-bold" style={{ color: "var(--c-text-1)", letterSpacing: "0.1em" }}>{inviteCode ?? "…"}</span>
-                  </div>
-                  <button onClick={copyCode} className="flex items-center justify-center w-10 h-10 rounded-lg flex-shrink-0 transition-all tap-feedback"
-                    style={{ background: copied ? "rgba(29,158,117,0.15)" : "var(--c-surface-2)", border: "1px solid var(--c-border-strong)" }}>
-                    {copied ? <Check size={14} color="#1D9E75" /> : <Copy size={13} style={{ color: "var(--c-text-2)" }} />}
-                  </button>
-                  <button onClick={regenerateCode} disabled={busy === "code"}
-                    className="flex items-center justify-center w-10 h-10 rounded-lg flex-shrink-0 transition-all tap-feedback disabled:opacity-40"
-                    style={{ background: "var(--c-surface-2)", border: "1px solid var(--c-border-strong)" }} title="Générer un nouveau code">
-                    <RefreshCw size={13} style={{ color: "var(--c-text-2)" }} className={busy === "code" ? "animate-spin" : ""} />
-                  </button>
-                </div>
-                <p className="text-[10.5px]" style={{ color: "var(--c-text-4)" }}>Régénérer invalide l'ancien code immédiatement.</p>
-              </Field>
-            </>
-          )}
         </div>
-      </div>
+      </section>
     </div>
   );
 }

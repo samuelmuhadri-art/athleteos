@@ -127,7 +127,7 @@ export function usePushNotifications(athleteId, clubId, userId = null) {
 }
 
 // ── Bouton toggle ──────────────────────────────────────────────────────────
-export function PushToggleButton({ subscribed, onToggle, permissionState }) {
+export function PushToggleButton({ subscribed, onToggle, permissionState, compact = false }) {
   const noSupport = !("serviceWorker" in navigator) || !("PushManager" in window);
   if (noSupport) return null;
   const denied = permissionState === "denied";
@@ -137,8 +137,11 @@ export function PushToggleButton({ subscribed, onToggle, permissionState }) {
       type="button"
       onClick={onToggle}
       disabled={subscribed || denied}
+      aria-label={compact ? (subscribed ? "Notifications actives" : denied ? "Notifications bloquées par le navigateur" : "Activer les notifications") : undefined}
+      title={compact ? (subscribed ? "Notifications actives" : denied ? "Notifications bloquées" : "Activer les notifications") : undefined}
       className={[
-        "flex items-center gap-2 px-3 py-2 rounded-xl text-[12px] font-semibold border transition-all",
+        "flex items-center justify-center rounded-xl text-[12px] font-semibold border transition-all",
+        compact ? "w-11 h-11 p-0" : "gap-2 px-3 py-2",
         subscribed || denied ? "cursor-default" : "hover:border-[var(--c-border-strong)]",
       ].join(" ")}
       style={
@@ -149,8 +152,8 @@ export function PushToggleButton({ subscribed, onToggle, permissionState }) {
             : { background: "var(--c-surface-2)", borderColor: "var(--c-border)", color: "var(--c-text-2)" }
       }
     >
-      <span>{subscribed ? "🔔" : "🔕"}</span>
-      <span>{subscribed ? "Notifs actives" : denied ? "Bloquées par le navigateur" : "Activer les notifs"}</span>
+      <span aria-hidden={compact ? "true" : undefined}>{subscribed ? "🔔" : "🔕"}</span>
+      {!compact && <span>{subscribed ? "Notifs actives" : denied ? "Bloquées par le navigateur" : "Activer les notifs"}</span>}
     </button>
   );
 }
