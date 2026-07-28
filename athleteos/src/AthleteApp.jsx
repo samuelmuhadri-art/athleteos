@@ -403,8 +403,7 @@ export default function AthleteApp() {
             {activeView === "messagerie" && (
               <AthleteMsgerie
                 athlete={athlete} coachUserId={coachUserId}
-                athleteUserId={profile?.id} coachName={coachName}
-                clubId={clubId} allAthletes={allAthletes}
+                athleteUserId={profile?.id} clubId={clubId}
               />
             )}
             {activeView === "social" && (
