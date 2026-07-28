@@ -12,6 +12,7 @@ import ErrorState    from "../components/ui/ErrorState";
 import { initialsFromName } from "../utils/helpers.js";
 import { EmptySection } from "./athleteListShared";
 import { parsePerf } from "../athlete/shared.js";
+import { resolveDisciplineId, getDisciplineUnit } from "../domain/disciplines.js";
 import AthleteProfile from "./AthleteProfile";
 import AthleteCard from "./AthleteCard";
 import AddAthleteModal from "./AddAthleteModal";
@@ -109,15 +110,22 @@ function AthleteList({ onNavigate }) {
     // (déjà un bug latent). Bascule en upsert explicite, et renseigne
     // pr_value/sb_value pour rester cohérent avec les comparaisons faites
     // côté serveur par les RPC de compétition.
+    // Tâche 12 : discipline passée au registre central avant écriture — ce
+    // point d'ajout manuel (formulaire coach en texte libre) était le seul
+    // à ne pas déjà le faire (tous les autres, compétitions/auto-déclaration
+    // athlète, le font depuis la tâche 9), donc "100 m" et "100m" pouvaient
+    // ne jamais se rejoindre malgré la discipline canonique identique.
+    const discipline = resolveDisciplineId(form.discipline);
     const patch = {
       sb: form.sb, sb_value: parsePerf(form.sb).value,
       pr: form.pr, pr_value: parsePerf(form.pr).value, pr_date: form.prDate || null,
+      unit: getDisciplineUnit(discipline), discipline_id: discipline,
     };
     const { data: existing } = await supabase.from("records").select("id")
-      .eq("athlete_id", athleteId).eq("discipline", form.discipline).maybeSingle();
+      .eq("athlete_id", athleteId).eq("discipline", discipline).maybeSingle();
     const { error: e } = existing
       ? await supabase.from("records").update(patch).eq("id", existing.id)
-      : await supabase.from("records").insert({ athlete_id: athleteId, discipline: form.discipline, ...patch });
+      : await supabase.from("records").insert({ athlete_id: athleteId, discipline, ...patch });
     if (e) throw e; await fetchAll();
   }, [fetchAll]);
 

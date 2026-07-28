@@ -22,7 +22,7 @@ import {
 } from "recharts";
 import { supabase } from "../../utils/supabaseClient";
 import { getDiscHib, parsePerf, toLocalDateStr, getISOWeek, isBetterOrEqual, pctOfReference } from "../shared";
-import { resolveDisciplineId } from "../../domain/disciplines.js";
+import { resolveDisciplineId, getDisciplineUnit } from "../../domain/disciplines.js";
 import { notifyGoalAchieved, postClubCelebration, dispatchOutboxNotifications } from "../../utils/notifications";
 import { getAthleteMetricsForWeek } from "../../utils/chargeCalculations";
 import MesRapports from "./MesRapports";
@@ -80,7 +80,11 @@ export default function AthletePerfs({ athlete, competitions, myPerformances, my
       .map(p => ({
         date:      p.performance_date.slice(0, 10),
         label:     new Date(p.performance_date).toLocaleDateString("fr-BE", { day: "numeric", month: "short" }),
-        value:     parseFloat(p.value) || 0,
+        // Tâche 12 : préfère la valeur canonique déjà stockée (normalized_value)
+        // à un parseFloat brut, qui donnait un résultat faux sur un format
+        // "minutes:secondes" ("1:52" -> 1 au lieu de 112) — fallback sur
+        // parsePerf() pour les lignes pas encore backfillées.
+        value:     p.normalized_value ?? parsePerf(p.value).value ?? 0,
         raw:       p.value,
         ctx:       p.context,
         breakdown: p.breakdown,
@@ -189,6 +193,8 @@ export default function AthletePerfs({ athlete, competitions, myPerformances, my
     const { data: existingRow } = await supabase.from("records").select("id")
       .eq("athlete_id", athlete.id).eq("discipline", disc).maybeSingle();
     const patch = {
+      // Tâche 12 : unité + discipline résolue tenues à jour à chaque écriture.
+      unit: getDisciplineUnit(disc), discipline_id: disc,
       ...(isPR ? { pr: resultStr, pr_value: newVal.value, pr_date: dateStr } : {}),
       ...(isSB ? { sb: resultStr, sb_value: newVal.value } : {}),
       ...(!curPR?.value ? { pr: resultStr, pr_value: newVal.value, pr_date: dateStr, sb: resultStr, sb_value: newVal.value } : {}),
@@ -228,6 +234,12 @@ export default function AthletePerfs({ athlete, competitions, myPerformances, my
       const cleanBreakdown = isCombine
         ? Object.fromEntries(Object.entries(perfForm.breakdown).filter(([, v]) => v?.trim()))
         : null;
+      // Tâche 12 : valeur canonique + unité + discipline résolue, calculées
+      // ici (le client reste la seule source de vérité pour le parsing,
+      // tâche 11) — une valeur non interprétable est quand même enregistrée
+      // (on ne bloque pas la saisie manuelle d'un athlète) mais marquée pour
+      // ne pas fausser silencieusement un tri/calcul ultérieur.
+      const normalizedValue = parsePerf(perfForm.value).value;
 
       const { data, error } = await supabase
         .from("athlete_performances")
@@ -240,6 +252,10 @@ export default function AthletePerfs({ athlete, competitions, myPerformances, my
           performance_date: perfForm.performance_date,
           context:          perfForm.context || null,
           breakdown:        cleanBreakdown && Object.keys(cleanBreakdown).length ? cleanBreakdown : null,
+          normalized_value: normalizedValue,
+          unit:             getDisciplineUnit(disc),
+          discipline_id:    disc,
+          quality_flags:    normalizedValue == null ? ["unparsable"] : [],
         })
         .select().single();
       if (error) throw error;
@@ -343,6 +359,7 @@ export default function AthletePerfs({ athlete, competitions, myPerformances, my
         p_context:          compForm.context || null,
         p_idempotency_key:  crypto.randomUUID(),
         p_breakdown:        cleanBreakdown && Object.keys(cleanBreakdown).length ? cleanBreakdown : null,
+        p_unit:             getDisciplineUnit(event),
       });
       if (error) throw error;
 

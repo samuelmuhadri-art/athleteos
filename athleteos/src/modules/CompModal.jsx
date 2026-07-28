@@ -7,6 +7,7 @@ import { memo } from "react";
 import { MapPin, CalendarDays, Users, Trophy, X, Zap } from "lucide-react";
 import { getAthleteMetricsForWeek } from "../utils/chargeCalculations";
 import { getTypeConfig, daysUntil, formatDate, dateToWeek, athleteColor, generateResultAnalysis } from "./competitionsShared";
+import { parsePerf } from "../athlete/shared.js";
 import AddResultInline from "./AddResultInline";
 
 const CompModal = memo(({ competition, athletes, weeklyCharge, records, onClose, onAddResult }) => {
@@ -111,7 +112,14 @@ const CompModal = memo(({ competition, athletes, weeklyCharge, records, onClose,
                               <strong className="text-emerald-600">{result.result}</strong>
                               {(() => {
                                 const rec   = records.find((r) => r.athleteId === a.id && r.discipline === result.event);
-                                const isPR  = rec && rec.pr === result.result && rec.prDate === competition.date;
+                                // Tâche 12 : comparaison numérique (moteur central,
+                                // tâche 11) au lieu d'une égalité de chaînes brute —
+                                // "11.20" vs "11.2" ne matchait pas alors qu'ils
+                                // désignent la même performance.
+                                const recPrVal    = parsePerf(rec?.pr).value;
+                                const resultVal   = parsePerf(result.result).value;
+                                const isPR  = rec && recPrVal != null && resultVal != null
+                                  && recPrVal === resultVal && rec.prDate === competition.date;
                                 return isPR ? (
                                   <span className="ml-1.5 text-[10px] font-bold text-amber-600">🏆 Nouveau record !</span>
                                 ) : null;

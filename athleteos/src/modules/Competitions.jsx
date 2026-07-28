@@ -16,7 +16,7 @@ import ErrorState                   from "../components/ui/ErrorState";
 import { dispatchOutboxNotifications } from "../utils/notifications";
 import { initialsFromName } from "../utils/helpers.js";
 import { TYPE_CONFIG } from "./competitionsShared";
-import { resolveDisciplineId, getDisciplineHib } from "../domain/disciplines.js";
+import { resolveDisciplineId, getDisciplineHib, getDisciplineUnit } from "../domain/disciplines.js";
 import { parsePerf } from "../athlete/shared.js";
 import CompCard from "./CompCard";
 import CompModal from "./CompModal";
@@ -178,6 +178,7 @@ function Competitions() {
       p_higher_is_better: getDisciplineHib(event),
       p_context:          form.context || null,
       p_idempotency_key:  crypto.randomUUID(),
+      p_unit:             getDisciplineUnit(event),
     });
     if (error) throw error;
 
