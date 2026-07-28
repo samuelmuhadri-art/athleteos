@@ -15,7 +15,7 @@ import {
 } from "recharts";
 import {
   Activity, TrendingUp, TrendingDown, Minus,
-  AlertTriangle, Zap, BarChart2, BookOpen, ChevronDown,
+  AlertTriangle, Zap, BarChart2, BookOpen, ChevronDown, CheckCircle,
 } from "lucide-react";
 import { supabase }          from "../utils/supabaseClient";
 import { useAuth }           from "../context/AuthContext";
@@ -116,7 +116,7 @@ const BarTooltip = ({ active, payload, label }) => {
 const MetricCard = memo(({ icon: Icon, label, value, sub, color, trend }) => (
   <div className="card p-5 flex flex-col gap-3">
     <div className="flex items-start justify-between gap-2">
-      <span className="text-[11px] font-semibold uppercase tracking-wider leading-snug" style={{ color: "var(--c-text-3)" }}>{label}</span>
+      <span className="meta-text font-semibold uppercase tracking-wide leading-snug">{label}</span>
       <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0" style={{ background: `${color}18` }}>
         <Icon size={16} color={color} strokeWidth={2} />
       </div>
@@ -126,7 +126,7 @@ const MetricCard = memo(({ icon: Icon, label, value, sub, color, trend }) => (
       {sub && <span className="text-[12px] mb-0.5" style={{ color: "var(--c-text-3)" }}>{sub}</span>}
     </div>
     {trend !== undefined && trend !== null && (
-      <div className="flex items-center gap-1 text-[11px]" style={{ color: "var(--c-text-3)" }}>
+      <div className="flex items-center gap-1 text-[12px]" style={{ color: "var(--c-text-2)" }}>
         {trend > 0 ? <TrendingUp size={12} color="#E24B4A" /> :
          trend < 0 ? <TrendingDown size={12} color="#1D9E75" /> :
          <Minus size={12} />}
@@ -136,11 +136,63 @@ const MetricCard = memo(({ icon: Icon, label, value, sub, color, trend }) => (
   </div>
 ));
 
+const AlertSignals = memo(({ fatigueAlerts, acwrAlerts }) => {
+  const signalCount = fatigueAlerts.length + acwrAlerts.length;
+  return (
+    <section className="card overflow-hidden" aria-labelledby="charge-signals-title">
+      <div className="px-5 py-4 flex items-center justify-between gap-3 border-b" style={{ borderColor: "var(--c-border)" }}>
+        <div>
+          <h3 id="charge-signals-title" className="card-title">À examiner aujourd'hui</h3>
+          <p className="card-subtitle">Signaux automatiques à confirmer avec l'athlète.</p>
+        </div>
+        {signalCount > 0 && (
+          <span className="text-[12px] font-bold px-2.5 py-1 rounded-full chip chip-warning">
+            {signalCount} signal{signalCount > 1 ? "aux" : ""}
+          </span>
+        )}
+      </div>
+
+      {signalCount === 0 ? (
+        <div className="px-5 py-5 flex items-center gap-3">
+          <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: "rgba(29,158,117,0.12)" }}>
+            <CheckCircle size={17} color="#1D9E75" />
+          </div>
+          <p className="text-[13px] font-medium" style={{ color: "var(--c-text-2)" }}>
+            Aucun signal critique détecté sur la fatigue ou l'ACWR cette semaine.
+          </p>
+        </div>
+      ) : (
+        <div className="p-4 space-y-2">
+          {fatigueAlerts.map(({ athlete, metrics }) => (
+            <div key={`f-${athlete.id}`} className="flex items-center gap-3 rounded-xl px-4 py-3" style={{ background: "rgba(224,82,82,0.10)", border: "1px solid rgba(224,82,82,0.20)" }}>
+              <AlertTriangle size={15} color="#E24B4A" className="flex-shrink-0" />
+              <span className="text-[12px]" style={{ color: "#F19A9A" }}>
+                <strong>{athlete.name.split(" ")[0]}</strong> — Fatigue élevée ({metrics.fatigue}/100)
+              </span>
+            </div>
+          ))}
+          {acwrAlerts.map(({ athlete, metrics }) => (
+            <div key={`a-${athlete.id}`} className="flex items-center gap-3 rounded-xl px-4 py-3" style={{ background: "rgba(232,160,32,0.10)", border: "1px solid rgba(232,160,32,0.20)" }}>
+              <Activity size={15} color="#EF9F27" className="flex-shrink-0" />
+              <span className="text-[12px]" style={{ color: "#F0CB61" }}>
+                <strong>{athlete.name.split(" ")[0]}</strong> — ACWR élevé ({metrics.acwr.toFixed(2)}) — hors de la zone habituelle, à examiner
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+    </section>
+  );
+});
+
 const MethodologyPanel = memo(() => {
   const [open, setOpen] = useState(false);
   return (
     <div className="card overflow-hidden">
       <button
+        type="button"
+        aria-expanded={open}
+        aria-controls="charge-methodology-content"
         onClick={() => setOpen((v) => !v)}
         className="w-full px-5 py-3.5 flex items-center justify-between gap-3 hover:bg-[var(--c-surface-3)] transition-colors"
       >
@@ -151,10 +203,10 @@ const MethodologyPanel = memo(() => {
         <ChevronDown size={15} className={`transition-transform ${open ? "rotate-180" : ""}`} style={{ color: "var(--c-text-3)" }} />
       </button>
       {open && (
-        <div className="px-5 pb-5 pt-1 text-[11.5px] leading-relaxed space-y-2 border-t" style={{ color: "var(--c-text-2)", borderColor: "var(--c-border)" }}>
+        <div id="charge-methodology-content" className="px-5 pb-5 pt-3 text-[12px] leading-relaxed space-y-2 border-t" style={{ color: "var(--c-text-2)", borderColor: "var(--c-border)" }}>
           <p>
             La charge de chaque séance est calculée selon la méthode <strong>session-RPE</strong> :
-            {" "}<code className="px-1.5 py-0.5 rounded text-[11px]" style={{ background: "var(--c-surface-3)" }}>Durée (min) × RPE (0–10)</code>,
+            {" "}<code className="px-1.5 py-0.5 rounded text-[12px]" style={{ background: "var(--c-surface-3)" }}>Durée (min) × RPE (0–10)</code>,
             où le RPE est le ressenti d'effort de l'athlète noté juste après la séance
             (échelle de Borg CR10). Un coefficient par catégorie de séance ajuste ensuite cette valeur.
           </p>
@@ -176,7 +228,7 @@ const MethodologyPanel = memo(() => {
 // ─── Composant principal ──────────────────────────────────────────────────────
 function ChargeView() {
   const { clubId } = useAuth();
-  const CURRENT_WEEK = useMemo(() => getISOWeek(new Date()), []);
+  const CURRENT_WEEK = getISOWeek(new Date());
 
   const [athletes,             setAthletes]             = useState([]);
   const [weeklyCharge,         setWeeklyCharge]         = useState([]);
@@ -270,7 +322,7 @@ function ChargeView() {
     const avgLoad      = Math.round(allMetrics.reduce((s, m) => s + m.rawLoad, 0) / allMetrics.length);
     const avgACWR      = Math.round((allMetrics.reduce((s, m) => s + m.metrics.acwr, 0) / allMetrics.length) * 100) / 100;
     const topLoader    = [...allMetrics].sort((a, b) => b.rawLoad - a.rawLoad)[0];
-    const critFatigue  = allMetrics.filter((m) => m.metrics.fatigue > 70).length;
+    const critFatigue  = allMetrics.filter((m) => m.metrics.fatigue > 75).length;
     const avgLoadPrev  = athletes.length
       ? Math.round(athletes.reduce((s, a) => s + getRawLoad(weeklyCharge, a.id, CURRENT_WEEK - 1), 0) / athletes.length)
       : 0;
@@ -306,22 +358,20 @@ function ChargeView() {
   if (error)   return <ErrorState  message={error} onRetry={fetchAll} />;
 
   return (
-    <div className="p-6 max-w-7xl mx-auto space-y-6">
+    <div className="page-container py-4 md:py-6 max-w-7xl mx-auto space-y-5 md:space-y-6 animate-slide-up">
 
       <div>
-        <h2 className="text-[22px] font-bold tracking-tight" style={{ color: "var(--c-text-1)" }}>Charge & Fatigue</h2>
-        <p className="text-[13px] mt-0.5" style={{ color: "var(--c-text-3)" }}>
+        <h2 className="page-title">Charge & Fatigue</h2>
+        <p className="secondary-text mt-1">
           Semaine {CURRENT_WEEK} · Analyse dynamique du groupe · {athletes.length} athlète{athletes.length !== 1 ? "s" : ""}
         </p>
       </div>
 
-      <MethodologyPanel />
-
       {!hasAnyCharge ? (
         <div className="card p-16 text-center">
-          <BarChart2 size={40} className="mx-auto mb-3" style={{ color: "var(--c-text-4)" }} />
-          <p className="text-[15px] font-semibold" style={{ color: "var(--c-text-3)" }}>Aucune charge calculable pour l'instant</p>
-          <p className="text-[12px] mt-1 max-w-sm mx-auto" style={{ color: "var(--c-text-4)" }}>
+          <BarChart2 size={40} className="mx-auto mb-3" style={{ color: "var(--c-text-3)" }} />
+          <p className="text-[15px] font-semibold" style={{ color: "var(--c-text-2)" }}>Aucune charge calculable pour l'instant</p>
+          <p className="meta-text mt-1 max-w-sm mx-auto">
             La charge se calcule automatiquement dès qu'une séance a une durée renseignée
             et qu'un athlète a noté son RPE dans <strong>Planning</strong>.
           </p>
@@ -336,14 +386,16 @@ function ChargeView() {
             <MetricCard icon={AlertTriangle} label="Fatigue critique"      value={globalMetrics.critFatigue}        sub={`athlète${globalMetrics.critFatigue > 1 ? "s" : ""} > 75`} color={globalMetrics.critFatigue > 0 ? "#E24B4A" : "#1D9E75"} />
           </div>
 
+          <AlertSignals fatigueAlerts={fatigueAlerts} acwrAlerts={acwrAlerts} />
+
           {/* ── Tableau charge par athlète ───────────────────────────── */}
           <div className="card overflow-hidden">
             <div className="px-5 py-4 border-b flex items-center justify-between flex-wrap gap-2" style={{ borderColor: "var(--c-border)" }}>
               <div>
-                <h3 className="text-[14px] font-semibold" style={{ color: "var(--c-text-1)" }}>Charge calculée — Semaine {CURRENT_WEEK}</h3>
-                <p className="text-[11px] mt-0.5" style={{ color: "var(--c-text-3)" }}>Triée par charge décroissante · Basée sur durée × RPE</p>
+                <h3 className="card-title">Charge calculée — Semaine {CURRENT_WEEK}</h3>
+                <p className="card-subtitle mt-0.5">Triée par charge décroissante · Basée sur durée × RPE</p>
               </div>
-              <div className="flex items-center gap-3 text-[11px]">
+              <div className="flex items-center gap-3 text-[12px]">
                 {[
                   { color: "#1D9E75", label: "Optimal (< 320)"   },
                   { color: "#EF9F27", label: "Modéré (320–449)"  },
@@ -358,7 +410,7 @@ function ChargeView() {
             </div>
 
             {sortedByLoad.every((m) => m.rawLoad === 0) ? (
-              <div className="px-5 py-10 text-center text-[13px]" style={{ color: "var(--c-text-4)" }}>
+              <div className="px-5 py-10 text-center text-[13px]" style={{ color: "var(--c-text-3)" }}>
                 Aucun RPE renseigné pour la semaine {CURRENT_WEEK} — va dans Planning pour en saisir un.
               </div>
             ) : (
@@ -374,19 +426,19 @@ function ChargeView() {
                   return (
                     <div
                       key={athlete.id}
-                      className="flex items-center gap-4 cursor-pointer"
+                      className="flex items-center gap-4"
                       onMouseEnter={() => setHighlightedAthlete(athlete.id)}
                       onMouseLeave={() => setHighlightedAthlete(null)}
                       style={{ opacity: isHL ? 1 : 0.4, transition: "opacity 0.15s" }}
                     >
-                      <span className="text-[11px] font-bold w-4 flex-shrink-0 text-right" style={{ color: "var(--c-text-4)" }}>{i + 1}</span>
-                      <div className="w-8 h-8 rounded-full flex items-center justify-center text-white text-[10px] font-bold flex-shrink-0"
+                      <span className="text-[12px] font-bold w-4 flex-shrink-0 text-right" style={{ color: "var(--c-text-3)" }}>{i + 1}</span>
+                      <div className="w-9 h-9 rounded-full flex items-center justify-center text-white text-[12px] font-bold flex-shrink-0"
                         style={{ background: ATHLETE_COLORS[colorIdx] }}>
                         {athlete.avatar}
                       </div>
                       <div className="w-32 flex-shrink-0">
                         <p className="text-[13px] font-semibold truncate" style={{ color: "var(--c-text-1)" }}>{athlete.name.split(" ")[0]}</p>
-                        <p className="text-[10px] truncate" style={{ color: "var(--c-text-3)" }}>{athlete.mainDiscipline ?? "—"}</p>
+                        <p className="meta-text truncate">{athlete.mainDiscipline ?? "—"}</p>
                       </div>
                       <div className="flex-1 flex items-center gap-3">
                         <div className="flex-1 h-3 rounded-full overflow-hidden" style={{ background: "var(--c-surface-3)" }}>
@@ -394,20 +446,20 @@ function ChargeView() {
                         </div>
                         <span className="text-[13px] font-bold w-10 text-right" style={{ color }}>{rawLoad}</span>
                       </div>
-                      <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full whitespace-nowrap ${badge.cls}`}>
+                      <span className={`text-[12px] font-semibold px-2 py-0.5 rounded-full whitespace-nowrap ${badge.cls}`}>
                         {badge.dot} {badge.label}
                       </span>
                       <div className="w-16 text-right flex-shrink-0">
                         <p className="text-[12px] font-bold" style={{ color: metrics.acwr > 1.3 ? "#E24B4A" : metrics.acwr < 0.8 ? "#378ADD" : "#1D9E75" }}>
                           {metrics.acwr.toFixed(2)}
                         </p>
-                        <p className="text-[9px]" style={{ color: "var(--c-text-3)" }}>ACWR</p>
+                        <p className="meta-text">ACWR</p>
                       </div>
                       <div className="w-16 text-right flex-shrink-0">
                         <p className="text-[12px] font-bold" style={{ color: metrics.fatigue > 70 ? "#E24B4A" : metrics.fatigue > 45 ? "#EF9F27" : "#1D9E75" }}>
                           {metrics.fatigue}
                         </p>
-                        <p className="text-[9px]" style={{ color: "var(--c-text-3)" }}>Fatigue</p>
+                        <p className="meta-text">Fatigue</p>
                       </div>
                     </div>
                   );
@@ -420,18 +472,21 @@ function ChargeView() {
           {/* ── Courbes ACWR ─────────────────────────────────────────── */}
           <div className="card p-5">
             <div className="mb-4">
-              <h3 className="text-[14px] font-semibold" style={{ color: "var(--c-text-1)" }}>Évolution ACWR du groupe</h3>
-              <p className="text-[11px] mt-0.5" style={{ color: "var(--c-text-3)" }}>
+              <h3 className="card-title">Évolution ACWR du groupe</h3>
+              <p className="card-subtitle mt-0.5">
                 Une courbe par athlète · Zone optimale : 0.80 – 1.30 · Zone à surveiller : &gt; 1.50
               </p>
             </div>
             <div className="flex flex-wrap gap-3 mb-4">
               {athletes.map((a, i) => (
                 <button
+                  type="button"
                   key={a.id}
                   onMouseEnter={() => setHighlightedAthlete(a.id)}
                   onMouseLeave={() => setHighlightedAthlete(null)}
-                  className="flex items-center gap-1.5 text-[11px] font-medium px-2.5 py-1 rounded-lg transition-all"
+                  onFocus={() => setHighlightedAthlete(a.id)}
+                  onBlur={() => setHighlightedAthlete(null)}
+                  className="flex items-center gap-1.5 text-[12px] font-medium px-2.5 py-1.5 rounded-lg transition-all"
                   style={{
                     background: highlightedAthlete === a.id ? `${ATHLETE_COLORS[i % ATHLETE_COLORS.length]}18` : "transparent",
                     color: ATHLETE_COLORS[i % ATHLETE_COLORS.length],
@@ -445,7 +500,7 @@ function ChargeView() {
               ))}
             </div>
             {acwrSeries.length === 0 ? (
-              <div className="h-[300px] flex items-center justify-center text-[13px]" style={{ color: "var(--c-text-4)" }}>
+              <div className="h-[300px] flex items-center justify-center text-[13px]" style={{ color: "var(--c-text-3)" }}>
                 Pas encore assez de données pour tracer l'évolution
               </div>
             ) : (
@@ -453,12 +508,12 @@ function ChargeView() {
                 <ResponsiveContainer width="100%" height={300}>
                   <LineChart data={acwrSeries} margin={{ right: 16 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
-                    <XAxis dataKey="label" tick={{ fontSize: 10, fill: "rgba(255,255,255,0.35)" }} axisLine={false} tickLine={false} />
-                    <YAxis domain={[0.4, 1.8]} tick={{ fontSize: 10, fill: "rgba(255,255,255,0.35)" }} axisLine={false} tickLine={false} width={36} />
+                    <XAxis dataKey="label" tick={{ fontSize: 12, fill: "var(--c-text-3)" }} axisLine={false} tickLine={false} />
+                    <YAxis domain={[0.4, 1.8]} tick={{ fontSize: 12, fill: "var(--c-text-3)" }} axisLine={false} tickLine={false} width={36} />
                     <Tooltip content={<ChartTooltip />} />
-                    <ReferenceLine y={0.8} stroke="#1D9E75" strokeDasharray="5 3" strokeWidth={1.5} label={{ value: "0.80", position: "right", fontSize: 9, fill: "#1D9E75" }} />
-                    <ReferenceLine y={1.3} stroke="#EF9F27" strokeDasharray="5 3" strokeWidth={1.5} label={{ value: "1.30", position: "right", fontSize: 9, fill: "#EF9F27" }} />
-                    <ReferenceLine y={1.5} stroke="#E24B4A" strokeDasharray="3 2" strokeWidth={2}   label={{ value: "1.50 ⚠", position: "right", fontSize: 9, fill: "#E24B4A" }} />
+                    <ReferenceLine y={0.8} stroke="#1D9E75" strokeDasharray="5 3" strokeWidth={1.5} label={{ value: "0.80", position: "right", fontSize: 12, fill: "#1D9E75" }} />
+                    <ReferenceLine y={1.3} stroke="#EF9F27" strokeDasharray="5 3" strokeWidth={1.5} label={{ value: "1.30", position: "right", fontSize: 12, fill: "#EF9F27" }} />
+                    <ReferenceLine y={1.5} stroke="#E24B4A" strokeDasharray="3 2" strokeWidth={2}   label={{ value: "1.50 ⚠", position: "right", fontSize: 12, fill: "#E24B4A" }} />
                     {athletes.map((a, i) => {
                       const prenom = a.name.split(" ")[0];
                       const isHL   = highlightedAthlete === null || highlightedAthlete === a.id;
@@ -473,7 +528,7 @@ function ChargeView() {
                     })}
                   </LineChart>
                 </ResponsiveContainer>
-                <div className="flex items-center gap-4 mt-3 text-[10px] flex-wrap">
+                <div className="flex items-center gap-4 mt-3 text-[12px] flex-wrap">
                   <span className="flex items-center gap-1.5"><span className="w-8 h-0.5 inline-block rounded" style={{ background: "#1D9E75", borderTop: "2px dashed #1D9E75" }} /><span style={{ color: "var(--c-text-2)" }}>0.80 — Seuil bas</span></span>
                   <span className="flex items-center gap-1.5"><span className="w-8 h-0.5 inline-block rounded" style={{ background: "#EF9F27", borderTop: "2px dashed #EF9F27" }} /><span style={{ color: "var(--c-text-2)" }}>1.30 — Seuil haut</span></span>
                   <span className="flex items-center gap-1.5"><span className="w-8 h-0.5 inline-block rounded" style={{ background: "#E24B4A" }} /><span style={{ color: "var(--c-text-2)" }}>1.50 — Zone à surveiller</span></span>
@@ -486,8 +541,8 @@ function ChargeView() {
           {chargeBreakdown.length > 0 && breakdownCategories.length > 0 && (
             <div className="card p-5">
               <div className="mb-4">
-                <h3 className="text-[14px] font-semibold" style={{ color: "var(--c-text-1)" }}>Répartition des types de charge — Groupe</h3>
-                <p className="text-[11px] mt-0.5" style={{ color: "var(--c-text-3)" }}>
+                <h3 className="card-title">Répartition des types de charge — Groupe</h3>
+                <p className="card-subtitle mt-0.5">
                   6 dernières semaines · Calculé à partir des vraies séances (durée × RPE)
                 </p>
               </div>
@@ -505,10 +560,10 @@ function ChargeView() {
                     })}
                   </defs>
                   <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
-                  <XAxis dataKey="label" tick={{ fontSize: 10, fill: "rgba(255,255,255,0.35)" }} axisLine={false} tickLine={false} />
-                  <YAxis tick={{ fontSize: 10, fill: "rgba(255,255,255,0.35)" }} axisLine={false} tickLine={false} width={40} />
+                  <XAxis dataKey="label" tick={{ fontSize: 12, fill: "var(--c-text-3)" }} axisLine={false} tickLine={false} />
+                  <YAxis tick={{ fontSize: 12, fill: "var(--c-text-3)" }} axisLine={false} tickLine={false} width={40} />
                   <Tooltip content={<BarTooltip />} />
-                  <Legend wrapperStyle={{ fontSize: "11px", paddingTop: "12px" }} formatter={(v) => <span style={{ color: "var(--c-text-2)" }}>{blockColors(v).label ?? v}</span>} />
+                  <Legend wrapperStyle={{ fontSize: "12px", paddingTop: "12px" }} formatter={(v) => <span style={{ color: "var(--c-text-2)" }}>{blockColors(v).label ?? v}</span>} />
                   {breakdownCategories.map((cat) => (
                     <Area key={cat} dataKey={cat} name={blockColors(cat).label ?? cat} stackId="1"
                       stroke={blockColors(cat).border} fill={`url(#grad-${cat})`} strokeWidth={1.5}
@@ -519,35 +574,10 @@ function ChargeView() {
             </div>
           )}
 
-          {/* ── Alertes automatiques ─────────────────────────────────── */}
-          {(fatigueAlerts.length > 0 || acwrAlerts.length > 0) && (
-            <div className="card p-5">
-              <div className="flex items-center gap-2 mb-4">
-                <Zap size={15} color="#EF9F27" />
-                <h3 className="text-[14px] font-semibold" style={{ color: "var(--c-text-1)" }}>Signaux d'alerte automatiques</h3>
-              </div>
-              <div className="space-y-2">
-                {fatigueAlerts.map(({ athlete, metrics }) => (
-                  <div key={`f-${athlete.id}`} className="flex items-center gap-3 rounded-lg px-4 py-2.5" style={{ background: "rgba(224,82,82,0.10)", border: "1px solid rgba(224,82,82,0.20)" }}>
-                    <AlertTriangle size={14} color="#E24B4A" />
-                    <span className="text-[12px]" style={{ color: "#E05252" }}>
-                      <strong>{athlete.name.split(" ")[0]}</strong> — Fatigue élevée ({metrics.fatigue}/100)
-                    </span>
-                  </div>
-                ))}
-                {acwrAlerts.map(({ athlete, metrics }) => (
-                  <div key={`a-${athlete.id}`} className="flex items-center gap-3 rounded-lg px-4 py-2.5" style={{ background: "rgba(232,160,32,0.10)", border: "1px solid rgba(232,160,32,0.20)" }}>
-                    <Activity size={14} color="#EF9F27" />
-                    <span className="text-[12px]" style={{ color: "#E8A020" }}>
-                      <strong>{athlete.name.split(" ")[0]}</strong> — ACWR élevé ({metrics.acwr.toFixed(2)}) — hors de la zone habituelle, à examiner
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
         </>
       )}
+
+      <MethodologyPanel />
     </div>
   );
 }
