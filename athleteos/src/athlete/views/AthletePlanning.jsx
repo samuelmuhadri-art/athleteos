@@ -13,14 +13,12 @@
 //   - StatusBadge, boutons présence/RPE : passage en rgba() dark-safe.
 // ============================================================
 
-import { useState, useMemo, useCallback, useRef } from "react";
+import { useState, useMemo, useRef } from "react";
 import {
   Plus, ChevronLeft, ChevronRight, Clock, CalendarDays, CheckCircle,
 } from "lucide-react";
-import {
-  DAYS_SHORT, MONTHS_FR, CATEGORIES,
-  isSameDay, toLocalDateStr,
-} from "../shared";
+import { MONTHS_FR, CATEGORIES, isSameDay, toLocalDateStr } from "../shared";
+import { parseLocalDate } from "../../utils/helpers";
 import { cat, StatusBadge, rpeColor } from "./planningShared";
 import CreateSessionModal from "./CreateSessionModal";
 import SessionDetailModal from "./SessionDetailModal";
@@ -30,6 +28,145 @@ import SessionDetailModal from "./SessionDetailModal";
 // on garde ce point d'entrée même si la définition a été déplacée dans son
 // propre fichier.
 export { SessionDetailModal };
+
+function SessionCard({ session, athleteId, isPast = false, compact = false, onOpen, onStatusChange }) {
+  const c = cat(session.category);
+  const val = session.validations?.find(v => v.athleteId === athleteId);
+  const status = val?.status ?? "future";
+  const rpeNeeded = isPast && val?.rpe == null && status !== "none" && status !== "future";
+  const canSwipe = !compact && status !== "done" && status !== "none";
+  const [dragX, setDragX] = useState(0);
+  const [dragging, setDragging] = useState(false);
+  const touchStartX = useRef(0);
+  const justSwiped = useRef(false);
+
+  const openSession = () => {
+    if (justSwiped.current) {
+      justSwiped.current = false;
+      return;
+    }
+    onOpen(session);
+  };
+
+  const handleKeyDown = event => {
+    if (event.key === "Enter" || event.key === " ") {
+      event.preventDefault();
+      openSession();
+    }
+  };
+
+  const onTouchStart = event => {
+    if (!canSwipe) return;
+    touchStartX.current = event.touches[0].clientX;
+    justSwiped.current = false;
+    setDragging(true);
+  };
+
+  const onTouchMove = event => {
+    if (!canSwipe || !dragging) return;
+    const delta = event.touches[0].clientX - touchStartX.current;
+    if (delta > 0) setDragX(Math.min(delta, 110));
+  };
+
+  const onTouchEnd = () => {
+    if (!canSwipe) return;
+    setDragging(false);
+    if (dragX > 72) {
+      justSwiped.current = true;
+      onStatusChange(session.id, athleteId, "done");
+    }
+    setDragX(0);
+  };
+
+  if (compact) {
+    return (
+      <div
+        role="button"
+        tabIndex={0}
+        aria-label={`Ouvrir la séance ${session.title}`}
+        onClick={event => { event.stopPropagation(); onOpen(session); }}
+        onKeyDown={event => {
+          event.stopPropagation();
+          handleKeyDown(event);
+        }}
+        className="tap-feedback truncate"
+        style={{
+          display: "flex", alignItems: "center", gap: 8, minHeight: 32, padding: "6px 8px", borderRadius: 8,
+          fontSize: 12, fontWeight: 700, cursor: "pointer",
+          background: c.bg, color: c.text, borderLeft: `3px solid ${c.border}`,
+        }}
+      >
+        <span className="truncate" style={{ flex: 1 }}>{session.title}</span>
+        {status === "done" && <CheckCircle size={12} color="#3DBE8B" style={{ flexShrink: 0 }} aria-hidden="true" />}
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ position: "relative" }}>
+      {canSwipe && (
+        <div aria-hidden="true" style={{
+          position: "absolute", inset: 0, borderRadius: 16, display: "flex", alignItems: "center", paddingLeft: 20,
+          background: "linear-gradient(90deg, rgba(29,158,117,0.95), rgba(29,158,117,0.55))",
+          opacity: Math.min(1, dragX / 55), pointerEvents: "none",
+        }}>
+          <CheckCircle size={20} color="white" strokeWidth={2.5} />
+          <span style={{ color: "white", fontWeight: 800, fontSize: 13, marginLeft: 8 }}>Valider</span>
+        </div>
+      )}
+      <div
+        role="button"
+        tabIndex={0}
+        aria-label={`Ouvrir la séance ${session.title}`}
+        onClick={openSession}
+        onKeyDown={handleKeyDown}
+        onTouchStart={onTouchStart}
+        onTouchMove={onTouchMove}
+        onTouchEnd={onTouchEnd}
+        className="card card-hover tap-feedback"
+        style={{
+          overflow: "hidden", cursor: "pointer",
+          transform: dragX ? `translateX(${dragX}px)` : undefined,
+          transition: dragging ? "none" : "transform 0.25s cubic-bezier(0.16,1,0.3,1)",
+          ...(rpeNeeded ? { borderWidth: 2, borderColor: "#EAB308", boxShadow: "0 0 0 3px rgba(234,179,8,0.14)" } : {}),
+        }}
+      >
+        <div style={{ padding: "12px 16px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, background: c.bg, borderBottom: `1px solid ${c.border}40` }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0, flexWrap: "wrap" }}>
+            <span style={{ fontSize: 12, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.06em", padding: "4px 10px", borderRadius: 99, background: c.border, color: "#0A150F" }}>
+              {CATEGORIES.find(x => x.id === session.category)?.label ?? session.type}
+            </span>
+            {session.pdfUrl && (
+              <span style={{ fontSize: 12, fontWeight: 700, padding: "3px 8px", borderRadius: 99, background: "rgba(91,158,245,0.16)", color: "#8DBDFA" }}>
+                PDF
+              </span>
+            )}
+          </div>
+          <StatusBadge status={status} size="sm" />
+        </div>
+        <div style={{ padding: 16 }}>
+          <p style={{ fontSize: 15, fontWeight: 800, lineHeight: 1.35, marginBottom: 8, color: "var(--c-text-1)" }}>{session.title}</p>
+          <div style={{ display: "flex", alignItems: "center", gap: 12, fontSize: 12, color: "var(--c-text-2)", marginBottom: 8, flexWrap: "wrap" }}>
+            <span style={{ display: "flex", alignItems: "center", gap: 4 }}><Clock size={13} aria-hidden="true" /> {session.time}</span>
+            {session.durationMinutes && <span>{session.durationMinutes} min</span>}
+            {val?.rpe != null && <span style={{ fontWeight: 700, color: rpeColor(val.rpe).active }}>RPE {val.rpe}/10</span>}
+          </div>
+          {session.instructions && (
+            <p style={{ fontSize: 13, lineHeight: 1.5, color: "#F0CB61", background: "rgba(234,179,8,0.08)", borderRadius: 12, padding: "8px 12px", marginBottom: 8 }} className="line-clamp-2">
+              {session.instructions}
+            </p>
+          )}
+          {rpeNeeded && (
+            <p style={{ fontSize: 12, fontWeight: 700, color: "#F0CB61", display: "flex", alignItems: "center", gap: 8 }}>
+              <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#EAB308" }} className="animate-pulse-soft" />
+              Valide ta séance
+            </p>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // COMPOSANT PRINCIPAL — AthletePlanning
@@ -72,14 +209,14 @@ export default function AthletePlanning({
   }, [viewYear, viewMonth]);
 
   const weekDays = useMemo(() => {
-    const ref = selectedDate ?? today;
+    const ref = selectedDate;
     const dow = (ref.getDay() + 6) % 7;
     const mon = new Date(ref);
     mon.setDate(ref.getDate() - dow);
     return Array.from({ length: 7 }, (_, i) => {
       const d = new Date(mon); d.setDate(mon.getDate() + i); return d;
     });
-  }, [selectedDate]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [selectedDate]);
 
   const groupedAgenda = useMemo(() => {
     const sorted = [...sessions].filter(s => s.sessionDate).sort((a, b) => a.sessionDate.localeCompare(b.sessionDate));
@@ -109,186 +246,66 @@ export default function AthletePlanning({
     return `${mon.toLocaleDateString("fr-BE", { day: "numeric", month: "short" })} – ${sun.toLocaleDateString("fr-BE", { day: "numeric", month: "short" })}`;
   }, [viewMode, viewMonth, viewYear, weekDays]);
 
-  const SessionCard = useCallback(({ s, isPast = false, compact = false }) => {
-    const c   = cat(s.category);
-    const val = s.validations?.find(v => v.athleteId === athlete.id);
-    const st  = val?.status ?? "future";
-    const rpeNeeded = isPast && val?.rpe == null && st !== "none" && st !== "future";
-
-    // ── Swipe à droite pour valider en un geste, sans ouvrir la modale ──────
-    // Ne capture le geste que sur les cartes non-compactes et non déjà
-    // validées — inutile de re-swiper une séance déjà "faite".
-    const canSwipe = !compact && st !== "done" && st !== "none";
-    // Trouvé par le lint react-hooks/rules-of-hooks ajouté à la tâche 19 —
-    // SessionCard est un composant défini via useCallback (donc son
-    // identité change quand [athlete.id, onStatusChange] change), pas
-    // reconnu comme un vrai composant stable : à chaque changement
-    // d'identité, React le démonte/remonte et l'état de swipe ci-dessous
-    // (dragX/dragging) est perdu. Bug réel et pré-existant, pas corrigé
-    // ici (corriger proprement = extraire SessionCard en composant de haut
-    // niveau et faire remonter ses props — hors périmètre d'une tâche
-    // d'installation d'outillage de test, à traiter dans une tâche dédiée).
-    /* eslint-disable react-hooks/rules-of-hooks */
-    const [dragX, setDragX]     = useState(0);
-    const [dragging, setDragging] = useState(false);
-    const touchStartX = useRef(0);
-    const justSwiped  = useRef(false);
-    /* eslint-enable react-hooks/rules-of-hooks */
-
-    const onTouchStart = (e) => {
-      if (!canSwipe) return;
-      touchStartX.current = e.touches[0].clientX;
-      justSwiped.current = false;
-      setDragging(true);
-    };
-    const onTouchMove = (e) => {
-      if (!canSwipe || !dragging) return;
-      const dx = e.touches[0].clientX - touchStartX.current;
-      if (dx > 0) setDragX(Math.min(dx, 110));
-    };
-    const onTouchEnd = () => {
-      if (!canSwipe) return;
-      setDragging(false);
-      if (dragX > 72) {
-        justSwiped.current = true;
-        onStatusChange(s.id, athlete.id, "done");
-      }
-      setDragX(0);
-    };
-    const onCardClick = () => {
-      // Un swipe qui vient de valider ne doit pas aussi ouvrir la modale.
-      if (justSwiped.current) { justSwiped.current = false; return; }
-      setActiveSession(s);
-    };
-
-    if (compact) {
-      return (
-        <div onClick={e => { e.stopPropagation(); setActiveSession(s); }}
-          className="tap-feedback truncate"
-          style={{
-            display: "flex", alignItems: "center", gap: 6, padding: "4px 8px", borderRadius: 10,
-            fontSize: 9.5, fontWeight: 700, cursor: "pointer",
-            background: c.bg, color: c.text, borderLeft: `3px solid ${c.border}`,
-          }}>
-          <span className="truncate" style={{ flex: 1 }}>{s.title}</span>
-          {st === "done" && <CheckCircle size={9} color="#3DBE8B" style={{ flexShrink: 0 }} />}
-        </div>
-      );
-    }
-
-    return (
-      <div style={{ position: "relative" }}>
-        {canSwipe && (
-          <div style={{
-            position: "absolute", inset: 0, borderRadius: 16, display: "flex", alignItems: "center", paddingLeft: 20,
-            background: "linear-gradient(90deg, rgba(29,158,117,0.95), rgba(29,158,117,0.55))",
-            opacity: Math.min(1, dragX / 55), pointerEvents: "none",
-          }}>
-            <CheckCircle size={20} color="white" strokeWidth={2.5} />
-            <span style={{ color: "white", fontWeight: 800, fontSize: 13, marginLeft: 8 }}>Valider</span>
-          </div>
-        )}
-        <div onClick={onCardClick}
-          onTouchStart={onTouchStart} onTouchMove={onTouchMove} onTouchEnd={onTouchEnd}
-          className="card card-hover tap-feedback"
-          style={{
-            overflow: "hidden", cursor: "pointer",
-            transform: dragX ? `translateX(${dragX}px)` : undefined,
-            transition: dragging ? "none" : "transform 0.25s cubic-bezier(0.16,1,0.3,1)",
-            ...(rpeNeeded ? { borderWidth: 2, borderColor: "#EAB308", boxShadow: "0 0 0 3px rgba(234,179,8,0.14)" } : {}),
-          }}>
-        {/* En-tête coloré catégorie */}
-        <div style={{ padding: "10px 16px", display: "flex", alignItems: "center", justifyContent: "space-between", background: c.bg, borderBottom: `1.5px solid ${c.border}40` }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <span style={{ fontSize: 9.5, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.06em", padding: "3px 10px", borderRadius: 99, background: c.border, color: "#0A150F" }}>
-              {CATEGORIES.find(x => x.id === s.category)?.label ?? s.type}
-            </span>
-            {s.pdfUrl && (
-              <span style={{ fontSize: 9, fontWeight: 700, padding: "2px 7px", borderRadius: 99, background: "rgba(91,158,245,0.16)", color: "#5B9EF5" }}>
-                PDF
-              </span>
-            )}
-          </div>
-          <StatusBadge status={st} size="sm" />
-        </div>
-        {/* Corps */}
-        <div style={{ padding: "14px 16px" }}>
-          <p style={{ fontSize: 15, fontWeight: 800, lineHeight: 1.3, marginBottom: 6, color: "var(--c-text-1)" }}>{s.title}</p>
-          <div style={{ display: "flex", alignItems: "center", gap: 12, fontSize: 11.5, color: "var(--c-text-3)", marginBottom: 8 }}>
-            <span style={{ display: "flex", alignItems: "center", gap: 4 }}><Clock size={11} /> {s.time}</span>
-            {s.durationMinutes && <span>{s.durationMinutes} min</span>}
-            {val?.rpe != null && (
-              <span style={{ fontWeight: 700, color: rpeColor(val.rpe).active }}>RPE {val.rpe}/10</span>
-            )}
-          </div>
-          {s.instructions && (
-            <p style={{ fontSize: 11, color: "#F0CB61", background: "rgba(234,179,8,0.08)", borderRadius: 12, padding: "8px 12px", marginBottom: 8 }} className="line-clamp-2">
-              {s.instructions}
-            </p>
-          )}
-          {rpeNeeded && (
-            <p style={{ fontSize: 11, fontWeight: 700, color: "#F0CB61", display: "flex", alignItems: "center", gap: 6 }}>
-              <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#EAB308" }} className="animate-pulse-soft" />
-              Valide ta séance
-            </p>
-          )}
-        </div>
-        </div>
-      </div>
-    );
-  }, [athlete.id, onStatusChange]);
-
   // ══════════════════════════════════════════════════════════════════════════════
   return (
     <div className="flex flex-col h-full" style={{ background: "var(--c-bg)" }}>
 
-      {/* ── HEADER GLASSMORPHISM ─────────────────────────────────────────────── */}
-      <div className="header-glass px-3 md:px-5 py-3 flex items-center justify-between gap-2 flex-shrink-0 z-10">
-
-        <div className="flex items-center gap-1">
-          {viewMode !== "agenda" && (
-            <button onClick={viewMode === "month" ? prevMonth : prevWeek}
-              className="tap-feedback"
-              style={{ width: 32, height: 32, borderRadius: 12, display: "flex", alignItems: "center", justifyContent: "center", background: "none", border: "none", cursor: "pointer", color: "var(--c-text-2)" }}>
-              <ChevronLeft size={16} />
+      <header className="header-glass px-4 md:px-6 py-4 flex-shrink-0 z-10">
+        <div className="flex flex-col gap-4">
+          <div className="flex items-start justify-between gap-4">
+            <div className="min-w-0">
+              <h1 className="page-title">Mon planning</h1>
+              <p style={{ fontSize: 13, color: "var(--c-text-2)", marginTop: 4 }}>
+                Consulte et valide tes séances d’entraînement.
+              </p>
+            </div>
+            <button type="button" onClick={() => setShowCreate(true)} className="btn-primary" style={{ flexShrink: 0 }}>
+              <Plus size={16} aria-hidden="true" /><span className="hidden sm:inline">Planifier</span>
             </button>
-          )}
-          <p style={{ fontSize: 14, fontWeight: 800, padding: "0 4px", minWidth: 100, textAlign: "center", color: "var(--c-text-1)" }} className="truncate">
-            {navLabel}
-          </p>
-          {viewMode !== "agenda" && (
-            <button onClick={viewMode === "month" ? nextMonth : nextWeek}
-              className="tap-feedback"
-              style={{ width: 32, height: 32, borderRadius: 12, display: "flex", alignItems: "center", justifyContent: "center", background: "none", border: "none", cursor: "pointer", color: "var(--c-text-2)" }}>
-              <ChevronRight size={16} />
-            </button>
-          )}
-          {viewMode !== "agenda" && (
-            <button onClick={goToday}
-              style={{ padding: "4px 10px", borderRadius: 8, fontSize: 10, fontWeight: 700, border: "1px solid var(--c-border-strong)", color: "var(--c-text-3)", background: "none", cursor: "pointer", marginLeft: 4 }}>
-              Auj.
-            </button>
-          )}
-        </div>
-
-        <div className="flex items-center gap-1.5">
-          <div style={{ display: "flex", borderRadius: 12, overflow: "hidden", border: "1px solid var(--c-border-strong)" }}>
-            {[{ id: "agenda", label: "Liste" }, { id: "month", label: "Mois" }, { id: "week", label: "Sem." }].map(v => (
-              <button key={v.id} onClick={() => setViewMode(v.id)}
-                style={{
-                  padding: "6px 12px", fontSize: 10, fontWeight: 700, border: "none", cursor: "pointer",
-                  background: viewMode === v.id ? "#1D9E75" : "var(--c-surface-2)",
-                  color: viewMode === v.id ? "#0A150F" : "var(--c-text-3)",
-                }}>
-                {v.label}
-              </button>
-            ))}
           </div>
-          <button onClick={() => setShowCreate(true)} className="btn-primary" style={{ padding: "0 12px", minHeight: 34 }}>
-            <Plus size={14} /><span className="hidden sm:inline">Planifier</span>
-          </button>
+
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <div className="flex items-center gap-1 min-w-0">
+              {viewMode !== "agenda" && (
+                <button type="button" aria-label="Période précédente" onClick={viewMode === "month" ? prevMonth : prevWeek}
+                  className="tap-feedback"
+                  style={{ width: 44, height: 44, borderRadius: 12, display: "flex", alignItems: "center", justifyContent: "center", background: "var(--c-surface-2)", border: "1px solid var(--c-border)", cursor: "pointer", color: "var(--c-text-2)", flexShrink: 0 }}>
+                  <ChevronLeft size={18} aria-hidden="true" />
+                </button>
+              )}
+              <p style={{ fontSize: 15, fontWeight: 800, padding: "0 8px", minWidth: 0, flex: 1, textAlign: viewMode === "agenda" ? "left" : "center", color: "var(--c-text-1)" }} className="truncate">
+                {navLabel}
+              </p>
+              {viewMode !== "agenda" && (
+                <button type="button" aria-label="Période suivante" onClick={viewMode === "month" ? nextMonth : nextWeek}
+                  className="tap-feedback"
+                  style={{ width: 44, height: 44, borderRadius: 12, display: "flex", alignItems: "center", justifyContent: "center", background: "var(--c-surface-2)", border: "1px solid var(--c-border)", cursor: "pointer", color: "var(--c-text-2)", flexShrink: 0 }}>
+                  <ChevronRight size={18} aria-hidden="true" />
+                </button>
+              )}
+              {viewMode !== "agenda" && (
+                <button type="button" onClick={goToday}
+                  style={{ minHeight: 44, padding: "0 12px", borderRadius: 12, fontSize: 12, fontWeight: 700, border: "1px solid var(--c-border-strong)", color: "var(--c-text-2)", background: "var(--c-surface-2)", cursor: "pointer", marginLeft: 4 }}>
+                  <span className="hidden sm:inline">Aujourd’hui</span><span className="sm:hidden">Auj.</span>
+                </button>
+              )}
+            </div>
+
+            <div role="group" aria-label="Affichage du planning" style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", borderRadius: 12, overflow: "hidden", border: "1px solid var(--c-border-strong)" }}>
+              {[{ id: "agenda", label: "Liste" }, { id: "month", label: "Mois" }, { id: "week", label: "Semaine" }].map(view => (
+                <button key={view.id} type="button" onClick={() => setViewMode(view.id)} aria-pressed={viewMode === view.id}
+                  style={{
+                    minHeight: 44, padding: "0 14px", fontSize: 13, fontWeight: 700, border: "none", cursor: "pointer",
+                    background: viewMode === view.id ? "var(--c-accent)" : "var(--c-surface-2)",
+                    color: viewMode === view.id ? "#07130F" : "var(--c-text-2)",
+                  }}>
+                  {view.label}
+                </button>
+              ))}
+            </div>
+          </div>
         </div>
-      </div>
+      </header>
 
       {/* ══════════════════════════════════════════════════════════════════════
           VUE AGENDA
@@ -298,20 +315,20 @@ export default function AthletePlanning({
           {groupedAgenda.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-full gap-4 p-8">
               <div style={{ width: 64, height: 64, borderRadius: 20, background: "var(--c-surface-2)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                <CalendarDays size={28} color="var(--c-text-4)" strokeWidth={1.5} />
+                <CalendarDays size={28} color="var(--c-text-3)" strokeWidth={1.5} />
               </div>
               <div style={{ textAlign: "center" }}>
                 <p style={{ fontSize: 15, fontWeight: 700, color: "var(--c-text-2)" }}>Aucune séance planifiée</p>
-                <p style={{ fontSize: 12, color: "var(--c-text-4)", marginTop: 4 }}>Ton coach ou toi pouvez planifier des séances</p>
+                <p style={{ fontSize: 13, color: "var(--c-text-2)", marginTop: 4 }}>Ton coach ou toi pouvez planifier des séances</p>
               </div>
-              <button onClick={() => setShowCreate(true)} className="btn-primary">
+              <button type="button" onClick={() => setShowCreate(true)} className="btn-primary">
                 <Plus size={14} /> Planifier une séance
               </button>
             </div>
           ) : (
-            <div className="p-3 md:p-5 space-y-6">
+            <div className="p-4 md:p-6 space-y-6">
               {groupedAgenda.map(({ date, sessions: ds }) => {
-                const dateObj = new Date(date);
+                const dateObj = parseLocalDate(date);
                 const isToday = isSameDay(dateObj, today);
                 const isPast  = toLocalDateStr(dateObj) < toLocalDateStr(today);
                 return (
@@ -322,25 +339,25 @@ export default function AthletePlanning({
                         background: isToday ? "linear-gradient(135deg, #1D9E75, #16826C)" : "var(--c-surface-2)",
                         border: isToday ? "none" : "1px solid var(--c-border)",
                       }}>
-                        <span style={{ fontSize: 9, fontWeight: 800, textTransform: "uppercase", lineHeight: 1, color: isToday ? "rgba(255,255,255,0.75)" : "var(--c-text-3)" }}>
+                        <span style={{ fontSize: 12, fontWeight: 800, textTransform: "uppercase", lineHeight: 1, color: isToday ? "rgba(255,255,255,0.82)" : "var(--c-text-2)" }}>
                           {dateObj.toLocaleDateString("fr-BE", { weekday: "short" }).replace(".", "")}
                         </span>
-                        <span style={{ fontSize: 18, fontWeight: 800, lineHeight: 1.2, color: isToday ? "white" : (isPast ? "var(--c-text-4)" : "var(--c-text-1)") }}>
+                        <span style={{ fontSize: 18, fontWeight: 800, lineHeight: 1.2, color: isToday ? "white" : (isPast ? "var(--c-text-3)" : "var(--c-text-1)") }}>
                           {dateObj.getDate()}
                         </span>
                       </div>
                       <div>
-                        <p style={{ fontSize: 13, fontWeight: 800, color: isToday ? "#4DC9A0" : (isPast ? "var(--c-text-4)" : "var(--c-text-1)") }}>
+                        <p style={{ fontSize: 14, fontWeight: 800, color: isToday ? "#7BD8B4" : (isPast ? "var(--c-text-2)" : "var(--c-text-1)") }}>
                           {isToday ? "Aujourd'hui" : dateObj.toLocaleDateString("fr-BE", { weekday: "long", day: "numeric", month: "long" })}
                         </p>
-                        <p style={{ fontSize: 10.5, color: "var(--c-text-3)", marginTop: 2 }}>
+                        <p style={{ fontSize: 12, color: "var(--c-text-2)", marginTop: 2 }}>
                           {ds.length} séance{ds.length > 1 ? "s" : ""}
                         </p>
                       </div>
                     </div>
-                    <div style={{ marginLeft: 16, paddingLeft: 44, borderLeft: "2px solid var(--c-border)" }} className="space-y-2.5">
+                    <div style={{ marginLeft: 16, paddingLeft: 24, borderLeft: "2px solid var(--c-border)" }} className="space-y-3">
                       {ds.sort((a, b) => (a.time ?? "").localeCompare(b.time ?? "")).map(s => (
-                        <SessionCard key={s.id} s={s} isPast={isPast} />
+                        <SessionCard key={s.id} session={s} athleteId={athlete.id} isPast={isPast} onOpen={setActiveSession} onStatusChange={onStatusChange} />
                       ))}
                     </div>
                   </div>
@@ -355,10 +372,10 @@ export default function AthletePlanning({
           VUE MOIS
          ══════════════════════════════════════════════════════════════════════ */}
       {viewMode === "month" && (
-        <div className="flex-1 overflow-y-auto p-3 md:p-4">
+        <div className="flex-1 overflow-y-auto p-4 md:p-6">
           <div className="grid grid-cols-7 mb-2">
             {["L", "M", "M", "J", "V", "S", "D"].map((d, i) => (
-              <div key={i} style={{ textAlign: "center", fontSize: 9.5, fontWeight: 800, color: "var(--c-text-4)", textTransform: "uppercase", letterSpacing: "0.07em", padding: "6px 0" }}>
+              <div key={i} style={{ textAlign: "center", fontSize: 12, fontWeight: 800, color: "var(--c-text-2)", textTransform: "uppercase", letterSpacing: "0.07em", padding: "8px 0" }}>
                 {d}
               </div>
             ))}
@@ -372,8 +389,16 @@ export default function AthletePlanning({
               const isSel   = selectedDate && isSameDay(date, selectedDate);
 
               return (
-                <div key={idx}
+                <div key={idx} role="button" tabIndex={0}
+                  aria-label={`${date.toLocaleDateString("fr-BE", { weekday: "long", day: "numeric", month: "long" })}, ${ds.length} séance${ds.length > 1 ? "s" : ""}`}
                   onClick={() => { setSelectedDate(date); if (window.innerWidth < 768) setViewMode("week"); }}
+                  onKeyDown={event => {
+                    if (event.key === "Enter" || event.key === " ") {
+                      event.preventDefault();
+                      setSelectedDate(date);
+                      if (window.innerWidth < 768) setViewMode("week");
+                    }
+                  }}
                   className="tap-feedback"
                   style={{
                     minHeight: 60, borderRadius: 14, padding: 6, cursor: "pointer",
@@ -385,23 +410,23 @@ export default function AthletePlanning({
                     <span style={{
                       fontSize: 12, fontWeight: 800, width: 24, height: 24, borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
                       background: isToday ? "linear-gradient(135deg, #1D9E75, #16826C)" : "transparent",
-                      color: isToday ? "white" : (cur ? "var(--c-text-1)" : "var(--c-text-4)"),
+                      color: isToday ? "white" : (cur ? "var(--c-text-1)" : "var(--c-text-3)"),
                     }}>
                       {date.getDate()}
                     </span>
                     {ds.length > 0 && (
                       <div className="md:hidden flex flex-wrap gap-0.5 justify-end mt-1">
                         {ds.slice(0, 3).map(s => (
-                          <div key={s.id} style={{ width: 6, height: 6, borderRadius: "50%", background: cat(s.category).border }}
+                          <button key={s.id} type="button" aria-label={`Ouvrir ${s.title}`} style={{ width: 12, height: 12, borderRadius: "50%", background: cat(s.category).border, border: "none", padding: 0 }}
                             onClick={e => { e.stopPropagation(); setActiveSession(s); }} />
                         ))}
                       </div>
                     )}
                   </div>
                   <div className="hidden md:block space-y-0.5">
-                    {ds.slice(0, 3).map(s => <SessionCard key={s.id} s={s} compact />)}
+                    {ds.slice(0, 3).map(s => <SessionCard key={s.id} session={s} athleteId={athlete.id} compact onOpen={setActiveSession} onStatusChange={onStatusChange} />)}
                     {ds.length > 3 && (
-                      <p style={{ fontSize: 9, fontWeight: 700, color: "var(--c-text-4)", padding: "0 4px" }}>+{ds.length - 3}</p>
+                      <p style={{ fontSize: 12, fontWeight: 700, color: "var(--c-text-2)", padding: "4px" }}>+{ds.length - 3}</p>
                     )}
                   </div>
                 </div>
@@ -422,7 +447,7 @@ export default function AthletePlanning({
                   </span>
                   {selectedDate.toLocaleDateString("fr-BE", { weekday: "long", day: "numeric", month: "long" })}
                 </p>
-                {ds.map(s => <SessionCard key={s.id} s={s} isPast={isPast} />)}
+                {ds.map(s => <SessionCard key={s.id} session={s} athleteId={athlete.id} isPast={isPast} onOpen={setActiveSession} onStatusChange={onStatusChange} />)}
               </div>
             );
           })()}
@@ -446,7 +471,7 @@ export default function AthletePlanning({
                     flexShrink: 0, display: "flex", flexDirection: "column", alignItems: "center", gap: 2, width: 44, padding: "10px 0", borderRadius: 16, border: "none", cursor: "pointer",
                     background: isToday ? "linear-gradient(135deg, #1D9E75, #16826C)" : isSel ? "var(--c-surface-3)" : "transparent",
                   }}>
-                  <span style={{ fontSize: 9, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: (isToday || isSel) ? "rgba(255,255,255,0.7)" : "var(--c-text-4)" }}>
+                  <span style={{ fontSize: 12, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: (isToday || isSel) ? "rgba(255,255,255,0.82)" : "var(--c-text-2)" }}>
                     {["L", "M", "M", "J", "V", "S", "D"][i]}
                   </span>
                   <span style={{ fontSize: 18, fontWeight: 800, lineHeight: 1.2, color: (isToday || isSel) ? "white" : "var(--c-text-1)" }}>
@@ -458,7 +483,7 @@ export default function AthletePlanning({
             })}
           </div>
 
-          <div className="flex-1 overflow-y-auto p-3 space-y-2.5">
+          <div className="flex-1 overflow-y-auto p-4 md:p-6 space-y-3">
             {(() => {
               const key     = toLocalDateStr(selectedDate ?? today);
               const ds      = (sessionsByDate[key] ?? []).sort((a, b) => (a.time ?? "").localeCompare(b.time ?? ""));
@@ -468,16 +493,16 @@ export default function AthletePlanning({
               if (ds.length === 0) return (
                 <div className="flex flex-col items-center justify-center py-16 gap-3">
                   <div style={{ width: 56, height: 56, borderRadius: 20, background: "var(--c-surface-2)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                    <CalendarDays size={24} color="var(--c-text-4)" strokeWidth={1.5} />
+                    <CalendarDays size={24} color="var(--c-text-3)" strokeWidth={1.5} />
                   </div>
                   <p style={{ fontSize: 13, fontWeight: 700, color: "var(--c-text-3)" }}>Repos ce jour</p>
-                  <button onClick={() => setShowCreate(true)} style={{ fontSize: 12, fontWeight: 700, color: "#4DC9A0", background: "none", border: "none", cursor: "pointer" }}>
+                  <button type="button" onClick={() => setShowCreate(true)} style={{ minHeight: 44, padding: "0 12px", fontSize: 13, fontWeight: 700, color: "#7BD8B4", background: "none", border: "none", cursor: "pointer" }}>
                     + Planifier une séance
                   </button>
                 </div>
               );
 
-              return ds.map(s => <SessionCard key={s.id} s={s} isPast={isPast} />);
+              return ds.map(s => <SessionCard key={s.id} session={s} athleteId={athlete.id} isPast={isPast} onOpen={setActiveSession} onStatusChange={onStatusChange} />);
             })()}
           </div>
         </div>

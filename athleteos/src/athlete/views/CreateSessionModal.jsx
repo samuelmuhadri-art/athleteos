@@ -9,6 +9,7 @@ import { Plus, X, FileText, Users, AlertCircle, CheckCircle, Zap } from "lucide-
 import { supabase } from "../../utils/supabaseClient";
 import { notifyCoachMessage, alertAthleteSession } from "../../utils/notifications";
 import { CATEGORIES, dateToISOWeek, dateToDayName, toLocalDateStr } from "../shared";
+import { parseLocalDate } from "../../utils/helpers";
 import { cat } from "./planningShared";
 
 const PDF_MAX_BYTES = 30 * 1024 * 1024; // aligné sur file_size_limit du bucket session-pdfs
@@ -38,9 +39,10 @@ const CreateSessionModal = memo(({ athlete, allAthletes, clubId, createdBy, coac
   }));
 
   const c = cat(form.category);
-  const labelStyle = { display: "block", fontSize: 10.5, fontWeight: 700, color: "var(--c-text-3)", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 8 };
+  const labelStyle = { display: "block", fontSize: 12, fontWeight: 700, color: "var(--c-text-2)", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 8 };
 
-  const handleSubmit = async () => {
+  const handleSubmit = async event => {
+    event?.preventDefault();
     if (!form.title.trim()) return;
     setSaving(true); setErr(null);
     try {
@@ -70,7 +72,7 @@ const CreateSessionModal = memo(({ athlete, allAthletes, clubId, createdBy, coac
       );
       await alertAthleteSession(clubId, athlete, { title: form.title, sessionDate: form.sessionDate });
       if (coachUserId) notifyCoachMessage(coachUserId, athlete.name,
-        `${athlete.name} a planifié "${form.title}" le ${new Date(form.sessionDate).toLocaleDateString("fr-BE", { day: "numeric", month: "long" })}`
+        `${athlete.name} a planifié "${form.title}" le ${parseLocalDate(form.sessionDate).toLocaleDateString("fr-BE", { day: "numeric", month: "long" })}`
       ).catch(console.warn);
       onCreated(); onClose();
     } catch (e) { setErr(e.message ?? "Erreur"); setSaving(false); }
@@ -85,7 +87,8 @@ const CreateSessionModal = memo(({ athlete, allAthletes, clubId, createdBy, coac
   return createPortal(
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4 modal-backdrop"
       onClick={e => e.target === e.currentTarget && !saving && onClose()}>
-      <div className="rounded-t-3xl sm:rounded-3xl shadow-2xl w-full sm:max-w-md max-h-[95vh] flex flex-col overflow-hidden modal-content"
+      <form onSubmit={handleSubmit} role="dialog" aria-modal="true" aria-labelledby="create-session-title"
+        className="rounded-t-3xl sm:rounded-3xl shadow-2xl w-full sm:max-w-md max-h-[95vh] flex flex-col overflow-hidden modal-content"
         style={{ background: "var(--c-surface)" }}>
 
         {/* Poignée mobile */}
@@ -99,18 +102,18 @@ const CreateSessionModal = memo(({ athlete, allAthletes, clubId, createdBy, coac
           <div>
             <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full mb-2"
               style={{ background: `${c.border}25`, border: `1px solid ${c.border}40` }}>
-              <Zap size={10} style={{ color: c.border }} />
-              <span style={{ fontSize: 10, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.07em", color: c.text }}>
+              <Zap size={14} style={{ color: c.border }} aria-hidden="true" />
+              <h2 id="create-session-title" style={{ fontSize: 15, fontWeight: 800, color: c.text }}>
                 Planifier une séance
-              </span>
+              </h2>
             </div>
             <p style={{ fontSize: 12, fontWeight: 500, color: "var(--c-text-2)" }}>
               Ton coach sera notifié automatiquement
             </p>
           </div>
-          <button onClick={onClose} disabled={saving}
-            style={{ padding: 8, borderRadius: 10, background: "rgba(255,255,255,0.06)", border: "none", cursor: "pointer", flexShrink: 0 }}>
-            <X size={18} style={{ color: c.text }} />
+          <button type="button" aria-label="Fermer" onClick={onClose} disabled={saving}
+            style={{ width: 44, height: 44, borderRadius: 12, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(255,255,255,0.06)", border: "1px solid var(--c-border)", cursor: "pointer", flexShrink: 0 }}>
+            <X size={18} style={{ color: c.text }} aria-hidden="true" />
           </button>
         </div>
 
@@ -118,7 +121,7 @@ const CreateSessionModal = memo(({ athlete, allAthletes, clubId, createdBy, coac
         <div className="flex-1 overflow-y-auto px-6 py-5 space-y-5">
 
           {err && (
-            <div style={{ display: "flex", alignItems: "flex-start", gap: 10, background: "rgba(239,107,107,0.10)", border: "1px solid rgba(239,107,107,0.25)", borderRadius: 14, padding: "12px 14px" }}>
+            <div role="alert" style={{ display: "flex", alignItems: "flex-start", gap: 10, background: "rgba(239,107,107,0.10)", border: "1px solid rgba(239,107,107,0.25)", borderRadius: 14, padding: "12px 14px" }}>
               <AlertCircle size={14} color="#F19A9A" style={{ marginTop: 2, flexShrink: 0 }} />
               <p style={{ fontSize: 12, color: "#F19A9A" }}>{err}</p>
             </div>
@@ -126,8 +129,8 @@ const CreateSessionModal = memo(({ athlete, allAthletes, clubId, createdBy, coac
 
           {/* Titre */}
           <div>
-            <label style={labelStyle}>Titre *</label>
-            <input className="input-premium" placeholder="Ex: Footing récup, Technique saut…"
+            <label htmlFor="session-title" style={labelStyle}>Titre *</label>
+            <input id="session-title" className="input-premium" placeholder="Ex: Footing récup, Technique saut…" required autoFocus
               value={form.title} onChange={e => set("title", e.target.value)} />
           </div>
 
@@ -139,10 +142,10 @@ const CreateSessionModal = memo(({ athlete, allAthletes, clubId, createdBy, coac
                 const cc  = cat(id);
                 const sel = form.category === id;
                 return (
-                  <button key={id} onClick={() => set("category", id)}
+                  <button key={id} type="button" aria-pressed={sel} onClick={() => set("category", id)}
                     className="tap-feedback"
                     style={{
-                      padding: "7px 13px", borderRadius: 12, fontSize: 12, fontWeight: 700,
+                      minHeight: 44, padding: "8px 13px", borderRadius: 12, fontSize: 13, fontWeight: 700,
                       border: `1.5px solid ${sel ? cc.border : `${cc.border}40`}`,
                       background: sel ? cc.border : cc.bg,
                       color: sel ? "#0A150F" : cc.text,
@@ -159,29 +162,29 @@ const CreateSessionModal = memo(({ athlete, allAthletes, clubId, createdBy, coac
           {/* Date + Heure */}
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label style={labelStyle}>Date *</label>
-              <input type="date" className="input-premium" value={form.sessionDate}
+              <label htmlFor="session-date" style={labelStyle}>Date *</label>
+              <input id="session-date" type="date" className="input-premium" value={form.sessionDate} required
                 onChange={e => set("sessionDate", e.target.value)} />
             </div>
             <div>
-              <label style={labelStyle}>Heure</label>
-              <input type="time" className="input-premium" value={form.time}
+              <label htmlFor="session-time" style={labelStyle}>Heure</label>
+              <input id="session-time" type="time" className="input-premium" value={form.time}
                 onChange={e => set("time", e.target.value)} />
             </div>
           </div>
 
           {/* Durée */}
           <div>
-            <label style={labelStyle}>Durée (min)</label>
-            <input type="number" min="5" step="5" className="input-premium"
+            <label htmlFor="session-duration" style={labelStyle}>Durée (min)</label>
+            <input id="session-duration" type="number" min="5" step="5" className="input-premium"
               value={form.durationMinutes}
               onChange={e => set("durationMinutes", Number(e.target.value))} />
           </div>
 
           {/* Description */}
           <div>
-            <label style={labelStyle}>Description</label>
-            <textarea className="input-premium resize-none" rows={2}
+            <label htmlFor="session-description" style={labelStyle}>Description</label>
+            <textarea id="session-description" className="input-premium resize-none" rows={3}
               placeholder="Objectifs, détails…"
               value={form.description} onChange={e => set("description", e.target.value)} />
           </div>
@@ -195,8 +198,8 @@ const CreateSessionModal = memo(({ athlete, allAthletes, clubId, createdBy, coac
               </div>
               <div style={{ flex: 1, minWidth: 0 }}>
                 {pdfFile
-                  ? <p style={{ fontSize: 12, fontWeight: 600, color: "var(--c-text-1)" }} className="truncate">{pdfFile.name}</p>
-                  : <p style={{ fontSize: 12, color: "var(--c-text-3)" }}>Appuie pour joindre un PDF</p>}
+                  ? <p style={{ fontSize: 13, fontWeight: 600, color: "var(--c-text-1)" }} className="truncate">{pdfFile.name}</p>
+                  : <p style={{ fontSize: 13, color: "var(--c-text-2)" }}>Appuie pour joindre un PDF</p>}
               </div>
               <input type="file" accept="application/pdf" className="sr-only"
                 onChange={e => pickPdf(e.target.files?.[0] ?? null)} />
@@ -206,20 +209,20 @@ const CreateSessionModal = memo(({ athlete, allAthletes, clubId, createdBy, coac
           {/* Inviter athlètes */}
           {others.length > 0 && (
             <div>
-              <label style={labelStyle}><Users size={11} style={{ display: "inline", marginRight: 5 }} />Inviter d'autres athlètes</label>
+              <label style={labelStyle}><Users size={14} style={{ display: "inline", marginRight: 5 }} aria-hidden="true" />Inviter d'autres athlètes</label>
               <div className="flex flex-wrap gap-2">
                 {others.map(a => {
                   const sel = form.invitedAthletes.includes(a.id);
                   return (
-                    <button key={a.id} onClick={() => toggleInv(a.id)}
+                    <button key={a.id} type="button" aria-pressed={sel} onClick={() => toggleInv(a.id)}
                       className="tap-feedback"
                       style={{
-                        display: "flex", alignItems: "center", gap: 8, padding: "8px 12px", borderRadius: 12,
-                        fontSize: 12, fontWeight: 600, border: `1.5px solid ${sel ? "#1D9E75" : "var(--c-border-strong)"}`,
+                        minHeight: 44, display: "flex", alignItems: "center", gap: 8, padding: "8px 12px", borderRadius: 12,
+                        fontSize: 13, fontWeight: 600, border: `1.5px solid ${sel ? "#1D9E75" : "var(--c-border-strong)"}`,
                         background: sel ? "rgba(29,158,117,0.14)" : "var(--c-surface-2)",
                         color: sel ? "#7BD8B4" : "var(--c-text-2)", cursor: "pointer",
                       }}>
-                      <div style={{ width: 22, height: 22, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", color: "white", fontSize: 8, fontWeight: 800, background: sel ? "#1D9E75" : "var(--c-surface-3)" }}>
+                      <div style={{ width: 24, height: 24, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", color: "white", fontSize: 12, fontWeight: 800, background: sel ? "#1D9E75" : "var(--c-surface-3)" }}>
                         {(a.name?.[0] ?? "?").toUpperCase()}
                       </div>
                       {a.name.split(" ")[0]}
@@ -234,14 +237,14 @@ const CreateSessionModal = memo(({ athlete, allAthletes, clubId, createdBy, coac
 
         {/* Footer */}
         <div className="px-6 py-4 flex items-center justify-between gap-3 flex-shrink-0" style={{ borderTop: "1px solid var(--c-border)" }}>
-          <button onClick={onClose} disabled={saving} className="btn-secondary">Annuler</button>
-          <button onClick={handleSubmit} disabled={!form.title.trim() || saving} className="btn-primary">
+          <button type="button" onClick={onClose} disabled={saving} className="btn-secondary">Annuler</button>
+          <button type="submit" disabled={!form.title.trim() || saving} className="btn-primary">
             {saving
               ? <><div className="loader-ring loader-ring-sm" />Création…</>
               : <><Plus size={15} />Planifier</>}
           </button>
         </div>
-      </div>
+      </form>
     </div>,
     document.body
   );

@@ -36,7 +36,7 @@ export function StatusBadge({ status, size = "sm" }) {
     future:  { label: "Prévue",    bg: "var(--c-surface-3)",     color: "var(--c-text-3)", dot: "#5B9EF5" },
   };
   const s = cfg[status] ?? cfg.future;
-  const px = size === "sm" ? "px-2 py-0.5 text-[10px]" : "px-3 py-1 text-[11px]";
+  const px = size === "sm" ? "px-2 py-1 text-xs" : "px-3 py-1.5 text-xs";
   return (
     <span className={`inline-flex items-center gap-1.5 font-bold rounded-full ${px}`}
       style={{ background: s.bg, color: s.color }}>

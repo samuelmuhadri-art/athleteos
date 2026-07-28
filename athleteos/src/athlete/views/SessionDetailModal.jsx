@@ -11,6 +11,7 @@ import { X, ChevronRight, Users, FileText, Star } from "lucide-react";
 import { CATEGORIES } from "../shared";
 import { cat, StatusBadge, rpeColor } from "./planningShared";
 import { openSessionPdf } from "../../utils/storage";
+import { parseLocalDate } from "../../utils/helpers";
 
 const SessionDetailModal = memo(({ session, athlete, allAthletes, onClose, onSetStatus, onSetRpe, onSetFeeling, onSetComment }) => {
   const c   = cat(session.category);
@@ -18,14 +19,14 @@ const SessionDetailModal = memo(({ session, athlete, allAthletes, onClose, onSet
   const [comment, setComment] = useState(val?.comment ?? "");
 
   const dateStr = session.sessionDate
-    ? new Date(session.sessionDate).toLocaleDateString("fr-BE", {
+    ? parseLocalDate(session.sessionDate.slice(0, 10)).toLocaleDateString("fr-BE", {
         weekday: "long", day: "numeric", month: "long", year: "numeric",
       })
     : session.day;
 
   const status  = val?.status ?? null;
   const hasPerf = status === "done" || status === "partial";
-  const labelStyle = { fontSize: 10.5, fontWeight: 700, color: "var(--c-text-3)", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 12, display: "block" };
+  const labelStyle = { fontSize: 12, fontWeight: 700, color: "var(--c-text-2)", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 12, display: "block" };
 
   const presenceOpts = [
     { id: "done",    label: "Réalisée",  activeBg: "rgba(61,190,139,0.16)",  activeBorder: "#3DBE8B", activeText: "#7BD8B4" },
@@ -39,7 +40,8 @@ const SessionDetailModal = memo(({ session, athlete, allAthletes, onClose, onSet
   return createPortal(
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4 modal-backdrop"
       onClick={e => e.target === e.currentTarget && onClose()}>
-      <div className="rounded-t-3xl sm:rounded-3xl shadow-2xl w-full max-w-lg max-h-[95vh] flex flex-col overflow-hidden modal-content"
+      <div role="dialog" aria-modal="true" aria-labelledby="session-detail-title"
+        className="rounded-t-3xl sm:rounded-3xl shadow-2xl w-full max-w-lg max-h-[95vh] flex flex-col overflow-hidden modal-content"
         style={{ background: "var(--c-surface)" }}>
 
         {/* Poignée mobile */}
@@ -52,24 +54,24 @@ const SessionDetailModal = memo(({ session, athlete, allAthletes, onClose, onSet
           style={{ background: c.bg, borderBottom: `2px solid ${c.border}` }}>
           <div className="flex-1 min-w-0">
             <span style={{
-              fontSize: 9.5, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.07em",
+              fontSize: 12, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.07em",
               padding: "4px 10px", borderRadius: 99, display: "inline-flex", alignItems: "center", gap: 4,
               marginBottom: 10, background: c.border, color: "#0A150F",
             }}>
               {CATEGORIES.find(x => x.id === session.category)?.label ?? session.type}
             </span>
-            <h3 style={{ fontSize: 20, fontWeight: 800, lineHeight: 1.2, color: c.text }}>
+            <h2 id="session-detail-title" style={{ fontSize: 20, fontWeight: 800, lineHeight: 1.2, color: c.text }}>
               {session.title}
-            </h3>
+            </h2>
             <p style={{ fontSize: 12, marginTop: 8, fontWeight: 500, color: "var(--c-text-2)", display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
               <span>{dateStr}</span>
               {session.time && <span>· {session.time}</span>}
               {session.durationMinutes && <span>· {session.durationMinutes} min</span>}
             </p>
           </div>
-          <button onClick={onClose}
-            style={{ padding: 8, borderRadius: 10, background: "rgba(255,255,255,0.06)", border: "none", cursor: "pointer", flexShrink: 0 }}>
-            <X size={18} style={{ color: c.text }} />
+          <button type="button" aria-label="Fermer" onClick={onClose}
+            style={{ width: 44, height: 44, borderRadius: 12, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(255,255,255,0.06)", border: "1px solid var(--c-border)", cursor: "pointer", flexShrink: 0 }}>
+            <X size={18} style={{ color: c.text }} aria-hidden="true" />
           </button>
         </div>
 
@@ -87,7 +89,7 @@ const SessionDetailModal = memo(({ session, athlete, allAthletes, onClose, onSet
           {session.instructions && (
             <div style={{ borderRadius: 16, overflow: "hidden", border: "1px solid rgba(234,179,8,0.25)", background: "rgba(234,179,8,0.06)" }}>
               <div style={{ padding: "10px 16px", borderBottom: "1px solid rgba(234,179,8,0.18)" }}>
-                <span style={{ fontSize: 9.5, fontWeight: 800, color: "#F0CB61", textTransform: "uppercase", letterSpacing: "0.07em" }}>
+                <span style={{ fontSize: 12, fontWeight: 800, color: "#F0CB61", textTransform: "uppercase", letterSpacing: "0.07em" }}>
                   Consignes du coach
                 </span>
               </div>
@@ -119,7 +121,7 @@ const SessionDetailModal = memo(({ session, athlete, allAthletes, onClose, onSet
               <span style={labelStyle}>Participants ({session.athleteIds.length})</span>
             </div>
             {session.athleteIds.length === 0 ? (
-              <p style={{ fontSize: 12, color: "var(--c-text-4)" }}>Aucun athlète assigné</p>
+              <p style={{ fontSize: 13, color: "var(--c-text-2)" }}>Aucun athlète assigné</p>
             ) : (
               <div className="space-y-2">
                 {session.athleteIds.map(id => {
@@ -128,7 +130,7 @@ const SessionDetailModal = memo(({ session, athlete, allAthletes, onClose, onSet
                   const st = v?.status ?? "future";
                   return (
                     <div key={id} className="card" style={{ display: "flex", alignItems: "flex-start", gap: 12, padding: 14 }}>
-                      <div style={{ width: 36, height: 36, borderRadius: 10, background: c.border, display: "flex", alignItems: "center", justifyContent: "center", color: "#0A150F", fontSize: 11, fontWeight: 800, flexShrink: 0 }}>
+                      <div style={{ width: 36, height: 36, borderRadius: 10, background: c.border, display: "flex", alignItems: "center", justifyContent: "center", color: "#0A150F", fontSize: 12, fontWeight: 800, flexShrink: 0 }}>
                         {a?.avatar ?? "?"}
                       </div>
                       <div style={{ flex: 1, minWidth: 0 }}>
@@ -136,7 +138,7 @@ const SessionDetailModal = memo(({ session, athlete, allAthletes, onClose, onSet
                           <span style={{ fontSize: 13, fontWeight: 700, color: "var(--c-text-1)" }}>{a?.name ?? `Athlète #${id}`}</span>
                           <StatusBadge status={st} />
                           {v?.rpe != null && (
-                            <span style={{ fontSize: 10, fontWeight: 700, padding: "2px 8px", borderRadius: 99, background: "var(--c-surface-3)", color: "var(--c-text-2)" }}>
+                            <span style={{ fontSize: 12, fontWeight: 700, padding: "3px 8px", borderRadius: 99, background: "var(--c-surface-3)", color: "var(--c-text-2)" }}>
                               RPE {v.rpe}
                             </span>
                           )}
@@ -151,7 +153,7 @@ const SessionDetailModal = memo(({ session, athlete, allAthletes, onClose, onSet
                           </div>
                         )}
                         {v?.comment && (
-                          <p style={{ fontSize: 11.5, fontStyle: "italic", color: "var(--c-text-3)" }}>« {v.comment} »</p>
+                          <p style={{ fontSize: 13, lineHeight: 1.5, fontStyle: "italic", color: "var(--c-text-2)" }}>« {v.comment} »</p>
                         )}
                       </div>
                     </div>
@@ -168,10 +170,10 @@ const SessionDetailModal = memo(({ session, athlete, allAthletes, onClose, onSet
               {presenceOpts.map(opt => {
                 const sel = status === opt.id;
                 return (
-                  <button key={opt.id} onClick={() => onSetStatus(session.id, athlete.id, opt.id)}
+                  <button key={opt.id} type="button" aria-pressed={sel} onClick={() => onSetStatus(session.id, athlete.id, opt.id)}
                     className="tap-feedback"
                     style={{
-                      flex: 1, padding: "12px 8px", borderRadius: 16, fontSize: 11.5, fontWeight: 700,
+                      flex: 1, minHeight: 48, padding: "12px 8px", borderRadius: 16, fontSize: 13, fontWeight: 700,
                       display: "flex", flexDirection: "column", alignItems: "center", gap: 6,
                       border: `1.5px solid ${sel ? opt.activeBorder : "var(--c-border-strong)"}`,
                       background: sel ? opt.activeBg : "var(--c-surface-2)",
@@ -201,10 +203,10 @@ const SessionDetailModal = memo(({ session, athlete, allAthletes, onClose, onSet
                   const rc  = rpeColor(i);
                   const sel = val?.rpe === i;
                   return (
-                    <button key={i} onClick={() => onSetRpe(session.id, athlete.id, i)}
+                    <button key={i} type="button" aria-label={`RPE ${i} sur 10`} aria-pressed={sel} onClick={() => onSetRpe(session.id, athlete.id, i)}
                       className="tap-feedback"
                       style={{
-                        width: 38, height: 38, borderRadius: 12, fontSize: 12, fontWeight: 800,
+                        width: 44, height: 44, borderRadius: 12, fontSize: 13, fontWeight: 800,
                         border: `1.5px solid ${sel ? rc.border : "var(--c-border-strong)"}`,
                         background: sel ? rc.active : "var(--c-surface-2)",
                         color: sel ? rc.text : "var(--c-text-3)",
@@ -221,7 +223,7 @@ const SessionDetailModal = memo(({ session, athlete, allAthletes, onClose, onSet
                 {[{ range: "0-3", color: "#22C55E", label: "Facile" }, { range: "4-6", color: "#F59E0B", label: "Modéré" }, { range: "7-10", color: "#EF4444", label: "Intense" }].map(l => (
                   <div key={l.range} style={{ display: "flex", alignItems: "center", gap: 5 }}>
                     <div style={{ width: 7, height: 7, borderRadius: "50%", background: l.color }} />
-                    <span style={{ fontSize: 10, color: "var(--c-text-4)", fontWeight: 500 }}>{l.range} {l.label}</span>
+                    <span style={{ fontSize: 12, color: "var(--c-text-2)", fontWeight: 500 }}>{l.range} {l.label}</span>
                   </div>
                 ))}
               </div>
@@ -237,8 +239,8 @@ const SessionDetailModal = memo(({ session, athlete, allAthletes, onClose, onSet
               </label>
               <div className="flex gap-2">
                 {[1, 2, 3, 4, 5].map(n => (
-                  <button key={n} onClick={() => onSetFeeling(session.id, athlete.id, n)}
-                    className="tap-feedback" style={{ background: "none", border: "none", cursor: "pointer", padding: 2 }}>
+                  <button key={n} type="button" aria-label={`Ressenti ${n} sur 5`} aria-pressed={val?.feeling === n} onClick={() => onSetFeeling(session.id, athlete.id, n)}
+                    className="tap-feedback" style={{ width: 44, height: 44, display: "flex", alignItems: "center", justifyContent: "center", background: "none", border: "none", cursor: "pointer", padding: 0 }}>
                     <Star size={30}
                       fill={val?.feeling >= n ? "#EAB308" : "none"}
                       color={val?.feeling >= n ? "#EAB308" : "var(--c-border-strong)"}
@@ -252,8 +254,9 @@ const SessionDetailModal = memo(({ session, athlete, allAthletes, onClose, onSet
           {/* ── Commentaire ── */}
           {hasPerf && (
             <div>
-              <label style={labelStyle}>Commentaire</label>
+              <label htmlFor="session-comment" style={labelStyle}>Commentaire</label>
               <textarea
+                id="session-comment"
                 className="input-premium resize-none"
                 rows={3}
                 placeholder="Comment s'est passée la séance ?"
@@ -267,7 +270,7 @@ const SessionDetailModal = memo(({ session, athlete, allAthletes, onClose, onSet
 
         {/* Footer */}
         <div className="px-6 py-4 flex justify-end flex-shrink-0" style={{ borderTop: "1px solid var(--c-border)" }}>
-          <button onClick={onClose} className="btn-secondary">Fermer</button>
+          <button type="button" onClick={onClose} className="btn-secondary">Fermer</button>
         </div>
       </div>
     </div>,
