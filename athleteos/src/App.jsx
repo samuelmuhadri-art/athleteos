@@ -2,11 +2,11 @@
 // AthleteOS — src/App.jsx  ★ DESIGN PREMIUM DARK
 // ============================================================
 
-import { useState, useCallback, useEffect, Suspense, lazy } from "react";
+import { useState, useCallback, useEffect, useRef, Suspense, lazy } from "react";
 import {
   LayoutDashboard, CalendarDays, Users, TrendingUp,
   Activity, Trophy, Bell, MessageSquare, FileText,
-  ChevronLeft, ChevronRight, Menu, X, LogOut,
+  ChevronLeft, ChevronRight, MoreHorizontal, X, LogOut,
   UserPlus, Copy, Check, Settings,
 } from "lucide-react";
 
@@ -21,6 +21,13 @@ import AthleteApp     from "./AthleteApp";
 import { usePushNotifications, PushToggleButton } from "./hooks/usePushNotifications";
 import { useUrlView } from "./hooks/useUrlView";
 import { initialsFromName } from "./utils/helpers.js";
+import MobileBottomNav from "./components/navigation/MobileBottomNav";
+import MobileMoreSheet from "./components/navigation/MobileMoreSheet";
+import {
+  COACH_MOBILE_MORE_ITEMS,
+  COACH_MOBILE_PRIMARY_ITEMS,
+  isCoachMoreView,
+} from "./navigation/mobileNavigation";
 
 // ─── Lazy imports modules coach ───────────────────────────────────────────────
 const Dashboard    = lazy(() => import("./modules/Dashboard"));
@@ -46,6 +53,14 @@ const NAV_ITEMS = [
   { id: "messaging",    label: "Messagerie",       icon: MessageSquare   },
 ];
 const NAV_ITEM_IDS = NAV_ITEMS.map(n => n.id);
+const COACH_MOBILE_NAV_ITEMS = COACH_MOBILE_PRIMARY_ITEMS.map((mobileItem) => ({
+  ...NAV_ITEMS.find((item) => item.id === mobileItem.id),
+  ...mobileItem,
+}));
+const COACH_MORE_NAV_ITEMS = COACH_MOBILE_MORE_ITEMS.map((mobileItem) => ({
+  ...NAV_ITEMS.find((item) => item.id === mobileItem.id),
+  ...mobileItem,
+}));
 
 // ─── Résolution de la vue active ──────────────────────────────────────────────
 function ActiveView({ view, onNavigate }) {
@@ -97,13 +112,14 @@ function AuthLoader() {
 function CoachShell({ user, profile, clubId, signOut }) {
   const { activeView, navigate: navigateUrl, viewKey } = useUrlView(NAV_ITEM_IDS, "dashboard");
   const [sidebarOpen,  setSidebarOpen]  = useState(true);
-  const [mobileOpen,   setMobileOpen]   = useState(false);
+  const [showMore,     setShowMore]     = useState(false);
   const [unreadAlerts, setUnreadAlerts] = useState(0);
   const [showInvite, setShowInvite] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [clubName, setClubName]     = useState("");
   const [inviteCode, setInviteCode] = useState(null);
   const [copied, setCopied]         = useState(false);
+  const moreButtonRef = useRef(null);
 
   const { subscribed, subscribe, permissionState } = usePushNotifications(
     null,
@@ -140,8 +156,13 @@ function CoachShell({ user, profile, clubId, signOut }) {
   const navigate = useCallback((view) => {
     if (activeView === "alerts") fetchUnreadCount();
     navigateUrl(view);
-    setMobileOpen(false);
+    setShowMore(false);
   }, [activeView, fetchUnreadCount, navigateUrl]);
+
+  const closeMore = useCallback(() => {
+    setShowMore(false);
+    requestAnimationFrame(() => moreButtonRef.current?.focus());
+  }, []);
 
   const currentNav    = NAV_ITEMS.find((n) => n.id === activeView);
   const coachName     = profile.name ?? user.email ?? "Coach";
@@ -153,23 +174,14 @@ function CoachShell({ user, profile, clubId, signOut }) {
       className="flex h-screen overflow-hidden w-full"
       style={{ background: "var(--c-bg)", fontFamily: "'DM Sans', system-ui, sans-serif" }}
     >
-      {/* ── Overlay mobile ───────────────────────────────────────────── */}
-      {mobileOpen && (
-        <div
-          className="fixed inset-0 z-20 md:hidden modal-backdrop"
-          onClick={() => setMobileOpen(false)}
-        />
-      )}
-
       {/* ══════════════════════════════════════════════════════════════
          SIDEBAR PREMIUM DARK
       ══════════════════════════════════════════════════════════════ */}
       <aside
         className={[
-          "flex flex-col sidebar-premium z-30 flex-shrink-0 transition-all duration-300 ease-spring",
+          "hidden md:flex flex-col sidebar-premium z-30 flex-shrink-0 transition-all duration-300 ease-spring",
           sidebarOpen ? "w-58" : "w-[68px]",
-          "fixed md:relative inset-y-0 left-0",
-          mobileOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0",
+          "relative inset-y-0 left-0",
         ].join(" ")}
         style={{ width: sidebarOpen ? "224px" : "68px" }}
       >
@@ -327,15 +339,6 @@ function CoachShell({ user, profile, clubId, signOut }) {
 
         {/* ── Header glassmorphism ── */}
         <header className="h-16 header-glass flex items-center gap-4 px-5 flex-shrink-0 z-10">
-          {/* Burger mobile */}
-          <button
-            className="md:hidden p-2 rounded-xl transition-all active:scale-95"
-            style={{ color: "var(--c-text-2)" }}
-            onClick={() => setMobileOpen((v) => !v)}
-          >
-            {mobileOpen ? <X size={19} /> : <Menu size={19} />}
-          </button>
-
           {/* Titre de la vue */}
           <div className="flex items-center gap-3">
             {(() => {
@@ -385,7 +388,7 @@ function CoachShell({ user, profile, clubId, signOut }) {
         </header>
 
         {/* ── Zone de contenu — transition de vue ── */}
-        <main className="flex-1 overflow-y-auto overflow-x-hidden">
+        <main className="flex-1 overflow-y-auto overflow-x-hidden pb-20 md:pb-0">
           <div key={viewKey} className="view-transition h-full">
             <Suspense fallback={<ViewLoader />}>
               <ActiveView view={activeView} onNavigate={navigate} />
@@ -393,6 +396,35 @@ function CoachShell({ user, profile, clubId, signOut }) {
           </div>
         </main>
       </div>
+
+      {/* ── Navigation mobile coach ── */}
+      <MobileBottomNav
+        ariaLabel="Navigation coach"
+        items={COACH_MOBILE_NAV_ITEMS}
+        activeId={activeView}
+        onSelect={navigate}
+        more={{
+          label: "Plus",
+          icon: MoreHorizontal,
+          badge: unreadAlerts,
+          active: showMore || isCoachMoreView(activeView),
+          expanded: showMore,
+          onSelect: () => setShowMore(true),
+          buttonRef: moreButtonRef,
+        }}
+      />
+
+      {showMore && (
+        <MobileMoreSheet
+          items={COACH_MORE_NAV_ITEMS.map((item) => ({
+            ...item,
+            badge: item.id === "alerts" ? unreadAlerts : 0,
+          }))}
+          activeId={activeView}
+          onSelect={navigate}
+          onClose={closeMore}
+        />
+      )}
 
       {/* ── Modal invitation ─────────────────────────────────────────────── */}
       {showInvite && (

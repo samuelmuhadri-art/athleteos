@@ -28,6 +28,8 @@ import NotificationCenter from "./athlete/components/NotificationCenter";
 import AccountSettingsModal from "./components/ui/AccountSettingsModal";
 import { AthleteOSBadge, AthleteOSWordmark } from "./components/brand/AthleteOSLogo";
 import { getNotificationPresentation, mergeIncomingNotification } from "./athlete/notificationPresentation";
+import MobileBottomNav from "./components/navigation/MobileBottomNav";
+import { ATHLETE_MOBILE_ITEM_IDS } from "./navigation/mobileNavigation";
 
 const NAV_ITEMS = [
   { id: "dashboard",    label: "Tableau de bord", shortLabel: "Accueil",  icon: LayoutDashboard },
@@ -37,6 +39,9 @@ const NAV_ITEMS = [
   { id: "messagerie",   label: "Messagerie",      shortLabel: "Messages", icon: MessageSquare   },
 ];
 const NAV_ITEM_IDS = NAV_ITEMS.map(n => n.id);
+const ATHLETE_MOBILE_NAV_ITEMS = ATHLETE_MOBILE_ITEM_IDS.map((id) => (
+  NAV_ITEMS.find((item) => item.id === id)
+));
 
 export default function AthleteApp() {
   const { profile, clubId, signOut } = useAuth();
@@ -418,6 +423,21 @@ export default function AthleteApp() {
             </h1>
           </div>
           <div className="flex-1" />
+          <button
+            type="button"
+            onClick={() => setShowNotifs(true)}
+            className={["mobile-header-action md:hidden", showNotifs ? "active" : ""].join(" ")}
+            aria-label={`Notifications${unreadCount > 0 ? `, ${unreadCount} non lue${unreadCount > 1 ? "s" : ""}` : ""}`}
+            aria-expanded={showNotifs}
+            aria-haspopup="dialog"
+          >
+            <Bell size={19} strokeWidth={showNotifs ? 2.1 : 1.7} aria-hidden="true" />
+            {unreadCount > 0 && (
+              <span className="mobile-header-badge" aria-hidden="true">
+                {unreadCount > 99 ? "99+" : unreadCount}
+              </span>
+            )}
+          </button>
           <div className="hidden md:block">
             <PushToggleButton subscribed={subscribed} onToggle={subscribe} permissionState={permissionState} />
           </div>
@@ -471,46 +491,16 @@ export default function AthleteApp() {
       </div>
 
       {/* ── BOTTOM NAV MOBILE ── */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 z-30 bottom-nav">
-        <div className="flex items-stretch justify-between w-full px-1" style={{ height: "60px" }}>
-          {NAV_ITEMS.map(item => {
-            const Icon     = item.icon;
-            const isActive = activeView === item.id;
-            const hasBadge = item.id === "messagerie" && msgUnread > 0;
-            return (
-              <button key={item.id} onClick={() => navigate(item.id)}
-                className={["bottom-nav-item tap-feedback flex-1", isActive ? "active" : ""].join(" ")}>
-                <div className="relative">
-                  <Icon size={20} strokeWidth={isActive ? 2 : 1.5} />
-                  {hasBadge && (
-                    <span className="absolute animate-bounce-in"
-                      style={{ top: -5, right: -5, width: 14, height: 14, borderRadius: "50%", background: "#E05252", color: "white", fontSize: 8, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", border: "2px solid var(--c-bg)" }}>
-                      {msgUnread}
-                    </span>
-                  )}
-                </div>
-                <span className="bottom-nav-label truncate max-w-[52px] text-center">
-                  {item.shortLabel ?? item.label}
-                </span>
-              </button>
-            );
-          })}
-          {/* Notifs */}
-          <button onClick={() => setShowNotifs(v => !v)}
-            className={["bottom-nav-item tap-feedback flex-1", showNotifs ? "active" : ""].join(" ")}>
-            <div className="relative">
-              <Bell size={20} strokeWidth={showNotifs ? 2 : 1.5} />
-              {unreadCount > 0 && (
-                <span className="absolute animate-bounce-in"
-                  style={{ top: -5, right: -5, width: 14, height: 14, borderRadius: "50%", background: "#E05252", color: "white", fontSize: 8, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", border: "2px solid var(--c-bg)" }}>
-                  {unreadCount}
-                </span>
-              )}
-            </div>
-            <span className="bottom-nav-label">{subscribed ? "Notifs ●" : "Notifs"}</span>
-          </button>
-        </div>
-      </nav>
+      <MobileBottomNav
+        ariaLabel="Navigation athlète"
+        items={ATHLETE_MOBILE_NAV_ITEMS.map((item) => ({
+          ...item,
+          label: item.shortLabel ?? item.label,
+          badge: item.id === "messagerie" ? msgUnread : 0,
+        }))}
+        activeId={activeView}
+        onSelect={navigate}
+      />
 
       {showNotifs && (
         <NotificationCenter

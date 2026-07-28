@@ -54,3 +54,42 @@ test("le code d'invitation du club est affichable", async ({ page }) => {
   await page.getByRole("button", { name: "Inviter" }).click();
   await expect(page.getByText("Inviter un athlète")).toBeVisible();
 });
+
+test.describe("navigation mobile coach", () => {
+  test.use({ viewport: { width: 390, height: 844 } });
+
+  test("les cinq raccourcis et toutes les fonctions de Plus ouvrent leur route", async ({ page }) => {
+    await login(page, fixtures.coach.email, fixtures.coach.password);
+
+    const mobileNav = page.getByRole("navigation", { name: "Navigation coach" });
+    await expect(mobileNav).toBeVisible({ timeout: 15000 });
+    await expect(mobileNav.getByRole("button")).toHaveCount(5);
+    await expect(page.locator("aside.sidebar-premium")).toBeHidden();
+
+    const primaryRoutes = [
+      ["Accueil", "dashboard"],
+      ["Planning", "planning"],
+      ["Athlètes", "athletes"],
+      ["Messages", "messaging"],
+    ];
+    for (const [label, route] of primaryRoutes) {
+      await mobileNav.getByRole("button", { name: new RegExp(`^${label}`) }).click();
+      await expect(page).toHaveURL(new RegExp(`/${route}$`));
+    }
+
+    const moreRoutes = [
+      ["Performances", "performances"],
+      ["Charge", "charge"],
+      ["Compétitions", "competitions"],
+      ["Alertes", "alerts"],
+      ["Rapports", "rapports"],
+    ];
+    for (const [label, route] of moreRoutes) {
+      await mobileNav.getByRole("button", { name: /^Plus/ }).click();
+      const dialog = page.getByRole("dialog", { name: "Plus" });
+      await expect(dialog).toBeVisible();
+      await dialog.getByRole("button", { name: new RegExp(`^${label}`) }).click();
+      await expect(page).toHaveURL(new RegExp(`/${route}$`));
+    }
+  });
+});

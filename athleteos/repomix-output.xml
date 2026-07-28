@@ -104,6 +104,10 @@ src/
     brand/
       AthleteOSLogo.jsx
       AthleteOSLogo.test.jsx
+    navigation/
+      MobileBottomNav.jsx
+      MobileMoreSheet.jsx
+      MobileNavigation.test.jsx
     ui/
       AccountSettingsModal.jsx
       AxisRadarCard.jsx
@@ -147,6 +151,9 @@ src/
     planningShared.jsx
     Rapports.jsx
     SessionModal.jsx
+  navigation/
+    mobileNavigation.js
+    mobileNavigation.test.js
   pages/
     LoginPage.jsx
     ResetPasswordPage.jsx
@@ -544,6 +551,37 @@ test("l'athlète navigue vers son planning", async ({ page }) => {
   await page.getByText("Planning", { exact: true }).click();
   await expect(page.getByText("Mon planning")).toBeVisible({ timeout: 10000 });
 });
+
+test.describe("navigation mobile athlète", () => {
+  test.use({ viewport: { width: 390, height: 844 } });
+
+  test("garde cinq destinations et ouvre les notifications depuis le header", async ({ page }) => {
+    await login(page, fixtures.athlete.email, fixtures.athlete.password);
+
+    const mobileNav = page.getByRole("navigation", { name: "Navigation athlète" });
+    await expect(mobileNav).toBeVisible({ timeout: 15000 });
+    await expect(mobileNav.getByRole("button")).toHaveCount(5);
+    await expect(mobileNav.getByRole("button", { name: /Notifs/i })).toHaveCount(0);
+
+    const notificationBell = page.getByRole("button", { name: /^Notifications/ });
+    await expect(notificationBell).toBeVisible();
+    await notificationBell.click();
+    await expect(page.getByRole("dialog", { name: "Notifications" })).toBeVisible();
+    await page.getByRole("button", { name: "Fermer les notifications" }).click();
+
+    const routes = [
+      ["Accueil", "dashboard"],
+      ["Planning", "planning"],
+      ["Perfs", "performances"],
+      ["Club", "social"],
+      ["Messages", "messagerie"],
+    ];
+    for (const [label, route] of routes) {
+      await mobileNav.getByRole("button", { name: new RegExp(`^${label}`) }).click();
+      await expect(page).toHaveURL(new RegExp(`/${route}$`));
+    }
+  });
+});
 </file>
 
 <file path="e2e/coach-journey.spec.js">
@@ -602,6 +640,45 @@ test("le code d'invitation du club est affichable", async ({ page }) => {
   await expect(page.getByText("Dashboard")).toBeVisible({ timeout: 15000 });
   await page.getByRole("button", { name: "Inviter" }).click();
   await expect(page.getByText("Inviter un athlète")).toBeVisible();
+});
+
+test.describe("navigation mobile coach", () => {
+  test.use({ viewport: { width: 390, height: 844 } });
+
+  test("les cinq raccourcis et toutes les fonctions de Plus ouvrent leur route", async ({ page }) => {
+    await login(page, fixtures.coach.email, fixtures.coach.password);
+
+    const mobileNav = page.getByRole("navigation", { name: "Navigation coach" });
+    await expect(mobileNav).toBeVisible({ timeout: 15000 });
+    await expect(mobileNav.getByRole("button")).toHaveCount(5);
+    await expect(page.locator("aside.sidebar-premium")).toBeHidden();
+
+    const primaryRoutes = [
+      ["Accueil", "dashboard"],
+      ["Planning", "planning"],
+      ["Athlètes", "athletes"],
+      ["Messages", "messaging"],
+    ];
+    for (const [label, route] of primaryRoutes) {
+      await mobileNav.getByRole("button", { name: new RegExp(`^${label}`) }).click();
+      await expect(page).toHaveURL(new RegExp(`/${route}$`));
+    }
+
+    const moreRoutes = [
+      ["Performances", "performances"],
+      ["Charge", "charge"],
+      ["Compétitions", "competitions"],
+      ["Alertes", "alerts"],
+      ["Rapports", "rapports"],
+    ];
+    for (const [label, route] of moreRoutes) {
+      await mobileNav.getByRole("button", { name: /^Plus/ }).click();
+      const dialog = page.getByRole("dialog", { name: "Plus" });
+      await expect(dialog).toBeVisible();
+      await dialog.getByRole("button", { name: new RegExp(`^${label}`) }).click();
+      await expect(page).toHaveURL(new RegExp(`/${route}$`));
+    }
+  });
 });
 </file>
 
@@ -8668,6 +8745,254 @@ describe("AthleteOSLogo", () => {
     render(<><AthleteOSBadge title="Marque AthleteOS" /><AthleteOSWordmark /></>);
     expect(screen.getByRole("img", { name: "Marque AthleteOS" })).toBeTruthy();
     expect(screen.getByText(/Athlete/).textContent).toBe("AthleteOS");
+  });
+});
+</file>
+
+<file path="src/components/navigation/MobileBottomNav.jsx">
+function NavigationBadge({ count }) {
+  if (!count || count < 1) return null;
+
+  return (
+    <span className="mobile-nav-badge" aria-hidden="true">
+      {count > 99 ? "99+" : count}
+    </span>
+  );
+}
+
+export default function MobileBottomNav({
+  ariaLabel,
+  items,
+  activeId,
+  onSelect,
+  more = null,
+}) {
+  const MoreIcon = more?.icon;
+  const moreBadgeLabel = more?.badge > 0
+    ? `, ${more.badge} alerte${more.badge > 1 ? "s" : ""} non lue${more.badge > 1 ? "s" : ""}`
+    : "";
+
+  return (
+    <nav className="md:hidden fixed bottom-0 left-0 right-0 bottom-nav" aria-label={ariaLabel}>
+      <div className="flex items-stretch justify-between w-full px-1" style={{ height: 60 }}>
+        {items.map((item) => {
+          const Icon = item.icon;
+          const isActive = activeId === item.id;
+          const badgeLabel = item.badge > 0 ? `, ${item.badge} non lu${item.badge > 1 ? "s" : ""}` : "";
+
+          return (
+            <button
+              key={item.id}
+              type="button"
+              onClick={() => onSelect(item.id)}
+              className={["bottom-nav-item tap-feedback", isActive ? "active" : ""].join(" ")}
+              aria-label={`${item.label}${badgeLabel}`}
+              aria-current={isActive ? "page" : undefined}
+            >
+              <div className="relative">
+                <Icon size={20} strokeWidth={isActive ? 2.1 : 1.6} aria-hidden="true" />
+                <NavigationBadge count={item.badge} />
+              </div>
+              <span className="bottom-nav-label">{item.label}</span>
+            </button>
+          );
+        })}
+
+        {more && (
+          <button
+            ref={more.buttonRef}
+            type="button"
+            onClick={more.onSelect}
+            className={["bottom-nav-item tap-feedback", more.active ? "active" : ""].join(" ")}
+            aria-label={`${more.label}${moreBadgeLabel}`}
+            aria-expanded={more.expanded}
+            aria-haspopup="dialog"
+          >
+            <div className="relative">
+              <MoreIcon size={21} strokeWidth={more.active ? 2.1 : 1.6} aria-hidden="true" />
+              <NavigationBadge count={more.badge} />
+            </div>
+            <span className="bottom-nav-label">{more.label}</span>
+          </button>
+        )}
+      </div>
+    </nav>
+  );
+}
+</file>
+
+<file path="src/components/navigation/MobileMoreSheet.jsx">
+import { useEffect } from "react";
+import { X } from "lucide-react";
+
+function SheetBadge({ count }) {
+  if (!count || count < 1) return null;
+
+  return (
+    <span className="mobile-more-count" aria-hidden="true">
+      {count > 99 ? "99+" : count}
+    </span>
+  );
+}
+
+export default function MobileMoreSheet({ items, activeId, onSelect, onClose }) {
+  useEffect(() => {
+    const closeOnEscape = (event) => {
+      if (event.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", closeOnEscape);
+    return () => window.removeEventListener("keydown", closeOnEscape);
+  }, [onClose]);
+
+  return (
+    <>
+      <div className="bottom-sheet-backdrop md:hidden" aria-hidden="true" onClick={onClose} />
+      <section
+        className="bottom-sheet md:hidden coach-more-sheet"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="coach-more-title"
+      >
+        <div className="bottom-sheet-handle" />
+        <div className="flex items-start justify-between gap-4 px-5 pt-4 pb-4">
+          <div>
+            <p className="meta-text uppercase tracking-[0.12em] font-semibold">Espace coach</p>
+            <h2 id="coach-more-title" className="section-title mt-1">Plus</h2>
+            <p className="secondary-text mt-1">Analyses et pilotage du club</p>
+          </div>
+          <button
+            type="button"
+            autoFocus
+            onClick={onClose}
+            className="icon-btn flex-shrink-0"
+            aria-label="Fermer le menu Plus"
+          >
+            <X size={18} aria-hidden="true" />
+          </button>
+        </div>
+
+        <nav className="grid grid-cols-2 gap-3 px-4 pb-2" aria-label="Fonctions supplémentaires">
+          {items.map((item) => {
+            const Icon = item.icon;
+            const isActive = activeId === item.id;
+            const badgeLabel = item.badge > 0 ? `, ${item.badge} non lue${item.badge > 1 ? "s" : ""}` : "";
+
+            return (
+              <button
+                key={item.id}
+                type="button"
+                onClick={() => onSelect(item.id)}
+                className={[
+                  "mobile-more-item",
+                  item.id === "rapports" ? "col-span-2" : "",
+                  isActive ? "active" : "",
+                ].join(" ")}
+                aria-label={`${item.label}${badgeLabel}`}
+                aria-current={isActive ? "page" : undefined}
+              >
+                <span className="mobile-more-icon">
+                  <Icon size={19} strokeWidth={isActive ? 2.1 : 1.7} aria-hidden="true" />
+                </span>
+                <span className="min-w-0 text-left">
+                  <span className="flex items-center gap-2">
+                    <span className="mobile-more-label">{item.label}</span>
+                    <SheetBadge count={item.badge} />
+                  </span>
+                  <span className="mobile-more-description">{item.description}</span>
+                </span>
+              </button>
+            );
+          })}
+        </nav>
+      </section>
+    </>
+  );
+}
+</file>
+
+<file path="src/components/navigation/MobileNavigation.test.jsx">
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import MobileBottomNav from "./MobileBottomNav";
+import MobileMoreSheet from "./MobileMoreSheet";
+import { COACH_MOBILE_MORE_ITEMS } from "../../navigation/mobileNavigation";
+
+afterEach(cleanup);
+
+function TestIcon(props) {
+  return <svg data-testid="navigation-icon" {...props} />;
+}
+
+describe("MobileBottomNav", () => {
+  it("ouvre toutes les destinations et conserve l'état actif et les compteurs", () => {
+    const onSelect = vi.fn();
+    const onOpenMore = vi.fn();
+    const items = [
+      { id: "dashboard", label: "Accueil", icon: TestIcon },
+      { id: "planning", label: "Planning", icon: TestIcon },
+      { id: "athletes", label: "Athlètes", icon: TestIcon },
+      { id: "messaging", label: "Messages", icon: TestIcon, badge: 3 },
+    ];
+
+    render(
+      <MobileBottomNav
+        ariaLabel="Navigation coach"
+        items={items}
+        activeId="planning"
+        onSelect={onSelect}
+        more={{
+          label: "Plus",
+          icon: TestIcon,
+          badge: 2,
+          active: false,
+          expanded: false,
+          onSelect: onOpenMore,
+        }}
+      />,
+    );
+
+    const navigation = screen.getByRole("navigation", { name: "Navigation coach" });
+    expect(within(navigation).getAllByRole("button")).toHaveLength(5);
+    expect(screen.getByRole("button", { name: "Planning" }).getAttribute("aria-current")).toBe("page");
+    expect(screen.getByRole("button", { name: "Messages, 3 non lus" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Plus, 2 alertes non lues" })).toBeTruthy();
+
+    items.forEach((item) => fireEvent.click(screen.getByRole("button", { name: new RegExp(`^${item.label}`) })));
+    expect(onSelect.mock.calls.map(([id]) => id)).toEqual(items.map((item) => item.id));
+
+    fireEvent.click(screen.getByRole("button", { name: /^Plus/ }));
+    expect(onOpenMore).toHaveBeenCalledOnce();
+  });
+});
+
+describe("MobileMoreSheet", () => {
+  it("rend les cinq liens secondaires, leur compteur et chaque action", () => {
+    const onSelect = vi.fn();
+    const onClose = vi.fn();
+    const items = COACH_MOBILE_MORE_ITEMS.map((item) => ({
+      ...item,
+      icon: TestIcon,
+      badge: item.id === "alerts" ? 4 : 0,
+    }));
+
+    render(
+      <MobileMoreSheet
+        items={items}
+        activeId="charge"
+        onSelect={onSelect}
+        onClose={onClose}
+      />,
+    );
+
+    expect(screen.getByRole("dialog", { name: "Plus" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Charge" }).getAttribute("aria-current")).toBe("page");
+    expect(screen.getByRole("button", { name: "Alertes, 4 non lues" })).toBeTruthy();
+
+    items.forEach((item) => fireEvent.click(screen.getByRole("button", { name: new RegExp(`^${item.label}`) })));
+    expect(onSelect.mock.calls.map(([id]) => id)).toEqual(items.map((item) => item.id));
+
+    fireEvent.keyDown(window, { key: "Escape" });
+    expect(onClose).toHaveBeenCalledOnce();
   });
 });
 </file>
@@ -18759,6 +19084,80 @@ const SessionModal = memo(({ session, athletes, onClose, onSetRpe, onSetStatus, 
 export default SessionModal;
 </file>
 
+<file path="src/navigation/mobileNavigation.js">
+export const COACH_MOBILE_PRIMARY_ITEMS = Object.freeze([
+  { id: "dashboard", label: "Accueil" },
+  { id: "planning", label: "Planning" },
+  { id: "athletes", label: "Athlètes" },
+  { id: "messaging", label: "Messages" },
+]);
+
+export const COACH_MOBILE_MORE_ITEMS = Object.freeze([
+  { id: "performances", label: "Performances", description: "Suivre les progrès" },
+  { id: "charge", label: "Charge", description: "Prévenir la fatigue" },
+  { id: "competitions", label: "Compétitions", description: "Préparer les échéances" },
+  { id: "alerts", label: "Alertes", description: "Voir les signaux à traiter" },
+  { id: "rapports", label: "Rapports", description: "Consulter les synthèses du club" },
+]);
+
+export const ATHLETE_MOBILE_ITEM_IDS = Object.freeze([
+  "dashboard",
+  "planning",
+  "performances",
+  "social",
+  "messagerie",
+]);
+
+export function isCoachMoreView(viewId) {
+  return COACH_MOBILE_MORE_ITEMS.some((item) => item.id === viewId);
+}
+</file>
+
+<file path="src/navigation/mobileNavigation.test.js">
+import { describe, expect, it } from "vitest";
+import {
+  ATHLETE_MOBILE_ITEM_IDS,
+  COACH_MOBILE_MORE_ITEMS,
+  COACH_MOBILE_PRIMARY_ITEMS,
+  isCoachMoreView,
+} from "./mobileNavigation";
+
+describe("mobile navigation configuration", () => {
+  it("répartit chaque route coach une seule fois entre la barre et Plus", () => {
+    const expectedRoutes = [
+      "dashboard", "planning", "athletes", "performances", "charge",
+      "rapports", "competitions", "alerts", "messaging",
+    ];
+    const configuredRoutes = [
+      ...COACH_MOBILE_PRIMARY_ITEMS.map((item) => item.id),
+      ...COACH_MOBILE_MORE_ITEMS.map((item) => item.id),
+    ];
+
+    expect(COACH_MOBILE_PRIMARY_ITEMS.map((item) => item.label)).toEqual([
+      "Accueil", "Planning", "Athlètes", "Messages",
+    ]);
+    expect(new Set(configuredRoutes).size).toBe(configuredRoutes.length);
+    expect(configuredRoutes.sort()).toEqual(expectedRoutes.sort());
+  });
+
+  it("place uniquement les cinq fonctions secondaires demandées dans Plus", () => {
+    expect(COACH_MOBILE_MORE_ITEMS.map((item) => item.id)).toEqual([
+      "performances", "charge", "competitions", "alerts", "rapports",
+    ]);
+    expect(isCoachMoreView("alerts")).toBe(true);
+    expect(isCoachMoreView("dashboard")).toBe(false);
+  });
+
+  it("garde cinq destinations athlète sans ajouter les notifications", () => {
+    expect(ATHLETE_MOBILE_ITEM_IDS).toHaveLength(5);
+    expect(ATHLETE_MOBILE_ITEM_IDS).toEqual([
+      "dashboard", "planning", "performances", "social", "messagerie",
+    ]);
+    expect(ATHLETE_MOBILE_ITEM_IDS).not.toContain("notifications");
+  });
+});
+</file>
+
 <file path="src/pages/LoginPage.jsx">
 // ============================================================
 // AthleteOS — src/pages/LoginPage.jsx  ★ DARK MODE
@@ -22636,11 +23035,11 @@ describe("buildMonthlyAggregate", () => {
 // AthleteOS — src/App.jsx  ★ DESIGN PREMIUM DARK
 // ============================================================
 
-import { useState, useCallback, useEffect, Suspense, lazy } from "react";
+import { useState, useCallback, useEffect, useRef, Suspense, lazy } from "react";
 import {
   LayoutDashboard, CalendarDays, Users, TrendingUp,
   Activity, Trophy, Bell, MessageSquare, FileText,
-  ChevronLeft, ChevronRight, Menu, X, LogOut,
+  ChevronLeft, ChevronRight, MoreHorizontal, X, LogOut,
   UserPlus, Copy, Check, Settings,
 } from "lucide-react";
 
@@ -22655,6 +23054,13 @@ import AthleteApp     from "./AthleteApp";
 import { usePushNotifications, PushToggleButton } from "./hooks/usePushNotifications";
 import { useUrlView } from "./hooks/useUrlView";
 import { initialsFromName } from "./utils/helpers.js";
+import MobileBottomNav from "./components/navigation/MobileBottomNav";
+import MobileMoreSheet from "./components/navigation/MobileMoreSheet";
+import {
+  COACH_MOBILE_MORE_ITEMS,
+  COACH_MOBILE_PRIMARY_ITEMS,
+  isCoachMoreView,
+} from "./navigation/mobileNavigation";
 
 // ─── Lazy imports modules coach ───────────────────────────────────────────────
 const Dashboard    = lazy(() => import("./modules/Dashboard"));
@@ -22680,6 +23086,14 @@ const NAV_ITEMS = [
   { id: "messaging",    label: "Messagerie",       icon: MessageSquare   },
 ];
 const NAV_ITEM_IDS = NAV_ITEMS.map(n => n.id);
+const COACH_MOBILE_NAV_ITEMS = COACH_MOBILE_PRIMARY_ITEMS.map((mobileItem) => ({
+  ...NAV_ITEMS.find((item) => item.id === mobileItem.id),
+  ...mobileItem,
+}));
+const COACH_MORE_NAV_ITEMS = COACH_MOBILE_MORE_ITEMS.map((mobileItem) => ({
+  ...NAV_ITEMS.find((item) => item.id === mobileItem.id),
+  ...mobileItem,
+}));
 
 // ─── Résolution de la vue active ──────────────────────────────────────────────
 function ActiveView({ view, onNavigate }) {
@@ -22731,13 +23145,14 @@ function AuthLoader() {
 function CoachShell({ user, profile, clubId, signOut }) {
   const { activeView, navigate: navigateUrl, viewKey } = useUrlView(NAV_ITEM_IDS, "dashboard");
   const [sidebarOpen,  setSidebarOpen]  = useState(true);
-  const [mobileOpen,   setMobileOpen]   = useState(false);
+  const [showMore,     setShowMore]     = useState(false);
   const [unreadAlerts, setUnreadAlerts] = useState(0);
   const [showInvite, setShowInvite] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [clubName, setClubName]     = useState("");
   const [inviteCode, setInviteCode] = useState(null);
   const [copied, setCopied]         = useState(false);
+  const moreButtonRef = useRef(null);
 
   const { subscribed, subscribe, permissionState } = usePushNotifications(
     null,
@@ -22774,8 +23189,13 @@ function CoachShell({ user, profile, clubId, signOut }) {
   const navigate = useCallback((view) => {
     if (activeView === "alerts") fetchUnreadCount();
     navigateUrl(view);
-    setMobileOpen(false);
+    setShowMore(false);
   }, [activeView, fetchUnreadCount, navigateUrl]);
+
+  const closeMore = useCallback(() => {
+    setShowMore(false);
+    requestAnimationFrame(() => moreButtonRef.current?.focus());
+  }, []);
 
   const currentNav    = NAV_ITEMS.find((n) => n.id === activeView);
   const coachName     = profile.name ?? user.email ?? "Coach";
@@ -22787,23 +23207,14 @@ function CoachShell({ user, profile, clubId, signOut }) {
       className="flex h-screen overflow-hidden w-full"
       style={{ background: "var(--c-bg)", fontFamily: "'DM Sans', system-ui, sans-serif" }}
     >
-      {/* ── Overlay mobile ───────────────────────────────────────────── */}
-      {mobileOpen && (
-        <div
-          className="fixed inset-0 z-20 md:hidden modal-backdrop"
-          onClick={() => setMobileOpen(false)}
-        />
-      )}
-
       {/* ══════════════════════════════════════════════════════════════
          SIDEBAR PREMIUM DARK
       ══════════════════════════════════════════════════════════════ */}
       <aside
         className={[
-          "flex flex-col sidebar-premium z-30 flex-shrink-0 transition-all duration-300 ease-spring",
+          "hidden md:flex flex-col sidebar-premium z-30 flex-shrink-0 transition-all duration-300 ease-spring",
           sidebarOpen ? "w-58" : "w-[68px]",
-          "fixed md:relative inset-y-0 left-0",
-          mobileOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0",
+          "relative inset-y-0 left-0",
         ].join(" ")}
         style={{ width: sidebarOpen ? "224px" : "68px" }}
       >
@@ -22961,15 +23372,6 @@ function CoachShell({ user, profile, clubId, signOut }) {
 
         {/* ── Header glassmorphism ── */}
         <header className="h-16 header-glass flex items-center gap-4 px-5 flex-shrink-0 z-10">
-          {/* Burger mobile */}
-          <button
-            className="md:hidden p-2 rounded-xl transition-all active:scale-95"
-            style={{ color: "var(--c-text-2)" }}
-            onClick={() => setMobileOpen((v) => !v)}
-          >
-            {mobileOpen ? <X size={19} /> : <Menu size={19} />}
-          </button>
-
           {/* Titre de la vue */}
           <div className="flex items-center gap-3">
             {(() => {
@@ -23019,7 +23421,7 @@ function CoachShell({ user, profile, clubId, signOut }) {
         </header>
 
         {/* ── Zone de contenu — transition de vue ── */}
-        <main className="flex-1 overflow-y-auto overflow-x-hidden">
+        <main className="flex-1 overflow-y-auto overflow-x-hidden pb-20 md:pb-0">
           <div key={viewKey} className="view-transition h-full">
             <Suspense fallback={<ViewLoader />}>
               <ActiveView view={activeView} onNavigate={navigate} />
@@ -23027,6 +23429,35 @@ function CoachShell({ user, profile, clubId, signOut }) {
           </div>
         </main>
       </div>
+
+      {/* ── Navigation mobile coach ── */}
+      <MobileBottomNav
+        ariaLabel="Navigation coach"
+        items={COACH_MOBILE_NAV_ITEMS}
+        activeId={activeView}
+        onSelect={navigate}
+        more={{
+          label: "Plus",
+          icon: MoreHorizontal,
+          badge: unreadAlerts,
+          active: showMore || isCoachMoreView(activeView),
+          expanded: showMore,
+          onSelect: () => setShowMore(true),
+          buttonRef: moreButtonRef,
+        }}
+      />
+
+      {showMore && (
+        <MobileMoreSheet
+          items={COACH_MORE_NAV_ITEMS.map((item) => ({
+            ...item,
+            badge: item.id === "alerts" ? unreadAlerts : 0,
+          }))}
+          activeId={activeView}
+          onSelect={navigate}
+          onClose={closeMore}
+        />
+      )}
 
       {/* ── Modal invitation ─────────────────────────────────────────────── */}
       {showInvite && (
@@ -23133,6 +23564,8 @@ import NotificationCenter from "./athlete/components/NotificationCenter";
 import AccountSettingsModal from "./components/ui/AccountSettingsModal";
 import { AthleteOSBadge, AthleteOSWordmark } from "./components/brand/AthleteOSLogo";
 import { getNotificationPresentation, mergeIncomingNotification } from "./athlete/notificationPresentation";
+import MobileBottomNav from "./components/navigation/MobileBottomNav";
+import { ATHLETE_MOBILE_ITEM_IDS } from "./navigation/mobileNavigation";
 
 const NAV_ITEMS = [
   { id: "dashboard",    label: "Tableau de bord", shortLabel: "Accueil",  icon: LayoutDashboard },
@@ -23142,6 +23575,9 @@ const NAV_ITEMS = [
   { id: "messagerie",   label: "Messagerie",      shortLabel: "Messages", icon: MessageSquare   },
 ];
 const NAV_ITEM_IDS = NAV_ITEMS.map(n => n.id);
+const ATHLETE_MOBILE_NAV_ITEMS = ATHLETE_MOBILE_ITEM_IDS.map((id) => (
+  NAV_ITEMS.find((item) => item.id === id)
+));
 
 export default function AthleteApp() {
   const { profile, clubId, signOut } = useAuth();
@@ -23523,6 +23959,21 @@ export default function AthleteApp() {
             </h1>
           </div>
           <div className="flex-1" />
+          <button
+            type="button"
+            onClick={() => setShowNotifs(true)}
+            className={["mobile-header-action md:hidden", showNotifs ? "active" : ""].join(" ")}
+            aria-label={`Notifications${unreadCount > 0 ? `, ${unreadCount} non lue${unreadCount > 1 ? "s" : ""}` : ""}`}
+            aria-expanded={showNotifs}
+            aria-haspopup="dialog"
+          >
+            <Bell size={19} strokeWidth={showNotifs ? 2.1 : 1.7} aria-hidden="true" />
+            {unreadCount > 0 && (
+              <span className="mobile-header-badge" aria-hidden="true">
+                {unreadCount > 99 ? "99+" : unreadCount}
+              </span>
+            )}
+          </button>
           <div className="hidden md:block">
             <PushToggleButton subscribed={subscribed} onToggle={subscribe} permissionState={permissionState} />
           </div>
@@ -23576,46 +24027,16 @@ export default function AthleteApp() {
       </div>
 
       {/* ── BOTTOM NAV MOBILE ── */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 z-30 bottom-nav">
-        <div className="flex items-stretch justify-between w-full px-1" style={{ height: "60px" }}>
-          {NAV_ITEMS.map(item => {
-            const Icon     = item.icon;
-            const isActive = activeView === item.id;
-            const hasBadge = item.id === "messagerie" && msgUnread > 0;
-            return (
-              <button key={item.id} onClick={() => navigate(item.id)}
-                className={["bottom-nav-item tap-feedback flex-1", isActive ? "active" : ""].join(" ")}>
-                <div className="relative">
-                  <Icon size={20} strokeWidth={isActive ? 2 : 1.5} />
-                  {hasBadge && (
-                    <span className="absolute animate-bounce-in"
-                      style={{ top: -5, right: -5, width: 14, height: 14, borderRadius: "50%", background: "#E05252", color: "white", fontSize: 8, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", border: "2px solid var(--c-bg)" }}>
-                      {msgUnread}
-                    </span>
-                  )}
-                </div>
-                <span className="bottom-nav-label truncate max-w-[52px] text-center">
-                  {item.shortLabel ?? item.label}
-                </span>
-              </button>
-            );
-          })}
-          {/* Notifs */}
-          <button onClick={() => setShowNotifs(v => !v)}
-            className={["bottom-nav-item tap-feedback flex-1", showNotifs ? "active" : ""].join(" ")}>
-            <div className="relative">
-              <Bell size={20} strokeWidth={showNotifs ? 2 : 1.5} />
-              {unreadCount > 0 && (
-                <span className="absolute animate-bounce-in"
-                  style={{ top: -5, right: -5, width: 14, height: 14, borderRadius: "50%", background: "#E05252", color: "white", fontSize: 8, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", border: "2px solid var(--c-bg)" }}>
-                  {unreadCount}
-                </span>
-              )}
-            </div>
-            <span className="bottom-nav-label">{subscribed ? "Notifs ●" : "Notifs"}</span>
-          </button>
-        </div>
-      </nav>
+      <MobileBottomNav
+        ariaLabel="Navigation athlète"
+        items={ATHLETE_MOBILE_NAV_ITEMS.map((item) => ({
+          ...item,
+          label: item.shortLabel ?? item.label,
+          badge: item.id === "messagerie" ? msgUnread : 0,
+        }))}
+        activeId={activeView}
+        onSelect={navigate}
+      />
 
       {showNotifs && (
         <NotificationCenter
@@ -23985,7 +24406,7 @@ body {
 .bottom-nav-item {
   display: flex; flex-direction: column; align-items: center;
   justify-content: center; gap: 3px; flex: 1;
-  min-height: 60px; min-width: var(--touch); padding: 8px 4px 0;
+  min-height: 60px; min-width: var(--touch); padding: 7px 2px 0;
   color: var(--c-text-3); font-family: inherit;
   transition: color var(--dur-fast) var(--spring), transform var(--dur-fast) var(--spring);
   border: none; background: none; cursor: pointer; position: relative;
@@ -24000,7 +24421,42 @@ body {
 }
 .bottom-nav-item:active { transform: scale(0.88); transition-duration: 70ms; }
 
-.bottom-nav-label { font-size: 9px; font-weight: 400; letter-spacing: 0.01em; line-height: 1; }
+.bottom-nav-label {
+  max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font-size: var(--text-meta); font-weight: 500; letter-spacing: 0; line-height: 1;
+}
+.mobile-nav-badge {
+  position: absolute; top: -7px; right: -10px;
+  min-width: 20px; height: 20px; padding: 0 5px;
+  display: inline-flex; align-items: center; justify-content: center;
+  border-radius: 999px; border: 2px solid var(--c-bg);
+  background: var(--color-danger); color: #fff;
+  font-size: var(--text-meta); line-height: 1; font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  animation: bounce-in var(--dur-base) var(--spring) both;
+}
+
+.mobile-header-action {
+  position: relative; width: var(--touch); height: var(--touch);
+  display: inline-flex; align-items: center; justify-content: center;
+  border: 1px solid var(--c-border); border-radius: var(--r-md);
+  background: var(--c-surface); color: var(--c-text-2); cursor: pointer;
+  transition: color var(--dur-fast) ease, border-color var(--dur-fast) ease, background var(--dur-fast) ease;
+}
+.mobile-header-action.active {
+  color: var(--c-accent); border-color: rgba(29,158,117,0.30);
+  background: rgba(29,158,117,0.10);
+}
+.mobile-header-badge {
+  position: absolute; top: 2px; right: 1px;
+  min-width: 20px; height: 20px; padding: 0 5px;
+  display: inline-flex; align-items: center; justify-content: center;
+  border-radius: 999px; border: 2px solid var(--c-surface);
+  background: var(--color-danger); color: #fff;
+  font-size: var(--text-meta); line-height: 1; font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  animation: bounce-in var(--dur-base) var(--spring) both;
+}
 
 /* ═══════════════════════════════════════════════════════════════════════════════
    HEADER — dark glassmorphism
@@ -24046,6 +24502,50 @@ body {
   border-radius: 99px; margin: 10px auto 0; flex-shrink: 0;
 }
 
+.coach-more-sheet { padding-bottom: calc(20px + var(--safe-bottom)); }
+.mobile-more-item {
+  min-height: 88px; padding: 14px;
+  display: flex; align-items: center; gap: 12px;
+  border: 1px solid var(--c-border); border-radius: var(--r-lg);
+  background: var(--c-surface-2); color: var(--c-text-2); cursor: pointer;
+  transition: transform var(--dur-fast) var(--spring), border-color var(--dur-fast) ease, background var(--dur-fast) ease;
+}
+.mobile-more-item:active { transform: scale(0.97); }
+.mobile-more-item.active {
+  border-color: rgba(29,158,117,0.34); background: rgba(29,158,117,0.09);
+}
+.mobile-more-icon {
+  width: 38px; height: 38px; flex-shrink: 0;
+  display: inline-flex; align-items: center; justify-content: center;
+  border-radius: 12px; background: var(--c-surface-3); color: var(--c-text-2);
+}
+.mobile-more-item.active .mobile-more-icon {
+  background: rgba(29,158,117,0.14); color: var(--c-accent);
+}
+.mobile-more-label {
+  display: block; color: var(--c-text-1);
+  font-size: var(--text-card-title); line-height: 1.2; font-weight: 600;
+}
+.mobile-more-description {
+  display: block; margin-top: 4px; color: var(--c-text-3);
+  font-size: var(--text-meta); line-height: 1.3;
+}
+.mobile-more-count {
+  min-width: 22px; height: 22px; padding: 0 6px;
+  display: inline-flex; align-items: center; justify-content: center;
+  border-radius: 999px; background: var(--color-danger); color: #fff;
+  font-size: var(--text-meta); line-height: 1; font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 379px) {
+  .coach-more-sheet nav { grid-template-columns: minmax(0, 1fr); }
+  .coach-more-sheet .mobile-more-item {
+    grid-column: span 1 / span 1;
+    min-height: 72px;
+  }
+}
+
 /* ═══════════════════════════════════════════════════════════════════════════════
    INPUTS — dark
    ═══════════════════════════════════════════════════════════════════════════════ */
@@ -24084,6 +24584,7 @@ select.input-premium {
   line-height: var(--leading-title); letter-spacing: -0.025em;
   color: var(--c-text-1);
 }
+
 .section-title {
   font-size: var(--text-section-title); font-weight: 600;
   line-height: var(--leading-section); letter-spacing: -0.015em;

@@ -35,3 +35,34 @@ test("l'athlète navigue vers son planning", async ({ page }) => {
   await page.getByText("Planning", { exact: true }).click();
   await expect(page.getByText("Mon planning")).toBeVisible({ timeout: 10000 });
 });
+
+test.describe("navigation mobile athlète", () => {
+  test.use({ viewport: { width: 390, height: 844 } });
+
+  test("garde cinq destinations et ouvre les notifications depuis le header", async ({ page }) => {
+    await login(page, fixtures.athlete.email, fixtures.athlete.password);
+
+    const mobileNav = page.getByRole("navigation", { name: "Navigation athlète" });
+    await expect(mobileNav).toBeVisible({ timeout: 15000 });
+    await expect(mobileNav.getByRole("button")).toHaveCount(5);
+    await expect(mobileNav.getByRole("button", { name: /Notifs/i })).toHaveCount(0);
+
+    const notificationBell = page.getByRole("button", { name: /^Notifications/ });
+    await expect(notificationBell).toBeVisible();
+    await notificationBell.click();
+    await expect(page.getByRole("dialog", { name: "Notifications" })).toBeVisible();
+    await page.getByRole("button", { name: "Fermer les notifications" }).click();
+
+    const routes = [
+      ["Accueil", "dashboard"],
+      ["Planning", "planning"],
+      ["Perfs", "performances"],
+      ["Club", "social"],
+      ["Messages", "messagerie"],
+    ];
+    for (const [label, route] of routes) {
+      await mobileNav.getByRole("button", { name: new RegExp(`^${label}`) }).click();
+      await expect(page).toHaveURL(new RegExp(`/${route}$`));
+    }
+  });
+});
