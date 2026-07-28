@@ -13,11 +13,10 @@
 - **Tâche 6** (audit RLS/grants/vues/fonctions par rôle) : terminée, commitée (`0522868`) et poussée. Migration appliquée par l'utilisateur (`supabase db push`), **30/30 tests automatisés OK en conditions réelles**.
 - **Tâche 7** (suite RLS automatisée en CI locale) : terminée, **CI GitHub Actions verte** (`6a33dcf`, run #43). L'ancienne CI testait contre la production et échouait silencieusement depuis toujours (secrets GitHub jamais configurés) ; remplacée par une instance Supabase locale et jetable (Docker, runner GitHub) qui rejoue toutes les migrations + le seed à partir d'une base vide, puis lance la suite deux fois de suite. Au passage, a révélé que le schéma d'origine n'était pas entièrement versionné (voir tâche 5) — corrigé par une migration socle (`20260720000000_baseline_schema_pre_migration_tracking.sql`) après 6 itérations de debug guidées par les vrais logs CI (jamais de correction à l'aveugle) : ordre fonction/table, guillemets `supabase status -o env`, version de Node.
 - **Tâche 5** (Supabase reproductible depuis zéro) : terminée, commitée (`00f13e5`) et poussée. **CI GitHub Actions verte** confirmée par l'utilisateur. Complète le socle de la tâche 7 (5 index de performance + l'event trigger `ensure_rls` manquants, trouvés par comparaison systématique avec la base réelle), enrichit `supabase/seed.sql` (deux clubs fictifs, tous les rôles, données de démo), génère `src/types/database.types.ts` (référence IDE, le projet reste en JS pur), et remplit `GUIDE_IA.md` (était vide) avec le flux complet local/distant.
+- **Tâche 4** (hiérarchie de rôles + audit pour `admin-actions`) : terminée, commitée (`4580c8c` puis fix `23ea838`), poussée, **déployée** (migration `audit_logs` + Edge Function) et **vérifiée en conditions réelles — 20/20 tests OK** (`test_admin_actions.mjs`, cleanup y compris après correction d'un bug de nettoyage). Migration appliquée via `supabase migration repair --status applied` sur les 2 fichiers socle de la tâche 7/5 (datés avant l'historique réel, donc jamais rejoués sur la vraie base) puis `supabase db push` normal.
 
 ## Tâche active
-- Numéro : 4
-- Objectif : Séparer les droits head coach/coach/athlète dans `admin-actions` (renommer club, code d'invitation, suppression de membre = head coach uniquement), protéger le dernier head coach (suppression ET rétrogradation), ajouter validation de payload + idempotence + journal d'audit, aligner l'UI sans compter sur elle pour la sécurité.
-- Risques : voir "Résultats et limites" — rien n'est déployé (ni migration ni Edge Function), donc le comportement ACTUEL en production reste l'ancien (coach = head coach pour ces 3 actions) tant que vous n'avez pas déployé.
+Aucune — arrêt après la tâche 4 comme demandé.
 
 ## Décisions prises (tâche 4)
 - **Faille trouvée** : `admin-actions/index.ts` traitait `head_coach` et `coach` de façon identique (`isCoach`) pour renommer le club, régénérer le code d'invitation et supprimer un membre — un simple coach avait donc les mêmes pouvoirs structurels qu'un head coach, contrairement à ce qu'attend une appli multi-club. Resserré à `role === "head_coach"` pour ces 3 actions (+ la nouvelle `change_role`).
@@ -40,19 +39,18 @@
 - [x] **Dry-run réel de la nouvelle migration contre la production**, transaction `ROLLBACK` (aucun changement persisté) — exécutée sans erreur, puis reconfirmé que `audit_logs` n'existe pas sur la vraie base (le rollback a bien annulé).
 - [x] `node --check test_admin_actions.mjs` — syntaxe valide.
 - [x] Relecture attentive de `admin-actions/index.ts` ligne par ligne, y compris auto-révision qui a trouvé le bug de double-audit (voir "Décisions prises") et la limite mathématique du garde-fou "dernier head coach" — corrigés/documentés avant de considérer la tâche terminée.
-- [ ] **`node test_admin_actions.mjs` — PAS exécuté.** Nécessite (a) `supabase db push` (nouvelle migration) et (b) `supabase functions deploy admin-actions`, aucun des deux fait — je ne déploie jamais sans que vous me le demandiez. Deno n'étant pas installé sur cette machine, je n'ai pas non plus pu vérifier la syntaxe de l'Edge Function autrement qu'à la lecture.
+- [x] **`node test_admin_actions.mjs` exécuté en conditions réelles par l'utilisateur — 20/20 vérifications OK**, y compris le nettoyage (après correction d'un bug : `.catch()` appelé sur une requête postgrest-js, qui ne l'implémente pas — même classe de bug que la tâche 3). Fixtures laissées par le premier plantage (4 comptes, 2 clubs, 17 lignes d'audit, toutes en `@example.invalid`) identifiées puis nettoyées manuellement en base, confirmé à zéro partout.
 - [ ] `npm run lint` / `npm run typecheck` — toujours aucun script dans le repo.
 
 ## Résultats et limites
-- Rien n'a été commité, ni déployé. Le comportement en production reste l'ancien (coach = head coach sur ces actions) tant que vous n'avez pas appliqué la migration ET redéployé la fonction.
-- **Pour activer vraiment cette tâche, il faudra, dans l'ordre** : 1) `supabase db push` (migration audit_logs) ; 2) `supabase functions deploy admin-actions` ; 3) `SUPABASE_SERVICE_ROLE_KEY=... node test_admin_actions.mjs` pour vérifier en conditions réelles.
+- **Déployé et vérifié en conditions réelles.** Migration appliquée, Edge Function déployée, matrice d'autorisation testée avec de vrais comptes contre la vraie fonction.
+- **Découverte pratique au déploiement** : `supabase db push` refuse par défaut d'appliquer une migration si des fichiers locaux plus anciens que la dernière migration distante existent — ici, les 2 fichiers socle des tâches 5/7 (datés avant l'historique réel exprès, pour que la base locale/CI se reconstruise dans le bon ordre). Résolu proprement avec `supabase migration repair --status applied <version...> --linked`, qui marque ces versions comme déjà appliquées dans l'historique SANS exécuter leur SQL (elles recréeraient des tables qui existent déjà) — **jamais** avec `--include-all`, qui aurait tenté de les rejouer pour de vrai sur la prod et échoué. Noté dans "État du socle" ci-dessous pour la prochaine fois.
 - **Limite assumée** : le garde-fou "dernier head coach" dans `remove_user`/`change_role` n'est pas indépendamment testable via l'API aujourd'hui (voir "Décisions prises") — documentée honnêtement plutôt que masquée par un faux test.
 - **`test_admin_actions.mjs` n'est pas branché sur la CI** (`rls-check.yml` exclut `edge-runtime` pour aller plus vite — cette fonction ne peut donc pas y tourner) — reste un test manuel post-déploiement, comme pour send-push/signup aux tâches 2/3.
 
-## Tests manuels recommandés (à faire par vous, après déploiement)
+## Tests manuels recommandés (à faire par vous, optionnel)
 - [ ] Se connecter en tant que simple coach et confirmer que la section "Nom du club"/"Code d'invitation" a disparu de l'écran de réglages.
-- [ ] Se connecter en tant que head coach et confirmer que tout fonctionne comme avant (renommer le club, régénérer le code).
-- [ ] Après un run de `test_admin_actions.mjs`, consulter la table `audit_logs` (SQL Editor Supabase) pour voir les entrées créées et confirmer qu'elles sont lisibles.
+- [ ] Consulter la table `audit_logs` (SQL Editor Supabase) pour voir les vraies entrées créées par l'usage normal de l'appli.
 
 ## État du socle Supabase (repères utiles pour les prochaines tâches)
 - `supabase/config.toml`, `supabase/seed.sql`, `supabase/migrations/20260720000000_*` et `20260720000001_*` (socle + index/event trigger) : base entièrement reproductible depuis zéro via `supabase start`/`db reset`, prouvé par CI.
@@ -60,6 +58,7 @@
 - `GUIDE_IA.md` : mode d'emploi (démarrage local, connexion, compte de test, régénération des types, liaison au projet distant, distinction déploiement frontend/Supabase).
 - **Limite connue, jamais vérifiée faute de Docker sur cette machine** : `pg_cron`/`pg_net` (cron hebdomadaire) s'installent et s'enregistrent sans erreur en local, mais leur déclenchement réel n'a jamais pu être observé (job hebdomadaire, CI trop courte) — seule la production l'a réellement exécuté.
 - **Pas de compte de connexion réel dans le seed** (décision assumée, tâche 5) — recréer les tables internes de Supabase Auth à la main est fragile et non vérifiable ; procédure manuelle documentée dans `GUIDE_IA.md` à la place.
+- **`supabase db push` et les 2 migrations socle (tâche 4)** : `db push` refuse par défaut toute migration si des fichiers locaux datés avant la dernière migration distante existent (c'est le cas des 2 fichiers socle, datés exprès avant l'historique réel). Si ça se reproduit sur une future tâche : `supabase migration repair --status applied 20260720000000 20260720000001 --linked` (une seule fois, marque juste l'historique) puis `supabase db push` normalement — jamais `--include-all`, qui tenterait de recréer sur la vraie base des tables qui y existent déjà.
 
 ## Prochaine tâche autorisée
 Non déterminée ici — arrêt après la tâche 4 comme demandé.
