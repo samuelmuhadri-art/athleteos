@@ -54,7 +54,15 @@ jobs:
           echo "--- supabase status -o env ---"
           supabase status -o env
           echo "--- fin ---"
-          supabase status -o env >> "$GITHUB_ENV"
+          # `supabase status -o env` sort des valeurs entre guillemets
+          # (NAME="value"), pensé pour être sourcé dans un shell — pas le
+          # format attendu par $GITHUB_ENV, qui prend la ligne telle quelle
+          # (guillemets inclus). Sans ça, Node recevait littéralement
+          # '"http://127.0.0.1:54321"' comme URL, invalide. On retire les
+          # guillemets et on ne garde que les lignes NAME=valeur (la ligne
+          # "Stopped services: [...]" imprimée par cette commande est
+          # ignorée).
+          supabase status -o env | sed 's/"//g' | grep -E '^[A-Z_]+=' >> "$GITHUB_ENV"
 
       # Lancée deux fois de suite (tâche 7, vérification obligatoire) : la
       # suite crée/nettoie ses propres fixtures à chaque exécution, un
