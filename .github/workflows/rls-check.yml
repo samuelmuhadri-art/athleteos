@@ -24,9 +24,36 @@ jobs:
       - name: Build
         run: npm run build
 
-      - name: Run RLS isolation regression test
-        env:
-          VITE_SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          VITE_SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
-          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      # Instance Supabase locale et jetable (Docker, fournie par le runner
+      # GitHub) — rejoue TOUTES les migrations de supabase/migrations/ dans
+      # l'ordre, à partir d'une base vide, à chaque run. La suite RLS ne
+      # touche donc jamais la production (tâche 7, DoD "ne touchent pas la
+      # production"). studio/imgproxy/inbucket/vector/analytics/edge-runtime
+      # ne sont pas nécessaires pour des tests RLS/storage et sont exclus
+      # pour accélérer le démarrage.
+      - name: Start local Supabase (applique toutes les migrations)
+        run: supabase start -x studio,imgproxy,inbucket,vector,analytics,edge-runtime
+
+      # Identifiants de l'instance locale — ce ne sont pas des secrets (clés
+      # de démo fixes, base jetable détruite à la fin du job), donc pas
+      # besoin des secrets GitHub SUPABASE_* utilisés avant cette tâche.
+      - name: Export local Supabase credentials
+        run: supabase status -o env >> "$GITHUB_ENV"
+
+      # Lancée deux fois de suite (tâche 7, vérification obligatoire) : la
+      # suite crée/nettoie ses propres fixtures à chaque exécution, un
+      # deuxième passage identique confirme qu'elle est déterministe et ne
+      # laisse rien traîner en base d'un run à l'autre.
+      - name: Run RLS isolation & authorization regression suite (1/2)
         run: node test_rls_regression.mjs
+
+      - name: Run RLS isolation & authorization regression suite (2/2 — déterminisme)
+        run: node test_rls_regression.mjs
+
+      - name: Stop local Supabase
+        if: always()
+        run: supabase stop

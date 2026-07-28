@@ -2,34 +2,50 @@
 // ============================================================
 // AthleteOS — test_rls_regression.mjs
 //
-// Vérifie l'isolation par club ET l'isolation par propriétaire à
-// l'intérieur d'un même club (tâche 6) :
+// Suite de non-régression RLS/autorisation (tâches 6 et 7). Cinq profils
+// éphémères sur deux clubs : head coach A, head coach B (autre club),
+// coach Z (rôle intermédiaire, même club que A), athlète X et athlète Y
+// (coéquipiers, même club que A) :
 //   1. Un coach authentifié du club A ne doit pouvoir ni lire ni
-//      modifier ni supprimer aucune donnée du club B.
+//      modifier ni supprimer aucune donnée du club B — y compris via des
+//      relations enfants forgées (session_athletes/competition_results
+//      pointant vers l'id d'une séance/compétition du club B).
 //   2. À l'intérieur du MÊME club, un athlète ne doit pouvoir lire/
 //      modifier ni le wellness, ni les blessures, ni l'abonnement push
 //      d'un coéquipier — uniquement les siens (le coach, lui, garde un
 //      accès en lecture à tout le club).
-//   3. Un athlète ne peut pas s'auto-attribuer un rôle différent
-//      (role/club_id verrouillés côté serveur).
+//   3. Un athlète ne peut pas s'auto-attribuer un rôle différent, et un
+//      simple coach ne peut ni créer un autre coach/head_coach, ni
+//      changer le rôle d'un membre existant (role/club_id verrouillés
+//      côté serveur, y compris pour un attaquant qui n'est pas la
+//      victime).
 //   4. Un compte non-authentifié (anon) ne voit aucune donnée métier.
 //   5. Les RPC (get_my_club_id/get_my_role/get_my_athlete_id) renvoient
 //      la bonne valeur pour le bon appelant, directement via REST.
+//   6. Le stockage de fichiers (storage.objects) refuse l'upload en
+//      dehors du dossier du club de l'appelant.
 //
-// Crée deux clubs, deux comptes coach et deux comptes athlète (même
-// club A) éphémères, seed une ligne de test dans chacune des tables
-// couvertes, se connecte avec la clé anon (comme le fait vraiment le
-// frontend), tente les accès interdits, puis nettoie tout — succès ou
-// échec.
+// Seed une ligne de test dans chacune des tables couvertes, se connecte
+// avec la clé anon (comme le fait vraiment le frontend) sous chaque
+// profil, tente les accès interdits, puis nettoie tout (comptes auth,
+// lignes DB, fichiers storage) — succès ou échec (try/finally).
 //
-// Usage :
+// Exécuté en CI (.github/workflows/rls-check.yml) contre une instance
+// Supabase locale éphémère (Docker), jamais contre la production —
+// db reset local + toutes les migrations rejouées à chaque run, donc
+// déterministe. Peut aussi être lancé à la main contre le projet distant
+// (voir "Usage" ci-dessous) pour une vérification en conditions réelles.
+//
+// Usage (local, comme en CI — après `supabase start`) :
+//   `supabase status -o env` imprime API_URL/ANON_KEY/SERVICE_ROLE_KEY pour
+//   l'instance locale — exportez-les dans votre shell puis lancez
+//   `node test_rls_regression.mjs` (voir le détail exact de la commande
+//   dans .github/workflows/rls-check.yml, non vérifié manuellement ici
+//   faute de Docker sur cette machine — voir status.md).
+//
+// Usage (contre le projet distant, vérification manuelle ponctuelle) :
+//   VITE_SUPABASE_URL=... VITE_SUPABASE_ANON_KEY=... \
 //   SUPABASE_SERVICE_ROLE_KEY=... node test_rls_regression.mjs
-//
-// Requiert dans l'environnement (ou .env à la racine du dossier) :
-//   VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY  (déjà dans .env)
-//   SUPABASE_SERVICE_ROLE_KEY                  (secret, jamais committé —
-//                                                variable d'env locale ou
-//                                                secret CI)
 // ============================================================
 
 import { createClient } from "@supabase/supabase-js";
@@ -48,14 +64,22 @@ function loadDotEnv(filePath) {
 }
 loadDotEnv(path.join(path.dirname(fileURLToPath(import.meta.url)), ".env"));
 
-const SUPABASE_URL      = process.env.VITE_SUPABASE_URL;
-const ANON_KEY           = process.env.VITE_SUPABASE_ANON_KEY;
-const SERVICE_ROLE_KEY   = process.env.SUPABASE_SERVICE_ROLE_KEY;
+// En CI (voir .github/workflows/rls-check.yml), la cible est une instance
+// Supabase LOCALE démarrée par `supabase start` — les identifiants sont
+// injectés via `supabase status -o env`, qui utilise les noms par défaut
+// du CLI (API_URL/ANON_KEY/SERVICE_ROLE_KEY), pas les noms VITE_* utilisés
+// par le frontend. Les deux formes sont acceptées ici, avec priorité aux
+// noms explicites VITE_*/SUPABASE_SERVICE_ROLE_KEY s'ils sont définis
+// (usage manuel contre le projet distant, voir "Usage" plus haut).
+const SUPABASE_URL      = process.env.VITE_SUPABASE_URL      ?? process.env.API_URL;
+const ANON_KEY           = process.env.VITE_SUPABASE_ANON_KEY ?? process.env.ANON_KEY;
+const SERVICE_ROLE_KEY   = process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.SERVICE_ROLE_KEY;
 
 if (!SUPABASE_URL || !ANON_KEY || !SERVICE_ROLE_KEY) {
   console.error(
     "Variables manquantes. Requis : VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY " +
-    "(dans .env) et SUPABASE_SERVICE_ROLE_KEY (variable d'environnement, jamais committée)."
+    "(dans .env, ou API_URL/ANON_KEY fournis par `supabase status -o env`) et " +
+    "SUPABASE_SERVICE_ROLE_KEY/SERVICE_ROLE_KEY (jamais committé)."
   );
   process.exit(1);
 }
@@ -83,6 +107,9 @@ async function main() {
   // Tâche 6 — comptes athlète intra-club (ownership) :
   let authX, authY, userX, userY, athleteX, athleteY;
   let athleteXClient, athleteYClient, anonClient;
+  // Tâche 7 — 5e profil (coach, ni head_coach ni athlète, même club que A) :
+  let authZ, userZ, coachZClient;
+  const storagePathsToClean = [];
 
   try {
     // ── Setup : deux clubs, deux comptes coach ──────────────────────────────
@@ -160,6 +187,13 @@ async function main() {
     await insertOrThrow("injuries", { athlete_id: athleteX.id, name: "Test RLS ownership", status: "actif" });
     await insertOrThrow("push_subscriptions", { club_id: clubA.id, athlete_id: athleteX.id, endpoint: `https://example.invalid/push/own-${RUN_ID}` });
 
+    // ── Seed club A : profil "coach" (5e profil, ni head_coach ni athlète) ──
+    const emailZ = `rls-test-z-${RUN_ID}@example.invalid`;
+    const { data: aZ, error: eaZ } = await admin.auth.admin.createUser({ email: emailZ, password: passwordXY, email_confirm: true });
+    if (eaZ) throw new Error(`createUser Z : ${eaZ.message}`);
+    authZ = aZ.user;
+    userZ = await insertOrThrow("users", { club_id: clubA.id, name: "Coach Z (test RLS)", email: emailZ, role: "coach", auth_uid: authZ.id });
+
     // ── Connexion en tant que coach A, avec la clé anon (comme le frontend) ─
     coachAClient = createClient(SUPABASE_URL, ANON_KEY, { auth: { autoRefreshToken: false, persistSession: false } });
     const { error: signInErr } = await coachAClient.auth.signInWithPassword({ email: emailA, password });
@@ -234,6 +268,8 @@ async function main() {
     { const { error } = await athleteXClient.auth.signInWithPassword({ email: emailX, password: passwordXY }); if (error) throw new Error(`signIn X : ${error.message}`); }
     athleteYClient = createClient(SUPABASE_URL, ANON_KEY, { auth: { autoRefreshToken: false, persistSession: false } });
     { const { error } = await athleteYClient.auth.signInWithPassword({ email: emailY, password: passwordXY }); if (error) throw new Error(`signIn Y : ${error.message}`); }
+    coachZClient = createClient(SUPABASE_URL, ANON_KEY, { auth: { autoRefreshToken: false, persistSession: false } });
+    { const { error } = await coachZClient.auth.signInWithPassword({ email: emailZ, password: passwordXY }); if (error) throw new Error(`signIn Z : ${error.message}`); }
 
     {
       const { data, error } = await athleteXClient.rpc("get_my_athlete_id");
@@ -320,6 +356,70 @@ async function main() {
       if (data?.[0]) await admin.from("users").delete().eq("id", data[0].id);
     }
 
+    // ── Profil coach Z (ni head_coach, ni athlète) : matrice spécifique ─────
+    {
+      const { data, error } = await coachZClient.from("athletes").select("*").eq("id", athleteX.id);
+      record("SELECT athletes (coach Z sur son club, positif)", !error && (data ?? []).length === 1, error?.message);
+    }
+    {
+      // Un coach peut créer un nouvel athlète dans son club (AthleteList.jsx).
+      const { data, error } = await coachZClient.from("users")
+        .insert({ club_id: clubA.id, name: "Nouvel athlète (test)", email: `rls-test-new-athlete-${RUN_ID}@example.invalid`, role: "athlete" }).select();
+      record("INSERT users role=athlete (coach Z, positif)", !error && (data ?? []).length > 0, error?.message);
+      if (data?.[0]) await admin.from("users").delete().eq("id", data[0].id);
+    }
+    {
+      // Un simple coach ne peut PAS créer un autre coach/head_coach (tâche 6).
+      const { data, error } = await coachZClient.from("users")
+        .insert({ club_id: clubA.id, name: "Coach forgé", email: `rls-test-forged-coach-${RUN_ID}@example.invalid`, role: "coach" }).select();
+      const created = !error && (data ?? []).length > 0;
+      record("INSERT users role=coach (coach Z, doit être refusé)", !created, created ? "ligne insérée !" : "bloqué, OK");
+      if (data?.[0]) await admin.from("users").delete().eq("id", data[0].id);
+    }
+    {
+      // Un coach ne peut pas changer le rôle d'un AUTRE membre, même dans son
+      // propre club (DoD tâche 6 : "un coach ne peut changer le rôle... d'un
+      // autre membre").
+      const { data, error } = await coachZClient.from("users").update({ role: "coach" }).eq("id", userX.id).select();
+      const affected = !error && (data ?? []).length > 0;
+      record("UPDATE users.role (coach Z modifie le rôle de l'athlète X)", !affected, affected ? "rôle changé !" : "bloqué, OK");
+    }
+
+    // ── IDOR sur relations enfants : forger une référence vers le club B ───
+    // (pas juste "lire l'ID de quelqu'un d'autre" — insérer une ligne DANS
+    // son propre club qui pointe vers l'objet d'un AUTRE club via une FK)
+    {
+      const { data, error } = await coachZClient.from("session_athletes")
+        .insert({ session_id: sessionB.id, athlete_id: athleteX.id, rpe: 5 }).select();
+      const inserted = !error && (data ?? []).length > 0;
+      record("INSERT session_athletes (Z référence une séance du club B)", !inserted, inserted ? "ligne insérée !" : "bloqué, OK");
+      if (data?.[0]) await admin.from("session_athletes").delete().eq("id", data[0].id);
+    }
+    {
+      const { data, error } = await coachZClient.from("competition_results")
+        .insert({ competition_id: competitionB.id, athlete_id: athleteX.id, event: "100m", result: "11.00" }).select();
+      const inserted = !error && (data ?? []).length > 0;
+      record("INSERT competition_results (Z référence une compétition du club B)", !inserted, inserted ? "ligne insérée !" : "bloqué, OK");
+      if (data?.[0]) await admin.from("competition_results").delete().eq("id", data[0].id);
+    }
+
+    // ── storage.objects : upload cantonné au dossier du club (tâche 6) ─────
+    {
+      const forgedPath = `${clubB.id}/rls-test-forged-${RUN_ID}.txt`;
+      const { data, error } = await athleteXClient.storage.from("session-pdfs")
+        .upload(forgedPath, Buffer.from("forged"), { contentType: "text/plain" });
+      const uploaded = !error && !!data;
+      record("STORAGE upload session-pdfs (X force le dossier du club B)", !uploaded, uploaded ? "fichier uploadé !" : "bloqué, OK");
+      if (uploaded) storagePathsToClean.push(forgedPath);
+    }
+    {
+      const ownPath = `${clubA.id}/rls-test-own-${RUN_ID}.txt`;
+      const { data, error } = await athleteXClient.storage.from("session-pdfs")
+        .upload(ownPath, Buffer.from("own"), { contentType: "text/plain" });
+      record("STORAGE upload session-pdfs (X dans le dossier de son propre club, positif)", !error && !!data, error?.message);
+      if (!error) storagePathsToClean.push(ownPath);
+    }
+
     // ── anon : aucun accès à la moindre donnée métier ───────────────────────
     anonClient = createClient(SUPABASE_URL, ANON_KEY, { auth: { autoRefreshToken: false, persistSession: false } });
     await checkNoReadAs(anonClient, "athletes (vu par anon)", "athletes", "id", athleteA.id, { allowPermissionDenied: true });
@@ -332,6 +432,8 @@ async function main() {
     if (coachAClient)   await coachAClient.auth.signOut().catch(() => {});
     if (athleteXClient) await athleteXClient.auth.signOut().catch(() => {});
     if (athleteYClient) await athleteYClient.auth.signOut().catch(() => {});
+    if (coachZClient)   await coachZClient.auth.signOut().catch(() => {});
+    if (storagePathsToClean.length) await admin.storage.from("session-pdfs").remove(storagePathsToClean).catch(() => {});
     // Le cascade FK sur athlete_id nettoie alerts, athlete_goals,
     // athlete_notifications, athlete_wellness, injuries, push_subscriptions,
     // records, session_athletes, social_comments, social_posts,
@@ -346,10 +448,12 @@ async function main() {
     if (userB)        await admin.from("users").delete().eq("id", userB.id);
     if (userX)        await admin.from("users").delete().eq("id", userX.id);
     if (userY)        await admin.from("users").delete().eq("id", userY.id);
+    if (userZ)        await admin.from("users").delete().eq("id", userZ.id);
     if (authA)        await admin.auth.admin.deleteUser(authA.id).catch(() => {});
     if (authB)        await admin.auth.admin.deleteUser(authB.id).catch(() => {});
     if (authX)        await admin.auth.admin.deleteUser(authX.id).catch(() => {});
     if (authY)        await admin.auth.admin.deleteUser(authY.id).catch(() => {});
+    if (authZ)        await admin.auth.admin.deleteUser(authZ.id).catch(() => {});
     if (clubA)        await admin.from("clubs").delete().eq("id", clubA.id);
     if (clubB)        await admin.from("clubs").delete().eq("id", clubB.id);
   }

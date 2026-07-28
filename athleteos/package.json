@@ -5,7 +5,8 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test:rls": "node test_rls_regression.mjs"
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^6.0.2",
