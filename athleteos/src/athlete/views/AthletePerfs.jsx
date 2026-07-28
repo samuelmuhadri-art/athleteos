@@ -22,6 +22,7 @@ import {
 } from "recharts";
 import { supabase } from "../../utils/supabaseClient";
 import { getDiscHib, parsePerf, toLocalDateStr, getISOWeek, isBetterOrEqual, pctOfReference } from "../shared";
+import { resolveDisciplineId } from "../../domain/disciplines.js";
 import { notifyGoalAchieved, postClubCelebration } from "../../utils/notifications";
 import { getAthleteMetricsForWeek } from "../../utils/chargeCalculations";
 import MesRapports from "./MesRapports";
@@ -214,7 +215,13 @@ export default function AthletePerfs({ athlete, competitions, myPerformances, my
     if (!perfForm.discipline.trim() || !perfForm.value.trim()) return;
     setSavingPerf(true);
     try {
-      const isCombine = !!COMBINE_EVENTS[perfForm.discipline];
+      // Tâche 9 : normalise un alias saisi librement ("100 m" -> "100m")
+      // vers l'identifiant canonique avant d'écrire en base — une
+      // discipline personnalisée qui ne correspond à rien de connu passe
+      // telle quelle (trim uniquement), le registre officiel n'est jamais
+      // pollué par une saisie libre.
+      const disc = resolveDisciplineId(perfForm.discipline);
+      const isCombine = !!COMBINE_EVENTS[disc];
       const cleanBreakdown = isCombine
         ? Object.fromEntries(Object.entries(perfForm.breakdown).filter(([, v]) => v?.trim()))
         : null;
@@ -224,8 +231,8 @@ export default function AthletePerfs({ athlete, competitions, myPerformances, my
         .insert({
           athlete_id:       athlete.id,
           club_id:          clubId,
-          discipline:       perfForm.discipline,
-          discipline_type:  perfForm.discipline,
+          discipline:       disc,
+          discipline_type:  disc,
           value:            perfForm.value,
           performance_date: perfForm.performance_date,
           context:          perfForm.context || null,
@@ -235,15 +242,15 @@ export default function AthletePerfs({ athlete, competitions, myPerformances, my
       if (error) throw error;
       setLocalPerfs(prev => [...prev, data]);
 
-      await maybeUpdateRecord(perfForm.discipline, perfForm.value, perfForm.performance_date);
+      await maybeUpdateRecord(disc, perfForm.value, perfForm.performance_date);
 
       // Bascule l'onglet Évolution sur la discipline qu'on vient de saisir —
       // sinon elle reste affichée sur l'ancienne sélection et la nouvelle
       // discipline ajoutée (ex: Décathlon) semble "ne rien afficher" alors
       // qu'elle est bien enregistrée, juste pas sélectionnée.
-      setSelectedDisc(perfForm.discipline);
+      setSelectedDisc(disc);
 
-      setPerfForm({ discipline: perfForm.discipline, value: "", performance_date: toLocalDateStr(today), context: "", breakdown: {} });
+      setPerfForm({ discipline: disc, value: "", performance_date: toLocalDateStr(today), context: "", breakdown: {} });
       setShowAddPerf(false);
     } catch (e) {
       console.error("Erreur ajout perf:", e);
@@ -261,7 +268,7 @@ export default function AthletePerfs({ athlete, competitions, myPerformances, my
         .insert({
           athlete_id:   athlete.id,
           club_id:      clubId,
-          discipline:   goalForm.discipline,
+          discipline:   resolveDisciplineId(goalForm.discipline), // tâche 9 : alias -> id canonique
           target_value: goalForm.target_value,
           deadline:     goalForm.deadline || null,
           description:  goalForm.notes || null,
@@ -307,6 +314,8 @@ export default function AthletePerfs({ athlete, competitions, myPerformances, my
     if (!compForm.name.trim() || !compForm.date || !compForm.event.trim() || !compForm.result.trim()) return;
     setSavingComp(true);
     try {
+      // Tâche 9 : normalise un alias saisi librement avant d'écrire en base.
+      const event = resolveDisciplineId(compForm.event);
       const { data: comp, error: ce } = await supabase.from("competitions").insert({
         club_id:  clubId,
         name:     compForm.name.trim(),
@@ -319,13 +328,13 @@ export default function AthletePerfs({ athlete, competitions, myPerformances, my
       await supabase.from("competition_athletes").insert({
         competition_id: comp.id,
         athlete_id:     athlete.id,
-        planned_event:  compForm.event,
+        planned_event:  event,
       });
 
       await supabase.from("competition_results").insert({
         competition_id: comp.id,
         athlete_id:     athlete.id,
-        event:          compForm.event,
+        event:          event,
         result:         compForm.result,
         context:        compForm.context || null,
       });
@@ -334,7 +343,7 @@ export default function AthletePerfs({ athlete, competitions, myPerformances, my
       // Évolution — avant ce fix, seule "Saisir une performance" écrivait
       // dans athlete_performances, donc les résultats de compétition
       // (le cas normal pour un décathlon par ex.) n'y apparaissaient jamais.
-      const isCombine = !!COMBINE_EVENTS[compForm.event];
+      const isCombine = !!COMBINE_EVENTS[event];
       const cleanBreakdown = isCombine
         ? Object.fromEntries(Object.entries(compForm.breakdown).filter(([, v]) => v?.trim()))
         : null;
@@ -343,8 +352,8 @@ export default function AthletePerfs({ athlete, competitions, myPerformances, my
         .insert({
           athlete_id:       athlete.id,
           club_id:          clubId,
-          discipline:       compForm.event,
-          discipline_type:  compForm.event,
+          discipline:       event,
+          discipline_type:  event,
           value:            compForm.result,
           performance_date: compForm.date,
           context:          compForm.name.trim(),
@@ -357,12 +366,12 @@ export default function AthletePerfs({ athlete, competitions, myPerformances, my
       // Un résultat de compétition qui bat le PR/SB doit mettre le record à
       // jour tout seul — avant ce fix, seule "Saisir une performance" le
       // faisait, jamais cette modale-ci.
-      await maybeUpdateRecord(compForm.event, compForm.result, compForm.date);
+      await maybeUpdateRecord(event, compForm.result, compForm.date);
 
       // Idem que pour "Saisir une performance" : bascule Évolution sur la
       // discipline qu'on vient d'ajouter, sinon elle reste sur l'ancienne
       // sélection et semble vide alors qu'elle est bien enregistrée.
-      setSelectedDisc(compForm.event);
+      setSelectedDisc(event);
 
       setCompForm({ name: "", date: toLocalDateStr(new Date()), location: "", type: "Régionale", event: "", result: "", context: "", breakdown: {} });
       setShowAddComp(false);

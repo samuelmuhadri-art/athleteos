@@ -6,6 +6,14 @@
 
 import { Moon, Battery, HeartPulse, Smile, Activity } from "lucide-react";
 import { getISOWeek, parseLocalDate, initialsFromName } from "../utils/helpers.js";
+// Tâche 9 : le registre central des disciplines vit dans domain/disciplines.js
+// (identifiant, libellé, unité, higherIsBetter, décimales, alias, sous-
+// épreuves des combinées). Ce fichier ne fait plus que réexporter
+// getDiscType/getDiscHib pour ne rien casser côté appelants existants —
+// eux ne changent pas, seule la source de vérité derrière change.
+import {
+  DISCIPLINE_TYPE_COLORS, getDisciplineType, getDisciplineHib,
+} from "../domain/disciplines.js";
 
 export { getISOWeek, parseLocalDate, initialsFromName };
 
@@ -34,35 +42,8 @@ export const SESSION_COLORS = {
   recuperation: { bg: "#F8FAFC", border: "#CBD5E1", text: "#475569" },
 };
 
-export const DISC_PRESETS = [
-  { name: "100m",        type: "sprint",    unit: "s",     hib: false },
-  { name: "200m",        type: "sprint",    unit: "s",     hib: false },
-  { name: "400m",        type: "sprint",    unit: "s",     hib: false },
-  { name: "800m",        type: "endurance", unit: "min:s", hib: false },
-  { name: "1500m",       type: "endurance", unit: "min:s", hib: false },
-  { name: "60m haies",   type: "sprint",    unit: "s",     hib: false },
-  { name: "100m haies",  type: "sprint",    unit: "s",     hib: false },
-  { name: "110m haies",  type: "sprint",    unit: "s",     hib: false },
-  { name: "400m haies",  type: "sprint",    unit: "s",     hib: false },
-  { name: "Longueur",    type: "saut",      unit: "m",     hib: true  },
-  { name: "Triple saut", type: "saut",      unit: "m",     hib: true  },
-  { name: "Hauteur",     type: "saut",      unit: "m",     hib: true  },
-  { name: "Perche",      type: "saut",      unit: "m",     hib: true  },
-  { name: "Poids",       type: "lancer",    unit: "m",     hib: true  },
-  { name: "Disque",      type: "lancer",    unit: "m",     hib: true  },
-  { name: "Javelot",     type: "lancer",    unit: "m",     hib: true  },
-  { name: "Marteau",     type: "lancer",    unit: "m",     hib: true  },
-  { name: "Décathlon",   type: "combine",   unit: "pts",   hib: true  },
-  { name: "Heptathlon",  type: "combine",   unit: "pts",   hib: true  },
-];
-
-export const DISC_TYPE_COLORS = {
-  sprint:    { bg: "#DBEAFE", border: "#3B82F6", text: "#1D4ED8", dot: "#3B82F6" },
-  endurance: { bg: "#E0F2FE", border: "#0284C7", text: "#0C4A6E", dot: "#0284C7" },
-  saut:      { bg: "#F3E8FF", border: "#A855F7", text: "#6B21A8", dot: "#A855F7" },
-  lancer:    { bg: "#FFEDD5", border: "#F97316", text: "#9A3412", dot: "#F97316" },
-  combine:   { bg: "#FEF9C3", border: "#CA8A04", text: "#713F12", dot: "#CA8A04" },
-};
+// Réexport (compat) : la vraie liste vit dans domain/disciplines.js.
+export const DISC_TYPE_COLORS = DISCIPLINE_TYPE_COLORS;
 
 export const WELLNESS_QUESTIONS = [
   { key: "sleep",    label: "Qualité du sommeil",    icon: Moon,       color: "#7C3AED", desc: ["Très mauvais","Mauvais","Correct","Bon","Excellent"],            inverted: false },
@@ -250,16 +231,16 @@ export function parsePerf(str) {
   return { value: isNaN(num) ? null : num };
 }
 
+// getDiscType/getDiscHib délèguent au registre central (domain/disciplines.js,
+// tâche 9) — signatures inchangées pour ne rien casser côté appelants,
+// mais résolvent maintenant aussi les alias historiques ("100 m" -> "100m")
+// au lieu d'un lookup exact sur un seul nom.
 export function getDiscType(discName) {
-  return DISC_PRESETS.find(d => d.name === discName)?.type ?? "sprint";
+  return getDisciplineType(discName);
 }
 
-// Seule source de vérité pour "plus petit ou plus grand est meilleur" sur
-// une discipline. Défaut hib:false (chrono) pour une discipline inconnue/
-// personnalisée — comportement déjà en place avant la tâche 11, conservé
-// tel quel ici, juste appliqué partout de façon cohérente.
 export function getDiscHib(discName) {
-  return DISC_PRESETS.find(d => d.name === discName)?.hib ?? false;
+  return getDisciplineHib(discName);
 }
 
 // ─── Moteur central de comparaison de performances (tâche 11) ────────────────

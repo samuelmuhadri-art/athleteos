@@ -16,6 +16,7 @@ import ErrorState                   from "../components/ui/ErrorState";
 import { alertNewRecord, notifyAthleteResult, postClubCelebration } from "../utils/notifications";
 import { initialsFromName } from "../utils/helpers.js";
 import { TYPE_CONFIG, isNewRecord } from "./competitionsShared";
+import { resolveDisciplineId } from "../domain/disciplines.js";
 import CompCard from "./CompCard";
 import CompModal from "./CompModal";
 import CreateCompModal from "./CreateCompModal";
@@ -165,12 +166,15 @@ function Competitions() {
   // ═══ Écriture : ajouter un résultat ══════════════════════════════════════
 
   const addResult = useCallback(async (competitionId, athleteId, form) => {
+    // Tâche 9 : normalise un alias saisi librement ("100 m" -> "100m") vers
+    // l'identifiant canonique du registre avant d'écrire en base.
+    const event = resolveDisciplineId(form.event);
     const { error: insertError } = await supabase
       .from("competition_results")
       .insert({
         competition_id: competitionId,
         athlete_id:     athleteId,
-        event:          form.event,
+        event:          event,
         result:         form.result,
         context:        form.context || null,
       });
@@ -179,9 +183,12 @@ function Competitions() {
     // Détection automatique de record personnel
     const competition    = competitionList.find((c) => c.id === competitionId);
     const athlete        = athletes.find((a) => a.id === athleteId);
-    const existingRecord = records.find((r) => r.athleteId === athleteId && r.discipline === form.event);
+    // resolveDisciplineId sur r.discipline aussi : un record déjà stocké
+    // sous un alias non-canonique (saisi avant cette normalisation) doit
+    // quand même être retrouvé, pas dupliqué.
+    const existingRecord = records.find((r) => r.athleteId === athleteId && resolveDisciplineId(r.discipline) === event);
 
-    if (isNewRecord(form.result, existingRecord?.pr, form.event)) {
+    if (isNewRecord(form.result, existingRecord?.pr, event)) {
       if (existingRecord) {
         const { error: updateError } = await supabase
           .from("records")
@@ -193,7 +200,7 @@ function Competitions() {
           .from("records")
           .insert({
             athlete_id: athleteId,
-            discipline: form.event,
+            discipline: event,
             sb:         form.result,
             pr:         form.result,
             pr_date:    competition?.date ?? null,
@@ -201,13 +208,13 @@ function Competitions() {
         if (insertRecError) console.error("Erreur création record :", insertRecError);
       }
       // ✅ Système centralisé : alerte coach + notif athlète
-      await alertNewRecord(clubId, athlete, form.event, form.result, competition?.name);
-      await notifyAthleteResult(clubId, athleteId, form.event, form.result, competition?.name ?? "");
+      await alertNewRecord(clubId, athlete, event, form.result, competition?.name);
+      await notifyAthleteResult(clubId, athleteId, event, form.result, competition?.name ?? "");
       await postClubCelebration(clubId, athleteId, "record",
-        `${athlete?.name?.split(" ")[0] ?? "Un athlète"} a battu son record en ${form.event} : ${form.result} !`);
+        `${athlete?.name?.split(" ")[0] ?? "Un athlète"} a battu son record en ${event} : ${form.result} !`);
     } else {
       // Notif athlète même sans record
-      await notifyAthleteResult(clubId, athleteId, form.event, form.result, competition?.name ?? "");
+      await notifyAthleteResult(clubId, athleteId, event, form.result, competition?.name ?? "");
     }
 
     await fetchAll();
