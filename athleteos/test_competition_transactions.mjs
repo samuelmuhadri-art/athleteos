@@ -110,6 +110,15 @@ async function main() {
       record("les 2 athlètes sont bien liés à la compétition", (links ?? []).length === 2, `${links?.length ?? 0} lien(s)`);
     }
 
+    // Tous les tests suivants ont besoin d'une compétition valide — si le
+    // test 1 a échoué, mieux vaut s'arrêter proprement ici (et nettoyer)
+    // que de planter en cascade sur `compA.competitionId` undefined,
+    // ce qui masquerait le vrai échec derrière une erreur JS confuse.
+    if (!compA?.competitionId) {
+      record("Arrêt anticipé : pas de compétition valide, tests suivants ignorés", false, "voir l'échec ci-dessus");
+      return;
+    }
+
     // ── 4a. Un athlète ne peut pas appeler add_competition_result ──────────
     {
       const { error } = await athleteA.client.rpc("add_competition_result", {
