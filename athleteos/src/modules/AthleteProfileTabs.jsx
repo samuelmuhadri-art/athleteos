@@ -17,6 +17,7 @@ import {
 } from "../utils/chargeCalculations";
 import { getAthleteAxisProfile } from "../utils/loadAxes";
 import { getISOWeek } from "../utils/helpers.js";
+import { parsePerf, pctOfReference } from "../athlete/shared.js";
 import {
   RADAR_KEYS, scoreColor, acwrColor,
   ValidationBadge, StarRow, EmptySection, ChartTooltip, ScoreRing,
@@ -78,8 +79,12 @@ export const TabPerformances = memo(({ athlete, competitions, onAddRecord }) => 
               <tbody style={{ divideY: "1px solid var(--c-border)" }}>
                 {disciplines.map((disc, i) => {
                   const r    = athlete.records[disc];
-                  const sbN  = parseFloat(r.sb), prN = parseFloat(r.pr);
-                  const pct  = !isNaN(sbN) && !isNaN(prN) && prN > 0 ? Math.min(100, Math.round((sbN/prN)*100)) : null;
+                  // Tâche 11 : parsePerf (pas parseFloat, qui tronque "4:32" à 4) +
+                  // pctOfReference (sens correct pour les disciplines chronométrées,
+                  // au lieu d'un ratio sb/pr toujours dans le même sens).
+                  const sbN  = parsePerf(r.sb).value;
+                  const prN  = parsePerf(r.pr).value;
+                  const pct  = pctOfReference(sbN, prN, disc);
                   const pc   = pct === null ? "var(--c-text-4)" : pct >= 95 ? "#1D9E75" : pct >= 85 ? "#EF9F27" : "#E24B4A";
                   return (
                     <tr key={disc} style={{ borderTop: i > 0 ? "1px solid var(--c-border)" : "none", transition: "background 0.2s" }} onMouseEnter={e => e.currentTarget.style.background = "var(--c-surface-2)"} onMouseLeave={e => e.currentTarget.style.background = "transparent"}>

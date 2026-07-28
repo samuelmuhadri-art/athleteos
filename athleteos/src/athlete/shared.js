@@ -236,20 +236,62 @@ export function dateToISOWeek(s) { return getISOWeek(parseLocalDate(s)); }
 export function dateToDayName(s) { return DAYS_FR[(parseLocalDate(s).getDay()+6)%7]; }
 export function colorsFor(cat) { return SESSION_COLORS[cat] ?? SESSION_COLORS.technique; }
 
+// Parse UNIQUEMENT la valeur numérique d'une performance ("11.20" -> 11.2,
+// "4:32" -> 272, "7.60m" -> 7.6). Ne devine JAMAIS le sens (plus petit ou
+// plus grand est meilleur) depuis le FORMAT de la chaîne — un lancer de
+// poids saisi "14.20" (sans "m") ressemble textuellement à un chrono, et
+// l'ancienne version de cette fonction s'y trompait. Le sens vient
+// TOUJOURS de la discipline via getDiscHib(), jamais d'ici (tâche 11).
 export function parsePerf(str) {
-  if (!str) return { value: null, hib: true };
+  if (!str) return { value: null };
   const s = str.toString().trim();
-  if (/^\d+:\d+/.test(s)) { const [m,sec]=s.split(":").map(Number); return { value: m*60+sec, hib: false }; }
-  if (s.endsWith("m"))   return { value: parseFloat(s), hib: true };
-  if (s.includes("pts")) return { value: parseFloat(s), hib: true };
-  if (s.endsWith("s") || /^\d+\.\d+$/.test(s)) return { value: parseFloat(s), hib: false };
-  return { value: parseFloat(s)||null, hib: true };
+  if (/^\d+:\d+/.test(s)) { const [m, sec] = s.split(":").map(Number); return { value: m * 60 + sec }; }
+  const num = parseFloat(s);
+  return { value: isNaN(num) ? null : num };
 }
 
 export function getDiscType(discName) {
   return DISC_PRESETS.find(d => d.name === discName)?.type ?? "sprint";
 }
 
+// Seule source de vérité pour "plus petit ou plus grand est meilleur" sur
+// une discipline. Défaut hib:false (chrono) pour une discipline inconnue/
+// personnalisée — comportement déjà en place avant la tâche 11, conservé
+// tel quel ici, juste appliqué partout de façon cohérente.
 export function getDiscHib(discName) {
   return DISC_PRESETS.find(d => d.name === discName)?.hib ?? false;
+}
+
+// ─── Moteur central de comparaison de performances (tâche 11) ────────────────
+// Point unique de vérité pour "est-ce mieux", "quelle est la meilleure
+// valeur" et "quel pourcentage d'une référence est atteint" — à utiliser
+// PARTOUT à la place de comparaisons/ratios écrits à la main (Math.max,
+// v > best, current/target...), qui supposent implicitement "plus grand =
+// meilleur" et se trompent sur toutes les disciplines chronométrées.
+
+// `a` est-il meilleur ou égal à `b` (nombres déjà parsés, pas des chaînes) ?
+export function isBetterOrEqual(a, b, discipline) {
+  if (a == null) return false;
+  if (b == null) return true;
+  return getDiscHib(discipline) ? a >= b : a <= b;
+}
+
+// Comparateur numérique pour .sort() — trie du meilleur au moins bon.
+// Ex: values.sort((a, b) => compareValues(a, b, "100m"))
+export function compareValues(a, b, discipline) {
+  return getDiscHib(discipline) ? b - a : a - b;
+}
+
+// % d'accomplissement d'une valeur "current" par rapport à une "reference"
+// (typiquement le PR pour un résultat de compétition, ou le PR pour un
+// objectif visé), dans le bon sens selon la discipline, plafonné à 100%.
+// Sert à la fois pour "% du PR réalisé en compétition" (current=résultat,
+// reference=PR) et pour "progression vers un objectif" (current=PR,
+// reference=objectif) — même formule, mêmes garanties, un seul endroit à
+// corriger si un jour elle doit changer.
+export function pctOfReference(currentValue, referenceValue, discipline) {
+  if (currentValue == null || referenceValue == null || referenceValue === 0) return null;
+  const hib = getDiscHib(discipline);
+  const ratio = hib ? currentValue / referenceValue : referenceValue / currentValue;
+  return Math.min(100, Math.round(ratio * 1000) / 10);
 }

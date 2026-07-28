@@ -22,6 +22,15 @@ import LoadingState                   from "../components/ui/LoadingState";
 import ErrorState                     from "../components/ui/ErrorState";
 import { getAthleteMetricsForWeek }   from "../utils/chargeCalculations";
 import { getISOWeek, initialsFromName } from "../utils/helpers.js";
+// Tâche 11 : moteur central de comparaison de performances (parsePerf,
+// getDiscHib, pctOfReference, compareValues) — ce fichier avait sa PROPRE
+// copie de parsePerf() qui devinait le sens ("higherIsBetter") depuis le
+// FORMAT de la chaîne plutôt que depuis la discipline. Un lancer de poids
+// saisi "14.20" (sans "m") était pris pour un chrono. Supprimée, remplacée
+// par athlete/shared.js — seule source de vérité, partagée avec le côté
+// athlète, pour que classements et records concordent entre coach et
+// athlète (DoD tâche 11).
+import { parsePerf, getDiscHib, pctOfReference, compareValues } from "../athlete/shared.js";
 
 // ─── Constantes ───────────────────────────────────────────────────────────────
 
@@ -39,40 +48,19 @@ function getAllDisciplines(athletes) {
   return [...set].sort();
 }
 
-function parsePerf(str) {
-  if (!str) return { value: null, higherIsBetter: true };
-  const s = str.toString().trim();
-  if (/^\d+:\d+/.test(s)) {
-    const [min, sec] = s.split(":").map(Number);
-    return { value: min * 60 + sec, higherIsBetter: false };
-  }
-  if (s.endsWith("m"))           return { value: parseFloat(s), higherIsBetter: true  };
-  if (s.includes("pts"))         return { value: parseFloat(s), higherIsBetter: true  };
-  if (s.endsWith("s") || /^\d+\.\d+$/.test(s)) return { value: parseFloat(s), higherIsBetter: false };
-  const num = parseFloat(s);
-  return { value: isNaN(num) ? null : num, higherIsBetter: true };
-}
-
-function computePctPR(sb, pr) {
-  const sbP = parsePerf(sb), prP = parsePerf(pr);
-  if (sbP.value === null || prP.value === null || prP.value === 0) return null;
-  if (!sbP.higherIsBetter) return Math.min(100, Math.round((prP.value / sbP.value) * 1000) / 10);
-  return Math.min(100, Math.round((sbP.value / prP.value) * 1000) / 10);
-}
-
 function rankAthletes(athletes, discipline) {
   const withRecord = athletes
     .filter((a) => a.records?.[discipline])
     .map((a) => {
       const rec = a.records[discipline];
       const sbP = parsePerf(rec.sb);
-      const pct = computePctPR(rec.sb, rec.pr);
+      const prP = parsePerf(rec.pr);
+      const pct = pctOfReference(sbP.value, prP.value, discipline);
       const idx = athletes.findIndex((x) => x.id === a.id);
       return { athlete: a, rec, sbParsed: sbP, pct, colorIdx: idx % ATHLETE_COLORS.length };
     })
     .filter((e) => e.sbParsed.value !== null);
-  const hib = withRecord[0]?.sbParsed.higherIsBetter ?? true;
-  return withRecord.sort((a, b) => hib ? b.sbParsed.value - a.sbParsed.value : a.sbParsed.value - b.sbParsed.value);
+  return withRecord.sort((a, b) => compareValues(a.sbParsed.value, b.sbParsed.value, discipline));
 }
 
 function pctColor(pct) {
@@ -260,12 +248,15 @@ function Performances() {
       .sort((a, b) => new Date(a.competitions.date) - new Date(b.competitions.date))
       .map((r) => {
         const parsed = parsePerf(r.result);
-        return { date: new Date(r.competitions.date).toLocaleDateString("fr-FR", { day: "2-digit", month: "short" }), fullDate: r.competitions.date, compName: r.competitions.name, resultStr: r.result, resultNum: parsed.value, higherIsBetter: parsed.higherIsBetter, context: r.context };
+        return { date: new Date(r.competitions.date).toLocaleDateString("fr-FR", { day: "2-digit", month: "short" }), fullDate: r.competitions.date, compName: r.competitions.name, resultStr: r.result, resultNum: parsed.value, context: r.context };
       })
       .filter((d) => d.resultNum !== null);
   }, [historyResults, selectedAthleteId, selectedDisc]);
 
-  const isTimeEvent = evolutionData.length > 0 ? !evolutionData[0].higherIsBetter : false;
+  // Tâche 11 : le sens (chrono ou pas) vient de la discipline sélectionnée,
+  // pas d'un résultat individuel deviné depuis son format — un seul résultat
+  // mal formaté ne doit pas inverser l'axe du graphique pour tout le monde.
+  const isTimeEvent = selectedDisc ? !getDiscHib(selectedDisc) : false;
 
   // ═══ Render ═══════════════════════════════════════════════════════════════
   if (loading) return <LoadingState message="Chargement des performances…" />;

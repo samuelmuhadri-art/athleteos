@@ -21,7 +21,7 @@ import {
   ScatterChart, Scatter, ZAxis, ReferenceArea, ReferenceLine,
 } from "recharts";
 import { supabase } from "../../utils/supabaseClient";
-import { getDiscHib, parsePerf, toLocalDateStr, getISOWeek } from "../shared";
+import { getDiscHib, parsePerf, toLocalDateStr, getISOWeek, isBetterOrEqual, pctOfReference } from "../shared";
 import { notifyGoalAchieved, postClubCelebration } from "../../utils/notifications";
 import { getAthleteMetricsForWeek } from "../../utils/chargeCalculations";
 import MesRapports from "./MesRapports";
@@ -139,14 +139,19 @@ export default function AthletePerfs({ athlete, competitions, myPerformances, my
       .filter(Boolean);
   }, [compHistory, selectedDisc, athlete.records, weeklyCharge]);
 
+  // Tâche 11 : "meilleure" performance déterminée via le moteur central
+  // (isBetterOrEqual, qui consulte getDiscHib) — avant ce fix, un simple
+  // "v > best.v" retenait systématiquement la plus grande valeur, ce qui
+  // est faux pour toute discipline chronométrée (un 12.50 aurait été
+  // "meilleur" qu'un 11.00 sur 100m).
   const disciplineStats = useMemo(() => {
     const map = {};
     localPerfs.forEach(p => {
       if (!map[p.discipline]) map[p.discipline] = { count: 0, best: null, last: null };
       map[p.discipline].count++;
-      const v = parseFloat(p.value);
-      if (!isNaN(v)) {
-        if (!map[p.discipline].best || v > map[p.discipline].best.v)
+      const v = parsePerf(p.value).value;
+      if (v != null) {
+        if (!map[p.discipline].best || isBetterOrEqual(v, map[p.discipline].best.v, p.discipline))
           map[p.discipline].best = { v, date: p.performance_date, raw: p.value };
         map[p.discipline].last = { v, date: p.performance_date, raw: p.value };
       }
@@ -164,14 +169,13 @@ export default function AthletePerfs({ athlete, competitions, myPerformances, my
   const maybeUpdateRecord = async (disc, resultStr, dateStr) => {
     const newVal = parsePerf(resultStr);
     if (newVal.value == null) return false;
-    const hib    = getDiscHib(disc);
     const curRec = athlete.records?.[disc];
     const curPR  = curRec ? parsePerf(curRec.pr) : null;
     const curSB  = curRec ? parsePerf(curRec.sb) : null;
     const isThisYear = dateStr.slice(0, 4) === new Date().getFullYear().toString();
 
-    const isPR = !curPR?.value || (hib ? newVal.value >= curPR.value : newVal.value <= curPR.value);
-    const isSB = isThisYear && (!curSB?.value || (hib ? newVal.value >= curSB.value : newVal.value <= curSB.value));
+    const isPR = !curPR?.value || isBetterOrEqual(newVal.value, curPR.value, disc);
+    const isSB = isThisYear && (!curSB?.value || isBetterOrEqual(newVal.value, curSB.value, disc));
     if (!isPR && !isSB) return false;
 
     // Pas de contrainte UNIQUE(athlete_id,discipline) en base — un
@@ -584,9 +588,15 @@ export default function AthletePerfs({ athlete, competitions, myPerformances, my
                       SB <strong style={{ color: "var(--c-text-2)" }}>{athlete.records[selectedDisc].sb}</strong>
                     </span>
                     {chartData.length >= 2 && (() => {
-                      const diff = chartData[chartData.length - 1].value - chartData[0].value;
-                      const col  = diff >= 0 ? "#4DC9A0" : "#F19A9A";
-                      const Icon = diff > 0 ? TrendingUp : diff < 0 ? TrendingDown : Minus;
+                      // Tâche 11 : le signe de `diff` seul ne dit rien de "mieux"
+                      // ou "moins bien" — sur un chrono, une valeur qui BAISSE est
+                      // une amélioration. `improved` tranche via getDiscHib, pas
+                      // via le signe brut.
+                      const diff  = chartData[chartData.length - 1].value - chartData[0].value;
+                      const hib   = getDiscHib(selectedDisc);
+                      const improved = diff === 0 ? null : (hib ? diff > 0 : diff < 0);
+                      const col  = improved === null ? "var(--c-text-3)" : improved ? "#4DC9A0" : "#F19A9A";
+                      const Icon = improved === null ? Minus : improved ? TrendingUp : TrendingDown;
                       return (
                         <span style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 4, fontWeight: 700, color: col }}>
                           <Icon size={13} />
@@ -725,9 +735,13 @@ export default function AthletePerfs({ athlete, competitions, myPerformances, my
                       : null;
                     const isUrgent = daysLeft !== null && daysLeft <= 14;
                     const col      = discColor(g.discipline);
-                    const pr       = athlete.records?.[g.discipline]?.pr;
-                    const prN = parseFloat(pr), tgN = parseFloat(g.target_value);
-                    const pct = (!isNaN(prN) && !isNaN(tgN) && tgN > 0) ? Math.min(100, Math.max(0, Math.round((prN/tgN)*100))) : null;
+                    const pr  = athlete.records?.[g.discipline]?.pr;
+                    // Tâche 11 : parsePerf (pas parseFloat, qui tronque "4:32" à 4)
+                    // + pctOfReference (pas un ratio PR/target écrit à la main, faux
+                    // sens pour un objectif chronométré plus rapide que le PR).
+                    const prN  = parsePerf(pr).value;
+                    const tgN  = parsePerf(g.target_value).value;
+                    const pct  = pctOfReference(prN, tgN, g.discipline);
 
                     return (
                       <div key={g.id} className="card p-4" style={{ display: "flex", gap: 14, alignItems: "flex-start" }}>
@@ -750,7 +764,7 @@ export default function AthletePerfs({ athlete, competitions, myPerformances, my
                               Échéance : {new Date(g.deadline).toLocaleDateString("fr-BE", { day: "numeric", month: "long", year: "numeric" })}
                             </p>
                           )}
-                          <GoalProgressBar pr={pr} target={g.target_value} color={col} />
+                          <GoalProgressBar pr={pr} target={g.target_value} discipline={g.discipline} color={col} />
                           <div style={{ display: "flex", alignItems: "center", gap: 14, marginTop: 12, paddingTop: 12, borderTop: "1px solid var(--c-border)" }}>
                             <button onClick={() => handleMarkGoalDone(g.id)}
                               style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11.5, fontWeight: 600, color: "#4DC9A0", background: "none", border: "none", cursor: "pointer" }}>

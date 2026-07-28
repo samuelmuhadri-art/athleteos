@@ -7,7 +7,7 @@
 
 import { useMemo, useEffect } from "react";
 import { ChevronRight } from "lucide-react";
-import { getDiscHib, parsePerf } from "../shared";
+import { getDiscHib, parsePerf, pctOfReference } from "../shared";
 import { discColor, recordStatusColor } from "./perfsShared";
 
 // ─── Confettis — célébration d'un nouveau record personnel ───────────────────
@@ -162,11 +162,15 @@ export function RecordCard({ disc, rec, onSeeEvolution, stats }) {
 }
 
 // ─── Barre de progression PR → objectif ──────────────────────────────────────
-export function GoalProgressBar({ pr, target, color }) {
+export function GoalProgressBar({ pr, target, discipline, color }) {
   if (!pr || !target) return null;
-  const prN = parseFloat(pr), tgN = parseFloat(target);
-  if (isNaN(prN) || isNaN(tgN) || tgN <= 0) return null;
-  const pct = Math.min(100, Math.max(0, Math.round((prN / tgN) * 100)));
+  // Tâche 11 : parsePerf (pas parseFloat, qui tronque "4:32" à 4) +
+  // pctOfReference (pas un ratio PR/target écrit à la main, qui donnait
+  // ~100%+ dès le départ pour un objectif chronométré plus rapide que le PR).
+  const prN = parsePerf(pr).value;
+  const tgN = parsePerf(target).value;
+  const pct = pctOfReference(prN, tgN, discipline);
+  if (pct === null) return null;
   return (
     <div style={{ marginTop: 12 }}>
       <div style={{ display: "flex", justifyContent: "space-between", fontSize: 9.5, fontWeight: 500, color: "var(--c-text-3)", marginBottom: 6 }}>

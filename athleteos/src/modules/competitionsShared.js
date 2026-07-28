@@ -4,7 +4,15 @@
 // CompModal.jsx, CreateCompModal.jsx et AddResultInline.jsx.
 // ============================================================
 
-import { getAthleteMetricsForWeek } from "../utils/chargeCalculations";
+import { getAthleteMetricsForWeek } from "../utils/chargeCalculations.js";
+// Tâche 11 : moteur central de comparaison de performances — ce fichier
+// avait sa PROPRE copie de parsePerf() qui devinait le sens ("higherIsBetter")
+// depuis le FORMAT de la chaîne plutôt que depuis la discipline (un lancer
+// de poids "14.20" sans "m" était pris pour un chrono). isNewRecord()
+// décide si un résultat de compétition écrase le PR en base — une mauvaise
+// détection ici corrompait silencieusement les records. Remplacée par
+// athlete/shared.js, seule source de vérité.
+import { parsePerf, getDiscHib } from "../athlete/shared.js";
 
 // ─── Config types de compétition (UI statique) ────────────────────────────────
 
@@ -63,26 +71,12 @@ export function dateToWeek(dateStr) {
   return Math.ceil(((d - jan1) / 86400000 + jan1.getDay() + 1) / 7);
 }
 
-export function parsePerf(str) {
-  if (!str) return { value: null, higherIsBetter: true };
-  const s = str.toString().trim();
-  if (/^\d+:\d+/.test(s)) {
-    const [min, sec] = s.split(":").map(Number);
-    return { value: min * 60 + sec, higherIsBetter: false };
-  }
-  if (s.endsWith("m"))                          return { value: parseFloat(s), higherIsBetter: true  };
-  if (s.includes("pts"))                        return { value: parseFloat(s), higherIsBetter: true  };
-  if (s.endsWith("s") || /^\d+\.\d+$/.test(s)) return { value: parseFloat(s), higherIsBetter: false };
-  const num = parseFloat(s);
-  return { value: isNaN(num) ? null : num, higherIsBetter: true };
-}
-
-export function isNewRecord(newResult, existingPr) {
+export function isNewRecord(newResult, existingPr, discipline) {
   if (!existingPr) return true;
   const a = parsePerf(newResult);
   const b = parsePerf(existingPr);
   if (a.value === null || b.value === null) return false;
-  return a.higherIsBetter ? a.value > b.value : a.value < b.value;
+  return getDiscHib(discipline) ? a.value > b.value : a.value < b.value;
 }
 
 export function generateResultAnalysis(result, competition, athlete, weeklyCharge) {

@@ -181,7 +181,7 @@ function Competitions() {
     const athlete        = athletes.find((a) => a.id === athleteId);
     const existingRecord = records.find((r) => r.athleteId === athleteId && r.discipline === form.event);
 
-    if (isNewRecord(form.result, existingRecord?.pr)) {
+    if (isNewRecord(form.result, existingRecord?.pr, form.event)) {
       if (existingRecord) {
         const { error: updateError } = await supabase
           .from("records")

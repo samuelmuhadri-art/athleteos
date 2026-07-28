@@ -7,50 +7,53 @@
 - **Tâche 15** (langage scientifique prudent) : terminée, commitée (`fee2254`) et poussée.
 - **Tâche 16** (versionnement JS/SQL des coefficients de charge) : terminée, commitée (`10e036c`) et poussée. Migration appliquée et testée avec succès par l'utilisateur.
 - **Tâche 17** (récupération en plage + confiance) : terminée, commitée (`dc9929f`) et poussée. Test pur JS exécuté avec succès (16/16), aucune migration nécessaire.
+- **Tâche 18** (profil de charge à 6 axes gouverné) : terminée, commitée (`399cc1b`) et poussée.
 
 ## Tâche active
-- Numéro : 18
+- Numéro : 11
 - Branche : main (aucune branche dédiée créée — travail effectué directement, non commité)
-- Objectif : Gouverner le profil de charge à 6 axes — configuration versionnée, contributions par séance, baseline personnelle explicite, qualité de données, "convention AthleteOS" affichée.
-- Risques : Faibles — nouvelle table Postgres additive (même pattern que la tâche 16, déjà éprouvé), aucune modification de données existantes, aucun calcul SQL touché (le profil à 6 axes reste 100% client).
+- Objectif : Corriger toutes les comparaisons de performances (records, classements, graphiques, objectifs) pour les disciplines où une valeur plus basse est meilleure (chronos).
+- Risques : Aucun risque de données — changements 100% JavaScript côté client, aucune migration. Risque fonctionnel réel avant correction : des records pouvaient être écrasés par de moins bonnes performances sur les disciplines chronométrées.
 
 ## Décisions prises
-- **Même architecture que la tâche 16, appliquée à `AXIS_WEIGHTS`** : nouvelle table `axis_model_versions` (version, poids jsonb imbriqué catégorie→axe, une seule version active, bornes [0,1] appliquées par trigger, colonnes d'audit). Portée volontairement identique à la tâche 16 : je construis la couche données gouvernée, pas d'écran coach pour créer une nouvelle version — ce qui satisfait de fait "mode par défaut verrouillé pour les pilotes" (aucun moyen de le déverrouiller sans accès direct à la base).
-- **Pas de table `club_model_settings` séparée** pour une surcharge par club — la Definition of Done de cette tâche ne l'exige pas explicitement (contrairement à "Exécution détaillée" qui l'évoque comme piste), et l'ajouter aurait doublé la complexité de cette tâche pour une fonctionnalité qui a de toute façon besoin d'un écran d'édition inexistant pour être utile.
-- **Baseline personnelle rendue explicite** : `getAthleteAxisProfile` expose maintenant `acute`/`chronic` bruts (pas seulement le ratio/score) — DoD "distinguer charge absolue, ratio à l'habitude". 
-- **Qualité de données** : nouveau champ `dataQuality` (faible/modérée/élevée) basé sur le nombre de semaines d'historique disponibles, mêmes paliers que la confiance de `estimateRecovery` (tâche 17) pour rester cohérent dans toute l'app.
-- **Contributions par séance** : nouvelle fonction `getAxisTopContributors()` — pour un axe donné, les séances des 2 dernières semaines qui y ont le plus contribué, triées. Répond concrètement au DoD "chaque axe explique ses principales contributions".
-- **Affichage** : chaque ligne d'axe dans `AxisRadarCard.jsx` devient dépliable au clic (badge "Convention AthleteOS" + version, baseline, qualité de données, séances contributrices) — sans changer le radar ni la liste sobre par défaut, pour respecter le design existant. Ce composant est **partagé entre l'athlète et le coach** (déjà le cas avant cette tâche) : l'enrichissement profite donc aux deux automatiquement, sans duplication de code.
-- **Export pour validation scientifique future** : satisfait par la table elle-même — n'importe qui avec un accès Supabase peut faire `SELECT * FROM axis_model_versions` et obtenir un JSON exportable avec version/poids/notes/date. Pas de bouton d'export dédié construit (aurait nécessité un écran, hors périmètre).
-- **Bug préexistant corrigé en cours de route** : `loadAxes.js` importait `trainingLoad` sans extension `.js` — toléré par Vite mais pas par le résolveur ESM strict de Node, ce qui empêchait mon script de test de tourner. Corrigé (`./trainingLoad` → `./trainingLoad.js`), sans effet sur le comportement (Vite gère les deux formes identiquement) — vérifié par un rebuild complet après coup.
+- **Ampleur du problème plus grande que prévu** : recherche exhaustive de tous les affichages de "best"/classement/pourcentage/objectif dans le code, comme demandé par "Exécution détaillée". Résultat : **3 copies quasi-identiques** de la fonction `parsePerf` existaient (`athlete/shared.js`, `modules/Performances.jsx`, `modules/competitionsShared.js`), chacune devinant le sens ("plus petit ou plus grand est meilleur") **depuis le FORMAT de la chaîne** plutôt que depuis la discipline — ex: un lancer de poids saisi "14.20" (sans "m") était pris pour un chrono. Plus 4 autres endroits avec des comparaisons/ratios écrits à la main sans tenir compte du sens. Confirmé par test : le lancer de poids était le piège exact qui cassait l'ancienne heuristique.
+- **Moteur central créé dans `athlete/shared.js`** (déjà le fichier qui contient `getDiscHib`/`DISC_PRESETS`, la vraie source de vérité sur le sens par discipline) : `isBetterOrEqual`, `compareValues`, `pctOfReference`. `parsePerf` simplifiée pour ne plus PARSER que la valeur numérique — elle ne devine plus jamais le sens (le champ `hib`/`higherIsBetter` qu'elle renvoyait avant n'était d'ailleurs déjà lu nulle part dans les endroits corrects du code, seulement dans les copies dupliquées buguées).
+- **`pctOfReference` sert à deux usages avec la même formule** : "% du PR réalisé en compétition" et "progression vers un objectif" — évite d'avoir deux formules à maintenir en cohérence.
+- **`Performances.jsx` (vue coach) et `competitionsShared.js`** : suppression complète de leurs copies locales de `parsePerf`, remplacées par un import depuis `athlete/shared.js` — c'est le changement le plus important pour le DoD "les classements et records concordent entre coach et athlète" (avant, coach et athlète utilisaient déjà des fonctions différentes qui pouvaient diverger).
+- **`isNewRecord`** (competitionsShared.js, décide si un résultat de compétition écrase le PR en base) prend maintenant la discipline en paramètre — corrige un vrai risque de corruption de records pour les lancers/sauts saisis sans unité.
+- **`AddGoalModal.jsx`** : lu entièrement, ne contient aucune logique de comparaison (formulaire pur) — aucun changement nécessaire, confirmé.
+- **Bug préexistant corrigé en cours de route** (même nature qu'aux tâches 18) : imports sans extension `.js` dans `competitionsShared.js`, empêchant l'exécution directe via Node — corrigé, aucun effet sur Vite.
+- **Ce que je n'ai pas touché, volontairement** : `chargeVsPerfData` (AthletePerfs.jsx) et `RecordCard` (PerfsWidgets.jsx) étaient déjà corrects (utilisaient déjà `getDiscHib`) — je ne les ai pas "refactorés pour faire propre" quand ça aurait changé un comportement volontaire non lié au bug (ex: le plafond à 105% au lieu de 100% dans `chargeVsPerfData`, qui permet de visualiser une performance qui dépasse le PR).
 
 ## Fichiers modifiés
-- `supabase/migrations/20260728010000_axis_model_versioning.sql` (créé) : table `axis_model_versions` + trigger de validation des bornes + version `v1` = copie exacte d'`AXIS_WEIGHTS`.
-- `src/utils/loadAxes.js` : `CURRENT_AXIS_MODEL_VERSION`, `getAthleteAxisProfile` enrichi (acute/chronic/dataQuality/weeksOfData), nouvelle fonction `getAxisTopContributors`, correction de l'import `trainingLoad.js`.
-- `src/components/ui/AxisRadarCard.jsx` : lignes d'axe dépliables (provenance, baseline, qualité, contributions) ; nouvelles props optionnelles `sessions`/`athleteId`/`currentWeek`.
-- `src/athlete/views/AthleteDashboard.jsx` et `src/modules/AthleteProfileTabs.jsx` : passent les nouvelles props à `AxisRadarCard`.
-- `test_axis_profile.mjs` (créé) : test pur JS, **exécuté avec succès (11/11)**.
-- `test_axis_model_parity.mjs` (créé) : test base de données (parité, bornes, version unique, non-mutation de 'v1') — écrit, pas exécuté (nécessite migration + secrets, comme tâche 16).
+- `src/athlete/shared.js` : `parsePerf` simplifiée (valeur seule, ne devine plus le sens) ; ajout de `isBetterOrEqual`, `compareValues`, `pctOfReference` (moteur central).
+- `src/athlete/views/AthletePerfs.jsx` : `disciplineStats` (le bug explicitement cité par la tâche), indicateur de tendance du graphique Évolution (sens de l'amélioration), pourcentage de progression d'objectif, `maybeUpdateRecord` simplifié pour utiliser le moteur central.
+- `src/athlete/views/PerfsWidgets.jsx` : `GoalProgressBar` corrigée (nouvelle prop `discipline`).
+- `src/modules/Performances.jsx` : suppression de `parsePerf`/`computePctPR` locaux, `rankAthletes` et `isTimeEvent` corrigés pour utiliser le moteur central.
+- `src/modules/competitionsShared.js` : suppression de `parsePerf` local, `isNewRecord` prend la discipline en paramètre, import extension `.js` corrigée.
+- `src/modules/Competitions.jsx` : passe la discipline à `isNewRecord`.
+- `src/modules/AthleteProfileTabs.jsx` : colonne "Progression" du tableau de records coach corrigée (parsePerf + pctOfReference au lieu de parseFloat sans sens).
+- `test_perf_engine.mjs` (créé) : test pur JS, **exécuté avec succès (34/34)**.
 
 ## Vérifications exécutées
-- [x] `npm run build` — succès (3 fois : après le JS, après la correction d'import, vérification finale).
+- [x] `npm run build` — succès (2 fois).
 - [ ] `npm run lint` / `npm run typecheck` — toujours aucun script dans le repo.
-- [x] **`node test_axis_profile.mjs` — exécuté réellement, 11/11 OK.** Couvre : bornes et couverture complète des poids, golden dataset (charge par axe d'une séance connue, calculée à la main et vérifiée), baseline insuffisante (<2 semaines → null), reproductibilité (même entrée → même sortie), qualité de données croissante avec l'historique, exposition acute/chronic, tri des séances contributrices.
-- [ ] **`test_axis_model_parity.mjs` — écrit mais PAS exécuté contre la vraie base.** Nécessite `supabase db push` (interdit dans cette tâche) et des secrets Supabase live. Vérifié manuellement par relecture croisée que les poids JS (`AXIS_WEIGHTS`) et le JSON seedé dans la migration sont identiques valeur par valeur.
-- [x] Relecture de la migration SQL (verrouillage, bornes, RLS, grants, contrainte d'unicité partielle) — même schéma déjà validé et exécuté avec succès en tâche 16, donc risque résiduel faible.
+- [x] **`node test_perf_engine.mjs` — exécuté réellement, 34/34 OK.** Couvre exactement les scénarios demandés : 100m, 1500m, Longueur, Poids, Décathlon ; égalité et précision différente ("11.2" vs "11.20") ; objectif déjà atteint, non atteint et incohérent (données absentes → null, jamais un chiffre inventé) ; classements triés dans le bon sens ; `isNewRecord` avec le piège exact qui cassait l'ancienne heuristique (lancer de poids sans unité).
+- [x] Recherche exhaustive de tous les sites de comparaison (`Math.max`/`Math.min`/`.sort`/`hib`/`isBetter`) dans tout `src/` avant de conclure la liste des fichiers à corriger — pas seulement les fichiers listés dans la tâche.
+- [x] Vérifié qu'`AddGoalModal.jsx` (listé dans la tâche) ne contient aucune logique à corriger (formulaire pur) — lu entièrement pour confirmer, pas juste supposé.
 
 ## Résultats et limites
-- **Rien n'a été commité, poussé, ni migré.**
-- **Ordre de déploiement** (identique à la tâche 16) :
-  1. `supabase db push` — crée `axis_model_versions`.
-  2. `node test_axis_model_parity.mjs` (avec `SUPABASE_SERVICE_ROLE_KEY`, comme d'habitude).
-- **Dette assumée** (même nature qu'en tâche 16) : pas d'écran coach pour créer une nouvelle version ou une surcharge par club — nécessite en base directement pour l'instant.
-- **`getAxisTopContributors` suppose `sessions[].athleteIds`/`validations`** (format déjà utilisé partout ailleurs dans l'app) — pas de nouveau format introduit.
+- **Rien n'a été commité ni poussé.**
+- **Aucune action de déploiement nécessaire après le commit/push** — changements 100% JavaScript, aucune migration, aucune Edge Function.
+- **Rendu de graphiques avec axe temporel** (une des vérifications obligatoires) : le graphique `Performances.jsx` (vue coach, `isTimeEvent`) inverse déjà l'axe Y et formate en min:s pour les chronos — ce mécanisme existait avant, je l'ai seulement reconnecté à `getDiscHib` au lieu d'un résultat deviné. Non revérifié visuellement dans un navigateur (voir tests manuels ci-dessous).
+- **`chargeVsPerfData`** garde son plafond à 105% (comportement préexistant, volontaire, non touché) — différent de `pctOfReference` qui plafonne à 100%. Différence mineure et déjà présente avant cette tâche, signalée ici par transparence.
 
-## Tests manuels recommandés (à faire par vous, après migration)
-- [ ] Exécuter `node test_axis_model_parity.mjs` et vérifier que tout est ✅.
-- [ ] Sur l'appli (athlète et coach), taper sur une ligne d'axe dans le "Profil de charge" et vérifier que le détail (convention, baseline, séances contributrices) s'affiche et reste lisible sur mobile.
-- [ ] Vérifier qu'un axe sans assez d'historique (nouvel athlète) n'affiche toujours aucun radar plutôt qu'un score inventé (comportement inchangé, à reconfirmer visuellement).
+## Tests manuels recommandés (à faire par vous)
+- [ ] Saisir une performance sur une discipline chronométrée (ex: 100m) avec une valeur meilleure que le PR actuel (temps plus bas) et vérifier que le record se met à jour.
+- [ ] Sur l'onglet Évolution (côté athlète), vérifier que l'icône de tendance est verte/TrendingUp quand un chrono s'améliore (baisse), pas quand il empire.
+- [ ] Créer un objectif chronométré plus rapide que le PR actuel et vérifier que la barre de progression n'affiche pas déjà 100%.
+- [ ] Côté coach (Performances.jsx), vérifier le classement d'une discipline chronométrée (100m, 1500m) — le premier du classement doit être le plus rapide, pas le temps le plus élevé.
+- [ ] Vérifier un résultat de lancer de poids saisi sans unité (ex: "14.20") côté compétitions — doit être traité comme une distance (plus grand = record), pas comme un chrono.
 
 ## Prochaine tâche autorisée
-Non déterminée ici — arrêt après la tâche 18 comme demandé. Ne pas démarrer la tâche suivante automatiquement.
+Non déterminée ici — arrêt après la tâche 11 comme demandé. Ne pas démarrer la tâche suivante automatiquement.
