@@ -26,6 +26,7 @@ import {
 import FormeDetailPanel from "../components/FormeDetailPanel";
 import AxisRadarCard from "../../components/ui/AxisRadarCard";
 import { SessionDetailModal } from "./AthletePlanning";
+import { openSessionPdf } from "../../utils/storage";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 function getDiscType(discName) {
@@ -717,10 +718,10 @@ export default function AthleteDashboard({
                     </p>
                   </div>
                   {s.pdfUrl && (
-                    <a href={s.pdfUrl} target="_blank" rel="noopener noreferrer"
-                      style={{ display: "flex", alignItems: "center", gap: 3, padding: "2px 6px", borderRadius: 5, background: "rgba(91,141,239,0.15)", color: "#5B8DEF", fontSize: 9.5, fontWeight: 500, flexShrink: 0, textDecoration: "none" }}>
+                    <button type="button" onClick={() => openSessionPdf(s.pdfUrl)}
+                      style={{ display: "flex", alignItems: "center", gap: 3, padding: "2px 6px", borderRadius: 5, background: "rgba(91,141,239,0.15)", color: "#5B8DEF", fontSize: 9.5, fontWeight: 500, flexShrink: 0, border: "none", cursor: "pointer" }}>
                       <FileText size={9} />PDF
-                    </a>
+                    </button>
                   )}
                   <span style={{ flexShrink: 0, padding: "2px 8px", borderRadius: 6, background: stCfg.bg, color: stCfg.color, fontSize: 10, fontWeight: 500 }}>
                     {stCfg.label}

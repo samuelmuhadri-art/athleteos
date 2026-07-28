@@ -151,11 +151,19 @@ function Planning() {
   }, [fetchAll, sessionList]);
 
   const deleteSession = useCallback(async (sessionId) => {
+    const existing = sessionList.find(s => s.id === sessionId);
     await supabase.from("session_athletes").delete().eq("session_id", sessionId);
     const { error: e } = await supabase.from("sessions").delete().eq("id", sessionId);
     if (e) throw e;
+    // Évite d'orpheliner le fichier storage privé une fois la séance
+    // supprimée (échec d'écriture ici non bloquant : la séance est déjà
+    // supprimée, le PDF orphelin est un problème mineur, pas une erreur
+    // utilisateur à faire remonter).
+    if (existing?.pdfUrl) {
+      await supabase.storage.from("session-pdfs").remove([existing.pdfUrl]).catch(() => {});
+    }
     await fetchAll();
-  }, [fetchAll]);
+  }, [fetchAll, sessionList]);
 
   const setRpe = useCallback(async (sessionId, athleteId, rpe) => {
     setSessionList(prev => prev.map(s => s.id !== sessionId ? s : {

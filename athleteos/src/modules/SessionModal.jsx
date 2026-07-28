@@ -6,6 +6,7 @@
 import { memo, useState } from "react";
 import { X, Users, FileText, AlertCircle, Star, Zap } from "lucide-react";
 import { CATEGORIES, colors, sessionStatus, ValidationBadge, StatusIcon } from "./planningShared";
+import { openSessionPdf } from "../utils/storage";
 
 const SessionModal = memo(({ session, athletes, onClose, onSetRpe, onSetStatus, onEditRequest, onDeleteSession }) => {
   const [deleting,    setDeleting]    = useState(false);
@@ -181,12 +182,12 @@ const SessionModal = memo(({ session, athletes, onClose, onSetRpe, onSetStatus, 
 
           {/* PDF */}
           {session.pdfUrl && (
-            <a href={session.pdfUrl} target="_blank" rel="noopener noreferrer"
-              className="flex items-center gap-3 px-4 py-3.5 rounded-2xl text-[13px] font-semibold transition-colors"
+            <button type="button" onClick={() => openSessionPdf(session.pdfUrl)}
+              className="w-full flex items-center gap-3 px-4 py-3.5 rounded-2xl text-[13px] font-semibold transition-colors"
               style={{ background: "rgba(91,158,245,0.10)", border: "1px solid rgba(91,158,245,0.25)", color: "#A9CBFB" }}>
               <span className="text-[18px]">📄</span>
               Voir le PDF de séance
-            </a>
+            </button>
           )}
 
           {/* Athlètes */}

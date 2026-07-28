@@ -11,6 +11,8 @@ import { notifyCoachMessage, alertAthleteSession } from "../../utils/notificatio
 import { CATEGORIES, dateToISOWeek, dateToDayName, toLocalDateStr } from "../shared";
 import { cat } from "./planningShared";
 
+const PDF_MAX_BYTES = 30 * 1024 * 1024; // aligné sur file_size_limit du bucket session-pdfs
+
 const CreateSessionModal = memo(({ athlete, allAthletes, clubId, createdBy, coachUserId, onClose, onCreated }) => {
   const today = toLocalDateStr(new Date());
   const [form, setForm] = useState({
@@ -22,6 +24,12 @@ const CreateSessionModal = memo(({ athlete, allAthletes, clubId, createdBy, coac
   const [err,     setErr]     = useState(null);
 
   const set       = (k, v) => setForm(f => ({ ...f, [k]: v }));
+  const pickPdf = file => {
+    if (!file) { setPdfFile(null); return; }
+    if (file.type !== "application/pdf") { setPdfFile(null); setErr("Le fichier doit être un PDF."); return; }
+    if (file.size > PDF_MAX_BYTES) { setPdfFile(null); setErr("PDF trop volumineux (30 Mo max)."); return; }
+    setErr(null); setPdfFile(file);
+  };
   const toggleInv = id => setForm(f => ({
     ...f,
     invitedAthletes: f.invitedAthletes.includes(id)
@@ -38,14 +46,14 @@ const CreateSessionModal = memo(({ athlete, allAthletes, clubId, createdBy, coac
     try {
       let pdfUrl = null;
       if (pdfFile) {
-        const ext  = pdfFile.name.split(".").pop();
         // Préfixé par club_id — requis par les policies storage scopées par
-        // club (sinon l'upload est rejeté par RLS).
-        const path = `${clubId}/${Date.now()}.${ext}`;
+        // club (sinon l'upload est rejeté par RLS). Extension forcée en
+        // .pdf et chemin (pas d'URL publique) stocké en base — le bucket
+        // est privé, ouverture via URL signée à la volée (src/utils/storage.js).
+        const path = `${clubId}/${Date.now()}.pdf`;
         const { error: ue } = await supabase.storage.from("session-pdfs").upload(path, pdfFile);
         if (ue) throw ue;
-        const { data: ud } = supabase.storage.from("session-pdfs").getPublicUrl(path);
-        pdfUrl = ud?.publicUrl ?? null;
+        pdfUrl = path;
       }
       const catLabel = CATEGORIES.find(x => x.id === form.category)?.label ?? form.category;
       const { data: ns, error: se } = await supabase.from("sessions").insert({
@@ -191,7 +199,7 @@ const CreateSessionModal = memo(({ athlete, allAthletes, clubId, createdBy, coac
                   : <p style={{ fontSize: 12, color: "var(--c-text-3)" }}>Appuie pour joindre un PDF</p>}
               </div>
               <input type="file" accept="application/pdf" className="sr-only"
-                onChange={e => setPdfFile(e.target.files?.[0] ?? null)} />
+                onChange={e => pickPdf(e.target.files?.[0] ?? null)} />
             </label>
           </div>
 

@@ -10,6 +10,8 @@ import { supabase }  from "../utils/supabaseClient";
 import { useAuth }   from "../context/AuthContext";
 import { CATEGORIES, SESSION_COLORS, EMPTY_FORM, dateToISOWeek, dateToDayName, toLocalDateStr } from "./planningShared";
 
+const PDF_MAX_BYTES = 30 * 1024 * 1024; // aligné sur file_size_limit du bucket session-pdfs
+
 const AddSessionModal = memo(({ athletes, initialData, onClose, onAdd }) => {
   const { clubId } = useAuth();
   const isEdit = !!initialData;
@@ -17,9 +19,16 @@ const AddSessionModal = memo(({ athletes, initialData, onClose, onAdd }) => {
   const [form, setForm]             = useState(initialData ?? { ...EMPTY_FORM, sessionDate: today });
   const [saving, setSaving]         = useState(false);
   const [pdfFile, setPdfFile]       = useState(null);
+  const [pdfError, setPdfError]     = useState(null);
   const [uploadingPdf, setUploadingPdf] = useState(false);
 
   const set = useCallback((key, val) => setForm(f => ({ ...f, [key]: val })), []);
+  const pickPdf = useCallback(file => {
+    if (!file) { setPdfFile(null); setPdfError(null); return; }
+    if (file.type !== "application/pdf") { setPdfFile(null); setPdfError("Le fichier doit être un PDF."); return; }
+    if (file.size > PDF_MAX_BYTES) { setPdfFile(null); setPdfError("PDF trop volumineux (30 Mo max)."); return; }
+    setPdfError(null); setPdfFile(file);
+  }, []);
   const toggleAthlete = useCallback(id => {
     setForm(f => ({
       ...f,
@@ -36,14 +45,16 @@ const AddSessionModal = memo(({ athletes, initialData, onClose, onAdd }) => {
       let pdfUrl = form.pdfUrl ?? null;
       if (pdfFile) {
         setUploadingPdf(true);
-        const ext  = pdfFile.name.split(".").pop();
         // Préfixé par club_id — requis par les policies storage scopées par
-        // club (sinon l'upload est rejeté par RLS).
-        const path = `${clubId}/${Date.now()}.${ext}`;
+        // club (sinon l'upload est rejeté par RLS). Extension forcée en
+        // .pdf (le bucket n'accepte que application/pdf côté serveur) et le
+        // chemin (pas d'URL publique) est ce qui est stocké en base — le
+        // bucket est privé, l'ouverture se fait via une URL signée générée
+        // à la volée (voir src/utils/storage.js).
+        const path = `${clubId}/${Date.now()}.pdf`;
         const { error: uploadErr } = await supabase.storage.from("session-pdfs").upload(path, pdfFile);
         if (uploadErr) throw uploadErr;
-        const { data: urlData } = supabase.storage.from("session-pdfs").getPublicUrl(path);
-        pdfUrl = urlData?.publicUrl ?? null;
+        pdfUrl = path;
         setUploadingPdf(false);
       }
       const chosenDate = form.sessionDate || today;
@@ -164,10 +175,11 @@ const AddSessionModal = memo(({ athletes, initialData, onClose, onAdd }) => {
               <p className="text-[11px] mb-1.5" style={{ color: "#7BD8B4" }}>📎 PDF déjà joint</p>
             )}
             <input type="file" accept="application/pdf"
-              onChange={e => setPdfFile(e.target.files?.[0] ?? null)}
+              onChange={e => pickPdf(e.target.files?.[0] ?? null)}
               className="w-full text-[12px] file:mr-3 file:py-1.5 file:px-3 file:rounded-xl file:border-0 file:text-[11.5px] file:font-semibold"
               style={{ color: "var(--c-text-3)" }} />
             {pdfFile && <p className="text-[11px] mt-1" style={{ color: "var(--c-text-3)" }}>📎 {pdfFile.name}</p>}
+            {pdfError && <p className="text-[11px] mt-1" style={{ color: "#F19A9A" }}>{pdfError}</p>}
           </div>
 
           <div>
