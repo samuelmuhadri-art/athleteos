@@ -7,11 +7,10 @@
 import { useState, useCallback, useEffect, useRef } from "react";
 import {
   LayoutDashboard, CalendarDays, TrendingUp, MessageSquare,
-  Zap, LogOut, Users, Bell, X, Settings
+  Zap, LogOut, Users, Bell, Settings
 } from "lucide-react";
 import { supabase }  from "./utils/supabaseClient";
 import { useAuth }   from "./context/AuthContext";
-import { getAthleteMetricsForWeek } from "./utils/chargeCalculations";
 import { usePushNotifications, PushToggleButton } from "./hooks/usePushNotifications";
 import { initialsFromName, toLocalDateStr, getISOWeek } from "./athlete/shared";
 import { notifyAthleteWeeklyRecap, notifyAthleteWeeklyReport } from "./utils/notifications";
@@ -24,7 +23,10 @@ import AthleteMsgerie   from "./athlete/views/AthleteMsgerie";
 import AthleteClub      from "./athlete/views/AthleteClub";
 import WellnessModal    from "./athlete/components/WellnessModal";
 import InjuryReportModal from "./athlete/components/InjuryReportModal";
+import NotificationBanner from "./athlete/components/NotificationBanner";
+import NotificationCenter from "./athlete/components/NotificationCenter";
 import AccountSettingsModal from "./components/ui/AccountSettingsModal";
+import { getNotificationPresentation, mergeIncomingNotification } from "./athlete/notificationPresentation";
 
 const NAV_ITEMS = [
   { id: "dashboard",    label: "Tableau de bord", shortLabel: "Accueil",  icon: LayoutDashboard },
@@ -51,6 +53,7 @@ export default function AthleteApp() {
   const [myGoals,        setMyGoals]        = useState([]);
   const [myNotifs,       setMyNotifs]       = useState([]);
   const [showNotifs,     setShowNotifs]     = useState(false);
+  const [incomingNotification, setIncomingNotification] = useState(null);
   const [loading,        setLoading]        = useState(true);
   const [error,          setError]          = useState(null);
   const [wellnessToday,  setWellnessToday]  = useState(null);
@@ -182,6 +185,60 @@ export default function AthleteApp() {
     setShowWellness(true);
   }, [athlete, wellnessToday, loading]);
 
+  // Le push navigateur reste inchangé. Cette écoute ajoute uniquement le
+  // retour visuel instantané quand l'application est déjà ouverte.
+  useEffect(() => {
+    if (!athlete?.id) return undefined;
+    const channel = supabase.channel(`athlete-notifications-${athlete.id}`)
+      .on("postgres_changes", {
+        event:"INSERT", schema:"public", table:"athlete_notifications",
+        filter:`athlete_id=eq.${athlete.id}`,
+      }, payload => {
+        setMyNotifs(previous => mergeIncomingNotification(previous, payload.new));
+        setIncomingNotification(payload.new);
+      })
+      .subscribe();
+    return () => supabase.removeChannel(channel);
+  }, [athlete?.id]);
+
+  const dismissIncomingNotification = useCallback(() => setIncomingNotification(null), []);
+
+  const openNotification = useCallback(async notification => {
+    const presentation = getNotificationPresentation(notification);
+    const wasUnread = !notification.is_read;
+    setIncomingNotification(current => current?.id === notification.id ? null : current);
+    setShowNotifs(false);
+    if (wasUnread) {
+      setMyNotifs(previous => previous.map(item => item.id === notification.id ? { ...item, is_read:true } : item));
+    }
+    navigate(presentation.destination);
+    if (!wasUnread) return;
+    const { error:updateError } = await supabase.from("athlete_notifications")
+      .update({ is_read:true })
+      .eq("id", notification.id)
+      .eq("athlete_id", notification.athlete_id);
+    if (updateError) {
+      console.error("AthleteApp — notification lue :", updateError);
+      setMyNotifs(previous => previous.map(item => item.id === notification.id ? { ...item, is_read:false } : item));
+    }
+  }, [navigate]);
+
+  const markAllNotificationsRead = useCallback(async () => {
+    if (!athlete?.id) return false;
+    const unreadIds = myNotifs.filter(notification => !notification.is_read).map(notification => notification.id);
+    if (!unreadIds.length) return true;
+    const unreadSet = new Set(unreadIds);
+    setMyNotifs(previous => previous.map(notification => unreadSet.has(notification.id) ? { ...notification, is_read:true } : notification));
+    const { error:updateError } = await supabase.from("athlete_notifications")
+      .update({ is_read:true })
+      .eq("athlete_id", athlete.id)
+      .eq("is_read", false);
+    if (!updateError) return true;
+    console.error("AthleteApp — toutes notifications lues :", updateError);
+    setMyNotifs(previous => previous.map(notification => unreadSet.has(notification.id) ? { ...notification, is_read:false } : notification));
+    return false;
+  }, [athlete?.id, myNotifs]);
+
   const handleRpe = useCallback(async (sid,aid,rpe) => {
     setSessions(p=>p.map(s=>s.id!==sid?s:{...s,validations:s.validations.map(v=>v.athleteId===aid?{...v,rpe}:v)}));
     await supabase.from("session_athletes").update({rpe}).eq("session_id",sid).eq("athlete_id",aid);
@@ -241,6 +298,15 @@ export default function AthleteApp() {
   return (
     <div className="flex h-screen overflow-hidden w-full"
       style={{ background: "var(--c-bg)", fontFamily: "'DM Sans', system-ui, sans-serif" }}>
+
+      {incomingNotification && (
+        <NotificationBanner
+          key={incomingNotification.id}
+          notification={incomingNotification}
+          onOpen={openNotification}
+          onDismiss={dismissIncomingNotification}
+        />
+      )}
 
       {/* ── SIDEBAR DESKTOP ── */}
       <aside id="athlete-sidebar" className="sidebar-premium z-30 flex-shrink-0">
@@ -458,80 +524,16 @@ export default function AthleteApp() {
         </div>
       </nav>
 
-      {/* Panel notifs — rendu hors du <nav> mobile-only : le bouton cloche du
-          sidebar desktop (footer) pilote le même état showNotifs, mais tant
-          que ce panneau vivait dans le <nav className="md:hidden">, il ne
-          s'affichait jamais sur desktop (cliquer la cloche ne faisait rien). */}
       {showNotifs && (
-        <div className="fixed inset-0 z-40 bottom-sheet-backdrop" onClick={() => setShowNotifs(false)}>
-          <div className="bottom-sheet md:mx-auto md:my-auto md:rounded-2xl md:max-w-sm md:max-h-[70vh]"
-            style={{ bottom: "calc(60px + env(safe-area-inset-bottom))" }}
-            onClick={e => e.stopPropagation()}>
-            <div className="bottom-sheet-handle md:hidden" />
-            <div className="px-5 py-4 flex items-center justify-between flex-shrink-0"
-              style={{ borderBottom: "1px solid var(--c-border)" }}>
-              <p style={{ fontSize: 14, fontWeight: 500, color: "var(--c-text-1)" }}>Notifications</p>
-              <div className="flex items-center gap-3">
-                <PushToggleButton subscribed={subscribed} onToggle={subscribe} permissionState={permissionState} />
-                {unreadCount > 0 && (
-                  <button onClick={async () => {
-                    await supabase.from("athlete_notifications").update({ is_read: true }).eq("athlete_id", athlete.id).eq("is_read", false);
-                    fetchAll();
-                  }} style={{ fontSize: 12, fontWeight: 500, color: "var(--c-accent)", background: "none", border: "none", cursor: "pointer" }}>
-                    Tout lire
-                  </button>
-                )}
-                {/* Bouton fermer — toujours visible */}
-                <button onClick={() => setShowNotifs(false)}
-                  style={{ width: 30, height: 30, borderRadius: 8, background: "var(--c-surface-2)", border: "1px solid var(--c-border)", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: "var(--c-text-2)", flexShrink: 0 }}>
-                  <X size={14} />
-                </button>
-              </div>
-            </div>
-            <div className="flex-1 overflow-y-auto">
-              {myNotifs.length === 0 ? (
-                <div className="px-5 py-12 text-center">
-                  <Bell size={20} style={{ margin: "0 auto 10px", color: "var(--c-text-4)" }} />
-                  <p style={{ fontSize: 13, color: "var(--c-text-3)" }}>Aucune notification</p>
-                </div>
-              ) : myNotifs.map(n => {
-                const diff = (new Date() - new Date(n.created_at)) / 1000;
-                const ago  = diff < 60 ? "À l'instant" : diff < 3600 ? `${Math.floor(diff/60)}min` : diff < 86400 ? `${Math.floor(diff/3600)}h` : `${Math.floor(diff/86400)}j`;
-                return (
-                  <div key={n.id}
-                    className="tap-feedback"
-                    style={{
-                      padding: "14px 20px",
-                      borderBottom: "1px solid var(--c-border)",
-                      background: !n.is_read ? "rgba(29,158,117,0.05)" : "transparent",
-                      cursor: "pointer",
-                    }}
-                    onClick={async () => {
-                      if (!n.is_read) await supabase.from("athlete_notifications").update({ is_read: true }).eq("id", n.id);
-                      fetchAll(); setShowNotifs(false);
-                    }}>
-                    <div className="flex items-start gap-3">
-                      {!n.is_read && (
-                        <div className="status-dot-live flex-shrink-0" style={{ marginTop: 5 }} />
-                      )}
-                      <div className="flex-1 min-w-0">
-                        <p style={{ fontSize: 13, fontWeight: 500, color: "var(--c-text-1)", lineHeight: 1.3 }}>
-                          {n.title}
-                        </p>
-                        {n.description && (
-                          <p style={{ fontSize: 12, color: "var(--c-text-3)", marginTop: 2, lineHeight: 1.4 }} className="line-clamp-2">
-                            {n.description}
-                          </p>
-                        )}
-                        <p style={{ fontSize: 10, color: "var(--c-text-4)", marginTop: 5 }}>{ago}</p>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        </div>
+        <NotificationCenter
+          notifications={myNotifs}
+          subscribed={subscribed}
+          onSubscribe={subscribe}
+          permissionState={permissionState}
+          onClose={() => setShowNotifs(false)}
+          onOpen={openNotification}
+          onMarkAllRead={markAllNotificationsRead}
+        />
       )}
 
       {showWellness && athlete && (

@@ -130,23 +130,27 @@ export function usePushNotifications(athleteId, clubId, userId = null) {
 export function PushToggleButton({ subscribed, onToggle, permissionState }) {
   const noSupport = !("serviceWorker" in navigator) || !("PushManager" in window);
   if (noSupport) return null;
+  const denied = permissionState === "denied";
 
   return (
     <button
+      type="button"
       onClick={onToggle}
-      disabled={subscribed}
+      disabled={subscribed || denied}
       className={[
         "flex items-center gap-2 px-3 py-2 rounded-xl text-[12px] font-semibold border transition-all",
-        subscribed ? "cursor-default" : "hover:border-[var(--c-border-strong)]",
+        subscribed || denied ? "cursor-default" : "hover:border-[var(--c-border-strong)]",
       ].join(" ")}
       style={
         subscribed
           ? { background: "rgba(29,158,117,0.12)", borderColor: "rgba(29,158,117,0.30)", color: "#4DC9A0" }
-          : { background: "var(--c-surface-2)", borderColor: "var(--c-border)", color: "var(--c-text-2)" }
+          : denied
+            ? { background: "rgba(224,82,82,0.08)", borderColor: "rgba(224,82,82,0.18)", color: "#F19A9A" }
+            : { background: "var(--c-surface-2)", borderColor: "var(--c-border)", color: "var(--c-text-2)" }
       }
     >
       <span>{subscribed ? "🔔" : "🔕"}</span>
-      <span>{subscribed ? "Notifs actives" : "Activer les notifs"}</span>
+      <span>{subscribed ? "Notifs actives" : denied ? "Bloquées par le navigateur" : "Activer les notifs"}</span>
     </button>
   );
 }

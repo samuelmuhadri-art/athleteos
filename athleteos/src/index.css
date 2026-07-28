@@ -552,6 +552,21 @@ select.input-premium {
   50%      { box-shadow: 0 0 0 4px rgba(29,158,117,0); }
 }
 
+/* Bandeau de notification interne — ligne de temps discrète avant fermeture. */
+.notification-banner-progress {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 3px;
+  transform-origin: left center;
+  animation: notification-banner-progress 7s linear forwards;
+}
+@keyframes notification-banner-progress {
+  from { transform: scaleX(1); opacity: 0.85; }
+  to   { transform: scaleX(0); opacity: 0.35; }
+}
+
 /* Confettis — nouveau record personnel (AthletePerfs.jsx) */
 @keyframes confetti-fall {
   0%   { transform: translate(0, 0) rotate(0deg); opacity: 1; }
