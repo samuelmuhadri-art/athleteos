@@ -199,17 +199,23 @@ async function main() {
     }
 
   } finally {
+    // Les requêtes postgrest-js (admin.from(...)) sont "thenables" mais
+    // n'implémentent PAS .catch()/.finally() — seul .then() existe (déjà
+    // rencontré à la tâche 3). On récupère {error} et on l'ignore, plutôt
+    // que de chaîner .catch() dessus (ça plante avec "catch is not a
+    // function"). .auth.signOut()/.auth.admin.deleteUser() sont de vraies
+    // Promises (API Auth, pas postgrest) — .catch() reste valide dessus.
     console.log("\nNettoyage...");
     for (const u of auths) {
       if (!u) continue;
       await u.client.auth.signOut().catch(() => {});
-      await admin.from("athletes").delete().eq("user_id", u.row.id).catch(() => {});
-      await admin.from("users").delete().eq("id", u.row.id).catch(() => {});
+      await admin.from("athletes").delete().eq("user_id", u.row.id);
+      await admin.from("users").delete().eq("id", u.row.id);
       await admin.auth.admin.deleteUser(u.auth.id).catch(() => {});
     }
-    await admin.from("audit_logs").delete().in("actor_club_id", [clubA?.id, clubB?.id].filter(Boolean)).catch(() => {});
-    if (clubA) await admin.from("clubs").delete().eq("id", clubA.id).catch(() => {});
-    if (clubB) await admin.from("clubs").delete().eq("id", clubB.id).catch(() => {});
+    await admin.from("audit_logs").delete().in("actor_club_id", [clubA?.id, clubB?.id].filter(Boolean));
+    if (clubA) await admin.from("clubs").delete().eq("id", clubA.id);
+    if (clubB) await admin.from("clubs").delete().eq("id", clubB.id);
   }
 
   const failed = results.filter((r) => !r.pass);
