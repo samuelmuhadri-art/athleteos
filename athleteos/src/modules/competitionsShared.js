@@ -5,14 +5,6 @@
 // ============================================================
 
 import { getAthleteMetricsForWeek } from "../utils/chargeCalculations.js";
-// Tâche 11 : moteur central de comparaison de performances — ce fichier
-// avait sa PROPRE copie de parsePerf() qui devinait le sens ("higherIsBetter")
-// depuis le FORMAT de la chaîne plutôt que depuis la discipline (un lancer
-// de poids "14.20" sans "m" était pris pour un chrono). isNewRecord()
-// décide si un résultat de compétition écrase le PR en base — une mauvaise
-// détection ici corrompait silencieusement les records. Remplacée par
-// athlete/shared.js, seule source de vérité.
-import { parsePerf, getDiscHib } from "../athlete/shared.js";
 
 // ─── Config types de compétition (UI statique) ────────────────────────────────
 
@@ -69,14 +61,6 @@ export function dateToWeek(dateStr) {
   const d    = new Date(dateStr);
   const jan1 = new Date(d.getFullYear(), 0, 1);
   return Math.ceil(((d - jan1) / 86400000 + jan1.getDay() + 1) / 7);
-}
-
-export function isNewRecord(newResult, existingPr, discipline) {
-  if (!existingPr) return true;
-  const a = parsePerf(newResult);
-  const b = parsePerf(existingPr);
-  if (a.value === null || b.value === null) return false;
-  return getDiscHib(discipline) ? a.value > b.value : a.value < b.value;
 }
 
 export function generateResultAnalysis(result, competition, athlete, weeklyCharge) {

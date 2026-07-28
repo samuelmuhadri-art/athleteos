@@ -16,7 +16,52 @@
 - **Tâche 4** (hiérarchie de rôles + audit pour `admin-actions`) : terminée, commitée (`4580c8c` puis fix `23ea838`), poussée, **déployée** (migration `audit_logs` + Edge Function) et **vérifiée en conditions réelles — 20/20 tests OK** (`test_admin_actions.mjs`, cleanup y compris après correction d'un bug de nettoyage). Migration appliquée via `supabase migration repair --status applied` sur les 2 fichiers socle de la tâche 7/5 (datés avant l'historique réel, donc jamais rejoués sur la vraie base) puis `supabase db push` normal.
 
 ## Tâche active
-Aucune — arrêt après la tâche 4 comme demandé.
+- Numéro : 14
+- Objectif : Rendre atomiques la création de compétitions et l'ajout de résultats (RPC SQL contrôlées par autorisation, verrouillage anti-concurrence sur les records, idempotence, outbox de notifications écrit dans la même transaction).
+- Risques : voir "Résultats et limites" — rien n'est déployé (ni migration ni redéploiement frontend nécessaire côté Vercel), le comportement ACTUEL en production reste l'ancien (écritures séquentielles non atomiques) tant que vous n'avez pas appliqué la migration.
+
+## Décisions prises (tâche 14)
+- **Deux points d'entrée fragiles trouvés** : `Competitions.jsx` (créer une compétition = 2 inserts séparés ; ajouter un résultat = jusqu'à 4 écritures) et `AthletePerfs.jsx` (`handleAddComp`, un athlète déclarant seul une compétition = jusqu'à 5 écritures : compétition, lien, résultat, performance, record). Une panne entre deux étapes laissait un état incohérent (compétition sans participant, résultat sans record mis à jour). Pire, dans `addResult` : si la mise à jour du record échouait, l'erreur était juste loguée et les notifications partaient quand même — exactement le "notification envoyée alors que l'écriture a échoué" cité par la tâche.
+- **Risque de concurrence trouvé en concevant la protection, pas juste supposé** : verrouiller une ligne `records` existante (`SELECT ... FOR UPDATE`) ne protège PAS le cas "deux résultats simultanés sont le tout premier résultat de cette discipline" (rien à verrouiller avant que la ligne existe). Corrigé avec un `INSERT ... ON CONFLICT (athlete_id, discipline) DO NOTHING RETURNING id` (nécessite une nouvelle contrainte UNIQUE — vérifié au préalable qu'aucun doublon n'existait déjà en base) : Postgres tranche lui-même laquelle des deux insertions concurrentes "gagne", sans fenêtre où les deux se croient les premières.
+- **3 RPC SQL créées** (migration `20260730010000`), chacune = une transaction Postgres complète (tout réussit ou rien n'est appliqué) :
+  - `create_competition_with_athletes` : coach (n'importe quel athlète de son club) ou athlète (lui-même uniquement, un seul participant) — `club_id` toujours résolu côté serveur, jamais envoyé par le client.
+  - `add_competition_result` : coach uniquement, résultat + record (verrouillé) + outbox en une transaction.
+  - `create_solo_competition_result` : athlète, combine création de compétition + résultat + record + journal de performance (pour l'onglet Évolution) + breakdown décathlon/heptathlon, en un seul appel — avant, c'était le flux le plus fragile (5 écritures séparées).
+  - Une logique interne partagée (`_apply_competition_result`) évite de dupliquer la partie sensible (verrouillage + comparaison + outbox) entre les deux RPC qui enregistrent un résultat.
+- **Idempotence** : `idempotencyKey` optionnel, table `rpc_idempotency` générique (réutilisée par les 3 RPC), un succès déjà enregistré pour la même clé+action est renvoyé tel quel sans rejouer l'effet. Le frontend envoie systématiquement une clé fraîche (`crypto.randomUUID()`) à chaque action utilisateur.
+- **Outbox de notifications** (table `notification_outbox`) : écrite DANS la même transaction que le résultat/record — jamais après. Le RPC renvoie le payload complet de chaque événement (pas juste un ID) pour que le client n'ait pas besoin d'un aller-retour supplémentaire ; les vraies notifications ne sont dépêchées qu'après le retour en succès du RPC (= commit confirmé), puis marquées "sent" via une 4e RPC (`mark_notification_outbox_sent`, scoping club vérifié).
+- **Incohérence adjacente trouvée et corrigée** : deux AUTRES endroits écrivaient dans `records` sans jamais toucher aux nouvelles colonnes numériques `pr_value`/`sb_value` (`maybeUpdateRecord` dans `AthletePerfs.jsx`, pour les performances saisies hors compétition ; `addRecord` dans `AthleteList.jsx`, saisie manuelle par un coach). Laissés tels quels, ils auraient rendu `pr_value`/`sb_value` obsolètes dès la prochaine saisie manuelle, faussant silencieusement la comparaison faite par les nouvelles RPC. Corrigés pour maintenir ces colonnes à jour. `addRecord` avait aussi un bug latent indépendant (insert direct sans vérifier l'existant, doublons silencieux possibles) — corrigé en bascule insert/update explicite au passage, nécessaire de toute façon puisque la nouvelle contrainte UNIQUE(athlete_id, discipline) aurait fait échouer l'ancien code au 2e enregistrement d'une même discipline.
+- **`isNewRecord` (competitionsShared.js) supprimée** : sa seule utilisation (Competitions.jsx) est remplacée par la comparaison faite côté serveur — code mort, supprimé plutôt que laissé traîner.
+
+## Fichiers modifiés
+- `supabase/migrations/20260730010000_transactional_competition_results.sql` (créé) : colonnes `pr_value`/`sb_value` + contrainte UNIQUE sur `records` (avec backfill), tables `rpc_idempotency`/`notification_outbox`, 4 RPC.
+- `src/modules/Competitions.jsx` : `createCompetition`/`addResult` remplacés par des appels RPC.
+- `src/modules/competitionsShared.js` : `isNewRecord` (devenue morte) supprimée avec son import.
+- `src/athlete/views/AthletePerfs.jsx` : `handleAddComp` remplacé par l'appel RPC solo ; `maybeUpdateRecord` maintient désormais `pr_value`/`sb_value`.
+- `src/modules/AthleteList.jsx` : `addRecord` passe en upsert explicite (compatible avec la nouvelle contrainte UNIQUE) et maintient `pr_value`/`sb_value`.
+- `src/utils/notifications.js` : `dispatchOutboxNotifications` ajoutée (dépêche les événements outbox après succès du RPC, puis les marque traités).
+- `test_competition_transactions.mjs` (créé) : suite de non-régression DB-dépendante, y compris un vrai test de concurrence (`Promise.all` sur deux résultats battant le même record en même temps).
+
+## Vérifications exécutées
+- [x] `npm run build` — succès (exécuté 3 fois, à chaque étape significative des changements JS).
+- [x] **Dry-run réel de la migration contre la production**, transaction `ROLLBACK` (aucun changement persisté) — exécutée plusieurs fois au fil des corrections (une vraie erreur de syntaxe trouvée et corrigée : `leading` est un mot réservé SQL, utilisé par erreur comme nom de variable).
+- [x] `node --check` sur les 3 scripts de test du dépôt (`test_admin_actions.mjs`, `test_rls_regression.mjs`, `test_competition_transactions.mjs`) — syntaxe valide, rien d'autre cassé.
+- [x] Vérifié en lecture seule qu'aucun doublon `(athlete_id, discipline)` n'existait déjà dans `records` avant d'ajouter la contrainte UNIQUE (`group by ... having count(*) > 1`, zéro résultat) — sans ça, la migration aurait échoué au déploiement.
+- [x] Recherche exhaustive de tous les autres points d'écriture sur `competitions`/`competition_results`/`records` dans le code (`Performances.jsx`, `Dashboard.jsx`, `AthleteApp.jsx` : lecture seule, rien à faire ; `AthleteList.jsx` : écriture trouvée et corrigée, voir "Décisions prises").
+- [ ] **`node test_competition_transactions.mjs` — PAS exécuté.** Nécessite `supabase db push` (nouvelle migration), pas fait — je ne déploie jamais sans que vous me le demandiez.
+- [ ] `npm run lint` / `npm run typecheck` — toujours aucun script dans le repo.
+
+## Résultats et limites
+- Rien n'a été commité, ni déployé. Le comportement en production reste l'ancien (écritures séquentielles) tant que vous n'avez pas appliqué la migration.
+- **Pour activer vraiment cette tâche** : `supabase db push` (migration `20260730010000` — pas d'Edge Function à déployer cette fois, tout est en RPC SQL), puis `SUPABASE_SERVICE_ROLE_KEY=... node test_competition_transactions.mjs`, puis "commit et push" pour le frontend (Vercel redéploie automatiquement).
+- **Limite assumée** : je n'ai pas touché à `Performances.jsx`/`Dashboard.jsx` (lecture seule sur ces tables, rien à rendre atomique) ni au calcul `pctOfReference`/classements qui LISENT `records` — seule l'écriture était concernée par cette tâche.
+- **Limite assumée** : "échec simulé à chaque étape" (vérification obligatoire de la tâche) n'a pas pu être fait — simuler une panne mi-transaction nécessiterait soit une base locale (pas de Docker ici), soit d'interrompre volontairement une vraie requête contre la production (jugé trop risqué sans le demander). L'atomicité repose sur une garantie structurelle de Postgres (une fonction plpgsql = une transaction, tout ou rien) plutôt que sur un test d'injection de panne — solide en théorie, mais pas observé en pratique par moi.
+
+## Tests manuels recommandés (à faire par vous, après déploiement)
+- [ ] Créer une compétition avec plusieurs athlètes engagés, confirmer qu'ils apparaissent tous.
+- [ ] Ajouter un résultat qui bat un record, confirmer la notification ET l'alerte "nouveau record" ET le post dans le fil du club.
+- [ ] Depuis l'app athlète, déclarer soi-même une compétition + résultat (decathlon avec breakdown si possible), confirmer qu'elle apparaît côté coach ET dans l'onglet Évolution de l'athlète.
+- [ ] Consulter `notification_outbox` (SQL Editor) après quelques actions, confirmer que le statut passe bien à `sent`.
 
 ## Décisions prises (tâche 4)
 - **Faille trouvée** : `admin-actions/index.ts` traitait `head_coach` et `coach` de façon identique (`isCoach`) pour renommer le club, régénérer le code d'invitation et supprimer un membre — un simple coach avait donc les mêmes pouvoirs structurels qu'un head coach, contrairement à ce qu'attend une appli multi-club. Resserré à `role === "head_coach"` pour ces 3 actions (+ la nouvelle `change_role`).

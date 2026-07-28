@@ -106,6 +106,40 @@ export async function alertNewRecord(clubId, athlete, discipline, result, compNa
   });
 }
 
+// ── Tâche 14 : dispatch de l'outbox de notifications ──────────────────────
+// Les RPC create_solo_competition_result/add_competition_result (voir
+// migration 20260730010000) écrivent leurs événements dans
+// notification_outbox DANS LA MÊME TRANSACTION que le résultat/record —
+// ce n'est qu'APRÈS le retour en succès du RPC (donc après COMMIT
+// confirmé) qu'on dépêche ici les vraies notifications, puis qu'on marque
+// les événements traités (mark_notification_outbox_sent, la seule façon
+// autorisée de modifier notification_outbox depuis le client). Un échec
+// de dispatch pour un événement (push indisponible, etc.) n'empêche pas
+// les autres de partir — chacun est traité indépendamment.
+export async function dispatchOutboxNotifications(notifications) {
+  if (!notifications?.length) return;
+  const sentIds = [];
+  for (const evt of notifications) {
+    const p = evt.payload ?? {};
+    try {
+      if (evt.type === "competition_new_record") {
+        await alertNewRecord(p.clubId, { id: p.athleteId, name: p.athleteName }, p.discipline, p.result, p.competitionName);
+        await postClubCelebration(p.clubId, p.athleteId, "record",
+          `${p.athleteName?.split(" ")[0] ?? "Un athlète"} a battu son record en ${p.discipline} : ${p.result} !`);
+      } else if (evt.type === "competition_result_added") {
+        await notifyAthleteResult(p.clubId, p.athleteId, p.discipline, p.result, p.competitionName ?? "");
+      }
+      sentIds.push(evt.outboxId);
+    } catch (err) {
+      console.warn("Échec dispatch notification outbox:", evt.type, err.message ?? err);
+    }
+  }
+  if (sentIds.length) {
+    const { error } = await supabase.rpc("mark_notification_outbox_sent", { p_ids: sentIds });
+    if (error) console.warn("mark_notification_outbox_sent :", error.message);
+  }
+}
+
 export async function checkUpcomingCompetitions(clubId, competitions) {
   const today     = new Date();
   const in7days   = new Date(today.getTime() + 7*86400000);

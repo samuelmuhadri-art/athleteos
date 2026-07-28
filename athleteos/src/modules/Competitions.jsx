@@ -13,10 +13,11 @@ import { supabase }                 from "../utils/supabaseClient";
 import { useAuth }                  from "../context/AuthContext";
 import LoadingState                 from "../components/ui/LoadingState";
 import ErrorState                   from "../components/ui/ErrorState";
-import { alertNewRecord, notifyAthleteResult, postClubCelebration } from "../utils/notifications";
+import { dispatchOutboxNotifications } from "../utils/notifications";
 import { initialsFromName } from "../utils/helpers.js";
-import { TYPE_CONFIG, isNewRecord } from "./competitionsShared";
-import { resolveDisciplineId } from "../domain/disciplines.js";
+import { TYPE_CONFIG } from "./competitionsShared";
+import { resolveDisciplineId, getDisciplineHib } from "../domain/disciplines.js";
+import { parsePerf } from "../athlete/shared.js";
 import CompCard from "./CompCard";
 import CompModal from "./CompModal";
 import CreateCompModal from "./CreateCompModal";
@@ -135,90 +136,54 @@ function Competitions() {
   useEffect(() => { fetchAll(); }, [fetchAll]);
 
   // ═══ Écriture : créer une compétition ════════════════════════════════════
+  // Tâche 14 : un seul appel RPC atomique (create_competition_with_athletes)
+  // au lieu de deux inserts successifs (compétition, puis participants) —
+  // avant, une panne entre les deux laissait une compétition sans aucun
+  // participant, sans qu'on ait aucun moyen simple de le voir/réparer.
+  // club_id résolu côté serveur (jamais envoyé par le client).
 
   const createCompetition = useCallback(async (form) => {
-    const { data: newComp, error: compError } = await supabase
-      .from("competitions")
-      .insert({
-        club_id:  clubId, // ✅ CORRECTION 3 : clubId au lieu de 1
-        name:     form.name,
-        date:     form.date,
-        location: form.location || null,
-        type:     form.type,
-      })
-      .select()
-      .single();
-    if (compError) throw compError;
-
-    if (form.athleteEntries.length > 0) {
-      const rows = form.athleteEntries.map((e) => ({
-        competition_id: newComp.id,
-        athlete_id:     e.athleteId,
-        planned_event:  e.plannedEvent || null,
-      }));
-      const { error: linkError } = await supabase.from("competition_athletes").insert(rows);
-      if (linkError) throw linkError;
-    }
-
+    const { error } = await supabase.rpc("create_competition_with_athletes", {
+      p_name:            form.name,
+      p_date:            form.date,
+      p_location:        form.location || null,
+      p_type:            form.type,
+      p_athlete_entries: form.athleteEntries.map((e) => ({ athleteId: e.athleteId, plannedEvent: e.plannedEvent || null })),
+      p_idempotency_key: crypto.randomUUID(),
+    });
+    if (error) throw error;
     await fetchAll();
-  }, [clubId, fetchAll]); // ✅ clubId dans les dépendances
+  }, [fetchAll]);
 
   // ═══ Écriture : ajouter un résultat ══════════════════════════════════════
+  // Tâche 14 : un seul appel RPC atomique (add_competition_result) —
+  // résultat + comparaison/mise à jour du record (verrouillée côté serveur
+  // contre deux résultats concurrents battant le même record) + écriture
+  // de l'outbox de notifications se font dans LA MÊME transaction SQL.
+  // Les vraies notifications ne sont dépêchées qu'après le retour en
+  // succès du RPC (donc après COMMIT confirmé) — avant, une erreur sur la
+  // mise à jour du record était juste loguée et n'empêchait pas l'envoi
+  // des notifications malgré l'échec.
 
   const addResult = useCallback(async (competitionId, athleteId, form) => {
     // Tâche 9 : normalise un alias saisi librement ("100 m" -> "100m") vers
     // l'identifiant canonique du registre avant d'écrire en base.
     const event = resolveDisciplineId(form.event);
-    const { error: insertError } = await supabase
-      .from("competition_results")
-      .insert({
-        competition_id: competitionId,
-        athlete_id:     athleteId,
-        event:          event,
-        result:         form.result,
-        context:        form.context || null,
-      });
-    if (insertError) throw insertError;
+    const { data, error } = await supabase.rpc("add_competition_result", {
+      p_competition_id:   competitionId,
+      p_athlete_id:       athleteId,
+      p_event:            event,
+      p_result:           form.result,
+      p_result_value:     parsePerf(form.result).value,
+      p_higher_is_better: getDisciplineHib(event),
+      p_context:          form.context || null,
+      p_idempotency_key:  crypto.randomUUID(),
+    });
+    if (error) throw error;
 
-    // Détection automatique de record personnel
-    const competition    = competitionList.find((c) => c.id === competitionId);
-    const athlete        = athletes.find((a) => a.id === athleteId);
-    // resolveDisciplineId sur r.discipline aussi : un record déjà stocké
-    // sous un alias non-canonique (saisi avant cette normalisation) doit
-    // quand même être retrouvé, pas dupliqué.
-    const existingRecord = records.find((r) => r.athleteId === athleteId && resolveDisciplineId(r.discipline) === event);
-
-    if (isNewRecord(form.result, existingRecord?.pr, event)) {
-      if (existingRecord) {
-        const { error: updateError } = await supabase
-          .from("records")
-          .update({ pr: form.result, pr_date: competition?.date ?? null, sb: form.result })
-          .eq("id", existingRecord.id);
-        if (updateError) console.error("Erreur mise à jour record :", updateError);
-      } else {
-        const { error: insertRecError } = await supabase
-          .from("records")
-          .insert({
-            athlete_id: athleteId,
-            discipline: event,
-            sb:         form.result,
-            pr:         form.result,
-            pr_date:    competition?.date ?? null,
-          });
-        if (insertRecError) console.error("Erreur création record :", insertRecError);
-      }
-      // ✅ Système centralisé : alerte coach + notif athlète
-      await alertNewRecord(clubId, athlete, event, form.result, competition?.name);
-      await notifyAthleteResult(clubId, athleteId, event, form.result, competition?.name ?? "");
-      await postClubCelebration(clubId, athleteId, "record",
-        `${athlete?.name?.split(" ")[0] ?? "Un athlète"} a battu son record en ${event} : ${form.result} !`);
-    } else {
-      // Notif athlète même sans record
-      await notifyAthleteResult(clubId, athleteId, event, form.result, competition?.name ?? "");
-    }
-
+    await dispatchOutboxNotifications(data?.notifications);
     await fetchAll();
-  }, [fetchAll, competitionList, athletes, records, clubId]); // ✅ clubId dans les dépendances
+  }, [fetchAll]);
 
   // Synchronise la compétition sélectionnée avec les données fraîches
   const liveSelectedComp = selectedComp

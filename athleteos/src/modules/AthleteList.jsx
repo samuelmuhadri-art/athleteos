@@ -11,6 +11,7 @@ import LoadingState  from "../components/ui/LoadingState";
 import ErrorState    from "../components/ui/ErrorState";
 import { initialsFromName } from "../utils/helpers.js";
 import { EmptySection } from "./athleteListShared";
+import { parsePerf } from "../athlete/shared.js";
 import AthleteProfile from "./AthleteProfile";
 import AthleteCard from "./AthleteCard";
 import AddAthleteModal from "./AddAthleteModal";
@@ -100,7 +101,23 @@ function AthleteList({ onNavigate }) {
 
   // ═══ Écritures (identiques) ═══════════════════════════════════════════════
   const addRecord = useCallback(async (athleteId, form) => {
-    const { error: e } = await supabase.from("records").insert({ athlete_id: athleteId, discipline: form.discipline, sb: form.sb, pr: form.pr, pr_date: form.prDate || null });
+    // Tâche 14 : records a désormais une contrainte UNIQUE(athlete_id,
+    // discipline) (migration 20260730010000, nécessaire pour verrouiller
+    // les résultats de compétition concurrents sans risque de doublon) —
+    // un insert direct échouerait si un record existe déjà pour cette
+    // discipline, là où il créait silencieusement un doublon auparavant
+    // (déjà un bug latent). Bascule en upsert explicite, et renseigne
+    // pr_value/sb_value pour rester cohérent avec les comparaisons faites
+    // côté serveur par les RPC de compétition.
+    const patch = {
+      sb: form.sb, sb_value: parsePerf(form.sb).value,
+      pr: form.pr, pr_value: parsePerf(form.pr).value, pr_date: form.prDate || null,
+    };
+    const { data: existing } = await supabase.from("records").select("id")
+      .eq("athlete_id", athleteId).eq("discipline", form.discipline).maybeSingle();
+    const { error: e } = existing
+      ? await supabase.from("records").update(patch).eq("id", existing.id)
+      : await supabase.from("records").insert({ athlete_id: athleteId, discipline: form.discipline, ...patch });
     if (e) throw e; await fetchAll();
   }, [fetchAll]);
 

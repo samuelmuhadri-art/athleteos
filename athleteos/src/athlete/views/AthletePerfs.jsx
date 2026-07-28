@@ -23,7 +23,7 @@ import {
 import { supabase } from "../../utils/supabaseClient";
 import { getDiscHib, parsePerf, toLocalDateStr, getISOWeek, isBetterOrEqual, pctOfReference } from "../shared";
 import { resolveDisciplineId } from "../../domain/disciplines.js";
-import { notifyGoalAchieved, postClubCelebration } from "../../utils/notifications";
+import { notifyGoalAchieved, postClubCelebration, dispatchOutboxNotifications } from "../../utils/notifications";
 import { getAthleteMetricsForWeek } from "../../utils/chargeCalculations";
 import MesRapports from "./MesRapports";
 import { COMBINE_EVENTS, discColor } from "./perfsShared";
@@ -179,16 +179,19 @@ export default function AthletePerfs({ athlete, competitions, myPerformances, my
     const isSB = isThisYear && (!curSB?.value || isBetterOrEqual(newVal.value, curSB.value, disc));
     if (!isPR && !isSB) return false;
 
-    // Pas de contrainte UNIQUE(athlete_id,discipline) en base — un
-    // .upsert(onConflict:...) échoue silencieusement en 400 ici (record
-    // jamais sauvé). On vérifie l'existence nous-mêmes et on update/insert
-    // explicitement, comme le fait déjà Competitions.jsx côté coach.
+    // Tâche 14 : records a maintenant une contrainte UNIQUE(athlete_id,
+    // discipline) et des colonnes numériques pr_value/sb_value (comparées
+    // par les RPC de compétition, migration 20260730010000) — il faut les
+    // maintenir à jour ici aussi, sinon une saisie manuelle "démode"
+    // silencieusement la valeur numérique sans toucher au texte, et la
+    // prochaine comparaison de record en compétition se ferait contre une
+    // valeur obsolète.
     const { data: existingRow } = await supabase.from("records").select("id")
       .eq("athlete_id", athlete.id).eq("discipline", disc).maybeSingle();
     const patch = {
-      ...(isPR ? { pr: resultStr, pr_date: dateStr } : {}),
-      ...(isSB ? { sb: resultStr } : {}),
-      ...(!curPR?.value ? { pr: resultStr, pr_date: dateStr, sb: resultStr } : {}),
+      ...(isPR ? { pr: resultStr, pr_value: newVal.value, pr_date: dateStr } : {}),
+      ...(isSB ? { sb: resultStr, sb_value: newVal.value } : {}),
+      ...(!curPR?.value ? { pr: resultStr, pr_value: newVal.value, pr_date: dateStr, sb: resultStr, sb_value: newVal.value } : {}),
     };
     if (existingRow) {
       await supabase.from("records").update(patch).eq("id", existingRow.id);
@@ -310,63 +313,53 @@ export default function AthletePerfs({ athlete, competitions, myPerformances, my
     await supabase.from("athlete_performances").delete().eq("id", perfId);
   };
 
+  // Tâche 14 : un seul appel RPC atomique (create_solo_competition_result)
+  // au lieu de jusqu'à 5 écritures successives (compétition, lien,
+  // résultat, performance, record) — avant, une panne entre deux étapes
+  // laissait par exemple une compétition sans aucun résultat, ou un
+  // résultat enregistré sans que le record ne soit mis à jour. La
+  // comparaison/mise à jour du record est aussi verrouillée côté serveur
+  // contre deux soumissions concurrentes qui battraient le même record.
   const handleAddComp = async () => {
     if (!compForm.name.trim() || !compForm.date || !compForm.event.trim() || !compForm.result.trim()) return;
     setSavingComp(true);
     try {
       // Tâche 9 : normalise un alias saisi librement avant d'écrire en base.
       const event = resolveDisciplineId(compForm.event);
-      const { data: comp, error: ce } = await supabase.from("competitions").insert({
-        club_id:  clubId,
-        name:     compForm.name.trim(),
-        date:     compForm.date,
-        location: compForm.location || null,
-        type:     compForm.type,
-      }).select().single();
-      if (ce) throw ce;
-
-      await supabase.from("competition_athletes").insert({
-        competition_id: comp.id,
-        athlete_id:     athlete.id,
-        planned_event:  event,
-      });
-
-      await supabase.from("competition_results").insert({
-        competition_id: comp.id,
-        athlete_id:     athlete.id,
-        event:          event,
-        result:         compForm.result,
-        context:        compForm.context || null,
-      });
-
-      // Un résultat de compétition doit aussi apparaître dans l'onglet
-      // Évolution — avant ce fix, seule "Saisir une performance" écrivait
-      // dans athlete_performances, donc les résultats de compétition
-      // (le cas normal pour un décathlon par ex.) n'y apparaissaient jamais.
       const isCombine = !!COMBINE_EVENTS[event];
       const cleanBreakdown = isCombine
         ? Object.fromEntries(Object.entries(compForm.breakdown).filter(([, v]) => v?.trim()))
         : null;
-      const { data: perfRow, error: pe } = await supabase
-        .from("athlete_performances")
-        .insert({
-          athlete_id:       athlete.id,
-          club_id:          clubId,
-          discipline:       event,
-          discipline_type:  event,
-          value:            compForm.result,
-          performance_date: compForm.date,
-          context:          compForm.name.trim(),
-          breakdown:        cleanBreakdown && Object.keys(cleanBreakdown).length ? cleanBreakdown : null,
-        })
-        .select().single();
-      if (pe) throw pe;
-      setLocalPerfs(prev => [...prev, perfRow]);
 
-      // Un résultat de compétition qui bat le PR/SB doit mettre le record à
-      // jour tout seul — avant ce fix, seule "Saisir une performance" le
-      // faisait, jamais cette modale-ci.
-      await maybeUpdateRecord(event, compForm.result, compForm.date);
+      const { data, error } = await supabase.rpc("create_solo_competition_result", {
+        p_name:             compForm.name.trim(),
+        p_date:             compForm.date,
+        p_location:         compForm.location || null,
+        p_type:             compForm.type,
+        p_event:            event,
+        p_result:           compForm.result,
+        p_result_value:     parsePerf(compForm.result).value,
+        p_higher_is_better: getDiscHib(event),
+        p_context:          compForm.context || null,
+        p_idempotency_key:  crypto.randomUUID(),
+        p_breakdown:        cleanBreakdown && Object.keys(cleanBreakdown).length ? cleanBreakdown : null,
+      });
+      if (error) throw error;
+
+      // Reflète tout de suite le nouveau résultat dans l'onglet Évolution
+      // (le rafraîchissement complet via onRefresh arrive juste après,
+      // mais ceci évite un flash "vide" en attendant).
+      if (data?.performanceId) {
+        setLocalPerfs(prev => [...prev, {
+          id: data.performanceId, athlete_id: athlete.id, club_id: clubId,
+          discipline: event, discipline_type: event, value: compForm.result,
+          performance_date: compForm.date, context: compForm.name.trim(),
+          breakdown: cleanBreakdown && Object.keys(cleanBreakdown).length ? cleanBreakdown : null,
+        }]);
+      }
+      if (data?.isNewRecord) setShowConfetti(true);
+
+      await dispatchOutboxNotifications(data?.notifications);
 
       // Idem que pour "Saisir une performance" : bascule Évolution sur la
       // discipline qu'on vient d'ajouter, sinon elle reste sur l'ancienne
