@@ -50,7 +50,32 @@ jobs:
           version: latest
 
       - name: Start local Supabase (applique toutes les migrations)
-        run: supabase start -x studio,imgproxy,mailpit,vector,logflare,edge-runtime --debug
+        shell: bash
+        run: |
+          # Conserver le journal complet et remonter les dernières lignes dans
+          # une annotation GitHub. Les annotations restent lisibles même quand
+          # l'accès au journal brut du job est restreint.
+          set +e
+          supabase start -x studio,imgproxy,mailpit,vector,logflare,edge-runtime --debug 2>&1 \
+            | tee "$RUNNER_TEMP/supabase-start.log"
+          start_status=${PIPESTATUS[0]}
+          set -e
+
+          if [ "$start_status" -ne 0 ]; then
+            {
+              echo "### Échec du démarrage Supabase"
+              echo '```text'
+              tail -n 80 "$RUNNER_TEMP/supabase-start.log"
+              echo '```'
+            } >> "$GITHUB_STEP_SUMMARY"
+
+            diagnostic=$(tail -n 40 "$RUNNER_TEMP/supabase-start.log")
+            diagnostic=${diagnostic//'%'/'%25'}
+            diagnostic=${diagnostic//$'\r'/'%0D'}
+            diagnostic=${diagnostic//$'\n'/'%0A'}
+            echo "::error title=Supabase local impossible à démarrer::$diagnostic"
+            exit "$start_status"
+          fi
 
       # Identifiants de l'instance locale — pas des secrets (clés de démo
       # fixes, base jetable détruite à la fin du job). `supabase status -o env`
