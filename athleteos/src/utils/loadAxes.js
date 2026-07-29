@@ -1,4 +1,4 @@
-import { getTrainingFocus } from "../domain/trainingFocus";
+import { getTrainingFocus } from "../domain/trainingFocus.js";
 
 // Profil descriptif des contraintes AthleteOS.
 // Les poids ventilent la charge session-RPE entre six dimensions séparées.
