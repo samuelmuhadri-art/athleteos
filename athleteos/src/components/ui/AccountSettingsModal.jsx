@@ -40,6 +40,18 @@ const BRAND_IMAGE_TYPES = Object.freeze({
   "image/jpeg": "jpg",
   "image/webp": "webp",
 });
+
+function readableAdminError(value, fallback = "Une erreur est survenue. Réessaie dans un instant.") {
+  const candidates = value && typeof value === "object"
+    ? [value.message, value.error, value.details, value.error_description]
+    : [value];
+  for (const candidate of candidates) {
+    if (typeof candidate === "string" && candidate.trim() && candidate !== "[object Object]") return candidate;
+    if (candidate && typeof candidate === "object" && typeof candidate.message === "string"
+      && candidate.message.trim() && candidate.message !== "[object Object]") return candidate.message;
+  }
+  return fallback;
+}
 const MAX_BRAND_IMAGE_SIZE = 5 * 1024 * 1024;
 
 async function fileToBase64(file) {
@@ -176,14 +188,14 @@ export default function AccountSettingsModal({ onClose, initialSection = "accoun
       if (error.context?.json) {
         try {
           const body = await error.context.json();
-          if (body?.error) throw new Error(body.error);
+          if (body?.error) throw new Error(readableAdminError(body.error));
         } catch (contextError) {
           if (contextError instanceof Error && contextError.message !== "Unexpected end of JSON input") throw contextError;
         }
       }
-      throw error;
+      throw new Error(readableAdminError(error));
     }
-    if (!data?.success) throw new Error(data?.error ?? "Une erreur est survenue.");
+    if (!data?.success) throw new Error(readableAdminError(data?.error));
     return data;
   }, []);
 

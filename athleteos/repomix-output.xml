@@ -9397,6 +9397,12 @@ function formatDate(value, withTime = false) {
     : { dateStyle: "medium" }).format(new Date(value));
 }
 
+function feedbackError(error, fallback) {
+  if (typeof error?.message === "string" && error.message.trim() && error.message !== "[object Object]") return error.message;
+  if (typeof error === "string" && error.trim() && error !== "[object Object]") return error;
+  return fallback;
+}
+
 export default function ClubInvitationCenter({ callAdmin, clubName }) {
   const [invitations, setInvitations] = useState([]);
   const [selectedId, setSelectedId] = useState(null);
@@ -9415,7 +9421,7 @@ export default function ClubInvitationCenter({ callAdmin, clubName }) {
       setSelectedId((current) => current ?? data.invitations?.[0]?.id ?? null);
       if (data.migrationPending) setFeedback({ type: "error", text: "La migration des invitations doit encore être appliquée." });
     } catch (error) {
-      setFeedback({ type: "error", text: error.message ?? "Les invitations n’ont pas pu être chargées." });
+      setFeedback({ type: "error", text: feedbackError(error, "Les invitations n’ont pas pu être chargées. Réessaie dans un instant.") });
     } finally {
       setLoading(false);
     }
@@ -9447,7 +9453,7 @@ export default function ClubInvitationCenter({ callAdmin, clubName }) {
       setForm({ recipientName: "", recipientEmail: "", expiresInDays: "7" });
       setFeedback({ type: "success", text: "Invitation individuelle prête à être envoyée." });
     } catch (error) {
-      setFeedback({ type: "error", text: error.message ?? "L’invitation n’a pas pu être créée." });
+      setFeedback({ type: "error", text: feedbackError(error, "L’invitation n’a pas pu être créée. Réessaie dans un instant.") });
     } finally {
       setCreating(false);
     }
@@ -9498,7 +9504,7 @@ export default function ClubInvitationCenter({ callAdmin, clubName }) {
       setConfirmRevokeId(null);
       setFeedback({ type: "success", text: "Invitation révoquée. Son lien ne permet plus de rejoindre le club." });
     } catch (error) {
-      setFeedback({ type: "error", text: error.message ?? "L’invitation n’a pas pu être révoquée." });
+      setFeedback({ type: "error", text: feedbackError(error, "L’invitation n’a pas pu être révoquée. Réessaie dans un instant.") });
     } finally {
       setRevokingId(null);
     }
@@ -11731,6 +11737,18 @@ const BRAND_IMAGE_TYPES = Object.freeze({
   "image/jpeg": "jpg",
   "image/webp": "webp",
 });
+
+function readableAdminError(value, fallback = "Une erreur est survenue. Réessaie dans un instant.") {
+  const candidates = value && typeof value === "object"
+    ? [value.message, value.error, value.details, value.error_description]
+    : [value];
+  for (const candidate of candidates) {
+    if (typeof candidate === "string" && candidate.trim() && candidate !== "[object Object]") return candidate;
+    if (candidate && typeof candidate === "object" && typeof candidate.message === "string"
+      && candidate.message.trim() && candidate.message !== "[object Object]") return candidate.message;
+  }
+  return fallback;
+}
 const MAX_BRAND_IMAGE_SIZE = 5 * 1024 * 1024;
 
 async function fileToBase64(file) {
@@ -11867,14 +11885,14 @@ export default function AccountSettingsModal({ onClose, initialSection = "accoun
       if (error.context?.json) {
         try {
           const body = await error.context.json();
-          if (body?.error) throw new Error(body.error);
+          if (body?.error) throw new Error(readableAdminError(body.error));
         } catch (contextError) {
           if (contextError instanceof Error && contextError.message !== "Unexpected end of JSON input") throw contextError;
         }
       }
-      throw error;
+      throw new Error(readableAdminError(error));
     }
-    if (!data?.success) throw new Error(data?.error ?? "Une erreur est survenue.");
+    if (!data?.success) throw new Error(readableAdminError(data?.error));
     return data;
   }, []);
 
@@ -12447,6 +12465,18 @@ describe("AccountSettingsModal", () => {
     expect(mocks.invoke).toHaveBeenCalledWith("admin-actions", {
       body: expect.objectContaining({ action: "update_club_branding", logoPath: "club-1/logo-safe.webp" }),
     });
+  });
+
+  it("transforme une erreur Supabase structurée en message lisible", async () => {
+    mocks.invoke.mockResolvedValue({
+      data: { success: false, error: { message: "La création de l’invitation a échoué." } },
+      error: null,
+    });
+
+    render(<AccountSettingsModal onClose={vi.fn()} initialSection="club" />);
+
+    expect((await screen.findByRole("alert")).textContent).toContain("La création de l’invitation a échoué.");
+    expect(screen.queryByText("[object Object]")).toBeNull();
   });
 });
 </file>
@@ -31112,6 +31142,24 @@ function ok(body: Record<string, unknown>) {
   });
 }
 
+function readableErrorMessage(error: unknown): string {
+  if (error instanceof Error && error.message.trim() && error.message !== "[object Object]") {
+    return error.message;
+  }
+  if (typeof error === "string" && error.trim() && error !== "[object Object]") return error;
+  if (error && typeof error === "object") {
+    const value = error as Record<string, unknown>;
+    const code = typeof value.code === "string" ? value.code : "";
+    if (code === "42P01") return "La mise à jour des invitations n’est pas encore appliquée à la base de données.";
+    if (code === "23505") return "Ce code d’invitation existe déjà. Réessaie dans un instant.";
+    for (const key of ["message", "details", "hint", "error_description"]) {
+      const candidate = value[key];
+      if (typeof candidate === "string" && candidate.trim() && candidate !== "[object Object]") return candidate;
+    }
+  }
+  return "Une erreur technique est survenue. Réessaie dans un instant.";
+}
+
 // Erreur "attendue" (autorisation refusée, payload invalide, règle
 // métier) — distincte d'une exception inattendue, pour choisir le bon
 // `result` ('denied' vs 'error') dans le journal d'audit.
@@ -31643,7 +31691,7 @@ serve(async (req) => {
 
     throw new DeniedError("Action inconnue.");
   } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
+    const message = readableErrorMessage(err);
     await logAudit(err instanceof DeniedError ? "denied" : "error", message).catch(() => {});
     console.error("admin-actions error:", message);
     return new Response(JSON.stringify({ success: false, error: message }), {

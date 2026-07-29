@@ -18,6 +18,12 @@ function formatDate(value, withTime = false) {
     : { dateStyle: "medium" }).format(new Date(value));
 }
 
+function feedbackError(error, fallback) {
+  if (typeof error?.message === "string" && error.message.trim() && error.message !== "[object Object]") return error.message;
+  if (typeof error === "string" && error.trim() && error !== "[object Object]") return error;
+  return fallback;
+}
+
 export default function ClubInvitationCenter({ callAdmin, clubName }) {
   const [invitations, setInvitations] = useState([]);
   const [selectedId, setSelectedId] = useState(null);
@@ -36,7 +42,7 @@ export default function ClubInvitationCenter({ callAdmin, clubName }) {
       setSelectedId((current) => current ?? data.invitations?.[0]?.id ?? null);
       if (data.migrationPending) setFeedback({ type: "error", text: "La migration des invitations doit encore être appliquée." });
     } catch (error) {
-      setFeedback({ type: "error", text: error.message ?? "Les invitations n’ont pas pu être chargées." });
+      setFeedback({ type: "error", text: feedbackError(error, "Les invitations n’ont pas pu être chargées. Réessaie dans un instant.") });
     } finally {
       setLoading(false);
     }
@@ -68,7 +74,7 @@ export default function ClubInvitationCenter({ callAdmin, clubName }) {
       setForm({ recipientName: "", recipientEmail: "", expiresInDays: "7" });
       setFeedback({ type: "success", text: "Invitation individuelle prête à être envoyée." });
     } catch (error) {
-      setFeedback({ type: "error", text: error.message ?? "L’invitation n’a pas pu être créée." });
+      setFeedback({ type: "error", text: feedbackError(error, "L’invitation n’a pas pu être créée. Réessaie dans un instant.") });
     } finally {
       setCreating(false);
     }
@@ -119,7 +125,7 @@ export default function ClubInvitationCenter({ callAdmin, clubName }) {
       setConfirmRevokeId(null);
       setFeedback({ type: "success", text: "Invitation révoquée. Son lien ne permet plus de rejoindre le club." });
     } catch (error) {
-      setFeedback({ type: "error", text: error.message ?? "L’invitation n’a pas pu être révoquée." });
+      setFeedback({ type: "error", text: feedbackError(error, "L’invitation n’a pas pu être révoquée. Réessaie dans un instant.") });
     } finally {
       setRevokingId(null);
     }

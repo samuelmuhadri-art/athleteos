@@ -106,4 +106,16 @@ describe("AccountSettingsModal", () => {
       body: expect.objectContaining({ action: "update_club_branding", logoPath: "club-1/logo-safe.webp" }),
     });
   });
+
+  it("transforme une erreur Supabase structurée en message lisible", async () => {
+    mocks.invoke.mockResolvedValue({
+      data: { success: false, error: { message: "La création de l’invitation a échoué." } },
+      error: null,
+    });
+
+    render(<AccountSettingsModal onClose={vi.fn()} initialSection="club" />);
+
+    expect((await screen.findByRole("alert")).textContent).toContain("La création de l’invitation a échoué.");
+    expect(screen.queryByText("[object Object]")).toBeNull();
+  });
 });

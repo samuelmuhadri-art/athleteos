@@ -62,6 +62,24 @@ function ok(body: Record<string, unknown>) {
   });
 }
 
+function readableErrorMessage(error: unknown): string {
+  if (error instanceof Error && error.message.trim() && error.message !== "[object Object]") {
+    return error.message;
+  }
+  if (typeof error === "string" && error.trim() && error !== "[object Object]") return error;
+  if (error && typeof error === "object") {
+    const value = error as Record<string, unknown>;
+    const code = typeof value.code === "string" ? value.code : "";
+    if (code === "42P01") return "La mise à jour des invitations n’est pas encore appliquée à la base de données.";
+    if (code === "23505") return "Ce code d’invitation existe déjà. Réessaie dans un instant.";
+    for (const key of ["message", "details", "hint", "error_description"]) {
+      const candidate = value[key];
+      if (typeof candidate === "string" && candidate.trim() && candidate !== "[object Object]") return candidate;
+    }
+  }
+  return "Une erreur technique est survenue. Réessaie dans un instant.";
+}
+
 // Erreur "attendue" (autorisation refusée, payload invalide, règle
 // métier) — distincte d'une exception inattendue, pour choisir le bon
 // `result` ('denied' vs 'error') dans le journal d'audit.
@@ -593,7 +611,7 @@ serve(async (req) => {
 
     throw new DeniedError("Action inconnue.");
   } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
+    const message = readableErrorMessage(err);
     await logAudit(err instanceof DeniedError ? "denied" : "error", message).catch(() => {});
     console.error("admin-actions error:", message);
     return new Response(JSON.stringify({ success: false, error: message }), {
