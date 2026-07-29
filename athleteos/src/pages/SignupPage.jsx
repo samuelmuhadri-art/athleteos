@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ArrowLeft, Building2, KeyRound, Lock, Mail, User, UsersRound } from "lucide-react";
 import { supabase } from "../utils/supabaseClient";
 import AuthShell from "../components/auth/AuthShell";
@@ -35,6 +35,7 @@ export default function SignupPage({ onBack, initialInviteCode = "" }) {
   const [form, setForm] = useState({ name: "", email: "", password: "", clubName: "", inviteCode: normalizedInviteCode });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [inviteCheck, setInviteCheck] = useState(null);
   const [honeypot, setHoneypot] = useState("");
   const formLoadedAt = useRef(Date.now());
 
@@ -43,12 +44,39 @@ export default function SignupPage({ onBack, initialInviteCode = "" }) {
     if (error) setError(null);
   };
 
+  const inviteBlocked = inviteCheck && !["active", "loading"].includes(inviteCheck.status);
   const canSubmit = Boolean(
     form.name.trim()
     && form.email.trim()
     && form.password.length >= 8
-    && (mode === "create_club" ? form.clubName.trim() : form.inviteCode.trim()),
+    && (mode === "create_club" ? form.clubName.trim() : form.inviteCode.trim())
+    && !inviteBlocked,
   );
+
+  useEffect(() => {
+    const code = normalizeInviteCode(form.inviteCode);
+    if (mode !== "join_club" || code.length !== 8) {
+      setInviteCheck(null);
+      return undefined;
+    }
+    let active = true;
+    setInviteCheck({ status: "loading" });
+    const timer = globalThis.setTimeout(async () => {
+      const { data, error: inspectError } = await supabase.rpc("inspect_club_invitation", { p_code: code });
+      if (!active) return;
+      if (inspectError) {
+        // Compatibilité pendant les quelques minutes séparant le déploiement
+        // du client et celui de la migration : le serveur signup revalide.
+        setInviteCheck(null);
+        return;
+      }
+      setInviteCheck(data ?? { status: "invalid" });
+    }, 350);
+    return () => {
+      active = false;
+      globalThis.clearTimeout(timer);
+    };
+  }, [form.inviteCode, mode]);
 
   const handleSubmit = async (event) => {
     event.preventDefault();
@@ -152,6 +180,18 @@ export default function SignupPage({ onBack, initialInviteCode = "" }) {
 
       <form className="auth-form auth-signup-form" onSubmit={handleSubmit} noValidate>
         {error && <AuthFeedback>{error}</AuthFeedback>}
+        {!error && inviteCheck?.status === "loading" && <AuthFeedback type="info">Vérification de l’invitation…</AuthFeedback>}
+        {!error && inviteCheck?.status === "active" && (
+          <AuthFeedback type="success">Invitation valide{inviteCheck.clubName ? ` pour ${inviteCheck.clubName}` : ""}.</AuthFeedback>
+        )}
+        {!error && inviteCheck && !["active", "loading"].includes(inviteCheck.status) && (
+          <AuthFeedback>
+            {inviteCheck.status === "expired" && "Cette invitation a expiré. Demande un nouveau lien à ton coach."}
+            {inviteCheck.status === "revoked" && "Cette invitation a été révoquée. Demande un nouveau lien à ton coach."}
+            {inviteCheck.status === "accepted" && "Cette invitation a déjà été utilisée."}
+            {inviteCheck.status === "invalid" && "Cette invitation est introuvable. Vérifie le code ou demande un nouveau lien."}
+          </AuthFeedback>
+        )}
 
         <div className="auth-honeypot" aria-hidden="true">
           <input

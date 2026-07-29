@@ -474,6 +474,11 @@ function CoachShell({ user, profile, clubId, signOut, club, clubLoading, refresh
           clubName={club?.name}
           inviteCode={club?.inviteCode}
           onClose={() => setShowInvite(false)}
+          onOpenCenter={() => {
+            setShowInvite(false);
+            setSettingsSection("club");
+            setShowSettings(true);
+          }}
         />
       )}
 

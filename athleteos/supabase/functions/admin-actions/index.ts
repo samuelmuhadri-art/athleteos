@@ -44,8 +44,10 @@ function normalizeInviteCode(value: unknown): string {
 }
 
 const VALID_ROLES = ["head_coach", "coach", "athlete"];
-const SENSITIVE_ACTIONS = ["rename_club", "upload_club_branding", "update_club_branding", "regenerate_invite_code", "remove_user", "change_role"];
+const SENSITIVE_ACTIONS = ["rename_club", "create_club_invitation", "revoke_club_invitation", "upload_club_branding", "update_club_branding", "regenerate_invite_code", "remove_user", "change_role"];
 const HEX_COLOR_PATTERN = /^#[0-9A-F]{6}$/;
+const EMAIL_PATTERN = /^[^\s@]{1,64}@[^\s@]{1,190}\.[^\s@]{2,24}$/;
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const CLUB_IMAGE_PATTERN = /\.(png|jpe?g|webp)$/i;
 const BRAND_IMAGE_TYPES: Record<string, string> = {
   "image/png": "png",
@@ -152,7 +154,7 @@ serve(async (req) => {
   // ── Contexte mutable rempli au fil de l'exécution, utilisé par le SEUL
   //    site d'écriture du journal d'audit (succès en fin de bloc try, ou
   //    catch) — évite toute double écriture. ──────────────────────────────
-  let caller: { id: number; club_id: number; role: string } | null = null;
+  let caller: { id: number; club_id: number; role: string; email: string | null } | null = null;
   let currentAction: string | null = null;
   let idempotencyKey: string | null = null;
   let targetUserId: number | null = null;
@@ -207,7 +209,7 @@ serve(async (req) => {
     if (!authUser) throw new DeniedError("Non authentifié.");
 
     const { data: callerRow, error: callerErr } = await admin
-      .from("users").select("id, club_id, role").eq("auth_uid", authUser.id).single();
+      .from("users").select("id, club_id, role, email").eq("auth_uid", authUser.id).single();
     if (callerErr || !callerRow) throw new DeniedError("Profil introuvable.");
     caller = callerRow;
     const isHeadCoach = caller.role === "head_coach";
@@ -238,6 +240,40 @@ serve(async (req) => {
       if (!/^[A-Z0-9]{8}$/.test(inviteCode)) {
         throw new DeniedError("Le code doit contenir 8 caractères.");
       }
+      const { data: individualInvitation, error: individualError } = await admin
+        .from("club_invitations")
+        .select("id, club_id, status, expires_at, accepted_at, accepted_user_id, recipient_email")
+        .ilike("code", inviteCode)
+        .maybeSingle();
+      if (individualError && individualError.code !== "42P01") throw individualError;
+
+      if (individualInvitation) {
+        if (individualInvitation.status === "revoked") throw new DeniedError("Cette invitation a été révoquée. Demande un nouveau lien à ton coach.");
+        if (individualInvitation.expires_at && new Date(individualInvitation.expires_at) <= new Date()) {
+          throw new DeniedError("Cette invitation a expiré. Demande un nouveau lien à ton coach.");
+        }
+        if (individualInvitation.recipient_email && individualInvitation.recipient_email.toLowerCase() !== caller.email?.toLowerCase()) {
+          throw new DeniedError("Cette invitation a été préparée pour une autre adresse email.");
+        }
+        if (Number(individualInvitation.club_id) !== Number(caller.club_id)) {
+          throw new DeniedError("Ton compte appartient déjà à un autre club. Aucun transfert n’a été effectué ; contacte ton coach pour conserver tes données.");
+        }
+        if (individualInvitation.accepted_at && Number(individualInvitation.accepted_user_id) !== Number(caller.id)) {
+          throw new DeniedError("Cette invitation a déjà été utilisée.");
+        }
+        if (!individualInvitation.accepted_at) {
+          const { error: acceptError } = await admin.from("club_invitations").update({
+            accepted_at: new Date().toISOString(),
+            accepted_user_id: caller.id,
+            reservation_token: null,
+            reserved_until: null,
+          }).eq("id", individualInvitation.id).is("accepted_at", null);
+          if (acceptError) throw acceptError;
+        }
+        const { data: club } = await admin.from("clubs").select("name").eq("id", caller.club_id).single();
+        return ok({ alreadyMember: true, clubName: club?.name ?? "Ton club" });
+      }
+
       let { data: invitedClub, error: inviteError } = await admin
         .from("clubs")
         .select("id, name, invite_code_expires_at")
@@ -261,6 +297,104 @@ serve(async (req) => {
 
     // ── Actions réservées au head coach ─────────────────────────────────
     if (!isHeadCoach) throw new DeniedError("Action réservée au head coach.");
+
+    if (currentAction === "list_club_invitations") {
+      const { data: rows, error } = await admin
+        .from("club_invitations")
+        .select("id, code, recipient_name, recipient_email, status, expires_at, opened_at, accepted_at, revoked_at, created_at")
+        .eq("club_id", caller.club_id)
+        .order("created_at", { ascending: false })
+        .limit(100);
+      if (error?.code === "42P01") return ok({ invitations: [], migrationPending: true });
+      if (error) throw error;
+      const now = Date.now();
+      return ok({ invitations: (rows ?? []).map((row) => ({
+        id: row.id,
+        code: row.code,
+        recipientName: row.recipient_name,
+        recipientEmail: row.recipient_email,
+        status: row.status === "revoked"
+          ? "revoked"
+          : row.accepted_at
+            ? "accepted"
+            : row.expires_at && new Date(row.expires_at).getTime() <= now
+              ? "expired"
+              : row.opened_at ? "opened" : "sent",
+        expiresAt: row.expires_at,
+        openedAt: row.opened_at,
+        acceptedAt: row.accepted_at,
+        revokedAt: row.revoked_at,
+        createdAt: row.created_at,
+      })) });
+    }
+
+    if (currentAction === "create_club_invitation") {
+      targetClubId = caller.club_id;
+      const cached = await findCachedSuccess();
+      if (cached?.invitation) return ok(cached);
+      const recipientName = typeof body.recipientName === "string" && body.recipientName.trim()
+        ? body.recipientName.trim().slice(0, 100)
+        : null;
+      const recipientEmail = typeof body.recipientEmail === "string" && body.recipientEmail.trim()
+        ? body.recipientEmail.trim().toLowerCase()
+        : null;
+      if (recipientEmail && (recipientEmail.length > 254 || !EMAIL_PATTERN.test(recipientEmail))) {
+        throw new DeniedError("Adresse email du destinataire invalide.");
+      }
+      const expiresInDays = body.expiresInDays == null ? 7 : Number(body.expiresInDays);
+      if (![1, 3, 7, 14, 30].includes(expiresInDays)) throw new DeniedError("Durée d’invitation invalide.");
+      const expiresAt = new Date(Date.now() + expiresInDays * 86_400_000).toISOString();
+
+      let code = "";
+      for (let attempt = 0; attempt < 10; attempt++) {
+        code = genCode();
+        const [{ data: clubMatch }, { data: invitationMatch }] = await Promise.all([
+          admin.from("clubs").select("id").eq("invite_code", code).maybeSingle(),
+          admin.from("club_invitations").select("id").eq("code", code).maybeSingle(),
+        ]);
+        if (!clubMatch && !invitationMatch) break;
+      }
+      const { data: invitation, error } = await admin.from("club_invitations").insert({
+        club_id: caller.club_id,
+        code,
+        recipient_name: recipientName,
+        recipient_email: recipientEmail,
+        expires_at: expiresAt,
+        created_by: caller.id,
+      }).select("id, code, recipient_name, recipient_email, expires_at, created_at").single();
+      if (error || !invitation) throw error ?? new Error("Invitation non créée.");
+      const responseInvitation = {
+        id: invitation.id,
+        code: invitation.code,
+        recipientName: invitation.recipient_name,
+        recipientEmail: invitation.recipient_email,
+        status: "sent",
+        expiresAt: invitation.expires_at,
+        createdAt: invitation.created_at,
+      };
+      auditPayload = { invitation: responseInvitation };
+      await logAudit("success", null);
+      return ok({ invitation: responseInvitation });
+    }
+
+    if (currentAction === "revoke_club_invitation") {
+      targetClubId = caller.club_id;
+      const invitationId = requireString(body.invitationId, "Invitation", { max: 36 });
+      if (!UUID_PATTERN.test(invitationId)) throw new DeniedError("Invitation invalide.");
+      const { data: invitation } = await admin.from("club_invitations")
+        .select("id, status, accepted_at")
+        .eq("id", invitationId).eq("club_id", caller.club_id).maybeSingle();
+      if (!invitation) throw new DeniedError("Invitation introuvable.");
+      if (invitation.accepted_at) throw new DeniedError("Une invitation acceptée ne peut plus être révoquée.");
+      if (invitation.status === "revoked") return ok({});
+      const revokedAt = new Date().toISOString();
+      const { error } = await admin.from("club_invitations").update({ status: "revoked", revoked_at: revokedAt })
+        .eq("id", invitationId).eq("club_id", caller.club_id);
+      if (error) throw error;
+      auditPayload = { invitationId, revokedAt };
+      await logAudit("success", null);
+      return ok({});
+    }
 
     if (currentAction === "rename_club") {
       targetClubId = caller.club_id;

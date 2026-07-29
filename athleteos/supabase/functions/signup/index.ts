@@ -129,6 +129,8 @@ serve(async (req) => {
   }
 
   let createdAuthUserId: string | null = null;
+  let reservedInvitationId: string | null = null;
+  let reservationToken: string | null = null;
 
   try {
     const rawBody = await req.text();
@@ -207,6 +209,7 @@ serve(async (req) => {
 
     let clubName = "";
     let inviteCode = "";
+    let individualInvitationId: string | null = null;
     if (mode === "create_club") {
       clubName = typeof body.clubName === "string" ? body.clubName.trim() : "";
       if (!clubName || clubName.length > MAX_CLUB_NAME_LEN) return fail(400, "Nom du club invalide.");
@@ -214,17 +217,45 @@ serve(async (req) => {
       inviteCode = normalizeInviteCode(body.inviteCode);
       if (!CODE_RE.test(inviteCode)) return fail(400, "Le code d’invitation doit contenir 8 caractères.");
 
-      let { data: club, error: clubErr } = await admin
-        .from("clubs").select("id, invite_code_expires_at").ilike("invite_code", inviteCode).maybeSingle();
-      if (clubErr?.code === "42703") {
-        const legacyResult = await admin.from("clubs").select("id").ilike("invite_code", inviteCode).maybeSingle();
-        club = legacyResult.data;
-        clubErr = legacyResult.error;
+      const { data: individualInvitation, error: individualError } = await admin
+        .from("club_invitations")
+        .select("id, club_id, status, expires_at, accepted_at, recipient_email")
+        .ilike("code", inviteCode)
+        .maybeSingle();
+      if (individualError && individualError.code !== "42P01") return fail(500, "Erreur serveur.");
+      if (individualInvitation) {
+        if (individualInvitation.status === "revoked") {
+          return fail(400, "Cette invitation a été révoquée. Demande un nouveau lien à ton coach.");
+        }
+        if (individualInvitation.accepted_at) return fail(400, "Cette invitation a déjà été utilisée.");
+        if (individualInvitation.recipient_email && individualInvitation.recipient_email.toLowerCase() !== emailRaw) {
+          return fail(400, "Cette invitation a été préparée pour une autre adresse email.");
+        }
+        if (individualInvitation.expires_at && new Date(individualInvitation.expires_at) <= new Date()) {
+          return fail(400, "Cette invitation a expiré. Demande un nouveau lien à ton coach.");
+        }
+        const { data: invitationClub, error: invitationClubError } = await admin
+          .from("clubs").select("invite_code").eq("id", individualInvitation.club_id).single();
+        if (invitationClubError || !invitationClub?.invite_code) return fail(500, "Club de l’invitation introuvable.");
+        individualInvitationId = individualInvitation.id;
+        // Le RPC historique rattache par le code général du club. Le code
+        // individuel reste celui qui sera marqué comme accepté ci-dessous.
+        inviteCode = invitationClub.invite_code;
       }
-      if (clubErr) return fail(500, "Erreur serveur.");
-      if (!club) return fail(400, "Cette invitation n’est plus active. Demande un nouveau lien à ton coach.");
-      if (club.invite_code_expires_at && new Date(club.invite_code_expires_at) <= new Date()) {
-        return fail(400, "Cette invitation a expiré. Demande un nouveau lien à ton coach.");
+
+      if (!individualInvitationId) {
+        let { data: club, error: clubErr } = await admin
+          .from("clubs").select("id, invite_code_expires_at").ilike("invite_code", inviteCode).maybeSingle();
+        if (clubErr?.code === "42703") {
+          const legacyResult = await admin.from("clubs").select("id").ilike("invite_code", inviteCode).maybeSingle();
+          club = legacyResult.data;
+          clubErr = legacyResult.error;
+        }
+        if (clubErr) return fail(500, "Erreur serveur.");
+        if (!club) return fail(400, "Cette invitation n’est plus active. Demande un nouveau lien à ton coach.");
+        if (club.invite_code_expires_at && new Date(club.invite_code_expires_at) <= new Date()) {
+          return fail(400, "Cette invitation a expiré. Demande un nouveau lien à ton coach.");
+        }
       }
     }
 
@@ -251,6 +282,28 @@ serve(async (req) => {
     }
     createdAuthUserId = authData.user.id;
 
+    if (individualInvitationId) {
+      reservationToken = crypto.randomUUID();
+      const nowIso = new Date().toISOString();
+      const reservedUntil = new Date(Date.now() + 5 * 60_000).toISOString();
+      const { data: reserved, error: reserveError } = await admin.from("club_invitations").update({
+        reservation_token: reservationToken,
+        reserved_until: reservedUntil,
+      })
+        .eq("id", individualInvitationId)
+        .eq("status", "active")
+        .is("accepted_at", null)
+        .or(`reserved_until.is.null,reserved_until.lt.${nowIso}`)
+        .select("id")
+        .maybeSingle();
+      if (reserveError || !reserved) {
+        await admin.auth.admin.deleteUser(createdAuthUserId).catch(() => {});
+        createdAuthUserId = null;
+        return fail(409, "Cette invitation est déjà utilisée ou en cours d’utilisation.");
+      }
+      reservedInvitationId = individualInvitationId;
+    }
+
     // ── Test uniquement : force un échec après création Auth, pour vérifier
     // la compensation. Double verrou : sans SIGNUP_TEST_MODE=true dans les
     // secrets de la fonction, ce bloc est totalement inerte quel que soit le
@@ -260,13 +313,23 @@ serve(async (req) => {
     }
 
     // ── club + users + athletes, atomique (migration 20260727030000) ────
-    const { error: rpcErr } = await admin.rpc("signup_create_account", {
+    const { data: rpcData, error: rpcErr } = await admin.rpc("signup_create_account", {
       p_mode: mode, p_club_name: clubName, p_invite_code: inviteCode,
       p_auth_uid: authData.user.id, p_name: name, p_email: emailRaw,
     });
     if (rpcErr) throw rpcErr;
 
-    if (mode === "join_club") {
+    if (mode === "join_club" && individualInvitationId && reservationToken) {
+      const { error: trackingError } = await admin.from("club_invitations").update({
+        accepted_at: new Date().toISOString(),
+        accepted_user_id: rpcData?.userId ?? null,
+        reservation_token: null,
+        reserved_until: null,
+      }).eq("id", individualInvitationId).eq("reservation_token", reservationToken).eq("status", "active").is("accepted_at", null);
+      if (trackingError) console.error(`signup[${correlationId}] individual invitation tracking:`, trackingError.message);
+      reservedInvitationId = null;
+      reservationToken = null;
+    } else if (mode === "join_club") {
       const { error: trackingError } = await admin.rpc("mark_club_invitation_used", {
         p_invite_code: inviteCode,
       });
@@ -283,6 +346,10 @@ serve(async (req) => {
     // lignes club/users/athletes qui vont avec (club+users+athletes eux-
     // mêmes sont déjà tout-ou-rien grâce au RPC).
     if (createdAuthUserId) await admin.auth.admin.deleteUser(createdAuthUserId).catch(() => {});
+    if (reservedInvitationId && reservationToken) {
+      await admin.from("club_invitations").update({ reservation_token: null, reserved_until: null })
+        .eq("id", reservedInvitationId).eq("reservation_token", reservationToken);
+    }
     console.error(`signup[${correlationId}] error:`, err instanceof Error ? err.message : err);
     return fail(500, "Erreur serveur.");
   }

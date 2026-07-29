@@ -72,7 +72,7 @@ describe("AccountSettingsModal", () => {
     fireEvent.click(screen.getByRole("tab", { name: "Club" }));
     expect(await screen.findByText("OLDCODE1")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Générer un nouveau code" }));
-    expect(mocks.invoke).not.toHaveBeenCalled();
+    expect(mocks.invoke.mock.calls.some(([, request]) => request.body.action === "regenerate_invite_code")).toBe(false);
     expect(screen.getByText("L’ancien code sera invalidé immédiatement.")).toBeTruthy();
 
     fireEvent.click(screen.getByRole("button", { name: "Générer le nouveau code" }));

@@ -10,7 +10,7 @@ async function copyText(value) {
   await globalThis.navigator.clipboard.writeText(value);
 }
 
-export default function InviteClubModal({ clubName, inviteCode, onClose }) {
+export default function InviteClubModal({ clubName, inviteCode, onClose, onOpenCenter }) {
   const [copied, setCopied] = useState(null);
   const [feedback, setFeedback] = useState(null);
   const dialogRef = useRef(null);
@@ -116,7 +116,11 @@ export default function InviteClubModal({ clubName, inviteCode, onClose }) {
         </div>
 
         <footer className="club-dialog-footer">
-          <button type="button" onClick={onClose} className="btn-secondary">Fermer</button>
+          {onOpenCenter ? (
+            <button type="button" onClick={onOpenCenter} className="btn-secondary">Gérer les invitations</button>
+          ) : (
+            <button type="button" onClick={onClose} className="btn-secondary">Fermer</button>
+          )}
           <button type="button" onClick={handleShare} disabled={!inviteUrl} className="btn-primary">
             <Share2 size={16} aria-hidden="true" /> Partager l’invitation
           </button>

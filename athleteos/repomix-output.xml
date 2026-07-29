@@ -113,6 +113,8 @@ src/
       club-experience.css
       ClubDemoPreview.jsx
       ClubExperience.test.jsx
+      ClubInvitationCenter.jsx
+      ClubInvitationCenter.test.jsx
       ClubOnboardingCard.jsx
       InviteClubModal.jsx
     navigation/
@@ -257,6 +259,7 @@ supabase/
     20260801070000_confirmed_rest_days.sql
     20260801080000_structured_performance_context.sql
     20260801090000_reliable_invites_and_branding_storage.sql
+    20260801100000_individual_club_invitations.sql
   .gitignore
   config.toml
   seed.sql
@@ -9362,6 +9365,358 @@ describe("InviteClubModal", () => {
     fireEvent.keyDown(globalThis, { key: "Escape" });
     expect(onClose).toHaveBeenCalledOnce();
   });
+
+  it("ouvre le centre individuel sans supprimer le partage général", () => {
+    const onOpenCenter = vi.fn();
+    render(<InviteClubModal clubName="Club ami" inviteCode="AB12CD34" onClose={vi.fn()} onOpenCenter={onOpenCenter} />);
+    fireEvent.click(screen.getByRole("button", { name: "Gérer les invitations" }));
+    expect(onOpenCenter).toHaveBeenCalledOnce();
+    expect(screen.getByRole("button", { name: "Partager l’invitation" })).toBeTruthy();
+  });
+});
+</file>
+
+<file path="src/components/club/ClubInvitationCenter.jsx">
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { Check, Clock3, Copy, Link2, Mail, Plus, RefreshCw, Send, ShieldCheck, UserRound, X } from "lucide-react";
+import { QRCodeSVG } from "qrcode.react";
+import { buildInviteUrl } from "../../utils/clubBranding";
+
+const STATUS_META = Object.freeze({
+  sent: { label: "Envoyée", className: "chip-neutral" },
+  opened: { label: "Ouverte", className: "chip-info" },
+  accepted: { label: "Acceptée", className: "chip-success" },
+  expired: { label: "Expirée", className: "chip-warning" },
+  revoked: { label: "Révoquée", className: "chip-danger" },
+});
+
+function formatDate(value, withTime = false) {
+  if (!value) return "—";
+  return new Intl.DateTimeFormat("fr-BE", withTime
+    ? { dateStyle: "medium", timeStyle: "short" }
+    : { dateStyle: "medium" }).format(new Date(value));
+}
+
+export default function ClubInvitationCenter({ callAdmin, clubName }) {
+  const [invitations, setInvitations] = useState([]);
+  const [selectedId, setSelectedId] = useState(null);
+  const [form, setForm] = useState({ recipientName: "", recipientEmail: "", expiresInDays: "7" });
+  const [loading, setLoading] = useState(true);
+  const [creating, setCreating] = useState(false);
+  const [revokingId, setRevokingId] = useState(null);
+  const [confirmRevokeId, setConfirmRevokeId] = useState(null);
+  const [feedback, setFeedback] = useState(null);
+
+  const loadInvitations = useCallback(async () => {
+    setLoading(true);
+    try {
+      const data = await callAdmin({ action: "list_club_invitations" });
+      setInvitations(data.invitations ?? []);
+      setSelectedId((current) => current ?? data.invitations?.[0]?.id ?? null);
+      if (data.migrationPending) setFeedback({ type: "error", text: "La migration des invitations doit encore être appliquée." });
+    } catch (error) {
+      setFeedback({ type: "error", text: error.message ?? "Les invitations n’ont pas pu être chargées." });
+    } finally {
+      setLoading(false);
+    }
+  }, [callAdmin]);
+
+  useEffect(() => { loadInvitations(); }, [loadInvitations]);
+
+  const selected = useMemo(
+    () => invitations.find((invitation) => invitation.id === selectedId) ?? null,
+    [invitations, selectedId],
+  );
+  const selectedUrl = buildInviteUrl(selected?.code);
+
+  const createInvitation = async (event) => {
+    event.preventDefault();
+    if (creating) return;
+    setCreating(true);
+    setFeedback(null);
+    try {
+      const data = await callAdmin({
+        action: "create_club_invitation",
+        recipientName: form.recipientName.trim() || null,
+        recipientEmail: form.recipientEmail.trim() || null,
+        expiresInDays: Number(form.expiresInDays),
+        idempotencyKey: crypto.randomUUID(),
+      });
+      setInvitations((current) => [data.invitation, ...current]);
+      setSelectedId(data.invitation.id);
+      setForm({ recipientName: "", recipientEmail: "", expiresInDays: "7" });
+      setFeedback({ type: "success", text: "Invitation individuelle prête à être envoyée." });
+    } catch (error) {
+      setFeedback({ type: "error", text: error.message ?? "L’invitation n’a pas pu être créée." });
+    } finally {
+      setCreating(false);
+    }
+  };
+
+  const copyLink = async (invitation = selected) => {
+    const url = buildInviteUrl(invitation?.code);
+    if (!url) return;
+    try {
+      await navigator.clipboard.writeText(url);
+      setFeedback({ type: "success", text: "Lien d’invitation copié." });
+    } catch {
+      setFeedback({ type: "error", text: "La copie automatique n’est pas disponible sur cet appareil." });
+    }
+  };
+
+  const shareInvitation = async (invitation = selected) => {
+    const url = buildInviteUrl(invitation?.code);
+    if (!url) return;
+    if (!navigator.share) {
+      await copyLink(invitation);
+      return;
+    }
+    try {
+      await navigator.share({
+        title: `Invitation ${clubName || "AthleteOS"}`,
+        text: `${invitation.recipientName ? `${invitation.recipientName}, rejoins` : "Rejoins"} ${clubName || "ton club"} sur AthleteOS.`,
+        url,
+      });
+      setFeedback({ type: "success", text: "Invitation partagée." });
+    } catch (error) {
+      if (error?.name !== "AbortError") setFeedback({ type: "error", text: "Le partage n’a pas pu être ouvert." });
+    }
+  };
+
+  const revokeInvitation = async (invitationId) => {
+    setRevokingId(invitationId);
+    setFeedback(null);
+    try {
+      await callAdmin({
+        action: "revoke_club_invitation",
+        invitationId,
+        idempotencyKey: crypto.randomUUID(),
+      });
+      setInvitations((current) => current.map((invitation) => (
+        invitation.id === invitationId ? { ...invitation, status: "revoked", revokedAt: new Date().toISOString() } : invitation
+      )));
+      setConfirmRevokeId(null);
+      setFeedback({ type: "success", text: "Invitation révoquée. Son lien ne permet plus de rejoindre le club." });
+    } catch (error) {
+      setFeedback({ type: "error", text: error.message ?? "L’invitation n’a pas pu être révoquée." });
+    } finally {
+      setRevokingId(null);
+    }
+  };
+
+  return (
+    <section className="card overflow-hidden" aria-labelledby="club-invitation-center-title">
+      <header className="flex flex-wrap items-start justify-between gap-3 border-b p-4" style={{ borderColor: "var(--c-border)" }}>
+        <div className="flex items-start gap-3">
+          <span className="flex h-9 w-9 items-center justify-center rounded-xl" style={{ background: "rgba(var(--club-accent-rgb),0.12)", color: "var(--club-accent)" }}>
+            <Send size={18} aria-hidden="true" />
+          </span>
+          <div>
+            <h4 id="club-invitation-center-title" className="card-title">Invitations individuelles</h4>
+            <p className="card-subtitle mt-1">Un lien unique par athlète, visible jusqu’à son acceptation.</p>
+          </div>
+        </div>
+        <button type="button" className="btn-ghost" onClick={loadInvitations} disabled={loading} style={{ minHeight: 36 }}>
+          <RefreshCw size={15} className={loading ? "animate-spin" : ""} aria-hidden="true" /> Actualiser
+        </button>
+      </header>
+
+      <form onSubmit={createInvitation} className="grid gap-3 border-b p-4 md:grid-cols-2" style={{ borderColor: "var(--c-border)", background: "var(--c-surface-2)" }}>
+        <label className="block">
+          <span className="club-field-label"><UserRound size={14} aria-hidden="true" /> Nom de l’athlète <small>(facultatif)</small></span>
+          <input className="input-premium mt-2 w-full" value={form.recipientName} maxLength={100} placeholder="Ex. Alice Martin"
+            onChange={(event) => setForm((current) => ({ ...current, recipientName: event.target.value }))} />
+        </label>
+        <label className="block">
+          <span className="club-field-label"><Mail size={14} aria-hidden="true" /> Email <small>(facultatif)</small></span>
+          <input className="input-premium mt-2 w-full" type="email" value={form.recipientEmail} maxLength={254} placeholder="alice@club.be"
+            onChange={(event) => setForm((current) => ({ ...current, recipientEmail: event.target.value }))} />
+        </label>
+        <label className="block">
+          <span className="club-field-label"><Clock3 size={14} aria-hidden="true" /> Durée de validité</span>
+          <select className="input-premium mt-2 w-full" value={form.expiresInDays}
+            onChange={(event) => setForm((current) => ({ ...current, expiresInDays: event.target.value }))}>
+            <option value="1">24 heures</option>
+            <option value="3">3 jours</option>
+            <option value="7">7 jours</option>
+            <option value="14">14 jours</option>
+            <option value="30">30 jours</option>
+          </select>
+        </label>
+        <div className="flex items-end">
+          <button type="submit" className="btn-primary w-full" disabled={creating}>
+            {creating ? <RefreshCw size={16} className="animate-spin" /> : <Plus size={16} />} {creating ? "Création…" : "Créer l’invitation"}
+          </button>
+        </div>
+      </form>
+
+      {feedback && (
+        <div role={feedback.type === "error" ? "alert" : "status"} className="mx-4 mt-4 rounded-xl border px-3 py-2.5 text-[13px]"
+          style={{ color: feedback.type === "error" ? "#F29B9A" : "#7BD8B4", borderColor: feedback.type === "error" ? "rgba(226,75,74,0.24)" : "rgba(29,158,117,0.24)", background: feedback.type === "error" ? "rgba(226,75,74,0.08)" : "rgba(29,158,117,0.08)" }}>
+          {feedback.text}
+        </div>
+      )}
+
+      <div className="grid gap-0 lg:grid-cols-[minmax(0,1.15fr)_minmax(280px,0.85fr)]">
+        <div className="p-4 lg:border-r" style={{ borderColor: "var(--c-border)" }}>
+          {loading ? (
+            <div className="flex items-center justify-center gap-2 py-10 secondary-text"><RefreshCw size={17} className="animate-spin" /> Chargement…</div>
+          ) : invitations.length === 0 ? (
+            <div className="py-10 text-center">
+              <ShieldCheck size={26} className="mx-auto mb-3" style={{ color: "var(--club-accent)" }} />
+              <p className="card-title">Aucune invitation individuelle</p>
+              <p className="secondary-text mt-1">Crée la première avec le formulaire ci-dessus.</p>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {invitations.map((invitation) => {
+                const status = STATUS_META[invitation.status] ?? STATUS_META.sent;
+                const selectedRow = invitation.id === selectedId;
+                return (
+                  <button key={invitation.id} type="button" onClick={() => setSelectedId(invitation.id)}
+                    className="tap-feedback w-full rounded-xl border p-3 text-left"
+                    style={{ borderColor: selectedRow ? "rgba(var(--club-accent-rgb),0.42)" : "var(--c-border)", background: selectedRow ? "rgba(var(--club-accent-rgb),0.08)" : "var(--c-surface-2)" }}>
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="truncate text-[13px] font-semibold" style={{ color: "var(--c-text-1)" }}>{invitation.recipientName || invitation.recipientEmail || "Invitation sans destinataire"}</p>
+                        <p className="meta-text mt-1">{invitation.recipientEmail || `Code ${invitation.code}`}</p>
+                      </div>
+                      <span className={`chip ${status.className}`}>{status.label}</span>
+                    </div>
+                    <p className="meta-text mt-2">Créée le {formatDate(invitation.createdAt)} · expire le {formatDate(invitation.expiresAt)}</p>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        <aside className="p-4" aria-label="Détail de l’invitation sélectionnée">
+          {selected ? (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="card-title">{selected.recipientName || "Invitation individuelle"}</p>
+                  <p className="meta-text mt-1">Code {selected.code}</p>
+                </div>
+                <span className={`chip ${(STATUS_META[selected.status] ?? STATUS_META.sent).className}`}>{(STATUS_META[selected.status] ?? STATUS_META.sent).label}</span>
+              </div>
+
+              <div className="mx-auto w-fit rounded-2xl bg-white p-3" aria-label="QR code de l’invitation individuelle">
+                <QRCodeSVG value={selectedUrl} size={150} level="M" marginSize={1} bgColor="#FFFFFF" fgColor="#07120C" title={`QR code invitation ${selected.code}`} />
+              </div>
+
+              <div className="rounded-xl border p-3" style={{ borderColor: "var(--c-border)", background: "var(--c-surface-2)" }}>
+                <div className="flex items-center gap-2"><Link2 size={15} style={{ color: "var(--club-accent)" }} /><p className="meta-text truncate">{selectedUrl}</p></div>
+                <div className="mt-3 grid grid-cols-2 gap-2">
+                  <button type="button" className="btn-secondary" onClick={() => copyLink(selected)}><Copy size={15} /> Copier</button>
+                  <button type="button" className="btn-primary" onClick={() => shareInvitation(selected)} disabled={["expired", "revoked", "accepted"].includes(selected.status)}><Send size={15} /> Renvoyer</button>
+                </div>
+              </div>
+
+              <div className="space-y-2 text-[12px]" style={{ color: "var(--c-text-2)" }}>
+                <p><strong style={{ color: "var(--c-text-1)" }}>Créée :</strong> {formatDate(selected.createdAt, true)}</p>
+                <p><strong style={{ color: "var(--c-text-1)" }}>Ouverte :</strong> {formatDate(selected.openedAt, true)}</p>
+                <p><strong style={{ color: "var(--c-text-1)" }}>Acceptée :</strong> {formatDate(selected.acceptedAt, true)}</p>
+                <p><strong style={{ color: "var(--c-text-1)" }}>Expiration :</strong> {formatDate(selected.expiresAt, true)}</p>
+              </div>
+
+              {!["accepted", "expired", "revoked"].includes(selected.status) && (
+                confirmRevokeId === selected.id ? (
+                  <div className="rounded-xl border p-3" style={{ borderColor: "rgba(226,75,74,0.28)", background: "rgba(226,75,74,0.07)" }}>
+                    <p className="secondary-text">Ce lien cessera immédiatement de fonctionner.</p>
+                    <div className="mt-3 flex gap-2">
+                      <button type="button" className="btn-ghost flex-1" onClick={() => setConfirmRevokeId(null)}><X size={15} /> Annuler</button>
+                      <button type="button" className="btn-secondary flex-1" style={{ color: "#F29B9A", borderColor: "rgba(226,75,74,0.35)" }} onClick={() => revokeInvitation(selected.id)} disabled={revokingId === selected.id}>
+                        {revokingId === selected.id ? <RefreshCw size={15} className="animate-spin" /> : <Check size={15} />} Confirmer
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <button type="button" className="btn-ghost w-full" onClick={() => setConfirmRevokeId(selected.id)} style={{ color: "#F29B9A" }}>
+                    Révoquer cette invitation
+                  </button>
+                )
+              )}
+            </div>
+          ) : (
+            <div className="flex h-full min-h-48 items-center justify-center text-center secondary-text">Sélectionne une invitation pour afficher son QR et ses actions.</div>
+          )}
+        </aside>
+      </div>
+    </section>
+  );
+}
+</file>
+
+<file path="src/components/club/ClubInvitationCenter.test.jsx">
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import ClubInvitationCenter from "./ClubInvitationCenter";
+
+const existingInvitation = {
+  id: "123e4567-e89b-42d3-a456-426614174000",
+  code: "ABCD2345",
+  recipientName: "Alice Martin",
+  recipientEmail: "alice@club.be",
+  status: "opened",
+  createdAt: "2026-07-29T10:00:00Z",
+  expiresAt: "2026-08-05T10:00:00Z",
+  openedAt: "2026-07-29T11:00:00Z",
+  acceptedAt: null,
+};
+
+beforeEach(() => {
+  Object.defineProperty(globalThis.navigator, "clipboard", {
+    configurable: true,
+    value: { writeText: vi.fn().mockResolvedValue(undefined) },
+  });
+});
+
+afterEach(cleanup);
+
+describe("ClubInvitationCenter", () => {
+  it("affiche le suivi et crée une invitation individuelle", async () => {
+    const created = { ...existingInvitation, id: "223e4567-e89b-42d3-a456-426614174000", code: "WXYZ6789", recipientName: "Noah", recipientEmail: null, status: "sent" };
+    const callAdmin = vi.fn(async (payload) => {
+      if (payload.action === "list_club_invitations") return { invitations: [existingInvitation] };
+      if (payload.action === "create_club_invitation") return { invitation: created };
+      return {};
+    });
+    render(<ClubInvitationCenter callAdmin={callAdmin} clubName="Club ami" />);
+
+    expect((await screen.findAllByText("Alice Martin")).length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Ouverte").length).toBeGreaterThan(0);
+    fireEvent.change(screen.getByPlaceholderText("Ex. Alice Martin"), { target: { value: "Noah" } });
+    fireEvent.change(screen.getByLabelText(/Durée de validité/i), { target: { value: "14" } });
+    fireEvent.click(screen.getByRole("button", { name: "Créer l’invitation" }));
+
+    await waitFor(() => expect(callAdmin).toHaveBeenCalledWith(expect.objectContaining({
+      action: "create_club_invitation",
+      recipientName: "Noah",
+      expiresInDays: 14,
+    })));
+    expect(await screen.findByText("Invitation individuelle prête à être envoyée.")).toBeTruthy();
+    expect(screen.getByTitle("QR code invitation WXYZ6789")).toBeTruthy();
+  });
+
+  it("demande confirmation avant de révoquer le lien", async () => {
+    const callAdmin = vi.fn(async (payload) => (
+      payload.action === "list_club_invitations" ? { invitations: [existingInvitation] } : {}
+    ));
+    render(<ClubInvitationCenter callAdmin={callAdmin} clubName="Club ami" />);
+    await screen.findAllByText("Alice Martin");
+
+    fireEvent.click(screen.getByRole("button", { name: "Révoquer cette invitation" }));
+    expect(callAdmin).not.toHaveBeenCalledWith(expect.objectContaining({ action: "revoke_club_invitation" }));
+    fireEvent.click(screen.getByRole("button", { name: "Confirmer" }));
+
+    await waitFor(() => expect(callAdmin).toHaveBeenCalledWith(expect.objectContaining({
+      action: "revoke_club_invitation",
+      invitationId: existingInvitation.id,
+    })));
+    expect(await screen.findByText(/Invitation révoquée/)).toBeTruthy();
+  });
 });
 </file>
 
@@ -9485,7 +9840,7 @@ async function copyText(value) {
   await globalThis.navigator.clipboard.writeText(value);
 }
 
-export default function InviteClubModal({ clubName, inviteCode, onClose }) {
+export default function InviteClubModal({ clubName, inviteCode, onClose, onOpenCenter }) {
   const [copied, setCopied] = useState(null);
   const [feedback, setFeedback] = useState(null);
   const dialogRef = useRef(null);
@@ -9591,7 +9946,11 @@ export default function InviteClubModal({ clubName, inviteCode, onClose }) {
         </div>
 
         <footer className="club-dialog-footer">
-          <button type="button" onClick={onClose} className="btn-secondary">Fermer</button>
+          {onOpenCenter ? (
+            <button type="button" onClick={onOpenCenter} className="btn-secondary">Gérer les invitations</button>
+          ) : (
+            <button type="button" onClick={onClose} className="btn-secondary">Fermer</button>
+          )}
           <button type="button" onClick={handleShare} disabled={!inviteUrl} className="btn-primary">
             <Share2 size={16} aria-hidden="true" /> Partager l’invitation
           </button>
@@ -11330,7 +11689,7 @@ describe("Form and mobile primitives", () => {
 </file>
 
 <file path="src/components/ui/AccountSettingsModal.jsx">
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   Building2,
   Check,
@@ -11356,6 +11715,7 @@ import {
 import { translateAuthError } from "../auth/authFormUtils";
 import { loadClubBranding } from "../../hooks/useClubBranding";
 import { CLUB_ACCENT_PRESETS, DEFAULT_CLUB_ACCENT } from "../../utils/clubBranding";
+import ClubInvitationCenter from "../club/ClubInvitationCenter";
 
 const FOCUSABLE_SELECTOR = [
   "button:not([disabled])",
@@ -11501,7 +11861,7 @@ export default function AccountSettingsModal({ onClose, initialSection = "accoun
     return () => window.removeEventListener("keydown", handleKeyDown);
   });
 
-  const callAdmin = async (payload) => {
+  const callAdmin = useCallback(async (payload) => {
     const { data, error } = await supabase.functions.invoke("admin-actions", { body: payload });
     if (error) {
       if (error.context?.json) {
@@ -11516,7 +11876,7 @@ export default function AccountSettingsModal({ onClose, initialSection = "accoun
     }
     if (!data?.success) throw new Error(data?.error ?? "Une erreur est survenue.");
     return data;
-  };
+  }, []);
 
   const runAction = async (key, action, successText) => {
     setBusy(key);
@@ -11966,6 +12326,8 @@ export default function AccountSettingsModal({ onClose, initialSection = "accoun
                       </div>
                     </div>
                   )}
+
+                  <ClubInvitationCenter callAdmin={callAdmin} clubName={clubName} />
                 </>
               )}
             </div>
@@ -12052,7 +12414,7 @@ describe("AccountSettingsModal", () => {
     fireEvent.click(screen.getByRole("tab", { name: "Club" }));
     expect(await screen.findByText("OLDCODE1")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Générer un nouveau code" }));
-    expect(mocks.invoke).not.toHaveBeenCalled();
+    expect(mocks.invoke.mock.calls.some(([, request]) => request.body.action === "regenerate_invite_code")).toBe(false);
     expect(screen.getByText("L’ancien code sera invalidé immédiatement.")).toBeTruthy();
 
     fireEvent.click(screen.getByRole("button", { name: "Générer le nouveau code" }));
@@ -23622,6 +23984,7 @@ const mocks = vi.hoisted(() => ({
   updatePassword: vi.fn(),
   signOut: vi.fn(),
   invoke: vi.fn(),
+  rpc: vi.fn(),
   signInWithPassword: vi.fn(),
 }));
 
@@ -23637,6 +24000,7 @@ vi.mock("../context/AuthContext", () => ({
 vi.mock("../utils/supabaseClient", () => ({
   supabase: {
     functions: { invoke: mocks.invoke },
+    rpc: mocks.rpc,
     auth: { signInWithPassword: mocks.signInWithPassword, signOut: mocks.signOut },
   },
 }));
@@ -23647,6 +24011,7 @@ beforeEach(() => {
   mocks.sendPasswordReset.mockResolvedValue({ error: null });
   mocks.updatePassword.mockResolvedValue({ error: null });
   mocks.invoke.mockResolvedValue({ data: { success: true }, error: null });
+  mocks.rpc.mockResolvedValue({ data: { status: "active", clubName: "Club ami" }, error: null });
   mocks.signInWithPassword.mockResolvedValue({ error: null });
 });
 
@@ -23694,11 +24059,13 @@ describe("LoginPage", () => {
 });
 
 describe("SignupPage", () => {
-  it("préremplit le club lorsqu’un athlète ouvre un lien d’invitation", () => {
+  it("préremplit et vérifie le club lorsqu’un athlète ouvre un lien d’invitation", async () => {
     render(<SignupPage onBack={vi.fn()} initialInviteCode="ab12cd34" />);
 
     expect(screen.getByRole("button", { name: /Athlète.*Rejoindre mon club/i }).getAttribute("aria-pressed")).toBe("true");
     expect(screen.getByLabelText("Code d’invitation").value).toBe("AB12CD34");
+    await waitFor(() => expect(mocks.rpc).toHaveBeenCalledWith("inspect_club_invitation", { p_code: "AB12CD34" }));
+    expect(await screen.findByText("Invitation valide pour Club ami.")).toBeTruthy();
   });
 
   it("rend le choix de rôle explicite et conserve le payload athlète existant", async () => {
@@ -24068,7 +24435,7 @@ export default function ResetPasswordPage() {
 </file>
 
 <file path="src/pages/SignupPage.jsx">
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ArrowLeft, Building2, KeyRound, Lock, Mail, User, UsersRound } from "lucide-react";
 import { supabase } from "../utils/supabaseClient";
 import AuthShell from "../components/auth/AuthShell";
@@ -24105,6 +24472,7 @@ export default function SignupPage({ onBack, initialInviteCode = "" }) {
   const [form, setForm] = useState({ name: "", email: "", password: "", clubName: "", inviteCode: normalizedInviteCode });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [inviteCheck, setInviteCheck] = useState(null);
   const [honeypot, setHoneypot] = useState("");
   const formLoadedAt = useRef(Date.now());
 
@@ -24113,12 +24481,39 @@ export default function SignupPage({ onBack, initialInviteCode = "" }) {
     if (error) setError(null);
   };
 
+  const inviteBlocked = inviteCheck && !["active", "loading"].includes(inviteCheck.status);
   const canSubmit = Boolean(
     form.name.trim()
     && form.email.trim()
     && form.password.length >= 8
-    && (mode === "create_club" ? form.clubName.trim() : form.inviteCode.trim()),
+    && (mode === "create_club" ? form.clubName.trim() : form.inviteCode.trim())
+    && !inviteBlocked,
   );
+
+  useEffect(() => {
+    const code = normalizeInviteCode(form.inviteCode);
+    if (mode !== "join_club" || code.length !== 8) {
+      setInviteCheck(null);
+      return undefined;
+    }
+    let active = true;
+    setInviteCheck({ status: "loading" });
+    const timer = globalThis.setTimeout(async () => {
+      const { data, error: inspectError } = await supabase.rpc("inspect_club_invitation", { p_code: code });
+      if (!active) return;
+      if (inspectError) {
+        // Compatibilité pendant les quelques minutes séparant le déploiement
+        // du client et celui de la migration : le serveur signup revalide.
+        setInviteCheck(null);
+        return;
+      }
+      setInviteCheck(data ?? { status: "invalid" });
+    }, 350);
+    return () => {
+      active = false;
+      globalThis.clearTimeout(timer);
+    };
+  }, [form.inviteCode, mode]);
 
   const handleSubmit = async (event) => {
     event.preventDefault();
@@ -24222,6 +24617,18 @@ export default function SignupPage({ onBack, initialInviteCode = "" }) {
 
       <form className="auth-form auth-signup-form" onSubmit={handleSubmit} noValidate>
         {error && <AuthFeedback>{error}</AuthFeedback>}
+        {!error && inviteCheck?.status === "loading" && <AuthFeedback type="info">Vérification de l’invitation…</AuthFeedback>}
+        {!error && inviteCheck?.status === "active" && (
+          <AuthFeedback type="success">Invitation valide{inviteCheck.clubName ? ` pour ${inviteCheck.clubName}` : ""}.</AuthFeedback>
+        )}
+        {!error && inviteCheck && !["active", "loading"].includes(inviteCheck.status) && (
+          <AuthFeedback>
+            {inviteCheck.status === "expired" && "Cette invitation a expiré. Demande un nouveau lien à ton coach."}
+            {inviteCheck.status === "revoked" && "Cette invitation a été révoquée. Demande un nouveau lien à ton coach."}
+            {inviteCheck.status === "accepted" && "Cette invitation a déjà été utilisée."}
+            {inviteCheck.status === "invalid" && "Cette invitation est introuvable. Vérifie le code ou demande un nouveau lien."}
+          </AuthFeedback>
+        )}
 
         <div className="auth-honeypot" aria-hidden="true">
           <input
@@ -28846,6 +29253,11 @@ function CoachShell({ user, profile, clubId, signOut, club, clubLoading, refresh
           clubName={club?.name}
           inviteCode={club?.inviteCode}
           onClose={() => setShowInvite(false)}
+          onOpenCenter={() => {
+            setShowInvite(false);
+            setSettingsSection("club");
+            setShowSettings(true);
+          }}
         />
       )}
 
@@ -30682,8 +31094,10 @@ function normalizeInviteCode(value: unknown): string {
 }
 
 const VALID_ROLES = ["head_coach", "coach", "athlete"];
-const SENSITIVE_ACTIONS = ["rename_club", "upload_club_branding", "update_club_branding", "regenerate_invite_code", "remove_user", "change_role"];
+const SENSITIVE_ACTIONS = ["rename_club", "create_club_invitation", "revoke_club_invitation", "upload_club_branding", "update_club_branding", "regenerate_invite_code", "remove_user", "change_role"];
 const HEX_COLOR_PATTERN = /^#[0-9A-F]{6}$/;
+const EMAIL_PATTERN = /^[^\s@]{1,64}@[^\s@]{1,190}\.[^\s@]{2,24}$/;
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const CLUB_IMAGE_PATTERN = /\.(png|jpe?g|webp)$/i;
 const BRAND_IMAGE_TYPES: Record<string, string> = {
   "image/png": "png",
@@ -30790,7 +31204,7 @@ serve(async (req) => {
   // ── Contexte mutable rempli au fil de l'exécution, utilisé par le SEUL
   //    site d'écriture du journal d'audit (succès en fin de bloc try, ou
   //    catch) — évite toute double écriture. ──────────────────────────────
-  let caller: { id: number; club_id: number; role: string } | null = null;
+  let caller: { id: number; club_id: number; role: string; email: string | null } | null = null;
   let currentAction: string | null = null;
   let idempotencyKey: string | null = null;
   let targetUserId: number | null = null;
@@ -30845,7 +31259,7 @@ serve(async (req) => {
     if (!authUser) throw new DeniedError("Non authentifié.");
 
     const { data: callerRow, error: callerErr } = await admin
-      .from("users").select("id, club_id, role").eq("auth_uid", authUser.id).single();
+      .from("users").select("id, club_id, role, email").eq("auth_uid", authUser.id).single();
     if (callerErr || !callerRow) throw new DeniedError("Profil introuvable.");
     caller = callerRow;
     const isHeadCoach = caller.role === "head_coach";
@@ -30876,6 +31290,40 @@ serve(async (req) => {
       if (!/^[A-Z0-9]{8}$/.test(inviteCode)) {
         throw new DeniedError("Le code doit contenir 8 caractères.");
       }
+      const { data: individualInvitation, error: individualError } = await admin
+        .from("club_invitations")
+        .select("id, club_id, status, expires_at, accepted_at, accepted_user_id, recipient_email")
+        .ilike("code", inviteCode)
+        .maybeSingle();
+      if (individualError && individualError.code !== "42P01") throw individualError;
+
+      if (individualInvitation) {
+        if (individualInvitation.status === "revoked") throw new DeniedError("Cette invitation a été révoquée. Demande un nouveau lien à ton coach.");
+        if (individualInvitation.expires_at && new Date(individualInvitation.expires_at) <= new Date()) {
+          throw new DeniedError("Cette invitation a expiré. Demande un nouveau lien à ton coach.");
+        }
+        if (individualInvitation.recipient_email && individualInvitation.recipient_email.toLowerCase() !== caller.email?.toLowerCase()) {
+          throw new DeniedError("Cette invitation a été préparée pour une autre adresse email.");
+        }
+        if (Number(individualInvitation.club_id) !== Number(caller.club_id)) {
+          throw new DeniedError("Ton compte appartient déjà à un autre club. Aucun transfert n’a été effectué ; contacte ton coach pour conserver tes données.");
+        }
+        if (individualInvitation.accepted_at && Number(individualInvitation.accepted_user_id) !== Number(caller.id)) {
+          throw new DeniedError("Cette invitation a déjà été utilisée.");
+        }
+        if (!individualInvitation.accepted_at) {
+          const { error: acceptError } = await admin.from("club_invitations").update({
+            accepted_at: new Date().toISOString(),
+            accepted_user_id: caller.id,
+            reservation_token: null,
+            reserved_until: null,
+          }).eq("id", individualInvitation.id).is("accepted_at", null);
+          if (acceptError) throw acceptError;
+        }
+        const { data: club } = await admin.from("clubs").select("name").eq("id", caller.club_id).single();
+        return ok({ alreadyMember: true, clubName: club?.name ?? "Ton club" });
+      }
+
       let { data: invitedClub, error: inviteError } = await admin
         .from("clubs")
         .select("id, name, invite_code_expires_at")
@@ -30899,6 +31347,104 @@ serve(async (req) => {
 
     // ── Actions réservées au head coach ─────────────────────────────────
     if (!isHeadCoach) throw new DeniedError("Action réservée au head coach.");
+
+    if (currentAction === "list_club_invitations") {
+      const { data: rows, error } = await admin
+        .from("club_invitations")
+        .select("id, code, recipient_name, recipient_email, status, expires_at, opened_at, accepted_at, revoked_at, created_at")
+        .eq("club_id", caller.club_id)
+        .order("created_at", { ascending: false })
+        .limit(100);
+      if (error?.code === "42P01") return ok({ invitations: [], migrationPending: true });
+      if (error) throw error;
+      const now = Date.now();
+      return ok({ invitations: (rows ?? []).map((row) => ({
+        id: row.id,
+        code: row.code,
+        recipientName: row.recipient_name,
+        recipientEmail: row.recipient_email,
+        status: row.status === "revoked"
+          ? "revoked"
+          : row.accepted_at
+            ? "accepted"
+            : row.expires_at && new Date(row.expires_at).getTime() <= now
+              ? "expired"
+              : row.opened_at ? "opened" : "sent",
+        expiresAt: row.expires_at,
+        openedAt: row.opened_at,
+        acceptedAt: row.accepted_at,
+        revokedAt: row.revoked_at,
+        createdAt: row.created_at,
+      })) });
+    }
+
+    if (currentAction === "create_club_invitation") {
+      targetClubId = caller.club_id;
+      const cached = await findCachedSuccess();
+      if (cached?.invitation) return ok(cached);
+      const recipientName = typeof body.recipientName === "string" && body.recipientName.trim()
+        ? body.recipientName.trim().slice(0, 100)
+        : null;
+      const recipientEmail = typeof body.recipientEmail === "string" && body.recipientEmail.trim()
+        ? body.recipientEmail.trim().toLowerCase()
+        : null;
+      if (recipientEmail && (recipientEmail.length > 254 || !EMAIL_PATTERN.test(recipientEmail))) {
+        throw new DeniedError("Adresse email du destinataire invalide.");
+      }
+      const expiresInDays = body.expiresInDays == null ? 7 : Number(body.expiresInDays);
+      if (![1, 3, 7, 14, 30].includes(expiresInDays)) throw new DeniedError("Durée d’invitation invalide.");
+      const expiresAt = new Date(Date.now() + expiresInDays * 86_400_000).toISOString();
+
+      let code = "";
+      for (let attempt = 0; attempt < 10; attempt++) {
+        code = genCode();
+        const [{ data: clubMatch }, { data: invitationMatch }] = await Promise.all([
+          admin.from("clubs").select("id").eq("invite_code", code).maybeSingle(),
+          admin.from("club_invitations").select("id").eq("code", code).maybeSingle(),
+        ]);
+        if (!clubMatch && !invitationMatch) break;
+      }
+      const { data: invitation, error } = await admin.from("club_invitations").insert({
+        club_id: caller.club_id,
+        code,
+        recipient_name: recipientName,
+        recipient_email: recipientEmail,
+        expires_at: expiresAt,
+        created_by: caller.id,
+      }).select("id, code, recipient_name, recipient_email, expires_at, created_at").single();
+      if (error || !invitation) throw error ?? new Error("Invitation non créée.");
+      const responseInvitation = {
+        id: invitation.id,
+        code: invitation.code,
+        recipientName: invitation.recipient_name,
+        recipientEmail: invitation.recipient_email,
+        status: "sent",
+        expiresAt: invitation.expires_at,
+        createdAt: invitation.created_at,
+      };
+      auditPayload = { invitation: responseInvitation };
+      await logAudit("success", null);
+      return ok({ invitation: responseInvitation });
+    }
+
+    if (currentAction === "revoke_club_invitation") {
+      targetClubId = caller.club_id;
+      const invitationId = requireString(body.invitationId, "Invitation", { max: 36 });
+      if (!UUID_PATTERN.test(invitationId)) throw new DeniedError("Invitation invalide.");
+      const { data: invitation } = await admin.from("club_invitations")
+        .select("id, status, accepted_at")
+        .eq("id", invitationId).eq("club_id", caller.club_id).maybeSingle();
+      if (!invitation) throw new DeniedError("Invitation introuvable.");
+      if (invitation.accepted_at) throw new DeniedError("Une invitation acceptée ne peut plus être révoquée.");
+      if (invitation.status === "revoked") return ok({});
+      const revokedAt = new Date().toISOString();
+      const { error } = await admin.from("club_invitations").update({ status: "revoked", revoked_at: revokedAt })
+        .eq("id", invitationId).eq("club_id", caller.club_id);
+      if (error) throw error;
+      auditPayload = { invitationId, revokedAt };
+      await logAudit("success", null);
+      return ok({});
+    }
 
     if (currentAction === "rename_club") {
       targetClubId = caller.club_id;
@@ -31507,6 +32053,8 @@ serve(async (req) => {
   }
 
   let createdAuthUserId: string | null = null;
+  let reservedInvitationId: string | null = null;
+  let reservationToken: string | null = null;
 
   try {
     const rawBody = await req.text();
@@ -31585,6 +32133,7 @@ serve(async (req) => {
 
     let clubName = "";
     let inviteCode = "";
+    let individualInvitationId: string | null = null;
     if (mode === "create_club") {
       clubName = typeof body.clubName === "string" ? body.clubName.trim() : "";
       if (!clubName || clubName.length > MAX_CLUB_NAME_LEN) return fail(400, "Nom du club invalide.");
@@ -31592,17 +32141,45 @@ serve(async (req) => {
       inviteCode = normalizeInviteCode(body.inviteCode);
       if (!CODE_RE.test(inviteCode)) return fail(400, "Le code d’invitation doit contenir 8 caractères.");
 
-      let { data: club, error: clubErr } = await admin
-        .from("clubs").select("id, invite_code_expires_at").ilike("invite_code", inviteCode).maybeSingle();
-      if (clubErr?.code === "42703") {
-        const legacyResult = await admin.from("clubs").select("id").ilike("invite_code", inviteCode).maybeSingle();
-        club = legacyResult.data;
-        clubErr = legacyResult.error;
+      const { data: individualInvitation, error: individualError } = await admin
+        .from("club_invitations")
+        .select("id, club_id, status, expires_at, accepted_at, recipient_email")
+        .ilike("code", inviteCode)
+        .maybeSingle();
+      if (individualError && individualError.code !== "42P01") return fail(500, "Erreur serveur.");
+      if (individualInvitation) {
+        if (individualInvitation.status === "revoked") {
+          return fail(400, "Cette invitation a été révoquée. Demande un nouveau lien à ton coach.");
+        }
+        if (individualInvitation.accepted_at) return fail(400, "Cette invitation a déjà été utilisée.");
+        if (individualInvitation.recipient_email && individualInvitation.recipient_email.toLowerCase() !== emailRaw) {
+          return fail(400, "Cette invitation a été préparée pour une autre adresse email.");
+        }
+        if (individualInvitation.expires_at && new Date(individualInvitation.expires_at) <= new Date()) {
+          return fail(400, "Cette invitation a expiré. Demande un nouveau lien à ton coach.");
+        }
+        const { data: invitationClub, error: invitationClubError } = await admin
+          .from("clubs").select("invite_code").eq("id", individualInvitation.club_id).single();
+        if (invitationClubError || !invitationClub?.invite_code) return fail(500, "Club de l’invitation introuvable.");
+        individualInvitationId = individualInvitation.id;
+        // Le RPC historique rattache par le code général du club. Le code
+        // individuel reste celui qui sera marqué comme accepté ci-dessous.
+        inviteCode = invitationClub.invite_code;
       }
-      if (clubErr) return fail(500, "Erreur serveur.");
-      if (!club) return fail(400, "Cette invitation n’est plus active. Demande un nouveau lien à ton coach.");
-      if (club.invite_code_expires_at && new Date(club.invite_code_expires_at) <= new Date()) {
-        return fail(400, "Cette invitation a expiré. Demande un nouveau lien à ton coach.");
+
+      if (!individualInvitationId) {
+        let { data: club, error: clubErr } = await admin
+          .from("clubs").select("id, invite_code_expires_at").ilike("invite_code", inviteCode).maybeSingle();
+        if (clubErr?.code === "42703") {
+          const legacyResult = await admin.from("clubs").select("id").ilike("invite_code", inviteCode).maybeSingle();
+          club = legacyResult.data;
+          clubErr = legacyResult.error;
+        }
+        if (clubErr) return fail(500, "Erreur serveur.");
+        if (!club) return fail(400, "Cette invitation n’est plus active. Demande un nouveau lien à ton coach.");
+        if (club.invite_code_expires_at && new Date(club.invite_code_expires_at) <= new Date()) {
+          return fail(400, "Cette invitation a expiré. Demande un nouveau lien à ton coach.");
+        }
       }
     }
 
@@ -31629,6 +32206,28 @@ serve(async (req) => {
     }
     createdAuthUserId = authData.user.id;
 
+    if (individualInvitationId) {
+      reservationToken = crypto.randomUUID();
+      const nowIso = new Date().toISOString();
+      const reservedUntil = new Date(Date.now() + 5 * 60_000).toISOString();
+      const { data: reserved, error: reserveError } = await admin.from("club_invitations").update({
+        reservation_token: reservationToken,
+        reserved_until: reservedUntil,
+      })
+        .eq("id", individualInvitationId)
+        .eq("status", "active")
+        .is("accepted_at", null)
+        .or(`reserved_until.is.null,reserved_until.lt.${nowIso}`)
+        .select("id")
+        .maybeSingle();
+      if (reserveError || !reserved) {
+        await admin.auth.admin.deleteUser(createdAuthUserId).catch(() => {});
+        createdAuthUserId = null;
+        return fail(409, "Cette invitation est déjà utilisée ou en cours d’utilisation.");
+      }
+      reservedInvitationId = individualInvitationId;
+    }
+
     // ── Test uniquement : force un échec après création Auth, pour vérifier
     // la compensation. Double verrou : sans SIGNUP_TEST_MODE=true dans les
     // secrets de la fonction, ce bloc est totalement inerte quel que soit le
@@ -31638,13 +32237,23 @@ serve(async (req) => {
     }
 
     // ── club + users + athletes, atomique (migration 20260727030000) ────
-    const { error: rpcErr } = await admin.rpc("signup_create_account", {
+    const { data: rpcData, error: rpcErr } = await admin.rpc("signup_create_account", {
       p_mode: mode, p_club_name: clubName, p_invite_code: inviteCode,
       p_auth_uid: authData.user.id, p_name: name, p_email: emailRaw,
     });
     if (rpcErr) throw rpcErr;
 
-    if (mode === "join_club") {
+    if (mode === "join_club" && individualInvitationId && reservationToken) {
+      const { error: trackingError } = await admin.from("club_invitations").update({
+        accepted_at: new Date().toISOString(),
+        accepted_user_id: rpcData?.userId ?? null,
+        reservation_token: null,
+        reserved_until: null,
+      }).eq("id", individualInvitationId).eq("reservation_token", reservationToken).eq("status", "active").is("accepted_at", null);
+      if (trackingError) console.error(`signup[${correlationId}] individual invitation tracking:`, trackingError.message);
+      reservedInvitationId = null;
+      reservationToken = null;
+    } else if (mode === "join_club") {
       const { error: trackingError } = await admin.rpc("mark_club_invitation_used", {
         p_invite_code: inviteCode,
       });
@@ -31661,6 +32270,10 @@ serve(async (req) => {
     // lignes club/users/athletes qui vont avec (club+users+athletes eux-
     // mêmes sont déjà tout-ou-rien grâce au RPC).
     if (createdAuthUserId) await admin.auth.admin.deleteUser(createdAuthUserId).catch(() => {});
+    if (reservedInvitationId && reservationToken) {
+      await admin.from("club_invitations").update({ reservation_token: null, reserved_until: null })
+        .eq("id", reservedInvitationId).eq("reservation_token", reservationToken);
+    }
     console.error(`signup[${correlationId}] error:`, err instanceof Error ? err.message : err);
     return fail(500, "Erreur serveur.");
   }
@@ -35773,6 +36386,103 @@ GRANT EXECUTE ON FUNCTION public.mark_club_invitation_used(text) TO service_role
 COMMIT;
 </file>
 
+<file path="supabase/migrations/20260801100000_individual_club_invitations.sql">
+BEGIN;
+
+CREATE TABLE IF NOT EXISTS public.club_invitations (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  club_id integer NOT NULL REFERENCES public.clubs(id) ON DELETE CASCADE,
+  code text NOT NULL,
+  recipient_name text,
+  recipient_email text,
+  status text NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'revoked')),
+  expires_at timestamptz,
+  opened_at timestamptz,
+  accepted_at timestamptz,
+  accepted_user_id integer REFERENCES public.users(id) ON DELETE SET NULL,
+  reservation_token uuid,
+  reserved_until timestamptz,
+  revoked_at timestamptz,
+  created_by integer REFERENCES public.users(id) ON DELETE SET NULL,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  CONSTRAINT club_invitations_code_format_check CHECK (code ~ '^[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{8}$'),
+  CONSTRAINT club_invitations_recipient_name_check CHECK (recipient_name IS NULL OR char_length(btrim(recipient_name)) BETWEEN 1 AND 100),
+  CONSTRAINT club_invitations_recipient_email_check CHECK (recipient_email IS NULL OR char_length(recipient_email) <= 254)
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS club_invitations_code_normalized_idx
+  ON public.club_invitations (upper(btrim(code)));
+CREATE INDEX IF NOT EXISTS club_invitations_club_created_idx
+  ON public.club_invitations (club_id, created_at DESC);
+
+ALTER TABLE public.club_invitations ENABLE ROW LEVEL SECURITY;
+REVOKE ALL ON TABLE public.club_invitations FROM anon, authenticated;
+-- Aucune policy cliente : les coordonnées et l'historique sont servis par
+-- admin-actions après vérification head_coach. L'inspection publique ci-dessous
+-- ne renvoie ni nom du destinataire, ni email, ni identifiant interne.
+
+CREATE OR REPLACE FUNCTION public.inspect_club_invitation(p_code text)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path TO 'public'
+AS $$
+DECLARE
+  v_code text;
+  v_invitation public.club_invitations%ROWTYPE;
+  v_club_name text;
+  v_status text;
+BEGIN
+  v_code := upper(regexp_replace(coalesce(p_code, ''), '[[:space:]-]+', '', 'g'));
+  IF v_code !~ '^[A-Z0-9]{8}$' THEN
+    RETURN jsonb_build_object('status', 'invalid');
+  END IF;
+
+  SELECT invitation, club.name
+  INTO v_invitation, v_club_name
+  FROM public.club_invitations invitation
+  JOIN public.clubs club ON club.id = invitation.club_id
+  WHERE upper(btrim(invitation.code)) = v_code
+  LIMIT 1;
+
+  IF FOUND THEN
+    v_status := CASE
+      WHEN v_invitation.status = 'revoked' THEN 'revoked'
+      WHEN v_invitation.accepted_at IS NOT NULL THEN 'accepted'
+      WHEN v_invitation.expires_at IS NOT NULL AND v_invitation.expires_at <= now() THEN 'expired'
+      ELSE 'active'
+    END;
+    IF v_status = 'active' AND v_invitation.opened_at IS NULL THEN
+      UPDATE public.club_invitations SET opened_at = now() WHERE id = v_invitation.id;
+    END IF;
+    RETURN jsonb_build_object(
+      'status', v_status,
+      'kind', 'individual',
+      'clubName', v_club_name,
+      'expiresAt', v_invitation.expires_at
+    );
+  END IF;
+
+  SELECT club.name
+  INTO v_club_name
+  FROM public.clubs club
+  WHERE upper(btrim(club.invite_code)) = v_code
+    AND (club.invite_code_expires_at IS NULL OR club.invite_code_expires_at > now())
+  LIMIT 1;
+  IF FOUND THEN
+    RETURN jsonb_build_object('status', 'active', 'kind', 'club', 'clubName', v_club_name);
+  END IF;
+
+  RETURN jsonb_build_object('status', 'invalid');
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.inspect_club_invitation(text) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.inspect_club_invitation(text) TO anon, authenticated;
+
+COMMIT;
+</file>
+
 <file path="supabase/.gitignore">
 # Supabase
 .branches
@@ -36971,6 +37681,8 @@ async function main() {
       for (const payload of [
         { action: "rename_club", clubName: "Triche" },
         { action: "update_club_branding", accentColor: "#378ADD" },
+        { action: "create_club_invitation", recipientName: "Intrusion", expiresInDays: 7 },
+        { action: "list_club_invitations" },
         { action: "regenerate_invite_code" },
         { action: "remove_user", userId: athleteA.row.id },
         { action: "change_role", userId: athleteA.row.id, role: "coach" },
@@ -37047,7 +37759,38 @@ async function main() {
       record("l'ancien code n'est plus valide après rotation", !stillValid.data, stillValid.data ? "encore trouvé !" : "introuvable, OK");
     }
 
-    // ── 5. Personnalisation visuelle : validation et mise à jour partielle ─────
+    // ── 5. Invitation individuelle : création, ouverture, suivi, révocation ──
+    {
+      const created = await callAdmin(headA2.client, {
+        action: "create_club_invitation",
+        recipientName: "Athlète test",
+        recipientEmail: athleteA.row.email,
+        expiresInDays: 7,
+        idempotencyKey: crypto.randomUUID(),
+      });
+      record("create_club_invitation crée un lien unique", created.success === true && /^[A-Z2-9]{8}$/.test(created.invitation?.code ?? ""), created.error);
+
+      const inspected = created.invitation?.code
+        ? await admin.rpc("inspect_club_invitation", { p_code: created.invitation.code })
+        : { data: null, error: new Error("Invitation absente") };
+      record("inspect_club_invitation valide le lien sans exposer l'email", inspected.data?.status === "active" && inspected.data?.clubName && !Object.hasOwn(inspected.data, "recipientEmail"), inspected.error?.message);
+
+      const listed = await callAdmin(headA2.client, { action: "list_club_invitations" });
+      const tracked = listed.invitations?.find((invitation) => invitation.id === created.invitation?.id);
+      record("list_club_invitations observe l'ouverture", listed.success === true && tracked?.status === "opened", listed.error);
+
+      const revoked = await callAdmin(headA2.client, {
+        action: "revoke_club_invitation",
+        invitationId: created.invitation?.id,
+        idempotencyKey: crypto.randomUUID(),
+      });
+      const afterRevoke = created.invitation?.code
+        ? await admin.rpc("inspect_club_invitation", { p_code: created.invitation.code })
+        : { data: null };
+      record("revoke_club_invitation invalide uniquement ce lien", revoked.success === true && afterRevoke.data?.status === "revoked", revoked.error);
+    }
+
+    // ── 6. Personnalisation visuelle : validation et mise à jour partielle ─────
     {
       const res = await callAdmin(headA2.client, {
         action: "update_club_branding",

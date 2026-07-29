@@ -112,6 +112,8 @@ async function main() {
       for (const payload of [
         { action: "rename_club", clubName: "Triche" },
         { action: "update_club_branding", accentColor: "#378ADD" },
+        { action: "create_club_invitation", recipientName: "Intrusion", expiresInDays: 7 },
+        { action: "list_club_invitations" },
         { action: "regenerate_invite_code" },
         { action: "remove_user", userId: athleteA.row.id },
         { action: "change_role", userId: athleteA.row.id, role: "coach" },
@@ -188,7 +190,38 @@ async function main() {
       record("l'ancien code n'est plus valide après rotation", !stillValid.data, stillValid.data ? "encore trouvé !" : "introuvable, OK");
     }
 
-    // ── 5. Personnalisation visuelle : validation et mise à jour partielle ─────
+    // ── 5. Invitation individuelle : création, ouverture, suivi, révocation ──
+    {
+      const created = await callAdmin(headA2.client, {
+        action: "create_club_invitation",
+        recipientName: "Athlète test",
+        recipientEmail: athleteA.row.email,
+        expiresInDays: 7,
+        idempotencyKey: crypto.randomUUID(),
+      });
+      record("create_club_invitation crée un lien unique", created.success === true && /^[A-Z2-9]{8}$/.test(created.invitation?.code ?? ""), created.error);
+
+      const inspected = created.invitation?.code
+        ? await admin.rpc("inspect_club_invitation", { p_code: created.invitation.code })
+        : { data: null, error: new Error("Invitation absente") };
+      record("inspect_club_invitation valide le lien sans exposer l'email", inspected.data?.status === "active" && inspected.data?.clubName && !Object.hasOwn(inspected.data, "recipientEmail"), inspected.error?.message);
+
+      const listed = await callAdmin(headA2.client, { action: "list_club_invitations" });
+      const tracked = listed.invitations?.find((invitation) => invitation.id === created.invitation?.id);
+      record("list_club_invitations observe l'ouverture", listed.success === true && tracked?.status === "opened", listed.error);
+
+      const revoked = await callAdmin(headA2.client, {
+        action: "revoke_club_invitation",
+        invitationId: created.invitation?.id,
+        idempotencyKey: crypto.randomUUID(),
+      });
+      const afterRevoke = created.invitation?.code
+        ? await admin.rpc("inspect_club_invitation", { p_code: created.invitation.code })
+        : { data: null };
+      record("revoke_club_invitation invalide uniquement ce lien", revoked.success === true && afterRevoke.data?.status === "revoked", revoked.error);
+    }
+
+    // ── 6. Personnalisation visuelle : validation et mise à jour partielle ─────
     {
       const res = await callAdmin(headA2.client, {
         action: "update_club_branding",

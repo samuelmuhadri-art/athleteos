@@ -10,6 +10,7 @@ const mocks = vi.hoisted(() => ({
   updatePassword: vi.fn(),
   signOut: vi.fn(),
   invoke: vi.fn(),
+  rpc: vi.fn(),
   signInWithPassword: vi.fn(),
 }));
 
@@ -25,6 +26,7 @@ vi.mock("../context/AuthContext", () => ({
 vi.mock("../utils/supabaseClient", () => ({
   supabase: {
     functions: { invoke: mocks.invoke },
+    rpc: mocks.rpc,
     auth: { signInWithPassword: mocks.signInWithPassword, signOut: mocks.signOut },
   },
 }));
@@ -35,6 +37,7 @@ beforeEach(() => {
   mocks.sendPasswordReset.mockResolvedValue({ error: null });
   mocks.updatePassword.mockResolvedValue({ error: null });
   mocks.invoke.mockResolvedValue({ data: { success: true }, error: null });
+  mocks.rpc.mockResolvedValue({ data: { status: "active", clubName: "Club ami" }, error: null });
   mocks.signInWithPassword.mockResolvedValue({ error: null });
 });
 
@@ -82,11 +85,13 @@ describe("LoginPage", () => {
 });
 
 describe("SignupPage", () => {
-  it("préremplit le club lorsqu’un athlète ouvre un lien d’invitation", () => {
+  it("préremplit et vérifie le club lorsqu’un athlète ouvre un lien d’invitation", async () => {
     render(<SignupPage onBack={vi.fn()} initialInviteCode="ab12cd34" />);
 
     expect(screen.getByRole("button", { name: /Athlète.*Rejoindre mon club/i }).getAttribute("aria-pressed")).toBe("true");
     expect(screen.getByLabelText("Code d’invitation").value).toBe("AB12CD34");
+    await waitFor(() => expect(mocks.rpc).toHaveBeenCalledWith("inspect_club_invitation", { p_code: "AB12CD34" }));
+    expect(await screen.findByText("Invitation valide pour Club ami.")).toBeTruthy();
   });
 
   it("rend le choix de rôle explicite et conserve le payload athlète existant", async () => {

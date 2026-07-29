@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   Building2,
   Check,
@@ -24,6 +24,7 @@ import {
 import { translateAuthError } from "../auth/authFormUtils";
 import { loadClubBranding } from "../../hooks/useClubBranding";
 import { CLUB_ACCENT_PRESETS, DEFAULT_CLUB_ACCENT } from "../../utils/clubBranding";
+import ClubInvitationCenter from "../club/ClubInvitationCenter";
 
 const FOCUSABLE_SELECTOR = [
   "button:not([disabled])",
@@ -169,7 +170,7 @@ export default function AccountSettingsModal({ onClose, initialSection = "accoun
     return () => window.removeEventListener("keydown", handleKeyDown);
   });
 
-  const callAdmin = async (payload) => {
+  const callAdmin = useCallback(async (payload) => {
     const { data, error } = await supabase.functions.invoke("admin-actions", { body: payload });
     if (error) {
       if (error.context?.json) {
@@ -184,7 +185,7 @@ export default function AccountSettingsModal({ onClose, initialSection = "accoun
     }
     if (!data?.success) throw new Error(data?.error ?? "Une erreur est survenue.");
     return data;
-  };
+  }, []);
 
   const runAction = async (key, action, successText) => {
     setBusy(key);
@@ -634,6 +635,8 @@ export default function AccountSettingsModal({ onClose, initialSection = "accoun
                       </div>
                     </div>
                   )}
+
+                  <ClubInvitationCenter callAdmin={callAdmin} clubName={clubName} />
                 </>
               )}
             </div>

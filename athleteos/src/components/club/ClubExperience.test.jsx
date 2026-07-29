@@ -51,4 +51,12 @@ describe("InviteClubModal", () => {
     fireEvent.keyDown(globalThis, { key: "Escape" });
     expect(onClose).toHaveBeenCalledOnce();
   });
+
+  it("ouvre le centre individuel sans supprimer le partage général", () => {
+    const onOpenCenter = vi.fn();
+    render(<InviteClubModal clubName="Club ami" inviteCode="AB12CD34" onClose={vi.fn()} onOpenCenter={onOpenCenter} />);
+    fireEvent.click(screen.getByRole("button", { name: "Gérer les invitations" }));
+    expect(onOpenCenter).toHaveBeenCalledOnce();
+    expect(screen.getByRole("button", { name: "Partager l’invitation" })).toBeTruthy();
+  });
 });
