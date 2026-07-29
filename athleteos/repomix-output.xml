@@ -41423,7 +41423,13 @@ async function main() {
       club_id: clubB.id, title: "Séance test RLS", category: "sprint",
       week: 1, duration_minutes: 60,
     });
-    await insertOrThrow("session_athletes", { session_id: sessionB.id, athlete_id: athleteB.id, rpe: 7 });
+    await insertOrThrow("session_athletes", {
+      session_id: sessionB.id,
+      athlete_id: athleteB.id,
+      rpe: 7,
+      actual_duration_minutes: 60,
+      duration_source: "reported",
+    });
     await insertOrThrow("injuries", { athlete_id: athleteB.id, name: "Test RLS", status: "actif" });
     await insertOrThrow("records", { athlete_id: athleteB.id, discipline: "100m", sb: "11.20" });
     await insertOrThrow("alerts", { club_id: clubB.id, athlete_id: athleteB.id, type: "charge", title: "Test RLS" });
@@ -41689,7 +41695,13 @@ async function main() {
     // son propre club qui pointe vers l'objet d'un AUTRE club via une FK)
     {
       const { data, error } = await coachZClient.from("session_athletes")
-        .insert({ session_id: sessionB.id, athlete_id: athleteX.id, rpe: 5 }).select();
+        .insert({
+          session_id: sessionB.id,
+          athlete_id: athleteX.id,
+          rpe: 5,
+          actual_duration_minutes: 60,
+          duration_source: "reported",
+        }).select();
       const inserted = !error && (data ?? []).length > 0;
       record("INSERT session_athletes (Z référence une séance du club B)", !inserted, inserted ? "ligne insérée !" : "bloqué, OK");
       if (data?.[0]) await admin.from("session_athletes").delete().eq("id", data[0].id);
