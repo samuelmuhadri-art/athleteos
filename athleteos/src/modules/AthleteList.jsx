@@ -4,23 +4,26 @@
 // ============================================================
 
 import { memo, useState, useCallback, useEffect } from "react";
-import { Plus, Users as UsersIcon } from "lucide-react";
+import { FileSpreadsheet, Plus, Users as UsersIcon } from "lucide-react";
 import { supabase }  from "../utils/supabaseClient";
 import { useAuth }   from "../context/AuthContext";
 import LoadingState  from "../components/ui/LoadingState";
 import ErrorState    from "../components/ui/ErrorState";
 import { initialsFromName } from "../utils/helpers.js";
-import { EmptySection } from "./athleteListShared";
 import { parsePerf } from "../athlete/shared.js";
 import { resolveDisciplineId, getDisciplineUnit } from "../domain/disciplines.js";
+import { getAthleteCsvImportError } from "../utils/athleteCsv.js";
 import AthleteProfile from "./AthleteProfile";
 import AthleteCard from "./AthleteCard";
 import AddAthleteModal from "./AddAthleteModal";
+import ImportAthletesCsvModal from "./ImportAthletesCsvModal";
+import { EmptyState, InlineNotice, PageHeader } from "../components/ui/premium";
 
 // ─── Composant principal ──────────────────────────────────────────────────────
 
 function AthleteList() {
-  const { clubId } = useAuth();
+  const { clubId, profile } = useAuth();
+  const canImportAthletes = profile?.role === "head_coach";
 
   const [selectedAthlete,    setSelectedAthlete]    = useState(null);
   const [athleteModalTarget, setAthleteModalTarget] = useState(null);
@@ -30,16 +33,22 @@ function AthleteList() {
   const [competitions,       setCompetitions]       = useState([]);
   const [loading,            setLoading]            = useState(true);
   const [error,              setError]              = useState(null);
+  const [existingEmails,     setExistingEmails]     = useState([]);
+  const [showImport,         setShowImport]         = useState(false);
+  const [importReport,       setImportReport]       = useState(null);
 
   // ═══ Chargement (identique) ═══════════════════════════════════════════════
   const fetchAll = useCallback(async () => {
     if (!clubId) return;
     try {
       setLoading(true); setError(null);
-      const [athletesRes, sessionsRes, competitionsRes] = await Promise.all([
+      const [athletesRes, sessionsRes, competitionsRes, usersRes] = await Promise.all([
         supabase.from("athletes").select("*").eq("club_id", clubId),
         supabase.from("sessions").select("*").eq("club_id", clubId),
         supabase.from("competitions").select("*").eq("club_id", clubId),
+        canImportAthletes
+          ? supabase.from("users").select("email").eq("club_id", clubId)
+          : Promise.resolve({ data: [], error: null }),
       ]);
       if (athletesRes.error) throw athletesRes.error;
       if (sessionsRes.error) throw sessionsRes.error;
@@ -84,6 +93,7 @@ function AthleteList() {
       }));
 
       setWeeklyCharge(remappedCharge);
+      setExistingEmails((usersRes.data ?? []).map((row) => row.email).filter(Boolean));
       setSessions((sessionsRes.data ?? []).map(s => {
         const rows = (sessionAthletesRes.data ?? []).filter(v => v.session_id === s.id);
         return { id: s.id, week: s.week, day: s.day, time: s.time, type: s.type, category: s.category, title: s.title, description: s.description, instructions: s.instructions, loadWeight: s.load_weight, pdfUrl: s.pdf_url, athleteIds: rows.map(v => v.athlete_id), validations: rows.map(v => ({ athleteId: v.athlete_id, status: v.status, feeling: v.feeling, fatigue: v.fatigue, comment: v.comment })) };
@@ -96,7 +106,7 @@ function AthleteList() {
     } catch (err) {
       setError(err.message ?? "Erreur inconnue");
     } finally { setLoading(false); }
-  }, [clubId]);
+  }, [canImportAthletes, clubId]);
 
   useEffect(() => { fetchAll(); }, [fetchAll]);
 
@@ -140,6 +150,40 @@ function AthleteList() {
     const { error: ae } = await supabase.from("athletes").insert({ club_id:clubId, name:form.name, age:form.age?Number(form.age):null, main_discipline:form.mainDiscipline||null, group_name:form.group||null, user_id:newUserId, profile_data:pd });
     if (ae) throw ae; await fetchAll();
   }, [clubId, fetchAll]);
+
+  const importAthletes = useCallback(async (rows, context) => {
+    const payload = rows.map((row) => ({
+      name: row.name,
+      email: row.email || null,
+      age: row.age ? Number(row.age) : null,
+      mainDiscipline: row.mainDiscipline || null,
+      secondaryDisciplines: row.secondaryDisciplines
+        ? row.secondaryDisciplines.split(",").map((value) => value.trim()).filter(Boolean)
+        : [],
+      group: row.group || null,
+      level: row.level || null,
+    }));
+    const { data, error: importError } = await supabase.rpc("import_club_athletes", { p_rows: payload });
+    if (importError) throw getAthleteCsvImportError(importError, context?.sourceRows);
+    const importedCount = data?.importedCount;
+    const createdUserCount = data?.createdUserCount;
+    if (
+      !Number.isInteger(importedCount)
+      || !Number.isInteger(createdUserCount)
+      || importedCount < 0
+      || createdUserCount < 0
+      || createdUserCount > importedCount
+    ) {
+      throw new Error("La réponse du serveur est incomplète. Recharge la liste avant de relancer un import.");
+    }
+    setImportReport({
+      importedCount,
+      createdUserCount,
+      skippedCount: context?.skippedRows?.length ?? 0,
+      fileName: context?.fileName ?? "",
+    });
+    await fetchAll();
+  }, [fetchAll]);
 
   const updateAthlete = useCallback(async (athleteId, form) => {
     const secDisc = form.secondaryDisciplines.split(",").map(s => s.trim()).filter(Boolean);
@@ -192,23 +236,50 @@ function AthleteList() {
 
   return (
     <div className="page-container py-4 md:py-6 max-w-7xl mx-auto space-y-5 animate-slide-up">
-      {/* Header */}
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        <div>
-          <h2 className="page-title">Athlètes</h2>
-          <p className="secondary-text mt-1">
-            {athletes.length > 0
-              ? `${athletes.length} athlète${athletes.length>1?"s":""} suivi${athletes.length>1?"s":""} · Cliquez pour le profil complet`
-              : "Aucun athlète pour l'instant"}
-          </p>
-        </div>
-        <button type="button" onClick={() => setAthleteModalTarget("create")} className="btn-primary">
-          <Plus size={16} /> Inscrire un athlète
-        </button>
-      </div>
+      <PageHeader
+        title="Athlètes"
+        eyebrow="EFFECTIF DU CLUB"
+        description={athletes.length > 0
+          ? `${athletes.length} athlète${athletes.length > 1 ? "s" : ""} suivi${athletes.length > 1 ? "s" : ""} · Ouvre un profil pour le dossier complet.`
+          : "Constitue ton groupe manuellement ou depuis un fichier CSV exporté par Excel."}
+        actions={(
+          <>
+            {canImportAthletes && (
+              <button type="button" onClick={() => setShowImport(true)} className="btn-secondary">
+                <FileSpreadsheet size={16} aria-hidden="true" /> Importer un CSV
+              </button>
+            )}
+            <button type="button" onClick={() => setAthleteModalTarget("create")} className="btn-primary">
+              <Plus size={16} aria-hidden="true" /> Inscrire un athlète
+            </button>
+          </>
+        )}
+      />
+
+      {importReport && (
+        <InlineNotice
+          tone={importReport.skippedCount > 0 ? "warning" : "success"}
+          title={`${importReport.importedCount} athlète${importReport.importedCount > 1 ? "s" : ""} importé${importReport.importedCount > 1 ? "s" : ""}`}
+          onDismiss={() => setImportReport(null)}
+        >
+          {`${importReport.createdUserCount > 0
+            ? `${importReport.createdUserCount} profil${importReport.createdUserCount > 1 ? "s ont" : " a"} été relié${importReport.createdUserCount > 1 ? "s" : ""} à une adresse email.`
+            : "Aucun profil importé n’a été relié à une adresse email."} ${importReport.skippedCount > 0
+            ? `${importReport.skippedCount} ligne${importReport.skippedCount > 1 ? "s ont" : " a"} été ignorée${importReport.skippedCount > 1 ? "s" : ""} car elle ne respectait pas le modèle.`
+            : `Le fichier ${importReport.fileName || "CSV"} a été traité sans modifier les profils existants.`}`}
+        </InlineNotice>
+      )}
 
       {athletes.length === 0 ? (
-        <EmptySection icon={UsersIcon} title="Aucun athlète enregistré" sub="Clique sur « Inscrire un athlète » pour ajouter le premier." />
+        <EmptyState
+          icon={UsersIcon}
+          title="Ton effectif est prêt à être créé"
+          description="Ajoute un premier athlète, importe un CSV exporté depuis Excel ou partage le QR code d’invitation depuis le dashboard."
+          action={<button type="button" className="btn-primary" onClick={() => setAthleteModalTarget("create")}><Plus size={16} aria-hidden="true" /> Ajouter le premier</button>}
+          secondaryAction={canImportAthletes
+            ? <button type="button" className="btn-secondary" onClick={() => setShowImport(true)}><FileSpreadsheet size={16} aria-hidden="true" /> Importer un CSV</button>
+            : null}
+        />
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
           {athletes.map(a => (
@@ -222,6 +293,14 @@ function AthleteList() {
           onClose={() => setAthleteModalTarget(null)}
           onCreate={athleteModalTarget === "create" ? createAthlete : form => updateAthlete(athleteModalTarget.id, form)}
           initialData={athleteModalTarget === "create" ? null : buildFormFromAthlete(athleteModalTarget)}
+        />
+      )}
+
+      {showImport && canImportAthletes && (
+        <ImportAthletesCsvModal
+          existingEmails={existingEmails}
+          onImport={importAthletes}
+          onClose={() => setShowImport(false)}
         />
       )}
     </div>

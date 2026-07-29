@@ -391,18 +391,27 @@ export type Database = {
       }
       clubs: {
         Row: {
+          accent_color: string
+          cover_path: string | null
           id: number
           invite_code: string | null
+          logo_path: string | null
           name: string
         }
         Insert: {
+          accent_color?: string
+          cover_path?: string | null
           id?: number
           invite_code?: string | null
+          logo_path?: string | null
           name: string
         }
         Update: {
+          accent_color?: string
+          cover_path?: string | null
           id?: number
           invite_code?: string | null
+          logo_path?: string | null
           name?: string
         }
         Relationships: []
@@ -1065,6 +1074,10 @@ export type Database = {
       get_my_club_id: { Args: never; Returns: number }
       get_my_role: { Args: never; Returns: string }
       get_my_user_id: { Args: never; Returns: number }
+      import_club_athletes: {
+        Args: { p_rows: Json }
+        Returns: Json
+      }
       signup_create_account: {
         Args: {
           p_auth_uid: string

@@ -14,6 +14,7 @@ import { supabase } from "../../utils/supabaseClient";
 import { initialsFromName, colorsFor, getISOWeek } from "../shared";
 import { notifyClubNewPost } from "../../utils/notifications";
 import { filterClubPosts, validateSocialImage } from "./clubFeed";
+import { EmptyState, SegmentedTabs } from "../../components/ui/premium";
 
 const AVATAR_COLORS = ["#1D9E75","#5B8DEF","#9B84F0","#E8A020","#E05252","#14B8A6","#F97316","#EC4899"];
 const QUICK_REACTIONS = ["🔥","💪","👏","⚡","🎯","❤️"];
@@ -538,7 +539,7 @@ const PostCard = memo(({ post, athlete, allAthletes, sessions, onComment, onReac
 // ═══════════════════════════════════════════════════════════════════════════════
 // COMPOSANT PRINCIPAL
 // ═══════════════════════════════════════════════════════════════════════════════
-export default function AthleteClub({ athlete, allAthletes, clubId, sessions }) {
+export default function AthleteClub({ athlete, allAthletes, clubId, sessions, clubBrand }) {
   const [posts,          setPosts]          = useState([]);
   const [loading,        setLoading]        = useState(true);
   const [loadingMore,    setLoadingMore]    = useState(false);
@@ -710,30 +711,33 @@ export default function AthleteClub({ athlete, allAthletes, clubId, sessions }) 
     <div className="p-4 md:p-6 space-y-5 max-w-4xl mx-auto animate-slide-up">
       {toast && <Toast msg={toast} onDismiss={() => setToast(null)}/>}
 
-      <section className="card" style={{ position:"relative", overflow:"hidden", padding:20, background:"linear-gradient(145deg, rgba(91,141,239,0.11), var(--c-surface) 50%, rgba(29,158,117,0.07))" }}>
-        <div aria-hidden="true" style={{ position:"absolute", width:260, height:260, right:-120, top:-150, borderRadius:"50%", background:"radial-gradient(circle, rgba(91,141,239,0.18), transparent 68%)" }}/>
-        <div style={{ position:"relative", display:"flex", alignItems:"flex-start", justifyContent:"space-between", gap:16, flexWrap:"wrap" }}>
-          <div>
-            <div style={{ display:"inline-flex", alignItems:"center", gap:6, padding:"4px 9px", borderRadius:99, background:"rgba(91,141,239,0.10)", border:"1px solid rgba(91,141,239,0.18)", marginBottom:12 }}>
-              <Sparkles size={13} color="#8DB1F6" aria-hidden="true"/>
-              <span style={{ fontSize:12, fontWeight:700, color:"#8DB1F6", letterSpacing:"0.05em", textTransform:"uppercase" }}>Club house</span>
+      <section className="card athlete-club-hero">
+        {clubBrand?.coverUrl && <img className="athlete-club-hero__cover" src={clubBrand.coverUrl} alt="" aria-hidden="true" />}
+        <div className="athlete-club-hero__overlay" aria-hidden="true" />
+        <div className="athlete-club-hero__topline">
+          <div className="athlete-club-hero__copy">
+            <div className="athlete-club-hero__eyebrow">
+              <span className="athlete-club-hero__logo" aria-hidden="true">
+                {clubBrand?.logoUrl ? <img src={clubBrand.logoUrl} alt="" /> : <Sparkles size={15} />}
+              </span>
+              <span>Mon club</span>
             </div>
-            <h1 className="page-title">Mon club</h1>
-            <p style={{ fontSize:13, lineHeight:1.5, color:"var(--c-text-2)", marginTop:6 }}>Les séances, encouragements et exploits de ton groupe.</p>
+            <h1 className="page-title">{clubBrand?.name || "Mon club"}</h1>
+            <p>Les séances, encouragements et exploits de ton groupe.</p>
           </div>
           <button type="button" onClick={() => setQuickPost(lastValidatedSession ?? true)} className="btn-primary" style={{ flexShrink:0 }}>
             <Camera size={16} aria-hidden="true"/> Partager
           </button>
         </div>
-        <div style={{ position:"relative", display:"grid", gridTemplateColumns:"repeat(3, minmax(0, 1fr))", marginTop:20, paddingTop:16, borderTop:"1px solid var(--c-border)" }}>
+        <div className="athlete-club-hero__stats">
           {[
             { value:allAthletes.length, label:"Membres" },
             { value:activePosterCount, label:"Actifs cette semaine" },
             { value:posts.length, label:"Publications" },
           ].map((item,index) => (
-            <div key={item.label} style={{ paddingInline:index===0?0:16, borderLeft:index===0?"none":"1px solid var(--c-border)" }}>
-              <p style={{ fontSize:22, fontWeight:700, lineHeight:1, color:"var(--c-text-1)", fontVariantNumeric:"tabular-nums" }}>{item.value}</p>
-              <p style={{ fontSize:12, color:"var(--c-text-2)", marginTop:6 }}>{item.label}</p>
+            <div key={item.label} className={index === 0 ? undefined : "athlete-club-hero__stat--divided"}>
+              <p className="athlete-club-hero__stat-value">{item.value}</p>
+              <p className="athlete-club-hero__stat-label">{item.label}</p>
             </div>
           ))}
         </div>
@@ -861,19 +865,12 @@ export default function AthleteClub({ athlete, allAthletes, clubId, sessions }) 
         </div>
       </div>
 
-      <nav aria-label="Filtrer les publications" style={{ display:"flex", gap:8, overflowX:"auto", scrollbarWidth:"none" }}>
-        {feedFilters.map(filter => {
-          const active = feedFilter === filter.id;
-          return (
-            <button key={filter.id} type="button" aria-pressed={active} onClick={() => setFeedFilter(filter.id)}
-              className="tap-feedback"
-              style={{ minHeight:44, flexShrink:0, display:"flex", alignItems:"center", gap:7, padding:"0 14px", borderRadius:12, border:`1px solid ${active?"rgba(77,201,160,0.30)":"var(--c-border)"}`, background:active?"rgba(29,158,117,0.14)":"var(--c-surface)", color:active?"#7BD8B4":"var(--c-text-2)", fontSize:13, fontWeight:700, cursor:"pointer" }}>
-              {filter.label}
-              <span style={{ minWidth:20, padding:"2px 6px", borderRadius:99, background:active?"rgba(77,201,160,0.12)":"var(--c-surface-2)", fontSize:12 }}>{filter.count}</span>
-            </button>
-          );
-        })}
-      </nav>
+      <SegmentedTabs
+        ariaLabel="Filtrer les publications"
+        items={feedFilters.map((filter) => ({ ...filter, badge: filter.count }))}
+        value={feedFilter}
+        onChange={setFeedFilter}
+      />
 
       {/* ── FIL POSTS ── */}
       <div className="space-y-4">
@@ -883,24 +880,20 @@ export default function AthleteClub({ athlete, allAthletes, clubId, sessions }) 
             <p style={{ fontSize:12, color:"var(--c-text-3)" }}>Chargement du fil…</p>
           </div>
         ) : posts.length===0 ? (
-          <div style={{ display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", padding:"60px 20px", gap:14 }}>
-            <div style={{ width:56, height:56, borderRadius:16, background:"var(--c-surface-2)", display:"flex", alignItems:"center", justifyContent:"center" }}>
-              <Camera size={26} color="var(--c-text-3)" strokeWidth={1.5}/>
-            </div>
-            <div style={{ textAlign:"center" }}>
-              <p style={{ fontSize:15, fontWeight:700, color:"var(--c-text-1)", marginBottom:6 }}>Fil vide</p>
-              <p style={{ fontSize:13, color:"var(--c-text-2)" }}>Sois le premier à partager ta séance !</p>
-            </div>
-            <button type="button" onClick={() => setQuickPost(lastValidatedSession ?? true)} className="btn-primary">
-              <Camera size={14}/> Partager maintenant
-            </button>
-          </div>
+          <EmptyState
+            icon={Camera}
+            title="Le fil du club attend son premier moment"
+            description="Partage une séance, une photo ou un encouragement pour lancer la vie du groupe."
+            action={<button type="button" onClick={() => setQuickPost(lastValidatedSession ?? true)} className="btn-primary"><Camera size={15} aria-hidden="true" /> Partager maintenant</button>}
+          />
         ) : filteredPosts.length===0 ? (
-          <div className="card" style={{ padding:32, textAlign:"center" }}>
-            <p style={{ fontSize:15, fontWeight:700, color:"var(--c-text-1)" }}>Aucune publication dans ce filtre</p>
-            <p style={{ fontSize:13, color:"var(--c-text-2)", marginTop:5 }}>Choisis un autre filtre ou partage quelque chose avec le club.</p>
-            <button type="button" onClick={() => setFeedFilter("all")} className="btn-secondary" style={{ margin:"16px auto 0" }}>Voir tout le fil</button>
-          </div>
+          <EmptyState
+            compact
+            icon={Camera}
+            title="Aucune publication dans ce filtre"
+            description="Choisis un autre filtre ou partage quelque chose avec le club."
+            action={<button type="button" onClick={() => setFeedFilter("all")} className="btn-secondary">Voir tout le fil</button>}
+          />
         ) : filteredPosts.map(post => (
           <PostCard
             key={post.id}

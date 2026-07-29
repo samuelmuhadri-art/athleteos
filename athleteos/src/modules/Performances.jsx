@@ -20,6 +20,7 @@ import { supabase }                   from "../utils/supabaseClient";
 import { useAuth }                    from "../context/AuthContext";
 import LoadingState                   from "../components/ui/LoadingState";
 import ErrorState                     from "../components/ui/ErrorState";
+import { EmptyState, PageHeader }      from "../components/ui/premium";
 import { getAthleteMetricsForWeek }   from "../utils/chargeCalculations";
 import { getISOWeek, initialsFromName } from "../utils/helpers.js";
 // Tâche 11 : moteur central de comparaison de performances (parsePerf,
@@ -270,15 +271,16 @@ function Performances() {
   if (allDisciplines.length === 0) {
     return (
       <div className="page-container py-4 md:py-6 max-w-7xl mx-auto space-y-5 animate-slide-up">
-        <div>
-          <h2 className="page-title">Performances</h2>
-          <p className="secondary-text mt-1">Classements du groupe et progression individuelle</p>
-        </div>
-        <div className="card px-5 py-16 text-center">
-          <Trophy size={40} className="mx-auto mb-3" style={{ color: "var(--c-text-3)" }} />
-          <p className="text-[15px] font-semibold" style={{ color: "var(--c-text-2)" }}>Aucun record enregistré pour l'instant</p>
-          <p className="meta-text mt-1 max-w-sm mx-auto">Dès que les athlètes auront ajouté leurs records, les classements apparaîtront ici.</p>
-        </div>
+        <PageHeader
+          eyebrow="ANALYSE DU GROUPE"
+          title="Performances"
+          description="Classements du groupe et progression individuelle."
+        />
+        <EmptyState
+          icon={Trophy}
+          title="Aucun record enregistré pour l’instant"
+          description="Les classements et graphiques apparaîtront dès que les premiers records auront été ajoutés aux profils."
+        />
       </div>
     );
   }
@@ -286,12 +288,11 @@ function Performances() {
   return (
     <div className="page-container py-4 md:py-6 max-w-7xl mx-auto space-y-5 md:space-y-6 animate-slide-up">
 
-      <div>
-        <h2 className="page-title">Performances</h2>
-        <p className="secondary-text mt-1">
-          {athletes.length} athlète{athletes.length !== 1 ? "s" : ""} · {allDisciplines.length} épreuve{allDisciplines.length !== 1 ? "s" : ""} suivie{allDisciplines.length !== 1 ? "s" : ""}
-        </p>
-      </div>
+      <PageHeader
+        eyebrow="ANALYSE DU GROUPE"
+        title="Performances"
+        description={`${athletes.length} athlète${athletes.length !== 1 ? "s" : ""} · ${allDisciplines.length} épreuve${allDisciplines.length !== 1 ? "s" : ""} suivie${allDisciplines.length !== 1 ? "s" : ""}`}
+      />
 
       {/* ── En-tête ──────────────────────────────────────────────────────── */}
       <div className="card p-2 flex flex-col md:flex-row md:items-center md:justify-between gap-2">

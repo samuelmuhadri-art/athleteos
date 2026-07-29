@@ -33,6 +33,8 @@ import {
 import { checkUpcomingCompetitions, checkAndAlertACWR, notifyAthleteCompetitionReminder, checkWeeklyRecap, checkWeeklyReports } from "../utils/notifications";
 import { buildCoachFeed } from "../utils/coachFeed";
 import { getISOWeek, initialsFromName } from "../utils/helpers.js";
+import ClubOnboardingCard from "../components/club/ClubOnboardingCard";
+import { PageHeader } from "../components/ui/premium";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -343,7 +345,14 @@ function CoachFeedSection({ items, onNavigate }) {
 }
 
 // ─── Composant principal ──────────────────────────────────────────────────────
-function Dashboard({ onNavigate }) {
+function Dashboard({
+  onNavigate,
+  club,
+  clubLoading = false,
+  onOpenClubSettings,
+  onInvite,
+  onDemo,
+}) {
   const { clubId, profile } = useAuth();
   const today       = new Date();
   const currentWeek = getISOWeek(today);
@@ -495,17 +504,29 @@ function Dashboard({ onNavigate }) {
 
   return (
     <div className="page-container py-4 md:py-6 space-y-4 md:space-y-5 max-w-7xl mx-auto animate-slide-up">
-      <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <p className="meta-text font-bold uppercase tracking-[0.12em] mb-1">Vue coach</p>
-          <h1 className="page-title">{getGreeting()}, {firstName}</h1>
-          <p className="secondary-text mt-1">Les priorités et l'état de votre groupe en un coup d'œil.</p>
-        </div>
-        <button type="button" className="btn-primary self-start sm:self-auto" onClick={() => onNavigate("planning")}>
-          Planifier une séance
-          <ChevronRight size={16} />
-        </button>
-      </header>
+      <PageHeader
+        eyebrow="VUE COACH"
+        title={`${getGreeting()}, ${firstName}`}
+        description="Les priorités et l’état de ton groupe en un coup d’œil."
+        actions={(
+          <button type="button" className="btn-primary" onClick={() => onNavigate("planning")}>
+            Planifier une séance
+            <ChevronRight size={16} aria-hidden="true" />
+          </button>
+        )}
+      />
+
+      {profile?.role === "head_coach" && !clubLoading && (
+        <ClubOnboardingCard
+          club={club}
+          athleteCount={athletes.length}
+          sessionCount={sessions.length}
+          onBranding={onOpenClubSettings}
+          onInvite={onInvite}
+          onPlanning={() => onNavigate("planning")}
+          onDemo={onDemo}
+        />
+      )}
 
       {/* ── Synthèse de la semaine ────────────────────────────────────────── */}
       <div

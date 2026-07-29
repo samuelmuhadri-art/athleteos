@@ -18,6 +18,7 @@ import { notifyAthleteMessage }  from "../utils/notifications";
 import { useAuth }               from "../context/AuthContext";
 import LoadingState              from "../components/ui/LoadingState";
 import ErrorState                from "../components/ui/ErrorState";
+import { SegmentedTabs }         from "../components/ui/premium";
 import { initialsFromName }      from "../utils/helpers.js";
 
 // ─── Constantes ───────────────────────────────────────────────────────────────
@@ -554,7 +555,7 @@ function Messaging() {
             <h2 className="text-[15px] font-bold text-[var(--c-text-1)]">Messagerie</h2>
             {totalUnread > 0 && (
               <span
-                className="text-[10px] font-bold px-2 py-0.5 rounded-full text-white"
+                className="text-[12px] font-bold px-2 py-0.5 rounded-full text-white"
                 style={{ background: "#E24B4A" }}
               >
                 {totalUnread} non lu{totalUnread > 1 ? "s" : ""}
@@ -575,26 +576,16 @@ function Messaging() {
           </div>
 
           {/* Onglets filtre */}
-          <div className="flex rounded-xl border border-[var(--c-border)] overflow-hidden text-[11px] font-semibold">
-            {[
-              { id: "tous",     label: `Tous (${athleteCount + coachCount})` },
-              { id: "athletes", label: `Athlètes (${athleteCount})`          },
-              { id: "coachs",   label: `Coachs (${coachCount})`              },
-            ].map((tab) => (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
-                className={[
-                  "flex-1 py-1.5 transition-colors text-center",
-                  activeTab === tab.id
-                    ? "bg-[#1D9E75] text-[#0A150F]"
-                    : "bg-transparent text-[var(--c-text-3)] hover:bg-[var(--c-surface-3)]",
-                ].join(" ")}
-              >
-                {tab.label}
-              </button>
-            ))}
-          </div>
+          <SegmentedTabs
+            ariaLabel="Filtrer les conversations"
+            items={[
+              { id: "tous", label: "Tous", badge: athleteCount + coachCount },
+              { id: "athletes", label: "Athlètes", badge: athleteCount },
+              { id: "coachs", label: "Coachs", badge: coachCount },
+            ]}
+            value={activeTab}
+            onChange={setActiveTab}
+          />
         </div>
 
         {/* Coach connecté */}

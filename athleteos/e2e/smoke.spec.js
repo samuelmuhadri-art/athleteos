@@ -24,6 +24,12 @@ test("le lien vers l'inscription est visible et navigue", async ({ page }) => {
   await expect(page.getByPlaceholder("coach@club.be")).toBeHidden();
 });
 
+test("un lien d'invitation ouvre directement l'inscription athlète", async ({ page }) => {
+  await page.goto("/?invite=AB12CD34");
+  await expect(page.getByRole("button", { name: /Athlète.*Rejoindre mon club/ })).toHaveAttribute("aria-pressed", "true");
+  await expect(page.getByLabel("Code d’invitation")).toHaveValue("AB12CD34");
+});
+
 test("un identifiant invalide affiche une erreur, ne fait pas planter l'app", async ({ page }) => {
   await page.goto("/");
   await page.getByPlaceholder("coach@club.be").fill("inexistant@example.invalid");

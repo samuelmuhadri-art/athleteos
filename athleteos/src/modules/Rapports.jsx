@@ -16,6 +16,7 @@ import { supabase }  from "../utils/supabaseClient";
 import { useAuth }   from "../context/AuthContext";
 import LoadingState  from "../components/ui/LoadingState";
 import ErrorState    from "../components/ui/ErrorState";
+import { EmptyState, PageHeader, SegmentedTabs, StatCard } from "../components/ui/premium";
 import { getISOWeek, initialsFromName } from "../utils/helpers.js";
 import { CATEGORIES, colorsFor, acwrColor } from "../athlete/shared";
 import { getRPELabel } from "../utils/chargeCalculations";
@@ -393,28 +394,19 @@ export default function Rapports() {
   return (
     <div className="page-container py-4 md:py-6 space-y-5 md:space-y-6 max-w-5xl mx-auto animate-slide-up">
 
-      {/* ── HEADER ─────────────────────────────────────────────────────── */}
-      <div className="flex items-start justify-between flex-wrap gap-4">
-        <div>
-          <h2 className="page-title">Rapports</h2>
-          <p className="secondary-text mt-1">
-            {athletes.length} athlète{athletes.length !== 1 ? "s" : ""} · {weeks.length} semaine{weeks.length !== 1 ? "s" : ""} avec des séances
-          </p>
-        </div>
-        <div className="grid grid-cols-2 gap-1 rounded-xl p-1 w-full sm:w-auto" style={{ background: "var(--c-surface-2)", border: "1px solid var(--c-border)" }} role="group" aria-label="Période des rapports">
-          {[{ id: "week", label: "Semaine" }, { id: "month", label: "Mois" }].map(m => (
-            <button type="button" key={m.id} aria-pressed={viewMode === m.id} onClick={() => { setViewMode(m.id); setSelectedWeek(null); setSelectedAthlete(null); }}
-              style={{
-                minHeight: 44, padding: "8px 16px", borderRadius: 8, fontSize: 13, fontWeight: 600,
-                background: viewMode === m.id ? "rgba(29,158,117,0.15)" : "transparent",
-                color: viewMode === m.id ? "var(--color-success)" : "var(--c-text-2)",
-                border: "none", cursor: "pointer",
-              }}>
-              {m.label}
-            </button>
-          ))}
-        </div>
-      </div>
+      <PageHeader
+        eyebrow="SUIVI DU GROUPE"
+        title="Rapports"
+        description={`${athletes.length} athlète${athletes.length !== 1 ? "s" : ""} · ${weeks.length} semaine${weeks.length !== 1 ? "s" : ""} avec des séances`}
+        actions={(
+          <SegmentedTabs
+            ariaLabel="Période des rapports"
+            items={[{ id: "week", label: "Semaine" }, { id: "month", label: "Mois" }]}
+            value={viewMode}
+            onChange={(mode) => { setViewMode(mode); setSelectedWeek(null); setSelectedAthlete(null); }}
+          />
+        )}
+      />
 
       {latestWeekOverview && (
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 md:gap-4">
@@ -423,11 +415,7 @@ export default function Rapports() {
             { label: "Séances réalisées", value: `${latestWeekOverview.done}/${latestWeekOverview.planned}`, detail: "cumul du groupe" },
             { label: "Charge cumulée", value: latestWeekOverview.totalLoad, detail: "unités arbitraires" },
           ].map(item => (
-            <div key={item.label} className="card p-4">
-              <p className="metric-label">{item.label}</p>
-              <p className="metric-value mt-2 text-[var(--c-text-1)]">{item.value}</p>
-              <p className="meta-text mt-1">{item.detail}</p>
-            </div>
+            <StatCard key={item.label} label={item.label} value={item.value} helper={item.detail} />
           ))}
         </div>
       )}
@@ -435,13 +423,11 @@ export default function Rapports() {
       {/* ── VUE SEMAINE ────────────────────────────────────────────────── */}
       {viewMode === "week" && selectedWeek == null && (
         weeks.length === 0 ? (
-          <div className="card p-12 text-center">
-            <div style={{ width: 56, height: 56, borderRadius: 18, display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 14px", background: "var(--c-surface-2)" }}>
-              <CalendarDays size={26} color="var(--c-text-3)" strokeWidth={1.5} />
-            </div>
-            <p className="text-[15px] font-semibold text-[var(--c-text-2)]">Aucune séance planifiée</p>
-            <p className="meta-text mt-1">Les rapports apparaîtront dès que des séances seront créées</p>
-          </div>
+          <EmptyState
+            icon={CalendarDays}
+            title="Aucune séance planifiée"
+            description="Les rapports apparaîtront automatiquement dès que des séances seront créées et attribuées."
+          />
         ) : (
           <div className="space-y-2.5">
             {weeks.map(w => (

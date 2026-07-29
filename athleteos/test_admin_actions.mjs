@@ -7,16 +7,19 @@
 // script ne peut pas s'exécuter sans déploiement préalable — Deno
 // n'est pas exécutable en local ici) :
 //   1. Un coach (pas head_coach) et un athlète sont refusés sur
-//      rename_club / regenerate_invite_code / remove_user / change_role.
+//      rename_club / update_club_branding / regenerate_invite_code /
+//      remove_user / change_role.
 //   2. Un head coach d'un AUTRE club ne peut pas agir sur un membre/club
 //      qui n'est pas le sien.
 //   3. Impossible de supprimer ou rétrograder le DERNIER head coach
 //      d'un club (mais transférer vers un 2e head coach débloque
 //      ensuite la suppression du premier).
 //   4. Régénérer le code d'invitation invalide l'ancien immédiatement.
-//   5. Rejouer exactement la même requête (même clé d'idempotence) ne
+//   5. La personnalisation visuelle valide strictement couleur et chemins,
+//      et reste limitée au club du head coach.
+//   6. Rejouer exactement la même requête (même clé d'idempotence) ne
 //      déclenche pas une seconde fois l'effet (testé sur rename_club).
-//   6. Le journal d'audit (table audit_logs) contient bien une ligne
+//   7. Le journal d'audit (table audit_logs) contient bien une ligne
 //      par tentative sensible, avec acteur/cible/date/résultat.
 //
 // Crée deux clubs et cinq comptes éphémères, nettoie tout à la fin
@@ -108,6 +111,7 @@ async function main() {
     for (const [label, client] of [["coach", coachA.client], ["athlète", athleteA.client]]) {
       for (const payload of [
         { action: "rename_club", clubName: "Triche" },
+        { action: "update_club_branding", accentColor: "#378ADD" },
         { action: "regenerate_invite_code" },
         { action: "remove_user", userId: athleteA.row.id },
         { action: "change_role", userId: athleteA.row.id, role: "coach" },
@@ -125,6 +129,13 @@ async function main() {
     {
       const res = await callAdmin(headB.client, { action: "change_role", userId: coachA.row.id, role: "head_coach" });
       record("change_role refusé (head coach club B sur coach club A)", res.success === false, res.success ? "AUTORISÉ !" : res.error);
+    }
+    {
+      const res = await callAdmin(headB.client, {
+        action: "update_club_branding",
+        logoPath: `${clubA.id}/${RUN_ID}-intrusion.png`,
+      });
+      record("update_club_branding refuse le chemin d'un autre club", res.success === false, res.success ? "AUTORISÉ !" : res.error);
     }
 
     // ── 3. Auto-suppression/auto-rétrogradation toujours bloquées, même en
@@ -177,7 +188,50 @@ async function main() {
       record("l'ancien code n'est plus valide après rotation", !stillValid.data, stillValid.data ? "encore trouvé !" : "introuvable, OK");
     }
 
-    // ── 5. Idempotence : rejouer la même requête ne double pas l'effet ─────
+    // ── 5. Personnalisation visuelle : validation et mise à jour partielle ─────
+    {
+      const res = await callAdmin(headA2.client, {
+        action: "update_club_branding",
+        logoPath: null,
+        coverPath: null,
+        accentColor: "#378add",
+      });
+      const { data: club } = await admin
+        .from("clubs")
+        .select("logo_path, cover_path, accent_color")
+        .eq("id", clubA.id)
+        .single();
+      record(
+        "update_club_branding applique une couleur normalisée et des chemins nullables",
+        res.success === true
+          && res.branding?.accentColor === "#378ADD"
+          && club?.accent_color === "#378ADD"
+          && club?.logo_path === null
+          && club?.cover_path === null,
+        res.error,
+      );
+    }
+    {
+      const res = await callAdmin(headA2.client, {
+        action: "update_club_branding",
+        accentColor: "linear-gradient(red, blue)",
+      });
+      const { data: club } = await admin.from("clubs").select("accent_color").eq("id", clubA.id).single();
+      record(
+        "update_club_branding refuse une couleur non hexadécimale sans modifier le club",
+        res.success === false && club?.accent_color === "#378ADD",
+        res.success ? "COULEUR DANGEREUSE AUTORISÉE !" : res.error,
+      );
+    }
+    {
+      const res = await callAdmin(headA2.client, {
+        action: "update_club_branding",
+        coverPath: `${clubA.id}/../${clubB.id}/cover.webp`,
+      });
+      record("update_club_branding refuse un chemin avec traversée de dossier", res.success === false, res.success ? "AUTORISÉ !" : res.error);
+    }
+
+    // ── 6. Idempotence : rejouer la même requête ne double pas l'effet ─────
     {
       const key = crypto.randomUUID();
       const nameA = `Club renommé une fois ${RUN_ID}`;
@@ -189,7 +243,7 @@ async function main() {
       record("rejeu idempotent : le nom appliqué est celui du 1er appel, pas du 2e", club.name === nameA, `nom actuel: ${club.name}`);
     }
 
-    // ── 6. Journal d'audit : au moins une ligne par tentative sensible ──────
+    // ── 7. Journal d'audit : au moins une ligne par tentative sensible ──────
     {
       const { data: logs, error } = await admin.from("audit_logs").select("action, actor_user_id, target_club_id, result").eq("actor_club_id", clubA.id);
       record("audit_logs contient des entrées pour le club A", !error && (logs ?? []).length > 0, error?.message ?? `${logs?.length ?? 0} ligne(s)`);

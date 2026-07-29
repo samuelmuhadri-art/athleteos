@@ -14,11 +14,12 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 // Rôle minimal par action :
 //   - update_profile        : n'importe quel compte connecté, sur SOI-MÊME uniquement. Pas audité (pas structurel).
 //   - rename_club            : head_coach uniquement.
+//   - update_club_branding   : head_coach uniquement.
 //   - regenerate_invite_code : head_coach uniquement.
 //   - remove_user            : head_coach uniquement.
 //   - change_role            : head_coach uniquement.
 //
-// Chaque tentative sur une action "sensible" (les 4 dernières) est
+// Chaque tentative sur une action "sensible" (toutes sauf update_profile) est
 // auditée UNE SEULE FOIS, ici, dans le bloc catch/succès final — jamais
 // à la fois inline dans une branche ET dans le catch, pour ne pas
 // dupliquer les entrées.
@@ -38,7 +39,9 @@ function genCode() {
 }
 
 const VALID_ROLES = ["head_coach", "coach", "athlete"];
-const SENSITIVE_ACTIONS = ["rename_club", "regenerate_invite_code", "remove_user", "change_role"];
+const SENSITIVE_ACTIONS = ["rename_club", "update_club_branding", "regenerate_invite_code", "remove_user", "change_role"];
+const HEX_COLOR_PATTERN = /^#[0-9A-F]{6}$/;
+const CLUB_IMAGE_PATTERN = /\.(png|jpe?g|webp)$/i;
 
 function ok(body: Record<string, unknown>) {
   return new Response(JSON.stringify({ success: true, ...body }), {
@@ -62,6 +65,41 @@ function requirePositiveInt(value: unknown, label: string): number {
   const n = Number(value);
   if (!Number.isInteger(n) || n <= 0) throw new DeniedError(`${label} invalide.`);
   return n;
+}
+
+function optionalAccentColor(value: unknown): string | undefined {
+  if (value === undefined) return undefined;
+  if (typeof value !== "string") throw new DeniedError("Couleur d'accent invalide.");
+  const normalized = value.trim().toUpperCase();
+  if (!HEX_COLOR_PATTERN.test(normalized)) {
+    throw new DeniedError("Couleur d'accent invalide (format attendu : #RRGGBB).");
+  }
+  return normalized;
+}
+
+function optionalClubImagePath(
+  value: unknown,
+  label: string,
+  clubId: number,
+): string | null | undefined {
+  if (value === undefined) return undefined;
+  if (value === null) return null;
+
+  const imagePath = requireString(value, label, { max: 500 });
+  const segments = imagePath.split("/");
+  const hasUnsafeSegment = segments.some((segment) => !segment || segment === "." || segment === "..");
+  if (
+    segments.length < 2
+    || segments[0] !== String(clubId)
+    || hasUnsafeSegment
+    || /[\\?#]/.test(imagePath)
+    || !CLUB_IMAGE_PATTERN.test(imagePath)
+  ) {
+    throw new DeniedError(
+      `${label} invalide : l'image doit appartenir au dossier du club et être au format PNG, JPEG ou WebP.`,
+    );
+  }
+  return imagePath;
 }
 
 serve(async (req) => {
@@ -166,6 +204,41 @@ serve(async (req) => {
       auditPayload = { clubName };
       await logAudit("success", null);
       return ok({});
+    }
+
+    if (currentAction === "update_club_branding") {
+      targetClubId = caller.club_id;
+      const cached = await findCachedSuccess();
+      if (cached) return ok(cached);
+
+      const logoPath = optionalClubImagePath(body.logoPath, "Chemin du logo", caller.club_id);
+      const coverPath = optionalClubImagePath(body.coverPath, "Chemin de la couverture", caller.club_id);
+      const accentColor = optionalAccentColor(body.accentColor);
+      if (logoPath === undefined && coverPath === undefined && accentColor === undefined) {
+        throw new DeniedError("Aucune personnalisation à mettre à jour.");
+      }
+
+      const updates: Record<string, string | null> = {};
+      if (logoPath !== undefined) updates.logo_path = logoPath;
+      if (coverPath !== undefined) updates.cover_path = coverPath;
+      if (accentColor !== undefined) updates.accent_color = accentColor;
+
+      const { data: updatedClub, error } = await admin
+        .from("clubs")
+        .update(updates)
+        .eq("id", caller.club_id)
+        .select("logo_path, cover_path, accent_color")
+        .single();
+      if (error || !updatedClub) throw error ?? new Error("Club introuvable.");
+
+      const branding = {
+        logoPath: updatedClub.logo_path,
+        coverPath: updatedClub.cover_path,
+        accentColor: updatedClub.accent_color,
+      };
+      auditPayload = { branding };
+      await logAudit("success", null);
+      return ok({ branding });
     }
 
     if (currentAction === "regenerate_invite_code") {

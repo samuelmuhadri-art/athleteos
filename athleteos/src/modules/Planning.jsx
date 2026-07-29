@@ -15,6 +15,7 @@ import { supabase }  from "../utils/supabaseClient";
 import { useAuth }   from "../context/AuthContext";
 import LoadingState  from "../components/ui/LoadingState";
 import ErrorState    from "../components/ui/ErrorState";
+import { SegmentedTabs } from "../components/ui/premium";
 import { LOAD_COEFFICIENTS } from "../utils/trainingLoad";
 import { initialsFromName } from "../utils/helpers.js";
 import {
@@ -319,37 +320,26 @@ function Planning() {
         <div className="flex items-center justify-between sm:justify-end gap-2 w-full sm:w-auto">
 
           {/* Toggle vue */}
-          <div className="flex rounded-xl overflow-hidden text-[12px] font-bold" style={{ border: "1px solid var(--c-border)" }}>
-            {[
-              { id: "month", label: "Mois" },
-              { id: "week",  label: "Sem." },
-            ].map(v => (
-              <button type="button" key={v.id} onClick={() => setViewMode(v.id)}
-                className="min-h-10 px-3 transition-colors"
-                style={viewMode === v.id
-                  ? { background: "#1D9E75", color: "#0A150F" }
-                  : { background: "var(--c-surface-2)", color: "var(--c-text-3)" }}>
-                {v.label}
-              </button>
-            ))}
-          </div>
+          <SegmentedTabs
+            ariaLabel="Mode d’affichage du planning"
+            items={[{ id: "month", label: "Mois" }, { id: "week", label: "Sem." }]}
+            value={viewMode}
+            onChange={setViewMode}
+          />
 
           {/* Filtre séances athlètes — desktop */}
           {athleteSessionCount > 0 && (
-            <div className="hidden lg:flex rounded-xl overflow-hidden text-[12px] font-bold" style={{ border: "1px solid var(--c-border)" }}>
-              {[
-                { id: "all",     label: "Toutes" },
-                { id: "coach",   label: "Coach"  },
-                { id: "athlete", label: `📋 ${athleteSessionCount}` },
-              ].map(f => (
-                <button type="button" key={f.id} onClick={() => setFilterMode(f.id)}
-                  className="min-h-10 px-3 transition-colors"
-                  style={filterMode === f.id
-                    ? { background: "#1D9E75", color: "#0A150F" }
-                    : { background: "var(--c-surface-2)", color: "var(--c-text-3)" }}>
-                  {f.label}
-                </button>
-              ))}
+            <div className="hidden lg:block">
+              <SegmentedTabs
+                ariaLabel="Origine des séances"
+                items={[
+                  { id: "all", label: "Toutes" },
+                  { id: "coach", label: "Coach" },
+                  { id: "athlete", label: "Athlètes", badge: athleteSessionCount },
+                ]}
+                value={filterMode}
+                onChange={setFilterMode}
+              />
             </div>
           )}
 

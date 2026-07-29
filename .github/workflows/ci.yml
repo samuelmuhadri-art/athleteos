@@ -77,6 +77,7 @@ jobs:
           node test_signup_regression.mjs
           node test_send_push_regression.mjs
           node test_admin_actions.mjs
+          node test_import_club_athletes.mjs
           node test_charge_model_parity.mjs
           node test_axis_model_parity.mjs
           node test_competition_transactions.mjs

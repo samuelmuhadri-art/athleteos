@@ -6,8 +6,11 @@ import {
   KeyRound,
   Lock,
   Mail,
+  Image as ImageIcon,
+  Palette,
   RefreshCw,
   Settings,
+  Upload,
   User,
   X,
 } from "lucide-react";
@@ -19,6 +22,8 @@ import {
   AuthPasswordField,
 } from "../auth/AuthFormControls";
 import { translateAuthError } from "../auth/authFormUtils";
+import { loadClubBranding } from "../../hooks/useClubBranding";
+import { CLUB_ACCENT_PRESETS, DEFAULT_CLUB_ACCENT } from "../../utils/clubBranding";
 
 const FOCUSABLE_SELECTOR = [
   "button:not([disabled])",
@@ -28,6 +33,13 @@ const FOCUSABLE_SELECTOR = [
   "[href]",
   "[tabindex]:not([tabindex='-1'])",
 ].join(",");
+
+const BRAND_IMAGE_TYPES = Object.freeze({
+  "image/png": "png",
+  "image/jpeg": "jpg",
+  "image/webp": "webp",
+});
+const MAX_BRAND_IMAGE_SIZE = 5 * 1024 * 1024;
 
 function SettingsSectionHeader({ icon: Icon, title, description }) {
   return (
@@ -50,15 +62,23 @@ function ActionRow({ children, action }) {
   );
 }
 
-export default function AccountSettingsModal({ onClose }) {
+export default function AccountSettingsModal({ onClose, initialSection = "account", onClubUpdated }) {
   const { user, profile, clubId } = useAuth();
   const isHeadCoach = profile?.role === "head_coach";
-  const [activeSection, setActiveSection] = useState("account");
+  const [activeSection, setActiveSection] = useState(initialSection === "club" && isHeadCoach ? "club" : "account");
   const [name, setName] = useState(profile?.name ?? "");
   const [email, setEmail] = useState(user?.email ?? "");
   const [password, setPassword] = useState("");
   const [clubName, setClubName] = useState("");
   const [inviteCode, setInviteCode] = useState(null);
+  const [logoPath, setLogoPath] = useState(null);
+  const [coverPath, setCoverPath] = useState(null);
+  const [logoPreview, setLogoPreview] = useState(null);
+  const [coverPreview, setCoverPreview] = useState(null);
+  const [logoFile, setLogoFile] = useState(null);
+  const [coverFile, setCoverFile] = useState(null);
+  const [accentColor, setAccentColor] = useState(DEFAULT_CLUB_ACCENT);
+  const [savedAccentColor, setSavedAccentColor] = useState(DEFAULT_CLUB_ACCENT);
   const [clubLoading, setClubLoading] = useState(Boolean(clubId));
   const [copied, setCopied] = useState(false);
   const [confirmRegeneration, setConfirmRegeneration] = useState(false);
@@ -79,19 +99,32 @@ export default function AccountSettingsModal({ onClose }) {
 
     let active = true;
     setClubLoading(true);
-    supabase.from("clubs").select("name, invite_code").eq("id", clubId).single()
-      .then(({ data, error }) => {
+    loadClubBranding(supabase, clubId)
+      .then((data) => {
         if (!active) return;
-        if (error) {
-          setMessage({ type: "error", text: "Les informations du club n’ont pas pu être chargées." });
-        } else if (data) {
-          setClubName(data.name ?? "");
-          setInviteCode(data.invite_code ?? null);
-        }
-        setClubLoading(false);
-      });
+        setClubName(data.name ?? "");
+        setInviteCode(data.inviteCode ?? null);
+        setLogoPath(data.logoPath ?? null);
+        setCoverPath(data.coverPath ?? null);
+        setLogoPreview(data.logoUrl ?? null);
+        setCoverPreview(data.coverUrl ?? null);
+        setAccentColor(data.accentColor);
+        setSavedAccentColor(data.accentColor);
+      })
+      .catch(() => {
+        if (active) setMessage({ type: "error", text: "Les informations du club n’ont pas pu être chargées." });
+      })
+      .finally(() => { if (active) setClubLoading(false); });
     return () => { active = false; };
   }, [clubId]);
+
+  useEffect(() => () => {
+    if (logoPreview?.startsWith("blob:")) globalThis.URL.revokeObjectURL(logoPreview);
+  }, [logoPreview]);
+
+  useEffect(() => () => {
+    if (coverPreview?.startsWith("blob:")) globalThis.URL.revokeObjectURL(coverPreview);
+  }, [coverPreview]);
 
   useEffect(() => {
     const previousFocus = restoreFocusRef.current;
@@ -179,13 +212,82 @@ export default function AccountSettingsModal({ onClose }) {
     if (!clubName.trim()) return;
     runAction(
       "club",
-      () => callAdmin({
-        action: "rename_club",
-        clubName: clubName.trim(),
-        idempotencyKey: crypto.randomUUID(),
-      }),
+      async () => {
+        await callAdmin({
+          action: "rename_club",
+          clubName: clubName.trim(),
+          idempotencyKey: crypto.randomUUID(),
+        });
+        await onClubUpdated?.();
+      },
       "Le nom du club a bien été mis à jour.",
     );
+  };
+
+  const selectBrandImage = (kind, file) => {
+    if (!file) return;
+    if (!BRAND_IMAGE_TYPES[file.type]) {
+      setMessage({ type: "error", text: "Utilise une image PNG, JPEG ou WebP." });
+      return;
+    }
+    if (file.size > MAX_BRAND_IMAGE_SIZE) {
+      setMessage({ type: "error", text: "L’image doit peser moins de 5 Mo." });
+      return;
+    }
+    const preview = globalThis.URL.createObjectURL(file);
+    setMessage(null);
+    if (kind === "logo") {
+      setLogoFile(file);
+      setLogoPreview(preview);
+    } else {
+      setCoverFile(file);
+      setCoverPreview(preview);
+    }
+  };
+
+  const uploadBrandImage = async (kind, file) => {
+    const extension = BRAND_IMAGE_TYPES[file.type];
+    const path = `${clubId}/${kind}-${crypto.randomUUID()}.${extension}`;
+    const { error } = await supabase.storage.from("club-branding").upload(path, file, {
+      cacheControl: "3600",
+      contentType: file.type,
+      upsert: false,
+    });
+    if (error) throw error;
+    return path;
+  };
+
+  const saveClubBranding = () => {
+    const dirty = logoFile || coverFile || accentColor !== savedAccentColor;
+    if (!dirty) return;
+    runAction("branding", async () => {
+      const uploadedPaths = [];
+      try {
+        const nextLogoPath = logoFile ? await uploadBrandImage("logo", logoFile) : logoPath;
+        if (logoFile) uploadedPaths.push(nextLogoPath);
+        const nextCoverPath = coverFile ? await uploadBrandImage("cover", coverFile) : coverPath;
+        if (coverFile) uploadedPaths.push(nextCoverPath);
+
+        await callAdmin({
+          action: "update_club_branding",
+          logoPath: nextLogoPath,
+          coverPath: nextCoverPath,
+          accentColor,
+          idempotencyKey: crypto.randomUUID(),
+        });
+        setLogoPath(nextLogoPath);
+        setCoverPath(nextCoverPath);
+        setSavedAccentColor(accentColor);
+        setLogoFile(null);
+        setCoverFile(null);
+        await onClubUpdated?.();
+      } catch (brandingError) {
+        if (uploadedPaths.length) {
+          await supabase.storage.from("club-branding").remove(uploadedPaths).catch(() => {});
+        }
+        throw brandingError;
+      }
+    }, "L’identité visuelle du club a bien été mise à jour.");
   };
 
   const regenerateCode = () => {
@@ -387,6 +489,84 @@ export default function AccountSettingsModal({ onClose }) {
                       disabled={Boolean(busy)}
                     />
                   </ActionRow>
+
+                  <section className="settings-branding-card" aria-labelledby="settings-branding-title">
+                    <div className="settings-branding-heading">
+                      <span><Palette size={18} aria-hidden="true" /></span>
+                      <div>
+                        <h4 id="settings-branding-title">Identité visuelle</h4>
+                        <p>Le logo, la couverture et la couleur apparaissent subtilement dans l’espace du club.</p>
+                      </div>
+                    </div>
+
+                    <div className="settings-brand-assets">
+                      <div className="settings-logo-editor">
+                        <p className="club-field-label">Logo du club</p>
+                        <div className="settings-logo-preview">
+                          {logoPreview ? <img src={logoPreview} alt="Aperçu du logo du club" /> : <ImageIcon size={24} aria-hidden="true" />}
+                        </div>
+                        <label className="btn-secondary settings-file-button">
+                          <Upload size={15} aria-hidden="true" /> {logoPreview ? "Remplacer" : "Choisir un logo"}
+                          <input
+                            type="file"
+                            accept="image/png,image/jpeg,image/webp"
+                            onChange={(event) => selectBrandImage("logo", event.target.files?.[0])}
+                            disabled={Boolean(busy)}
+                          />
+                        </label>
+                        <small>Format carré recommandé · 5 Mo max.</small>
+                      </div>
+
+                      <div className="settings-cover-editor">
+                        <p className="club-field-label">Photo de couverture</p>
+                        <div className="settings-cover-preview">
+                          {coverPreview ? <img src={coverPreview} alt="Aperçu de la couverture du club" /> : <><ImageIcon size={24} aria-hidden="true" /><span>Une image horizontale crée une signature discrète.</span></>}
+                        </div>
+                        <label className="btn-secondary settings-file-button">
+                          <Upload size={15} aria-hidden="true" /> {coverPreview ? "Remplacer" : "Choisir une couverture"}
+                          <input
+                            type="file"
+                            accept="image/png,image/jpeg,image/webp"
+                            onChange={(event) => selectBrandImage("cover", event.target.files?.[0])}
+                            disabled={Boolean(busy)}
+                          />
+                        </label>
+                        <small>Image horizontale recommandée · 5 Mo max.</small>
+                      </div>
+                    </div>
+
+                    <fieldset className="settings-accent-picker" disabled={Boolean(busy)}>
+                      <legend>Couleur d’accent</legend>
+                      <p>Elle colore uniquement les actions et repères importants.</p>
+                      <div>
+                        {CLUB_ACCENT_PRESETS.map((preset) => (
+                          <label key={preset.value} title={preset.label}>
+                            <input
+                              type="radio"
+                              name="club-accent"
+                              value={preset.value}
+                              checked={accentColor === preset.value}
+                              onChange={() => setAccentColor(preset.value)}
+                            />
+                            <span style={{ background: preset.value }} aria-hidden="true" />
+                            <small>{preset.label}</small>
+                          </label>
+                        ))}
+                      </div>
+                    </fieldset>
+
+                    <div className="settings-branding-save">
+                      <p>Les images restent privées et accessibles uniquement aux membres du club.</p>
+                      <button
+                        type="button"
+                        onClick={saveClubBranding}
+                        disabled={Boolean(busy) || (!logoFile && !coverFile && accentColor === savedAccentColor)}
+                        className="btn-primary"
+                      >
+                        {busy === "branding" ? "Enregistrement…" : "Enregistrer l’identité"}
+                      </button>
+                    </div>
+                  </section>
 
                   <div className="settings-invite-card">
                     <div className="settings-invite-copy">

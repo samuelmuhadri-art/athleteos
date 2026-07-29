@@ -5,6 +5,7 @@
 // Vérifie le durcissement de l'Edge Function signup (tâche 3) :
 //   - création de club valide (mode create_club)
 //   - adhésion par code valide (mode join_club)
+//   - réclamation d'un user+athlete précréé par import, sans doublon
 //   - code d'invitation invalide -> rejeté, sans créer de compte Auth
 //   - email déjà existant -> réponse IDENTIQUE à un succès (anti-énumération)
 //   - honeypot rempli -> rejeté (anti-bot, équivalent CAPTCHA)
@@ -147,6 +148,59 @@ async function main() {
     {
       const { data: row } = await admin.from("users").select("club_id, role").eq("email", joinEmail).maybeSingle();
       record("Adhésion -> rattaché au bon club + rôle athlete", row?.club_id === existingClub.id && row?.role === "athlete", JSON.stringify(row));
+    }
+
+    // ── Réclamation d'un athlète importé ─────────────────────────────────
+    // Un athlète importé doit réclamer ses lignes existantes, sans que le
+    // signup ne crée un deuxième profil ou n'écrase les données du coach.
+    const importedClaimEmail = `signup-test-imported-${RUN_ID}@example.invalid`;
+    createdEmails.push(importedClaimEmail);
+    const importedUser = await admin.from("users").insert({
+      club_id: existingClub.id,
+      name: "Nom précréé par import",
+      email: importedClaimEmail,
+      role: "athlete",
+      auth_uid: null,
+    }).select().single().then((result) => { if (result.error) throw result.error; return result.data; });
+    const importedAthlete = await admin.from("athletes").insert({
+      club_id: existingClub.id,
+      name: "Nom précréé par import",
+      user_id: importedUser.id,
+      profile_data: { level: "National", secondary_disciplines: ["200 m"] },
+    }).select().single().then((result) => { if (result.error) throw result.error; return result.data; });
+    {
+      const { status, json } = await callSignup(baseBody({
+        mode: "join_club",
+        name: "Nom différent saisi au signup",
+        email: importedClaimEmail,
+        password: `Test-${RUN_ID}-Aa!`,
+        inviteCode: validInviteCode,
+      }));
+      const { data: claimedUser } = await admin
+        .from("users")
+        .select("id, club_id, name, auth_uid")
+        .eq("email", importedClaimEmail)
+        .single();
+      const { data: athleteRows } = await admin
+        .from("athletes")
+        .select("id, name, profile_data")
+        .eq("user_id", importedUser.id);
+      record(
+        "Signup d'un athlète importé -> succès",
+        status === 200 && json?.success === true && Boolean(claimedUser?.auth_uid),
+        `status=${status} body=${JSON.stringify(json)}`,
+      );
+      record(
+        "Signup importé -> même user, même athlete, aucun profil écrasé",
+        claimedUser?.id === importedUser.id
+          && claimedUser?.club_id === existingClub.id
+          && claimedUser?.name === "Nom précréé par import"
+          && athleteRows?.length === 1
+          && athleteRows[0].id === importedAthlete.id
+          && athleteRows[0].name === "Nom précréé par import"
+          && athleteRows[0].profile_data?.level === "National",
+        `users=${claimedUser?.id} athletes=${athleteRows?.length ?? 0}`,
+      );
     }
 
     // ── 3. Code d'invitation invalide ───────────────────────────────

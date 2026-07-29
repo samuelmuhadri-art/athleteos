@@ -2,12 +2,12 @@
 // AthleteOS — src/App.jsx  ★ DESIGN PREMIUM DARK
 // ============================================================
 
-import { useState, useCallback, useEffect, useRef, Suspense, lazy } from "react";
+import { useState, useCallback, useEffect, useRef, Suspense, lazy, useMemo } from "react";
 import {
   LayoutDashboard, CalendarDays, Users, TrendingUp,
   Activity, Trophy, Bell, MessageSquare, FileText,
-  ChevronLeft, ChevronRight, MoreHorizontal, X, LogOut,
-  UserPlus, Copy, Check, Settings,
+  ChevronLeft, ChevronRight, MoreHorizontal, LogOut,
+  UserPlus, Settings,
 } from "lucide-react";
 
 import { supabase }   from "./utils/supabaseClient";
@@ -23,6 +23,10 @@ import { useUrlView } from "./hooks/useUrlView";
 import { initialsFromName } from "./utils/helpers.js";
 import MobileBottomNav from "./components/navigation/MobileBottomNav";
 import MobileMoreSheet from "./components/navigation/MobileMoreSheet";
+import InviteClubModal from "./components/club/InviteClubModal";
+import ClubDemoPreview from "./components/club/ClubDemoPreview";
+import { useClubBranding } from "./hooks/useClubBranding";
+import { getClubThemeVariables } from "./utils/clubBranding";
 import {
   COACH_MOBILE_MORE_ITEMS,
   COACH_MOBILE_PRIMARY_ITEMS,
@@ -63,9 +67,18 @@ const COACH_MORE_NAV_ITEMS = COACH_MOBILE_MORE_ITEMS.map((mobileItem) => ({
 }));
 
 // ─── Résolution de la vue active ──────────────────────────────────────────────
-function ActiveView({ view, onNavigate }) {
+function ActiveView({ view, onNavigate, club, clubLoading, coachActions }) {
   switch (view) {
-    case "dashboard":    return <Dashboard    onNavigate={onNavigate} />;
+    case "dashboard":    return (
+      <Dashboard
+        onNavigate={onNavigate}
+        club={club}
+        clubLoading={clubLoading}
+        onOpenClubSettings={coachActions.onOpenClubSettings}
+        onInvite={coachActions.onInvite}
+        onDemo={coachActions.onDemo}
+      />
+    );
     case "planning":     return <Planning     />;
     case "athletes":     return <AthleteList  onNavigate={onNavigate} />;
     case "performances": return <Performances />;
@@ -74,7 +87,7 @@ function ActiveView({ view, onNavigate }) {
     case "competitions": return <Competitions />;
     case "alerts":       return <AlertsView   />;
     case "messaging":    return <Messaging    />;
-    default:             return <Dashboard    onNavigate={onNavigate} />;
+    default:             return <Dashboard onNavigate={onNavigate} club={club} clubLoading={clubLoading} {...coachActions} />;
   }
 }
 
@@ -109,16 +122,15 @@ function AuthLoader() {
 }
 
 // ─── CoachShell ───────────────────────────────────────────────────────────────
-function CoachShell({ user, profile, clubId, signOut }) {
+function CoachShell({ user, profile, clubId, signOut, club, clubLoading, refreshClub }) {
   const { activeView, navigate: navigateUrl, viewKey } = useUrlView(NAV_ITEM_IDS, "dashboard");
   const [sidebarOpen,  setSidebarOpen]  = useState(true);
   const [showMore,     setShowMore]     = useState(false);
   const [unreadAlerts, setUnreadAlerts] = useState(0);
   const [showInvite, setShowInvite] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
-  const [clubName, setClubName]     = useState("");
-  const [inviteCode, setInviteCode] = useState(null);
-  const [copied, setCopied]         = useState(false);
+  const [settingsSection, setSettingsSection] = useState("account");
+  const [showDemo, setShowDemo] = useState(false);
   const moreButtonRef = useRef(null);
 
   const { subscribed, subscribe, permissionState } = usePushNotifications(
@@ -126,20 +138,6 @@ function CoachShell({ user, profile, clubId, signOut }) {
     clubId,
     profile.id
   );
-
-  useEffect(() => {
-    if (!clubId) return;
-    supabase.from("clubs").select("name, invite_code").eq("id", clubId).single()
-      .then(({ data }) => { if (data) { setClubName(data.name ?? ""); setInviteCode(data.invite_code ?? null); } });
-  }, [clubId]);
-
-  const copyInviteCode = () => {
-    if (!inviteCode) return;
-    navigator.clipboard?.writeText(inviteCode).then(() => {
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    });
-  };
 
   const fetchUnreadCount = useCallback(async () => {
     if (!clubId) return;
@@ -168,11 +166,20 @@ function CoachShell({ user, profile, clubId, signOut }) {
   const coachName     = profile.name ?? user.email ?? "Coach";
   const coachInitials = initialsFromName(coachName);
   const coachRole     = profile.role === "head_coach" ? "Head coach" : "Coach";
+  const coachActions = useMemo(() => ({
+    onOpenClubSettings: () => {
+      setSettingsSection("club");
+      setShowSettings(true);
+    },
+    onInvite: () => setShowInvite(true),
+    onDemo: () => setShowDemo(true),
+  }), []);
+  const themeStyle = useMemo(() => getClubThemeVariables(club?.accentColor), [club?.accentColor]);
 
   return (
     <div
       className="flex h-screen overflow-hidden w-full"
-      style={{ background: "var(--c-bg)", fontFamily: "'DM Sans', system-ui, sans-serif" }}
+      style={{ background: "var(--c-bg)", fontFamily: "'DM Sans', system-ui, sans-serif", ...themeStyle }}
     >
       {/* ══════════════════════════════════════════════════════════════
          SIDEBAR PREMIUM DARK
@@ -196,6 +203,9 @@ function CoachShell({ user, profile, clubId, signOut }) {
           >
             <AthleteOSWordmark size={15} />
           </div>
+          {sidebarOpen && club?.logoUrl && (
+            <img className="club-shell-mark ml-auto" src={club.logoUrl} alt={`Logo ${club.name || "du club"}`} />
+          )}
         </div>
 
         {/* ── Navigation ── */}
@@ -395,7 +405,7 @@ function CoachShell({ user, profile, clubId, signOut }) {
 
           <button
             type="button"
-            onClick={() => setShowSettings(true)}
+            onClick={() => { setSettingsSection("account"); setShowSettings(true); }}
             className="mobile-account-action md:hidden"
             aria-label="Ouvrir les réglages du compte"
           >
@@ -417,7 +427,13 @@ function CoachShell({ user, profile, clubId, signOut }) {
         <main className="flex-1 overflow-y-auto overflow-x-hidden pb-20 md:pb-0">
           <div key={viewKey} className="view-transition h-full">
             <Suspense fallback={<ViewLoader />}>
-              <ActiveView view={activeView} onNavigate={navigate} />
+              <ActiveView
+                view={activeView}
+                onNavigate={navigate}
+                club={club}
+                clubLoading={clubLoading}
+                coachActions={coachActions}
+              />
             </Suspense>
           </div>
         </main>
@@ -454,46 +470,27 @@ function CoachShell({ user, profile, clubId, signOut }) {
 
       {/* ── Modal invitation ─────────────────────────────────────────────── */}
       {showInvite && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 modal-backdrop"
-          onClick={e => e.target === e.currentTarget && setShowInvite(false)}>
-          <div className="rounded-2xl shadow-2xl w-full max-w-sm modal-content overflow-hidden"
-            style={{ background: "var(--c-surface)", border: "1px solid var(--c-border)" }}>
-            <div className="px-6 py-5 flex items-center justify-between" style={{ borderBottom: "1px solid var(--c-border)" }}>
-              <div>
-                <h3 className="text-[15px] font-bold" style={{ color: "var(--c-text-1)" }}>Inviter un athlète</h3>
-                <p className="text-[11.5px] mt-0.5" style={{ color: "var(--c-text-3)" }}>{clubName || "Ton club"}</p>
-              </div>
-              <button onClick={() => setShowInvite(false)} className="p-1.5 rounded-lg hover:bg-[var(--c-surface-3)] transition-colors">
-                <X size={16} style={{ color: "var(--c-text-3)" }} />
-              </button>
-            </div>
-            <div className="px-6 py-6">
-              <p className="text-[12.5px] mb-4" style={{ color: "var(--c-text-2)" }}>
-                Partage ce code — chaque athlète qui s'inscrit avec sera automatiquement rattaché à ton club, sans rien faire de ton côté.
-              </p>
-              {inviteCode ? (
-                <div className="flex items-center gap-2">
-                  <div className="flex-1 rounded-xl px-4 py-3 text-center"
-                    style={{ background: "var(--c-surface-2)", border: "1px solid var(--c-border-strong)" }}>
-                    <span className="text-[22px] font-bold" style={{ color: "var(--c-text-1)", letterSpacing: "0.12em" }}>
-                      {inviteCode}
-                    </span>
-                  </div>
-                  <button onClick={copyInviteCode}
-                    className="flex items-center justify-center w-12 h-12 rounded-xl flex-shrink-0 transition-all tap-feedback"
-                    style={{ background: copied ? "rgba(29,158,117,0.15)" : "var(--c-surface-2)", border: "1px solid var(--c-border-strong)" }}>
-                    {copied ? <Check size={16} color="#1D9E75" /> : <Copy size={15} style={{ color: "var(--c-text-2)" }} />}
-                  </button>
-                </div>
-              ) : (
-                <p className="text-[12px]" style={{ color: "var(--c-text-4)" }}>Chargement…</p>
-              )}
-            </div>
-          </div>
-        </div>
+        <InviteClubModal
+          clubName={club?.name}
+          inviteCode={club?.inviteCode}
+          onClose={() => setShowInvite(false)}
+        />
       )}
 
-      {showSettings && <AccountSettingsModal onClose={() => setShowSettings(false)} />}
+      {showDemo && (
+        <ClubDemoPreview
+          onClose={() => setShowDemo(false)}
+          onStart={() => { setShowDemo(false); navigate("planning"); }}
+        />
+      )}
+
+      {showSettings && (
+        <AccountSettingsModal
+          initialSection={settingsSection}
+          onClubUpdated={refreshClub}
+          onClose={() => setShowSettings(false)}
+        />
+      )}
     </div>
   );
 }
@@ -501,7 +498,12 @@ function CoachShell({ user, profile, clubId, signOut }) {
 // ─── App root ─────────────────────────────────────────────────────────────────
 export default function App() {
   const { user, profile, clubId, loading: authLoading, signOut, passwordRecovery } = useAuth();
-  const [showSignup, setShowSignup] = useState(false);
+  const inviteCodeFromUrl = useMemo(() => (
+    new URLSearchParams(globalThis.location?.search ?? "").get("invite")?.trim().toUpperCase() ?? ""
+  ), []);
+  const [showSignup, setShowSignup] = useState(Boolean(inviteCodeFromUrl));
+  const { club, loading: clubLoading, refresh: refreshClub } = useClubBranding(clubId);
+  const themeStyle = useMemo(() => getClubThemeVariables(club?.accentColor), [club?.accentColor]);
 
   if (authLoading) return <AuthLoader />;
   // Priorité absolue : tant qu'un nouveau mot de passe n'est pas défini après
@@ -509,10 +511,10 @@ export default function App() {
   if (passwordRecovery) return <ResetPasswordPage />;
   if (!user) {
     return showSignup
-      ? <SignupPage onBack={() => setShowSignup(false)} />
+      ? <SignupPage initialInviteCode={inviteCodeFromUrl} onBack={() => setShowSignup(false)} />
       : <LoginPage onSignupClick={() => setShowSignup(true)} />;
   }
-  if (profile?.role === "athlete") return <AthleteApp />;
+  if (profile?.role === "athlete") return <AthleteApp clubBrand={club} themeStyle={themeStyle} />;
   if (!profile) return <AuthLoader />;
 
   return (
@@ -521,6 +523,9 @@ export default function App() {
       profile={profile}
       clubId={clubId}
       signOut={signOut}
+      club={club}
+      clubLoading={clubLoading}
+      refreshClub={refreshClub}
     />
   );
 }

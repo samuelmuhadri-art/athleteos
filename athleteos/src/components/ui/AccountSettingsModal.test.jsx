@@ -45,6 +45,21 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe("AccountSettingsModal", () => {
+  it("ouvre directement l’identité du club et enregistre une couleur contrôlée", async () => {
+    const onClubUpdated = vi.fn();
+    render(<AccountSettingsModal onClose={vi.fn()} initialSection="club" onClubUpdated={onClubUpdated} />);
+
+    expect(screen.getByRole("tab", { name: "Club" }).getAttribute("aria-selected")).toBe("true");
+    await screen.findByText("Identité visuelle");
+    fireEvent.click(screen.getByRole("radio", { name: "Bleu performance" }));
+    fireEvent.click(screen.getByRole("button", { name: "Enregistrer l’identité" }));
+
+    await waitFor(() => expect(mocks.invoke).toHaveBeenCalledWith("admin-actions", {
+      body: expect.objectContaining({ action: "update_club_branding", accentColor: "#378ADD" }),
+    }));
+    expect(onClubUpdated).toHaveBeenCalledOnce();
+  });
+
   it("sépare Compte et Club et confirme avant d'invalider le code", async () => {
     render(<AccountSettingsModal onClose={vi.fn()} />);
     expect(screen.getByRole("dialog", { name: "Réglages" })).toBeTruthy();

@@ -4,10 +4,11 @@
 // ============================================================
 
 import { memo, useState, useMemo } from "react";
-import { ArrowLeft, HeartPulse } from "lucide-react";
+import { ArrowLeft, HeartPulse, Pencil, Trash2 } from "lucide-react";
 import { getAthleteMetricsForWeek } from "../utils/chargeCalculations";
 import { TABS, StatusBadge, ScoreRing } from "./athleteListShared";
 import { TabPerformances, TabCharge, TabEntrainements, TabBlessures, TabProfil } from "./AthleteProfileTabs";
+import { ConfirmDialog, InlineNotice, SegmentedTabs } from "../components/ui/premium";
 
 const AthleteProfile = memo(({ athlete, weeklyCharge, sessions, competitions, onBack, onAddRecord, onEditRequest, onDelete, onAddInjury, onUpdateInjury, onDeleteInjury }) => {
   const [activeTab,      setActiveTab]      = useState("performances");
@@ -22,7 +23,7 @@ const AthleteProfile = memo(({ athlete, weeklyCharge, sessions, competitions, on
   const handleDelete = async () => {
     setDeleting(true); setDeleteError(null);
     try { await onDelete(athlete.id); onBack(); }
-    catch { setDeleteError("Impossible de supprimer : cet athlète a des données liées."); setDeleting(false); }
+    catch { setDeleteError("Impossible de supprimer : cet athlète a des données liées."); setDeleting(false); setConfirmDelete(false); }
   };
 
   return (
@@ -35,38 +36,23 @@ const AthleteProfile = memo(({ athlete, weeklyCharge, sessions, competitions, on
         </button>
         <div className="flex items-center gap-2">
           <button type="button" onClick={() => onEditRequest(athlete)}
-            className="text-[12px] font-bold border rounded-xl min-h-10 px-3 transition-colors" style={{ color: "var(--c-text-2)", borderColor: "var(--c-border)", background: "transparent" }} onMouseEnter={e => e.currentTarget.style.background = "var(--c-surface-2)"} onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
-            ✏️ Modifier
+            className="btn-secondary">
+            <Pencil size={15} aria-hidden="true" /> Modifier
           </button>
-          {!confirmDelete ? (
-            <button type="button" onClick={() => setConfirmDelete(true)}
-              className="text-[12px] font-bold border rounded-xl min-h-10 px-3 transition-colors" style={{ color: "#F19A9A", borderColor: "rgba(226,75,74,0.3)", background: "transparent" }} onMouseEnter={e => e.currentTarget.style.background = "rgba(226,75,74,0.1)"} onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
-              🗑️ Supprimer
-            </button>
-          ) : (
-            <div className="flex items-center gap-2 border rounded-xl px-3 py-1.5" style={{ background: "rgba(226,75,74,0.1)", borderColor: "rgba(226,75,74,0.3)" }}>
-              <span className="text-[12px] font-semibold" style={{ color: "#F19A9A" }}>Confirmer ?</span>
-              <button type="button" onClick={handleDelete} disabled={deleting}
-                className="text-[12px] font-bold text-white rounded-lg px-2.5 py-1 disabled:opacity-50" style={{ background: "#E24B4A" }}>
-                {deleting ? "…" : "Oui"}
-              </button>
-              <button type="button" onClick={() => setConfirmDelete(false)} disabled={deleting}
-                className="text-[12px]" style={{ color: "var(--c-text-2)" }}>Non</button>
-            </div>
-          )}
+          <button type="button" onClick={() => setConfirmDelete(true)} className="btn-secondary athlete-profile-delete">
+            <Trash2 size={15} aria-hidden="true" /> Supprimer
+          </button>
         </div>
       </div>
 
       {deleteError && (
-        <div className="rounded-2xl px-4 py-3 text-[12.5px]" style={{ background: "rgba(226,75,74,0.1)", border: "1px solid rgba(226,75,74,0.3)", color: "#F19A9A" }}>
-          {deleteError}
-        </div>
+        <InlineNotice tone="danger" title="Suppression impossible" onDismiss={() => setDeleteError(null)}>{deleteError}</InlineNotice>
       )}
 
       {/* Hero banner */}
       <div
         className="rounded-3xl p-6 text-white relative overflow-hidden"
-        style={{ background: "linear-gradient(135deg, #1D9E75 0%, #0f7a5a 60%, #0a6048 100%)" }}
+        style={{ background: "linear-gradient(135deg, var(--c-accent) 0%, var(--c-accent-dark) 72%, #07120C 150%)" }}
       >
         <div className="absolute -right-10 -top-10 w-48 h-48 rounded-full bg-white/5" />
         <div className="relative flex items-start gap-5 flex-wrap">
@@ -120,30 +106,42 @@ const AthleteProfile = memo(({ athlete, weeklyCharge, sessions, competitions, on
       </div>
 
       {/* Tabs pill premium */}
-      <div className="flex gap-1 rounded-2xl border p-1.5 overflow-x-auto" style={{ background: "var(--c-surface)", borderColor: "var(--c-border)" }}>
-        {TABS.map(tab => {
-          const Icon     = tab.icon;
-          const isActive = activeTab === tab.id;
-          return (
-            <button type="button" key={tab.id} onClick={() => setActiveTab(tab.id)}
-              className={["flex items-center gap-2 px-4 min-h-10 rounded-xl text-[13px] font-bold whitespace-nowrap transition-all flex-1 justify-center tap-feedback", isActive ? "" : "hover:opacity-80"].join(" ")}
-              style={isActive ? { background: "#1D9E75", color: "#0A150F", boxShadow: "0 2px 8px rgba(29,158,117,0.30)" } : { color: "var(--c-text-3)", background: "transparent" }}
-            >
-              <Icon size={13} strokeWidth={isActive ? 2.5 : 2} />
-              {tab.label}
-            </button>
-          );
-        })}
-      </div>
+      <SegmentedTabs
+        className="aos-segmented-tabs--fill"
+        ariaLabel="Sections du profil athlète"
+        items={TABS.map((tab) => ({
+          ...tab,
+          tabId: `coach-athlete-tab-${tab.id}`,
+          panelId: "coach-athlete-tabpanel",
+        }))}
+        value={activeTab}
+        onChange={setActiveTab}
+      />
 
       {/* Contenu onglet */}
-      <div className="view-transition">
+      <div
+        id="coach-athlete-tabpanel"
+        role="tabpanel"
+        aria-labelledby={`coach-athlete-tab-${activeTab}`}
+        className="view-transition"
+      >
         {activeTab === "performances"  && <TabPerformances  athlete={athlete} competitions={competitions} onAddRecord={onAddRecord} />}
         {activeTab === "charge"        && <TabCharge        athlete={athlete} metrics={metrics} weeklyCharge={weeklyCharge} competitions={competitions} sessions={sessions} />}
         {activeTab === "entrainements" && <TabEntrainements athlete={athlete} sessions={sessions} />}
         {activeTab === "blessures"     && <TabBlessures     athlete={athlete} onAddInjury={onAddInjury} onUpdateInjury={onUpdateInjury} onDeleteInjury={onDeleteInjury} />}
         {activeTab === "profil"        && <TabProfil        athlete={athlete} />}
       </div>
+
+      <ConfirmDialog
+        open={confirmDelete}
+        title={`Supprimer ${athlete.name} ?`}
+        description="Le profil et ses données liées seraient retirés du club. Cette action reste volontairement protégée."
+        confirmLabel="Supprimer le profil"
+        loadingLabel="Suppression…"
+        loading={deleting}
+        onClose={() => setConfirmDelete(false)}
+        onConfirm={handleDelete}
+      />
     </div>
   );
 });

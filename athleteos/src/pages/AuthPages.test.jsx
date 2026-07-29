@@ -70,6 +70,13 @@ describe("LoginPage", () => {
 });
 
 describe("SignupPage", () => {
+  it("préremplit le club lorsqu’un athlète ouvre un lien d’invitation", () => {
+    render(<SignupPage onBack={vi.fn()} initialInviteCode="ab12cd34" />);
+
+    expect(screen.getByRole("button", { name: /Athlète.*Rejoindre mon club/i }).getAttribute("aria-pressed")).toBe("true");
+    expect(screen.getByLabelText("Code d’invitation").value).toBe("AB12CD34");
+  });
+
   it("rend le choix de rôle explicite et conserve le payload athlète existant", async () => {
     render(<SignupPage onBack={vi.fn()} />);
     fireEvent.click(screen.getByRole("button", { name: /Athlète.*Rejoindre mon club/i }));

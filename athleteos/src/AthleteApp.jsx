@@ -43,7 +43,7 @@ const ATHLETE_MOBILE_NAV_ITEMS = ATHLETE_MOBILE_ITEM_IDS.map((id) => (
   NAV_ITEMS.find((item) => item.id === id)
 ));
 
-export default function AthleteApp() {
+export default function AthleteApp({ clubBrand, themeStyle }) {
   const { profile, clubId, signOut } = useAuth();
 
   const { activeView, navigate, viewKey } = useUrlView(NAV_ITEM_IDS, "dashboard");
@@ -300,7 +300,8 @@ export default function AthleteApp() {
 
   return (
     <div className="flex h-screen overflow-hidden w-full"
-      style={{ background: "var(--c-bg)", fontFamily: "'DM Sans', system-ui, sans-serif" }}>
+      data-club-name={clubBrand?.name || undefined}
+      style={{ background: "var(--c-bg)", fontFamily: "'DM Sans', system-ui, sans-serif", ...themeStyle }}>
 
       {incomingNotification && (
         <NotificationBanner
@@ -319,6 +320,7 @@ export default function AthleteApp() {
           style={{ height: 64, borderBottom: "1px solid var(--c-border)" }}>
           <AthleteOSBadge size={32} title={null} />
           <AthleteOSWordmark size={14} />
+          {clubBrand?.logoUrl && <img className="club-shell-mark ml-auto" src={clubBrand.logoUrl} alt={`Logo ${clubBrand.name || "du club"}`} />}
         </div>
 
         {/* Nav items */}
@@ -404,7 +406,11 @@ export default function AthleteApp() {
           style={{ height: 56 }}>
           {/* Logo mobile */}
           <div className="flex md:hidden items-center gap-2.5">
-            <AthleteOSBadge size={28} title={null} />
+            {clubBrand?.logoUrl ? (
+              <img className="club-shell-mark" src={clubBrand.logoUrl} alt={`Logo ${clubBrand.name || "du club"}`} />
+            ) : (
+              <AthleteOSBadge size={28} title={null} />
+            )}
             <AthleteOSWordmark size={14} />
           </div>
           {/* Titre vue — desktop */}
@@ -491,7 +497,7 @@ export default function AthleteApp() {
             {activeView === "social" && (
               <AthleteClub
                 athlete={athlete} allAthletes={allAthletes}
-                clubId={clubId} sessions={sessions}
+                clubId={clubId} sessions={sessions} clubBrand={clubBrand}
               />
             )}
           </div>

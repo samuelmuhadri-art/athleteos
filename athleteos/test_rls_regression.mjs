@@ -24,6 +24,8 @@
 //      la bonne valeur pour le bon appelant, directement via REST.
 //   6. Le stockage de fichiers (storage.objects) refuse l'upload en
 //      dehors du dossier du club de l'appelant.
+//   7. L'identité visuelle du club est lisible par ses membres, mais ne
+//      peut jamais être modifiée directement en contournant admin-actions.
 //
 // Seed une ligne de test dans chacune des tables couvertes, se connecte
 // avec la clé anon (comme le fait vraiment le frontend) sous chaque
@@ -205,6 +207,28 @@ async function main() {
     {
       const { data, error } = await coachAClient.from("clubs").select("*").eq("id", clubA.id);
       record("SELECT clubs (club A, positif)", !error && (data ?? []).length === 1, error?.message);
+      record(
+        "SELECT clubs expose une identité visuelle rétrocompatible par défaut",
+        !error
+          && data?.[0]?.logo_path === null
+          && data?.[0]?.cover_path === null
+          && data?.[0]?.accent_color === "#1D9E75",
+        error?.message,
+      );
+    }
+    {
+      const { data, error } = await coachAClient
+        .from("clubs")
+        .update({ accent_color: "#378ADD" })
+        .eq("id", clubA.id)
+        .select();
+      const affected = !error && (data ?? []).length > 0;
+      const { data: persisted } = await admin.from("clubs").select("accent_color").eq("id", clubA.id).single();
+      record(
+        "UPDATE clubs direct refusé, même au head coach (passage obligatoire par admin-actions)",
+        !affected && persisted?.accent_color === "#1D9E75",
+        affected ? "couleur modifiée directement !" : "bloqué, OK",
+      );
     }
     {
       const { data, error } = await coachAClient.from("athletes").select("*").eq("id", athleteA.id);

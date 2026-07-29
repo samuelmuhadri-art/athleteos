@@ -30,6 +30,7 @@ import { ConfettiBurst, PerfTooltip, ProgressRing, RecordCard, GoalProgressBar }
 import AddPerfModal from "./AddPerfModal";
 import AddGoalModal from "./AddGoalModal";
 import AddCompModal from "./AddCompModal";
+import { SegmentedTabs } from "../../components/ui/premium";
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // COMPOSANT PRINCIPAL
@@ -415,8 +416,8 @@ export default function AthletePerfs({ athlete, competitions, myPerformances, my
   return (
     <div className="p-4 md:p-6 space-y-6 max-w-5xl mx-auto animate-slide-up">
 
-      <section className="card" style={{ position: "relative", overflow: "hidden", padding: 20, background: "linear-gradient(145deg, rgba(29,158,117,0.11), var(--c-surface) 48%, rgba(91,158,245,0.05))" }}>
-        <div aria-hidden="true" style={{ position: "absolute", width: 260, height: 260, right: -110, top: -150, borderRadius: "50%", background: "radial-gradient(circle, rgba(77,201,160,0.16), transparent 68%)" }} />
+      <section className="card" style={{ position: "relative", overflow: "hidden", padding: 20, background: "linear-gradient(145deg, rgba(var(--club-accent-rgb, 29, 158, 117), 0.11), var(--c-surface) 48%, rgba(91,158,245,0.05))" }}>
+        <div aria-hidden="true" style={{ position: "absolute", width: 260, height: 260, right: -110, top: -150, borderRadius: "50%", background: "radial-gradient(circle, rgba(var(--club-accent-rgb, 29, 158, 117), 0.16), transparent 68%)" }} />
         <div style={{ position: "relative", display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
           <div style={{ minWidth: 0 }}>
             <div style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "4px 9px", borderRadius: 99, background: "rgba(29,158,117,0.10)", border: "1px solid rgba(77,201,160,0.18)", marginBottom: 12 }}>
@@ -448,31 +449,28 @@ export default function AthletePerfs({ athlete, competitions, myPerformances, my
       </section>
 
       {/* ── TAB BAR ──────────────────────────────────────────────────────────── */}
-      <nav aria-label="Sections des performances" className="flex gap-1 rounded-2xl p-1.5 overflow-x-auto" style={{ background: "var(--c-surface)", border: "1px solid var(--c-border)" }}>
-        {PERF_TABS.map(tab => {
-          const TabIcon = tab.icon;
-          return (
-          <button key={tab.id} type="button" onClick={() => setActiveTab(tab.id)} aria-pressed={activeTab === tab.id}
-            className="flex-1 rounded-xl text-center transition-all tap-feedback"
-            style={{
-              minWidth: 116, minHeight: 44, padding: "0 14px", fontSize: 13, fontWeight: 700, whiteSpace: "nowrap",
-              display: "flex", alignItems: "center", justifyContent: "center", gap: 7,
-              background: activeTab === tab.id ? "rgba(29,158,117,0.16)" : "transparent",
-              color: activeTab === tab.id ? "#7BD8B4" : "var(--c-text-2)",
-              boxShadow: activeTab === tab.id ? "inset 0 0 0 1px rgba(77,201,160,0.22)" : "none",
-              border: "none", cursor: "pointer", flexShrink: 0,
-            }}>
-            <TabIcon size={15} aria-hidden="true" />
-            {tab.label}
-          </button>
-          );
-        })}
-      </nav>
+      <SegmentedTabs
+        className="aos-segmented-tabs--fill"
+        ariaLabel="Sections des performances"
+        items={PERF_TABS.map((tab) => ({
+          ...tab,
+          tabId: `athlete-perfs-tab-${tab.id}`,
+          panelId: "athlete-perfs-panel",
+        }))}
+        value={activeTab}
+        onChange={setActiveTab}
+      />
 
       {/* key={activeTab} force un remount à chaque changement d'onglet, ce qui
           déclenche .view-transition (fondu+glissement) au lieu d'un switch
           instantané — évite l'effet "ça saute" en cliquant sur les tabs. */}
-      <div key={activeTab} className="view-transition">
+      <div
+        key={activeTab}
+        id="athlete-perfs-panel"
+        role="tabpanel"
+        aria-labelledby={`athlete-perfs-tab-${activeTab}`}
+        className="view-transition"
+      >
       {/* ══════════════════════════════════════════════════════════════════════
           ONGLET RECORDS
          ══════════════════════════════════════════════════════════════════════ */}

@@ -2,9 +2,8 @@
 // ============================================================
 // AthleteOS — test_private_storage.mjs
 //
-// Vérifie en conditions réelles (tâche 8) que le bucket session-pdfs,
-// désormais privé, respecte les "Vérifications obligatoires" de la
-// tâche :
+// Vérifie en conditions réelles que les buckets privés session-pdfs et
+// club-branding respectent leurs frontières de club et de rôle :
 //   1. Upload coach autorisé (club A, dossier club A).
 //   2. Upload athlète autorisé (club A, dossier club A) — mêmes règles
 //      que le coach, c'est le comportement existant (auto-planification).
@@ -15,6 +14,9 @@
 //      est rejeté par le bucket (allowed_mime_types, contrôle serveur).
 //   + Limite de taille (file_size_limit) appliquée côté serveur.
 //   + Round-trip complet : upload → createSignedUrl → fetch → 200.
+//   6. club-branding : seul un head coach peut écrire/supprimer ; tous les
+//      membres du même club peuvent lire, jamais un autre club.
+//   7. club-branding : MIME image et limite de 5 Mo imposés par le bucket.
 //
 // Note honnête : Supabase Storage ne fait PAS de sniffing du contenu
 // réel du fichier, seulement du Content-Type déclaré à l'upload. Un
@@ -25,7 +27,7 @@
 // dépôt public anonyme (cf. tâche 8 : quarantaine/antivirus seulement
 // "si des documents externes sont acceptés à grande échelle" — non le cas).
 //
-// Crée deux clubs et deux comptes éphémères, nettoie tout à la fin.
+// Crée deux clubs et quatre comptes éphémères, nettoie tout à la fin.
 //
 // Usage :
 //   SUPABASE_SERVICE_ROLE_KEY=... node test_private_storage.mjs
@@ -85,17 +87,20 @@ async function makeUser(email, password, clubId, role, name) {
 }
 
 const PDF_BYTES = Buffer.from("%PDF-1.4\n%fake-test-pdf\n", "utf8");
+const PNG_BYTES = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
 
 async function main() {
   let clubA, clubB;
   const auths = [];
   const uploadedPaths = []; // nettoyage via admin, quel que soit le résultat des tests
+  const brandingPaths = [];
   const password = `Storage-Test-${RUN_ID}-Aa!`;
 
   try {
     clubA = await insertOrThrow("clubs", { name: `Storage Test Club A ${RUN_ID}` });
     clubB = await insertOrThrow("clubs", { name: `Storage Test Club B ${RUN_ID}` });
 
+    const headA    = await makeUser(`storage-test-heada-${RUN_ID}@example.invalid`,    password, clubA.id, "head_coach", "Head A"); auths.push(headA);
     const coachA   = await makeUser(`storage-test-coacha-${RUN_ID}@example.invalid`,   password, clubA.id, "coach",   "Coach A");   auths.push(coachA);
     const athleteA = await makeUser(`storage-test-athletea-${RUN_ID}@example.invalid`, password, clubA.id, "athlete", "Athlete A"); auths.push(athleteA);
     const athleteB = await makeUser(`storage-test-athleteb-${RUN_ID}@example.invalid`, password, clubB.id, "athlete", "Athlete B"); auths.push(athleteB);
@@ -183,12 +188,117 @@ async function main() {
       record("upload refusé (fichier > 30 Mo, limite serveur)", !!error, error ? "refusé, OK" : "AUTORISÉ !");
     }
 
+    // ── 6. club-branding : droits par rôle et isolation inter-club ───────
+    const brandPath = `${clubA.id}/${RUN_ID}-logo.png`;
+    {
+      const { error } = await headA.client.storage.from("club-branding").upload(
+        brandPath,
+        PNG_BYTES,
+        { contentType: "image/png" },
+      );
+      if (!error) brandingPaths.push(brandPath);
+      record("club-branding : upload head coach autorisé dans son club", !error, error?.message);
+    }
+    {
+      const { error } = await headA.client.storage.from("club-branding").update(
+        brandPath,
+        PNG_BYTES,
+        { contentType: "image/png" },
+      );
+      record("club-branding : remplacement head coach autorisé", !error, error?.message);
+    }
+    {
+      const forbiddenPath = `${clubA.id}/${RUN_ID}-coach.png`;
+      const { error } = await coachA.client.storage.from("club-branding").upload(
+        forbiddenPath,
+        PNG_BYTES,
+        { contentType: "image/png" },
+      );
+      if (!error) brandingPaths.push(forbiddenPath);
+      record("club-branding : upload refusé pour un simple coach", !!error, error ? "refusé, OK" : "AUTORISÉ !");
+    }
+    {
+      const forbiddenPath = `${clubA.id}/${RUN_ID}-athlete.png`;
+      const { error } = await athleteA.client.storage.from("club-branding").upload(
+        forbiddenPath,
+        PNG_BYTES,
+        { contentType: "image/png" },
+      );
+      if (!error) brandingPaths.push(forbiddenPath);
+      record("club-branding : upload refusé pour un athlète", !!error, error ? "refusé, OK" : "AUTORISÉ !");
+    }
+    {
+      const forbiddenPath = `${clubB.id}/${RUN_ID}-intrusion.png`;
+      const { error } = await headA.client.storage.from("club-branding").upload(
+        forbiddenPath,
+        PNG_BYTES,
+        { contentType: "image/png" },
+      );
+      if (!error) brandingPaths.push(forbiddenPath);
+      record("club-branding : head coach refusé dans le dossier d'un autre club", !!error, error ? "refusé, OK" : "AUTORISÉ !");
+    }
+    {
+      const { error } = await athleteA.client.storage.from("club-branding").createSignedUrl(brandPath, 60);
+      record("club-branding : lecture autorisée pour un membre du même club", !error, error?.message);
+    }
+    {
+      const { error } = await athleteB.client.storage.from("club-branding").createSignedUrl(brandPath, 60);
+      record("club-branding : lecture refusée depuis un autre club", !!error, error ? "refusée, OK" : "AUTORISÉE !");
+    }
+    {
+      const { data, error } = await athleteB.client.storage.from("club-branding").list(String(clubA.id));
+      const leaked = (data ?? []).length > 0;
+      record("club-branding : list() ne révèle rien à un autre club", !leaked, error?.message ?? `${data?.length ?? 0} fichier(s)`);
+    }
+    {
+      const res = await fetch(`${SUPABASE_URL}/storage/v1/object/public/club-branding/${brandPath}`);
+      record("club-branding : aucune URL publique permanente", res.status !== 200, `HTTP ${res.status}`);
+    }
+
+    // ── 7. club-branding : MIME et taille contrôlés par Storage ─────────
+    {
+      const forbiddenPath = `${clubA.id}/${RUN_ID}-fake.png`;
+      const { error } = await headA.client.storage.from("club-branding").upload(
+        forbiddenPath,
+        Buffer.from("<svg onload=alert(1)></svg>"),
+        { contentType: "image/svg+xml" },
+      );
+      if (!error) brandingPaths.push(forbiddenPath);
+      record("club-branding : SVG refusé par la liste MIME", !!error, error ? "refusé, OK" : "AUTORISÉ !");
+    }
+    {
+      const forbiddenPath = `${clubA.id}/${RUN_ID}-big.jpg`;
+      const bigImage = Buffer.alloc((5 * 1024 * 1024) + 1, 1);
+      const { error } = await headA.client.storage.from("club-branding").upload(
+        forbiddenPath,
+        bigImage,
+        { contentType: "image/jpeg" },
+      );
+      if (!error) brandingPaths.push(forbiddenPath);
+      record("club-branding : image > 5 Mo refusée", !!error, error ? "refusée, OK" : "AUTORISÉE !");
+    }
+    {
+      await coachA.client.storage.from("club-branding").remove([brandPath]);
+      const { data } = await headA.client.storage.from("club-branding").list(String(clubA.id), { search: `${RUN_ID}-logo.png` });
+      const stillExists = (data ?? []).some((item) => item.name === `${RUN_ID}-logo.png`);
+      record("club-branding : suppression refusée pour un simple coach", stillExists, stillExists ? "fichier conservé, OK" : "FICHIER SUPPRIMÉ !");
+    }
+    {
+      const { error } = await headA.client.storage.from("club-branding").remove([brandPath]);
+      const { data } = await headA.client.storage.from("club-branding").list(String(clubA.id), { search: `${RUN_ID}-logo.png` });
+      const stillExists = (data ?? []).some((item) => item.name === `${RUN_ID}-logo.png`);
+      const cleanupIndex = brandingPaths.indexOf(brandPath);
+      if (!error && !stillExists && cleanupIndex >= 0) brandingPaths.splice(cleanupIndex, 1);
+      record("club-branding : suppression head coach autorisée", !error && !stillExists, error?.message ?? (stillExists ? "fichier encore présent" : "supprimé, OK"));
+    }
+
   } finally {
     console.log("\nNettoyage...");
     // .storage.from(...).remove()/.upload() sont de vraies Promises (client
     // storage-js, pas le query builder postgrest-js) — .catch() est valide
     // ici, contrairement à admin.from(table)... (déjà rencontré tâches 3/4/14).
     if (uploadedPaths.length) await admin.storage.from("session-pdfs").remove(uploadedPaths).catch(() => {});
+    if (brandingPaths.length) await admin.storage.from("club-branding").remove(brandingPaths).catch(() => {});
     for (const u of auths) {
       if (!u) continue;
       await u.client.auth.signOut().catch(() => {});
@@ -207,7 +317,7 @@ async function main() {
     failed.forEach((f) => console.error(`  - ${f.name}${f.detail ? " : " + f.detail : ""}`));
     process.exit(1);
   }
-  console.log("\nStockage privé session-pdfs conforme.");
+  console.log("\nStockage privé session-pdfs et club-branding conforme.");
   process.exit(0);
 }
 

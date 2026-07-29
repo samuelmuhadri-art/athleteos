@@ -28,9 +28,10 @@ const SIGNUP_MODES = Object.freeze([
   },
 ]);
 
-export default function SignupPage({ onBack }) {
-  const [mode, setMode] = useState("create_club");
-  const [form, setForm] = useState({ name: "", email: "", password: "", clubName: "", inviteCode: "" });
+export default function SignupPage({ onBack, initialInviteCode = "" }) {
+  const normalizedInviteCode = initialInviteCode.trim().toUpperCase().slice(0, 8);
+  const [mode, setMode] = useState(normalizedInviteCode ? "join_club" : "create_club");
+  const [form, setForm] = useState({ name: "", email: "", password: "", clubName: "", inviteCode: normalizedInviteCode });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [honeypot, setHoneypot] = useState("");
