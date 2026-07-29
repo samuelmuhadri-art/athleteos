@@ -441,17 +441,17 @@ async function main() {
 
     // ── storage.objects : upload cantonné au dossier du club (tâche 6) ─────
     {
-      const forgedPath = `${clubB.id}/rls-test-forged-${RUN_ID}.txt`;
+      const forgedPath = `${clubB.id}/rls-test-forged-${RUN_ID}.pdf`;
       const { data, error } = await athleteXClient.storage.from("session-pdfs")
-        .upload(forgedPath, Buffer.from("forged"), { contentType: "text/plain" });
+        .upload(forgedPath, Buffer.from("%PDF-1.4\n%%EOF"), { contentType: "application/pdf" });
       const uploaded = !error && !!data;
       record("STORAGE upload session-pdfs (X force le dossier du club B)", !uploaded, uploaded ? "fichier uploadé !" : "bloqué, OK");
       if (uploaded) storagePathsToClean.push(forgedPath);
     }
     {
-      const ownPath = `${clubA.id}/rls-test-own-${RUN_ID}.txt`;
+      const ownPath = `${clubA.id}/rls-test-own-${RUN_ID}.pdf`;
       const { data, error } = await athleteXClient.storage.from("session-pdfs")
-        .upload(ownPath, Buffer.from("own"), { contentType: "text/plain" });
+        .upload(ownPath, Buffer.from("%PDF-1.4\n%%EOF"), { contentType: "application/pdf" });
       record("STORAGE upload session-pdfs (X dans le dossier de son propre club, positif)", !error && !!data, error?.message);
       if (!error) storagePathsToClean.push(ownPath);
     }
