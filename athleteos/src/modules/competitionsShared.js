@@ -66,41 +66,18 @@ export function dateToWeek(dateStr) {
 export function generateResultAnalysis(result, competition, athlete, weeklyCharge) {
   const week    = dateToWeek(competition.date);
   const metrics = getAthleteMetricsForWeek(athlete.id, weeklyCharge, week);
-  const { acwr, fatigue, readiness } = metrics;
+  const { load7, load28, variationPercent, wellnessScore } = metrics;
   const lines = [];
 
-  if (acwr > 1.3) {
-    lines.push(
-      `⚠️ ACWR de ${acwr.toFixed(2)} à la date de cette compétition (semaine ~${week}). ` +
-      `L'athlète était en phase de charge élevée — une performance en deçà du PR est normale et attendue dans ce contexte.`
-    );
-  } else if (acwr >= 0.8 && acwr <= 1.3) {
-    lines.push(
-      `✅ ACWR optimal à ${acwr.toFixed(2)} à la date de cette compétition. ` +
-      `L'athlète était dans une fenêtre de performance favorable.`
-    );
+  if (load7 != null && load28 != null) {
+    const variation = variationPercent == null ? "variation indisponible" : `${variationPercent >= 0 ? "+" : ""}${variationPercent} %`;
+    lines.push(`Contexte de charge à cette date : ${load7} unités sur 7 jours, ${load28} unités sur 28 jours (${variation} entre les moyennes quotidiennes). Cette observation ne prédit pas la performance ni le risque de blessure.`);
   } else {
-    lines.push(
-      `📉 ACWR bas (${acwr.toFixed(2)}) à la date de cette compétition. ` +
-      `L'athlète était en sous-charge — possibilité de déconditionnement léger.`
-    );
+    lines.push("Contexte de charge indisponible : l'historique quotidien n'est pas assez complet à cette date.");
   }
 
-  if (fatigue > 65) {
-    lines.push(
-      `Fatigue estimée à ${fatigue}/100 — niveau élevé. Le résultat doit être interprété avec prudence : ` +
-      `la fatigue accumulée peut masquer le vrai niveau de l'athlète.`
-    );
-  } else if (fatigue < 35) {
-    lines.push(
-      `Fatigue estimée à ${fatigue}/100 — athlète frais. Les conditions étaient réunies pour une bonne performance.`
-    );
-  }
-
-  if (readiness >= 70) {
-    lines.push(`Readiness estimé : ${readiness}/100 — l'athlète était prêt à performer.`);
-  } else if (readiness < 50) {
-    lines.push(`Readiness estimé : ${readiness}/100 — disponibilité physique limitée à cette date.`);
+  if (wellnessScore != null) {
+    lines.push(`Questionnaire de bien-être AthleteOS : ${wellnessScore}/100. Il s'agit d'un retour déclaré, pas d'un diagnostic de récupération.`);
   }
 
   const activeInjuries = athlete.injuries?.filter((inj) => {

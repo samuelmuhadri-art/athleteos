@@ -6,10 +6,11 @@
 import { memo, useMemo } from "react";
 import { ChevronRight, HeartPulse } from "lucide-react";
 import { getAthleteMetricsForWeek, getStatusLabel } from "../utils/chargeCalculations";
-import { scoreColor, acwrColor } from "./athleteListShared";
+import { getISOWeek } from "../utils/helpers.js";
+import { scoreColor } from "./athleteListShared";
 
 const AthleteCard = memo(({ athlete, weeklyCharge, onClick }) => {
-  const metrics        = useMemo(() => getAthleteMetricsForWeek(athlete.id, weeklyCharge), [athlete.id, weeklyCharge]);
+  const metrics        = useMemo(() => getAthleteMetricsForWeek(athlete.id, weeklyCharge, getISOWeek(new Date())), [athlete.id, weeklyCharge]);
   const { readiness, fatigue, acwr } = metrics;
   const status         = getStatusLabel(readiness, fatigue, acwr);
   const activeInjuries = athlete.injuries?.filter(i => i.status !== "résolu") ?? [];
@@ -60,9 +61,9 @@ const AthleteCard = memo(({ athlete, weeklyCharge, onClick }) => {
       {hasCharge ? (
         <div className="grid grid-cols-3 gap-2">
           {[
-            { label: "Readiness", value: readiness,       color: scoreColor(readiness)       },
-            { label: "Fatigue",   value: fatigue,         color: scoreColor(fatigue, true)   },
-            { label: "ACWR",      value: acwr.toFixed(2), color: acwrColor(acwr)             },
+            { label: "Bien-être", value: metrics.wellnessScore ?? "—", color: scoreColor(metrics.wellnessScore ?? 0) },
+            { label: "Charge 7j", value: metrics.load7 ?? "—", color: "#378ADD" },
+            { label: "Charge 28j", value: metrics.load28 ?? "—", color: "#A9CBFB" },
           ].map(s => (
             <div key={s.label} className="rounded-2xl p-2.5 text-center" style={{ background: "var(--c-surface-2)" }}>
               <p className="text-[18px] font-bold leading-tight" style={{ color: s.color }}>{s.value}</p>

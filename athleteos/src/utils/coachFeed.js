@@ -34,34 +34,25 @@ export function buildCoachFeed({ athletes, weeklyCharge, sessions, injuries, com
     if (hasCharge) {
       const metrics = getAthleteMetricsForWeek(athlete.id, weeklyCharge, currentWeek);
 
-      if (metrics.acwr > 1.5) {
+      if (metrics.variationPercent != null && Math.abs(metrics.variationPercent) >= 20) {
+        const direction = metrics.variationPercent > 0 ? "au-dessus" : "en dessous";
         items.push({
-          id: `acwr-crit-${athlete.id}`, priority: "critical", icon: "alert", color: "#E24B4A",
-          sentence: `${name} est en surcharge critique (ACWR ${metrics.acwr.toFixed(2)}) — hors de la zone habituelle, à examiner cette semaine.`,
-        });
-      } else if (metrics.acwr > 1.3) {
-        items.push({
-          id: `acwr-warn-${athlete.id}`, priority: "warning", icon: "activity", color: "#EF9F27",
-          sentence: `${name} approche la zone de surcharge (ACWR ${metrics.acwr.toFixed(2)}) — à surveiller cette semaine.`,
-        });
-      } else if (metrics.acwr < 0.8) {
-        items.push({
-          id: `acwr-low-${athlete.id}`, priority: "info", icon: "activity", color: "#378ADD",
-          sentence: `${name} est en sous-charge (ACWR ${metrics.acwr.toFixed(2)}) — risque de déconditionnement si ça se prolonge.`,
+          id: `load-variation-${athlete.id}`, priority: "info", icon: "activity", color: "#378ADD",
+          sentence: `${name} a une charge moyenne sur 7 jours ${Math.abs(metrics.variationPercent)} % ${direction} de sa moyenne sur 28 jours. Observation descriptive à mettre en contexte avec son retour.`,
         });
       }
 
       if (metrics.fatigue > 75) {
         items.push({
           id: `fatigue-${athlete.id}`, priority: "warning", icon: "zap", color: "#EF9F27",
-          sentence: `${name} affiche une fatigue élevée (${metrics.fatigue}/100) — envisage une séance allégée.`,
+          sentence: `${name} signale un bien-être faible dans le questionnaire AthleteOS — prends contact pour comprendre le contexte.`,
         });
       }
 
-      if (metrics.readiness >= 85 && metrics.acwr >= 0.8 && metrics.acwr <= 1.3) {
+      if (metrics.readiness >= 85) {
         items.push({
           id: `top-${athlete.id}`, priority: "positive", icon: "trending", color: "#1D9E75",
-          sentence: `${name} est en forme optimale (readiness ${metrics.readiness}/100) — bon moment pour une séance exigeante.`,
+          sentence: `${name} signale un bien-être élevé aujourd'hui (${metrics.readiness}/100).`,
         });
       }
     }
@@ -73,12 +64,12 @@ export function buildCoachFeed({ athletes, weeklyCharge, sessions, injuries, com
     const axisProfile = getAthleteAxisProfile(athlete.id, sessions, currentWeek);
     if (axisProfile) {
       const worst = Object.entries(axisProfile).sort((a, b) => b[1].score - a[1].score)[0];
-      if (worst && worst[1].score > 75) {
+      if (worst && worst[1].score >= 75) {
         const [axisId, axisData] = worst;
         const axis = LOAD_AXES[axisId];
         items.push({
-          id: `axis-${athlete.id}`, priority: "warning", icon: "activity", color: axisData.color,
-          sentence: `${name} a une charge ${axis.nounPhrase} nettement plus élevée que d'habitude cette semaine — ${axis.what}`,
+          id: `axis-${athlete.id}`, priority: "info", icon: "activity", color: axisData.color,
+          sentence: `${name} a surtout travaillé la dimension ${axis.nounPhrase} cette semaine — ${axis.what}`,
         });
       }
     }
@@ -105,23 +96,9 @@ export function buildCoachFeed({ athletes, weeklyCharge, sessions, injuries, com
     });
   });
 
-  // Compétition dans les 7 jours + athlète en zone de surcharge.
-  const in7Days = new Date(Date.now() + 7 * 86400000);
-  (competitions ?? []).forEach(comp => {
-    const compDate = new Date(comp.date);
-    if (compDate > in7Days || compDate < new Date()) return;
-    (comp.athleteIds ?? []).forEach(athleteId => {
-      const athlete = athletes.find(a => a.id === athleteId);
-      if (!athlete || !weeklyCharge.some(w => w.athleteId === athleteId)) return;
-      const metrics = getAthleteMetricsForWeek(athleteId, weeklyCharge, currentWeek);
-      if (metrics.acwr <= 1.3) return;
-      const days = Math.max(0, Math.round((compDate - new Date()) / 86400000));
-      items.push({
-        id: `comp-risk-${comp.id}-${athleteId}`, priority: "warning", icon: "trophy", color: "#EF9F27",
-        sentence: `${firstName(athlete.name)} dispute "${comp.name}" dans ${days === 0 ? "moins d'un jour" : `${days}j`}, en zone de surcharge (ACWR ${metrics.acwr.toFixed(2)}).`,
-      });
-    });
-  });
+  // Les compétitions restent visibles ailleurs dans le dashboard. Aucun
+  // signal de risque n'est généré automatiquement à partir d'un ratio de charge.
+  void competitions;
 
   return items.sort((a, b) => PRIORITY[a.priority] - PRIORITY[b.priority]);
 }

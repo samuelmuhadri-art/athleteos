@@ -12,6 +12,15 @@ const SessionModal = memo(({ session, athletes, onClose, onSetRpe, onSetStatus, 
   const [deleting,    setDeleting]    = useState(false);
   const [deleteError, setDeleteError] = useState(null);
   const [confirmDel,  setConfirmDel]  = useState(false);
+  const [durationDrafts, setDurationDrafts] = useState(() => Object.fromEntries(
+    (session.validations ?? []).map(validation => [
+      validation.athleteId,
+      validation.durationSource === "reported" && validation.actualDurationMinutes != null
+        ? String(validation.actualDurationMinutes)
+        : "",
+    ]),
+  ));
+  const [loadErrors, setLoadErrors] = useState({});
   const c      = colors(session.category);
   const status = sessionStatus(session);
 
@@ -27,8 +36,20 @@ const SessionModal = memo(({ session, athletes, onClose, onSetRpe, onSetStatus, 
 
   const pendingFeedback = session.athleteIds.filter(id => {
     const v = session.validations?.find(val => val.athleteId === id);
-    return v?.status == null;
+    return v?.status == null || ((v?.status === "done" || v?.status === "partial") && (
+      v?.rpe == null || v?.durationSource !== "reported" || v?.actualDurationMinutes == null
+    ));
   });
+
+  const submitRpe = (athleteId, rpe) => {
+    const duration = Number(durationDrafts[athleteId]);
+    if (!Number.isFinite(duration) || duration <= 0 || duration > 1440) {
+      setLoadErrors(previous => ({ ...previous, [athleteId]: "Durée réelle requise (1 à 1 440 min)." }));
+      return;
+    }
+    setLoadErrors(previous => ({ ...previous, [athleteId]: "" }));
+    onSetRpe(session.id, athleteId, rpe, duration);
+  };
 
   return (
     <div
@@ -136,13 +157,36 @@ const SessionModal = memo(({ session, athletes, onClose, onSetRpe, onSetStatus, 
                       </div>
                       {v?.status && v.status !== "none" && (
                         <div>
+                          <label className="meta-text font-bold uppercase tracking-wide mb-1.5 block" htmlFor={`duration-${id}`}>
+                            Durée réellement effectuée
+                          </label>
+                          <div className="flex items-center gap-2 mb-3">
+                            <input
+                              id={`duration-${id}`}
+                              type="number"
+                              min="1"
+                              max="1440"
+                              inputMode="numeric"
+                              value={durationDrafts[id] ?? ""}
+                              onChange={event => {
+                                setDurationDrafts(previous => ({ ...previous, [id]: event.target.value }));
+                                setLoadErrors(previous => ({ ...previous, [id]: "" }));
+                              }}
+                              placeholder={session.durationMinutes ? String(session.durationMinutes) : "Minutes"}
+                              className="input-premium"
+                              style={{ width: 120 }}
+                            />
+                            <span className="text-[12px]" style={{ color: "var(--c-text-2)" }}>
+                              min{session.durationMinutes ? ` · prévu ${session.durationMinutes}` : ""}
+                            </span>
+                          </div>
                           <p className="meta-text font-bold uppercase tracking-wide mb-1.5">RPE</p>
                           <div className="flex gap-1 flex-wrap">
                             {Array.from({ length: 11 }, (_, i) => {
                               const sel = v?.rpe === i;
                               const rpeColor = i <= 3 ? "#3DBE8B" : i <= 6 ? "#EAB308" : "#EF6B6B";
                               return (
-                                <button key={i} onClick={() => onSetRpe(session.id, id, i)}
+                                <button key={i} onClick={() => submitRpe(id, i)}
                                   className="w-9 h-9 rounded-xl text-[12px] font-bold border-2 transition-all tap-feedback"
                                   style={sel
                                     ? { background: rpeColor, borderColor: rpeColor, color: "#0A150F" }
@@ -151,6 +195,7 @@ const SessionModal = memo(({ session, athletes, onClose, onSetRpe, onSetStatus, 
                               );
                             })}
                           </div>
+                          {loadErrors[id] && <p role="alert" className="text-[12px] mt-2" style={{ color: "#F19A9A" }}>{loadErrors[id]}</p>}
                         </div>
                       )}
                     </div>

@@ -12,7 +12,7 @@ import {
 } from "lucide-react";
 import { LineChart, Line, ResponsiveContainer } from "recharts";
 import { supabase } from "../../utils/supabaseClient";
-import { CATEGORIES, colorsFor, acwrColor } from "../shared";
+import { CATEGORIES, colorsFor } from "../shared";
 import { getRPELabel } from "../../utils/chargeCalculations";
 import { parseLocalDate } from "../../utils/helpers";
 import {
@@ -74,13 +74,13 @@ function WeekReportDetail({ report }) {
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 8 }}>
         <div style={{ padding: "12px 10px", borderRadius: 14, background: "var(--c-surface-2)", border: "1px solid var(--c-border)", textAlign: "center" }}>
-          <p style={{ fontSize: 12, fontWeight: 700, color: "var(--c-text-2)", textTransform: "uppercase", letterSpacing: "0.05em" }}>Charge aiguë</p>
+          <p style={{ fontSize: 12, fontWeight: 700, color: "var(--c-text-2)", textTransform: "uppercase", letterSpacing: "0.05em" }}>EWMA courte</p>
           <p style={{ fontSize: 19, fontWeight: 700, color: "var(--c-text-1)", marginTop: 4 }}>{stats.total > 0 ? metrics.acute : "—"}</p>
         </div>
         <div style={{ padding: "12px 10px", borderRadius: 14, background: "var(--c-surface-2)", border: "1px solid var(--c-border)", textAlign: "center" }}>
-          <p style={{ fontSize: 12, fontWeight: 700, color: "var(--c-text-2)", textTransform: "uppercase", letterSpacing: "0.05em" }}>ACWR</p>
-          <p style={{ fontSize: 19, fontWeight: 700, color: stats.total > 0 ? acwrColor(metrics.acwr) : "var(--c-text-1)", marginTop: 4 }}>
-            {stats.total > 0 ? metrics.acwr.toFixed(2) : "—"}
+          <p style={{ fontSize: 12, fontWeight: 700, color: "var(--c-text-2)", textTransform: "uppercase", letterSpacing: "0.05em" }}>Charge 7 jours</p>
+          <p style={{ fontSize: 19, fontWeight: 700, color: "#A9CBFB", marginTop: 4 }}>
+            {stats.total > 0 ? (metrics.load7 ?? "—") : "—"}
           </p>
         </div>
         <div style={{ padding: "12px 10px", borderRadius: 14, background: "var(--c-surface-2)", border: "1px solid var(--c-border)", textAlign: "center" }}>

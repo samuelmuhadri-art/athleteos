@@ -196,6 +196,8 @@ function Performances() {
         if (!chargeRes.error) {
           weeklyChargeComputed = (chargeRes.data ?? []).map((c) => ({
             athleteId: c.athlete_id, week: c.week, rawLoad: c.raw_load,
+            dailyLoads: c.daily_loads ?? [], knownDays: c.known_days ?? 0,
+            unknownDays: c.unknown_days ?? 0, estimatedDays: c.estimated_days ?? 0,
           }));
         }
       }

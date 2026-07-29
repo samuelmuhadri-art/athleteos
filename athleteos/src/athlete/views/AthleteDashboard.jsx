@@ -20,10 +20,9 @@ import {
 } from "../../utils/chargeCalculations";
 import { getAthleteAxisProfile } from "../../utils/loadAxes";
 import {
-  getISOWeek, dimColor, acwrColor, colorsFor, parsePerf, isSameDay, parseLocalDate,
-  initialsFromName, getDiscHib, DISC_TYPE_COLORS, WELLNESS_QUESTIONS, METRIC_SCIENCE, EVIDENCE_LEVELS,
+  getISOWeek, dimColor, colorsFor, parsePerf, isSameDay, parseLocalDate,
+  initialsFromName, getDiscHib, DISC_TYPE_COLORS, WELLNESS_QUESTIONS, EVIDENCE_LEVELS,
 } from "../shared";
-import FormeDetailPanel from "../components/FormeDetailPanel";
 import AxisRadarCard from "../../components/ui/AxisRadarCard";
 import { SessionDetailModal } from "./AthletePlanning";
 import { openSessionPdf } from "../../utils/storage";
@@ -86,10 +85,10 @@ function computeBadges({ athlete, weeklyCharge, sessions, competitions, myPerfor
 
   const optW = (weeklyCharge.filter(w=>w.athleteId===athlete.id)).filter(w => {
     const m = getAthleteMetricsForWeek(athlete.id, weeklyCharge, w.week);
-    return m.acwr >= 0.8 && m.acwr <= 1.3;
+    return m.variationPercent != null && Math.abs(m.variationPercent) <= 20;
   }).length;
-  if (optW >= 3) add("aw3","Équilibré","3 sem. optimales","#1D9E75","check");
-  if (optW >= 8) add("aw8","Maestro",  "8 sem. optimales","#7C67C8","star");
+  if (optW >= 3) add("aw3","Régulier","3 fenêtres stables","#1D9E75","check");
+  if (optW >= 8) add("aw8","Maestro", "8 fenêtres stables","#7C67C8","star");
 
   if (streak < 3)         addLocked("l1","En feu",      `${3-streak} sem. de plus`);
   if (totalDone < 10)     addLocked("l2","Régulier",    `${10-totalDone} séance(s)`);
@@ -171,7 +170,7 @@ const ReadinessRing = memo(({ value, color, size = 128 }) => {
           {displayValue}
         </span>
         <span style={{ fontSize: "var(--text-meta)", fontWeight: 600, letterSpacing: "0.07em", textTransform: "uppercase", color: "var(--c-text-3)", marginTop: "var(--space-1)" }}>
-          Readiness
+          Bien-être
         </span>
       </div>
     </div>
@@ -189,7 +188,7 @@ const DailyFocusCard = memo(({
   const presentation = focus.kind === "wellness" ? {
     eyebrow: "Étape suivante",
     title: "Check-in du matin",
-    description: "30 secondes pour fiabiliser ton Readiness et donner le bon contexte à ton coach.",
+    description: "30 secondes pour décrire ton ressenti du jour et donner du contexte à ton coach.",
     cta: "Faire mon check-in",
     color: "var(--color-success)",
     icon: Activity,
@@ -360,7 +359,7 @@ export default function AthleteDashboard({
     if (!myCharge.length) return [];
     return [...myCharge].sort((a, b) => a.week - b.week).slice(-8).map(w => ({
       label: `S${w.week}`, charge: w.rawLoad,
-      color: w.rawLoad >= 450 ? "#C0392B" : w.rawLoad >= 320 ? "#C8890A" : "#1D9E75",
+      color: "#4B7BDB",
     }));
   }, [weeklyCharge, athlete.id]);
 
@@ -410,18 +409,7 @@ export default function AthleteDashboard({
   const doneThisWeek = weekSessions.filter(s =>
     s.validations?.find(v => v.athleteId === athlete.id && v.status === "done")).length;
 
-  const [activeMetric, setActiveMetric] = useState(null);
-
-  const statusColor =
-    metrics.acwr > 1.3 || metrics.readiness < 50 ? "#C0392B" :
-    metrics.acwr > 1.15 || metrics.fatigue > 60   ? "#C8890A" :
-    "#1D9E75";
-
-  const acwrPct = Math.min(94, Math.max(2, (metrics.acwr / 2) * 100));
-
-  const readinessThreshold = METRIC_SCIENCE.readiness.thresholds.find(
-    t => metrics.readiness >= t.min && metrics.readiness <= t.max
-  );
+  const statusColor = metrics.wellnessScore == null ? "#64748B" : metrics.wellnessScore < 40 ? "#C8890A" : "#1D9E75";
 
   // ══════════════════════════════════════════════════════════════════════════
   return (
@@ -477,28 +465,26 @@ export default function AthleteDashboard({
               background: `${statusColor}12`, border: `1px solid ${statusColor}22`,
             }}>
               <div style={{ width: 5, height: 5, borderRadius: "50%", background: statusColor, flexShrink: 0 }} />
-              <span style={{ fontSize: "var(--text-meta)", fontWeight: 600, color: statusColor }}>Readiness {metrics.readiness}</span>
+              <span style={{ fontSize: "var(--text-meta)", fontWeight: 600, color: statusColor }}>Bien-être {metrics.wellnessScore ?? "—"}</span>
             </div>
           </div>
 
           {/* Ring héro — readiness, LE chiffre qui compte le plus, avec le
               reste (fatigue/ACWR/streak) en soutien à côté */}
           <div style={{ display: "flex", alignItems: "center", gap: 18, flexWrap: "wrap" }}>
-            <ReadinessRing value={metrics.readiness} color={dimColor("readiness", metrics.readiness)} />
+            <ReadinessRing value={metrics.wellnessScore ?? 0} color={statusColor} />
 
             <div style={{ flex: 1, minWidth: 190 }}>
-              {readinessThreshold && (
-                <p style={{ fontSize: "var(--text-body)", color: "var(--c-text-2)", lineHeight: "var(--leading-body)", marginBottom: "var(--space-4)" }}>
-                  {readinessThreshold.advice}
-                </p>
-              )}
+              <p style={{ fontSize: "var(--text-body)", color: "var(--c-text-2)", lineHeight: "var(--leading-body)", marginBottom: "var(--space-4)" }}>
+                Ton questionnaire décrit ton ressenti du jour. Il ne prédit pas à lui seul ta récupération ou ta performance.
+              </p>
               <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 8 }}>
                 {[
-                  { key: "fatigue", label: "Fatigue", value: metrics.fatigue,         unit: "",     pct: metrics.fatigue,        danger: metrics.fatigue > 70 },
-                  { key: "acwr",    label: "ACWR",     value: metrics.acwr.toFixed(2),unit: "",     pct: Math.min(100,(metrics.acwr/2)*100), danger: metrics.acwr > 1.3 },
+                  { key: "load7", label: "Charge 7j", value: metrics.load7 ?? "—", unit: "", pct: metrics.load7 && metrics.load28 ? Math.min(100,(metrics.load7/metrics.load28)*100) : 0, danger: false },
+                  { key: "load28", label: "Charge 28j", value: metrics.load28 ?? "—", unit: "", pct: metrics.load28 ? 100 : 0, danger: false },
                   { key: "streak",  label: "Streak",   value: streak,                  unit: " sem", pct: Math.min(100,streak*10), danger: false },
                 ].map(s => {
-                  const col = dimColor(s.key, s.key === "acwr" ? metrics.acwr : Number(s.value));
+                  const col = s.key === "streak" ? dimColor("streak", Number(s.value)) : "#5B8DEF";
                   return (
                     <div key={s.key} className={s.danger ? "pulse-danger-card" : undefined} style={{
                       background: "rgba(255,255,255,0.03)", border: "0.5px solid rgba(255,255,255,0.055)",
@@ -604,7 +590,7 @@ export default function AthleteDashboard({
                 <div>
                   <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
                     <p className="card-title">Charge d'entraînement</p>
-                    <span className={`chip ${EVIDENCE_LEVELS.validated.chip}`}>ACWR validé</span>
+                    <span className={`chip ${EVIDENCE_LEVELS.statistical.chip}`}>session-RPE</span>
                   </div>
                   <p className="card-subtitle">8 dernières semaines</p>
                 </div>
@@ -671,9 +657,9 @@ export default function AthleteDashboard({
               {/* Métriques inline sous le graphe — pas de cards séparées */}
               <div style={{ padding: "12px 16px", display: "flex", alignItems: "center", gap: 0, borderTop: "1px solid var(--c-border)", marginTop: 4 }}>
                 {[
-                  { label: "ACWR",      value: metrics.acwr.toFixed(2), color: acwrColor(metrics.acwr), sub: "0.8–1.3 optimal" },
-                  { label: "Aiguë",     value: metrics.acute,           color: "#4B7BDB",               sub: "4 sem." },
-                  { label: "Chronique", value: metrics.chronic,         color: "var(--c-text-3)",               sub: "12 sem." },
+                  { label: "7 jours", value: metrics.load7 ?? "—", color: "#4B7BDB", sub: "somme" },
+                  { label: "28 jours", value: metrics.load28 ?? "—", color: "#14B8A6", sub: "somme" },
+                  { label: "Variation", value: metrics.variationPercent == null ? "—" : `${metrics.variationPercent >= 0 ? "+" : ""}${metrics.variationPercent}%`, color: "var(--c-text-2)", sub: "moy. 7j vs 28j" },
                 ].map((s, idx) => (
                   <div key={s.label} style={{
                     flex: 1, textAlign: "center", paddingTop: 2, paddingBottom: 2,
@@ -690,24 +676,9 @@ export default function AthleteDashboard({
                 ))}
               </div>
 
-              {/* Réglette ACWR */}
+              {/* Information méthodologique */}
               <div style={{ padding: "0 16px 14px" }}>
-                <div style={{ display: "flex", justifyContent: "space-between", fontSize: "var(--text-meta)", color: "var(--c-text-3)", marginBottom: 6 }}>
-                  <span>Sous-charge</span>
-                  <span style={{ color: "#1D9E75", fontWeight: 500 }}>Zone optimale</span>
-                  <span>Surcharge</span>
-                </div>
-                <div style={{ position: "relative", height: 5, borderRadius: 99, background: "linear-gradient(to right, #4B7BDB 0%, #1D9E75 38%, #1D9E75 62%, #C8890A 78%, #C0392B 100%)" }}>
-                  <div style={{
-                    position: "absolute", top: "50%", transform: "translate(-50%, -50%)",
-                    left: `${acwrPct}%`, width: 11, height: 11, borderRadius: "50%",
-                    background: "white", boxShadow: "0 1px 4px rgba(0,0,0,0.25)",
-                    transition: "left 0.7s cubic-bezier(0.16,1,0.3,1)",
-                  }} />
-                </div>
-                <div style={{ display: "flex", justifyContent: "space-between", fontSize: "var(--text-meta)", color: "var(--c-text-3)", marginTop: 4 }}>
-                  <span>0</span><span>0.8</span><span>1.3</span><span>2.0</span>
-                </div>
+                <p style={{ fontSize: "var(--text-meta)", color: "var(--c-text-2)", lineHeight: 1.5 }}>Charge = durée réellement effectuée × RPE CR10. Les variations sont descriptives et ne correspondent pas à des zones de risque.</p>
               </div>
             </div>
           )}
@@ -728,20 +699,19 @@ export default function AthleteDashboard({
               <p className="card-subtitle mb-4">Basé sur ta charge réelle</p>
               <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                 {[
-                  { key: "readiness",    label: "Readiness"       },
-                  { key: "forme",        label: "Forme"           },
-                  { key: "fatigue",      label: "Fatigue"         },
-                  { key: "recuperation", label: "Récupération"    },
-                  { key: "risque",       label: "Signal de charge" },
+                  { key: "readiness", label: "Bien-être déclaré", value: metrics.wellnessScore, color: "#1D9E75" },
+                  { key: "forme", label: "Charge sur 7 jours", value: metrics.load7, color: "#4B7BDB" },
+                  { key: "fatigue", label: "Charge sur 28 jours", value: metrics.load28, color: "#14B8A6" },
+                  { key: "recuperation", label: "EWMA courte", value: metrics.acute == null ? null : Math.round(metrics.acute), color: "#A855F7" },
+                  { key: "risque", label: "EWMA longue", value: metrics.chronic == null ? null : Math.round(metrics.chronic), color: "#EC4899" },
                 ].map(s => {
-                  const val    = metrics[s.key];
-                  const col    = dimColor(s.key, val);
-                  const sci    = METRIC_SCIENCE[s.key];
-                  const thresh = sci?.thresholds.find(t => val >= t.min && val <= t.max);
+                  const val = s.value;
+                  const col = s.color;
+                  const thresh = null;
                   return (
-                    <button key={s.key} onClick={() => setActiveMetric(s.key)}
+                    <div key={s.key}
                       className="tap-feedback"
-                      style={{ background: "var(--c-surface-2)", borderRadius: 10, padding: "10px 12px", textAlign: "left", border: "none", cursor: "pointer", transition: "background 0.15s ease", width: "100%" }}>
+                      style={{ background: "var(--c-surface-2)", borderRadius: 10, padding: "10px 12px", textAlign: "left", border: "none", transition: "background 0.15s ease", width: "100%" }}>
                       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: 7 }}>
                         <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
                           <span style={{ fontSize: 12.5, fontWeight: 400, color: "var(--c-text-1)" }}>{s.label}</span>
@@ -753,14 +723,13 @@ export default function AthleteDashboard({
                         </div>
                         <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
                           <span style={{ fontSize: 14, fontWeight: 600, color: col, fontVariantNumeric: "tabular-nums", letterSpacing: "-0.02em" }}>{val}</span>
-                          <ChevronRight size={11} color="var(--c-text-3)" />
                         </div>
                       </div>
                       {/* Barre 3px */}
                       <div style={{ height: 3, background: "rgba(255,255,255,0.07)", borderRadius: 99, overflow: "hidden" }}>
                         <div style={{ height: "100%", width: `${val}%`, background: col, borderRadius: 99, transition: "width 0.8s cubic-bezier(0.16,1,0.3,1)" }} />
                       </div>
-                    </button>
+                    </div>
                   );
                 })}
               </div>
@@ -1054,14 +1023,6 @@ export default function AthleteDashboard({
           )}
         </div>
       </div>
-
-      {activeMetric && (
-        <FormeDetailPanel
-          metricKey={activeMetric} metrics={metrics}
-          sessions={sessions} weeklyCharge={weeklyCharge}
-          athlete={athlete} onClose={() => setActiveMetric(null)}
-        />
-      )}
 
       {openedTodaySession && (
         <SessionDetailModal

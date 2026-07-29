@@ -16,7 +16,6 @@ import { useAuth }   from "../context/AuthContext";
 import LoadingState  from "../components/ui/LoadingState";
 import ErrorState    from "../components/ui/ErrorState";
 import { SegmentedTabs } from "../components/ui/premium";
-import { LOAD_COEFFICIENTS } from "../utils/trainingLoad";
 import { initialsFromName } from "../utils/helpers.js";
 import {
   alertSessionAbsence,
@@ -92,6 +91,8 @@ function Planning() {
             athleteId: v.athlete_id, status: v.status,
             feeling: v.feeling, fatigue: v.fatigue,
             comment: v.comment, rpe: v.rpe,
+            actualDurationMinutes: v.actual_duration_minutes,
+            durationSource: v.duration_source,
           })),
         };
       }));
@@ -116,7 +117,7 @@ function Planning() {
         description: form.description || null,
         instructions: form.instructions || null,
         duration_minutes: form.durationMinutes,
-        load_weight: LOAD_COEFFICIENTS[form.category] ?? 1.0,
+        load_weight: 1.0,
         pdf_url: form.pdfUrl ?? null,
       })
       .select().single();
@@ -137,7 +138,7 @@ function Planning() {
       time: form.time, type: form.type, category: form.category, title: form.title,
       description: form.description || null, instructions: form.instructions || null,
       duration_minutes: form.durationMinutes,
-      load_weight: LOAD_COEFFICIENTS[form.category] ?? 1.0,
+      load_weight: 1.0,
       pdf_url: form.pdfUrl ?? null,
     }).eq("id", sessionId);
     if (sessionError) throw sessionError;
@@ -166,11 +167,17 @@ function Planning() {
     await fetchAll();
   }, [fetchAll, sessionList]);
 
-  const setRpe = useCallback(async (sessionId, athleteId, rpe) => {
+  const setRpe = useCallback(async (sessionId, athleteId, rpe, actualDurationMinutes) => {
+    const duration = Number(actualDurationMinutes);
+    if (!Number.isFinite(duration) || duration <= 0 || duration > 1440) return;
     setSessionList(prev => prev.map(s => s.id !== sessionId ? s : {
-      ...s, validations: s.validations.map(v => v.athleteId === athleteId ? { ...v, rpe } : v),
+      ...s, validations: s.validations.map(v => v.athleteId === athleteId ? {
+        ...v, rpe, actualDurationMinutes: duration, durationSource: "reported",
+      } : v),
     }));
-    await supabase.from("session_athletes").update({ rpe }).eq("session_id", sessionId).eq("athlete_id", athleteId);
+    await supabase.from("session_athletes").update({
+      rpe, actual_duration_minutes: duration, duration_source: "reported",
+    }).eq("session_id", sessionId).eq("athlete_id", athleteId);
   }, []);
 
   const setStatus = useCallback(async (sessionId, athleteId, status) => {
@@ -257,7 +264,7 @@ function Planning() {
     return {
       title: s.title, type: s.type, category: s.category,
       day: s.day, time: s.time, week: s.week,
-      durationMinutes: s.durationMinutes ?? 60,
+      durationMinutes: s.durationMinutes ?? "",
       description: s.description ?? "", instructions: s.instructions ?? "",
       athleteIds: s.athleteIds, pdfUrl: s.pdfUrl ?? null,
       sessionDate: s.sessionDate?.slice(0, 10) ?? "",

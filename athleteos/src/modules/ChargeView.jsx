@@ -11,7 +11,7 @@ import { memo, useMemo, useState, useEffect, useCallback } from "react";
 import {
   LineChart, Line, AreaChart, Area,
   XAxis, YAxis, Tooltip, ResponsiveContainer,
-  CartesianGrid, ReferenceLine, Legend,
+  CartesianGrid, Legend,
 } from "recharts";
 import {
   Activity, TrendingUp, TrendingDown, Minus,
@@ -56,15 +56,13 @@ function getRawLoad(weeklyCharge, athleteId, week) {
 }
 
 function chargeColor(rawLoad) {
-  if (rawLoad >= 450) return "#E24B4A";
-  if (rawLoad >= 320) return "#EF9F27";
-  return "#1D9E75";
+  return rawLoad > 0 ? "#378ADD" : "#64748B";
 }
 
 function chargeLabel(rawLoad) {
-  if (rawLoad >= 450) return { dot: "🔴", label: "Surcharge",  cls: "bg-[rgba(224,82,82,0.15)] text-[#E05252]"  };
-  if (rawLoad >= 320) return { dot: "🟡", label: "Modéré",     cls: "bg-[rgba(232,160,32,0.15)] text-[#E8A020]" };
-  return                     { dot: "🟢", label: "Optimal",    cls: "bg-[rgba(29,158,117,0.15)] text-[#4DC9A0]" };
+  return rawLoad > 0
+    ? { dot: "●", label: "Observée", cls: "bg-[rgba(55,138,221,0.15)] text-[#A9CBFB]" }
+    : { dot: "○", label: "Aucune", cls: "bg-[rgba(100,116,139,0.15)] text-[#94A3B8]" };
 }
 
 function computeGroupACWRSeries(athletes, weeklyCharge) {
@@ -136,8 +134,8 @@ const MetricCard = memo(({ icon: Icon, label, value, sub, color, trend }) => (
   </div>
 ));
 
-const AlertSignals = memo(({ fatigueAlerts, acwrAlerts }) => {
-  const signalCount = fatigueAlerts.length + acwrAlerts.length;
+const AlertSignals = memo(({ fatigueAlerts }) => {
+  const signalCount = fatigueAlerts.length;
   return (
     <section className="card overflow-hidden" aria-labelledby="charge-signals-title">
       <div className="px-5 py-4 flex items-center justify-between gap-3 border-b" style={{ borderColor: "var(--c-border)" }}>
@@ -158,7 +156,7 @@ const AlertSignals = memo(({ fatigueAlerts, acwrAlerts }) => {
             <CheckCircle size={17} color="#1D9E75" />
           </div>
           <p className="text-[13px] font-medium" style={{ color: "var(--c-text-2)" }}>
-            Aucun signal critique détecté sur la fatigue ou l'ACWR cette semaine.
+            Aucun questionnaire de bien-être faible à examiner aujourd'hui.
           </p>
         </div>
       ) : (
@@ -167,15 +165,7 @@ const AlertSignals = memo(({ fatigueAlerts, acwrAlerts }) => {
             <div key={`f-${athlete.id}`} className="flex items-center gap-3 rounded-xl px-4 py-3" style={{ background: "rgba(224,82,82,0.10)", border: "1px solid rgba(224,82,82,0.20)" }}>
               <AlertTriangle size={15} color="#E24B4A" className="flex-shrink-0" />
               <span className="text-[12px]" style={{ color: "#F19A9A" }}>
-                <strong>{athlete.name.split(" ")[0]}</strong> — Fatigue élevée ({metrics.fatigue}/100)
-              </span>
-            </div>
-          ))}
-          {acwrAlerts.map(({ athlete, metrics }) => (
-            <div key={`a-${athlete.id}`} className="flex items-center gap-3 rounded-xl px-4 py-3" style={{ background: "rgba(232,160,32,0.10)", border: "1px solid rgba(232,160,32,0.20)" }}>
-              <Activity size={15} color="#EF9F27" className="flex-shrink-0" />
-              <span className="text-[12px]" style={{ color: "#F0CB61" }}>
-                <strong>{athlete.name.split(" ")[0]}</strong> — ACWR élevé ({metrics.acwr.toFixed(2)}) — hors de la zone habituelle, à examiner
+                <strong>{athlete.name.split(" ")[0]}</strong> — bien-être déclaré faible ({metrics.wellnessScore ?? "—"}/100). À contextualiser avec l'athlète.
               </span>
             </div>
           ))}
@@ -207,18 +197,15 @@ const MethodologyPanel = memo(() => {
           <p>
             La charge de chaque séance est calculée selon la méthode <strong>session-RPE</strong> :
             {" "}<code className="px-1.5 py-0.5 rounded text-[12px]" style={{ background: "var(--c-surface-3)" }}>Durée (min) × RPE (0–10)</code>,
-            où le RPE est le ressenti d'effort de l'athlète noté juste après la séance
-            (échelle de Borg CR10). Un coefficient par catégorie de séance ajuste ensuite cette valeur.
+            où la durée est celle réellement effectuée et le RPE le ressenti d'effort de l'athlète
+            (échelle CR10). Aucun coefficient de discipline ne modifie cette charge totale.
           </p>
           <p style={{ color: "var(--c-text-3)" }}>
             <strong>Références :</strong> Foster C. et al. (2001), <em>"A New Approach to Monitoring Exercise Training"</em>,
             Journal of Strength and Conditioning Research, 15(1) · Foster C. (1998), Medicine & Science in Sports & Exercise,
             30(7) · Borg G. (1998), Borg's Perceived Exertion and Pain Scales, Human Kinetics.
           </p>
-          <p className="italic" style={{ color: "var(--c-text-3)" }}>
-            Les coefficients par catégorie (ex : musculation ×1.3, technique ×0.7) sont un paramètre
-            d'ajustement pratique courant en planification sportive — calibrable par le coach.
-          </p>
+          <p className="italic" style={{ color: "var(--c-text-3)" }}>Les contraintes sprint, saut, lancer, force ou technique sont présentées séparément comme dimensions descriptives.</p>
         </div>
       )}
     </div>
@@ -260,7 +247,7 @@ function ChargeView() {
       const athleteIds = athletesRes.data.map((a) => a.id);
       const [sessionAthletesRes, weeklyChargeRes] = await Promise.all([
         sessionIds.length
-          ? supabase.from("session_athletes").select("session_id, athlete_id, rpe").in("session_id", sessionIds)
+          ? supabase.from("session_athletes").select("session_id, athlete_id, rpe, actual_duration_minutes, duration_source").in("session_id", sessionIds)
           : Promise.resolve({ data: [], error: null }),
         // Total hebdomadaire calculé côté serveur (vue weekly_charge, voir
         // migration 20260726120000). La ventilation par catégorie ci-dessous
@@ -287,13 +274,15 @@ function ChargeView() {
           category:        s.category,
           durationMinutes: s.duration_minutes,
           athleteIds:      rows.map((r) => r.athlete_id),
-          validations:     rows.map((r) => ({ athleteId: r.athlete_id, rpe: r.rpe })),
+          validations:     rows.map((r) => ({ athleteId: r.athlete_id, rpe: r.rpe, actualDurationMinutes: r.actual_duration_minutes, durationSource: r.duration_source })),
         };
       });
 
       setAthletes(remappedAthletes);
       setWeeklyCharge((weeklyChargeRes.data ?? []).map((c) => ({
         athleteId: c.athlete_id, week: c.week, rawLoad: c.raw_load,
+        dailyLoads: c.daily_loads ?? [], knownDays: c.known_days ?? 0,
+        unknownDays: c.unknown_days ?? 0, estimatedDays: c.estimated_days ?? 0,
       })));
       setSessionsForBreakdown(enrichedSessions);
     } catch (err) {
@@ -318,20 +307,20 @@ function ChargeView() {
   const hasAnyCharge = weeklyCharge.length > 0;
 
   const globalMetrics = useMemo(() => {
-    if (!allMetrics.length) return { avgLoad: 0, avgACWR: 0, topLoader: null, critFatigue: 0, trendLoad: 0 };
+    if (!allMetrics.length) return { avgLoad: 0, avgLoad7: null, topLoader: null, critFatigue: 0, trendLoad: 0 };
     const avgLoad      = Math.round(allMetrics.reduce((s, m) => s + m.rawLoad, 0) / allMetrics.length);
-    const avgACWR      = Math.round((allMetrics.reduce((s, m) => s + m.metrics.acwr, 0) / allMetrics.length) * 100) / 100;
+    const load7Values  = allMetrics.map(item => item.metrics.load7).filter(Number.isFinite);
+    const avgLoad7     = load7Values.length ? Math.round(load7Values.reduce((sum, value) => sum + value, 0) / load7Values.length) : null;
     const topLoader    = [...allMetrics].sort((a, b) => b.rawLoad - a.rawLoad)[0];
     const critFatigue  = allMetrics.filter((m) => m.metrics.fatigue > 75).length;
     const avgLoadPrev  = athletes.length
       ? Math.round(athletes.reduce((s, a) => s + getRawLoad(weeklyCharge, a.id, CURRENT_WEEK - 1), 0) / athletes.length)
       : 0;
-    return { avgLoad, avgACWR, topLoader, critFatigue, trendLoad: avgLoad - avgLoadPrev };
+    return { avgLoad, avgLoad7, topLoader, critFatigue, trendLoad: avgLoad - avgLoadPrev };
   }, [allMetrics, athletes, weeklyCharge, CURRENT_WEEK]);
 
   const acwrSeries       = useMemo(() => computeGroupACWRSeries(athletes, weeklyCharge), [athletes, weeklyCharge]);
   const fatigueAlerts    = useMemo(() => allMetrics.filter((m) => m.metrics.fatigue > 75), [allMetrics]);
-  const acwrAlerts       = useMemo(() => allMetrics.filter((m) => m.metrics.acwr > 1.3), [allMetrics]);
   const sortedByLoad     = useMemo(() => [...allMetrics].sort((a, b) => b.rawLoad - a.rawLoad), [allMetrics]);
   const maxLoad          = sortedByLoad[0]?.rawLoad ?? 1;
 
@@ -381,12 +370,12 @@ function ChargeView() {
           {/* ── KPIs globaux ─────────────────────────────────────────── */}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
             <MetricCard icon={BarChart2}   label="Charge moyenne groupe"  value={globalMetrics.avgLoad}              sub="unités"                                color="#378ADD" trend={globalMetrics.trendLoad} />
-            <MetricCard icon={Activity}    label="ACWR moyen groupe"      value={globalMetrics.avgACWR.toFixed(2)}   color={globalMetrics.avgACWR > 1.3 ? "#E24B4A" : globalMetrics.avgACWR < 0.8 ? "#378ADD" : "#1D9E75"} />
+            <MetricCard icon={Activity}    label="Charge moyenne sur 7j" value={globalMetrics.avgLoad7 ?? "—"} sub="jours connus uniquement" color="#14B8A6" />
             <MetricCard icon={Zap}         label="Athlète le plus chargé" value={globalMetrics.topLoader?.athlete.name.split(" ")[0] ?? "—"} sub={`${globalMetrics.topLoader?.rawLoad ?? 0} u`} color="#EF9F27" />
-            <MetricCard icon={AlertTriangle} label="Fatigue critique"      value={globalMetrics.critFatigue}        sub={`athlète${globalMetrics.critFatigue > 1 ? "s" : ""} > 75`} color={globalMetrics.critFatigue > 0 ? "#E24B4A" : "#1D9E75"} />
+            <MetricCard icon={AlertTriangle} label="Bien-être à revoir" value={globalMetrics.critFatigue} sub={`athlète${globalMetrics.critFatigue > 1 ? "s" : ""}`} color={globalMetrics.critFatigue > 0 ? "#EF9F27" : "#1D9E75"} />
           </div>
 
-          <AlertSignals fatigueAlerts={fatigueAlerts} acwrAlerts={acwrAlerts} />
+          <AlertSignals fatigueAlerts={fatigueAlerts} />
 
           {/* ── Tableau charge par athlète ───────────────────────────── */}
           <div className="card overflow-hidden">
@@ -395,18 +384,7 @@ function ChargeView() {
                 <h3 className="card-title">Charge calculée — Semaine {CURRENT_WEEK}</h3>
                 <p className="card-subtitle mt-0.5">Triée par charge décroissante · Basée sur durée × RPE</p>
               </div>
-              <div className="flex items-center gap-3 text-[12px]">
-                {[
-                  { color: "#1D9E75", label: "Optimal (< 320)"   },
-                  { color: "#EF9F27", label: "Modéré (320–449)"  },
-                  { color: "#E24B4A", label: "Surcharge (≥ 450)" },
-                ].map((l) => (
-                  <div key={l.label} className="flex items-center gap-1.5">
-                    <span className="w-2.5 h-2.5 rounded-sm" style={{ background: l.color }} />
-                    <span style={{ color: "var(--c-text-2)" }}>{l.label}</span>
-                  </div>
-                ))}
-              </div>
+              <p className="text-[12px]" style={{ color: "var(--c-text-2)" }}>Comparaison descriptive dans le groupe · aucun seuil de risque</p>
             </div>
 
             {sortedByLoad.every((m) => m.rawLoad === 0) ? (
@@ -450,16 +428,16 @@ function ChargeView() {
                         {badge.dot} {badge.label}
                       </span>
                       <div className="w-16 text-right flex-shrink-0">
-                        <p className="text-[12px] font-bold" style={{ color: metrics.acwr > 1.3 ? "#E24B4A" : metrics.acwr < 0.8 ? "#378ADD" : "#1D9E75" }}>
-                          {metrics.acwr.toFixed(2)}
+                        <p className="text-[12px] font-bold" style={{ color: "#A9CBFB" }}>
+                          {metrics.load7 ?? "—"}
                         </p>
-                        <p className="meta-text">ACWR</p>
+                        <p className="meta-text">7 jours</p>
                       </div>
                       <div className="w-16 text-right flex-shrink-0">
                         <p className="text-[12px] font-bold" style={{ color: metrics.fatigue > 70 ? "#E24B4A" : metrics.fatigue > 45 ? "#EF9F27" : "#1D9E75" }}>
-                          {metrics.fatigue}
+                          {metrics.load28 ?? "—"}
                         </p>
-                        <p className="meta-text">Fatigue</p>
+                        <p className="meta-text">28 jours</p>
                       </div>
                     </div>
                   );
@@ -472,9 +450,9 @@ function ChargeView() {
           {/* ── Courbes ACWR ─────────────────────────────────────────── */}
           <div className="card p-5">
             <div className="mb-4">
-              <h3 className="card-title">Évolution ACWR du groupe</h3>
+              <h3 className="card-title">ACWR EWMA · métrique expérimentale</h3>
               <p className="card-subtitle mt-0.5">
-                Une courbe par athlète · Zone optimale : 0.80 – 1.30 · Zone à surveiller : &gt; 1.50
+                Affiché uniquement lorsque 28 jours quotidiens continus sont connus. Aucun seuil n'est interprété comme optimal ou comme risque.
               </p>
             </div>
             <div className="flex flex-wrap gap-3 mb-4">
@@ -511,9 +489,6 @@ function ChargeView() {
                     <XAxis dataKey="label" tick={{ fontSize: 12, fill: "var(--c-text-3)" }} axisLine={false} tickLine={false} />
                     <YAxis domain={[0.4, 1.8]} tick={{ fontSize: 12, fill: "var(--c-text-3)" }} axisLine={false} tickLine={false} width={36} />
                     <Tooltip content={<ChartTooltip />} />
-                    <ReferenceLine y={0.8} stroke="#1D9E75" strokeDasharray="5 3" strokeWidth={1.5} label={{ value: "0.80", position: "right", fontSize: 12, fill: "#1D9E75" }} />
-                    <ReferenceLine y={1.3} stroke="#EF9F27" strokeDasharray="5 3" strokeWidth={1.5} label={{ value: "1.30", position: "right", fontSize: 12, fill: "#EF9F27" }} />
-                    <ReferenceLine y={1.5} stroke="#E24B4A" strokeDasharray="3 2" strokeWidth={2}   label={{ value: "1.50 ⚠", position: "right", fontSize: 12, fill: "#E24B4A" }} />
                     {athletes.map((a, i) => {
                       const prenom = a.name.split(" ")[0];
                       const isHL   = highlightedAthlete === null || highlightedAthlete === a.id;
@@ -528,11 +503,7 @@ function ChargeView() {
                     })}
                   </LineChart>
                 </ResponsiveContainer>
-                <div className="flex items-center gap-4 mt-3 text-[12px] flex-wrap">
-                  <span className="flex items-center gap-1.5"><span className="w-8 h-0.5 inline-block rounded" style={{ background: "#1D9E75", borderTop: "2px dashed #1D9E75" }} /><span style={{ color: "var(--c-text-2)" }}>0.80 — Seuil bas</span></span>
-                  <span className="flex items-center gap-1.5"><span className="w-8 h-0.5 inline-block rounded" style={{ background: "#EF9F27", borderTop: "2px dashed #EF9F27" }} /><span style={{ color: "var(--c-text-2)" }}>1.30 — Seuil haut</span></span>
-                  <span className="flex items-center gap-1.5"><span className="w-8 h-0.5 inline-block rounded" style={{ background: "#E24B4A" }} /><span style={{ color: "var(--c-text-2)" }}>1.50 — Zone à surveiller</span></span>
-                </div>
+                <p className="text-[12px] mt-3" style={{ color: "var(--c-text-2)" }}>Section réservée à l'exploration et à la recherche ; aucune décision automatique n'en découle.</p>
               </>
             )}
           </div>

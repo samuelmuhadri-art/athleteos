@@ -250,7 +250,8 @@ const FormeDetailPanel = memo(({ metricKey, metrics, sessions, weeklyCharge, ath
               <div>
                 {weekSessions.slice(0, 6).map((s, idx) => {
                   const rpe    = s.validation?.rpe ?? 0;
-                  const load   = (s.durationMinutes ?? 60) * rpe;
+                  const actualDuration = s.validation?.actualDurationMinutes;
+                  const load = Number.isFinite(Number(actualDuration)) ? Number(actualDuration) * rpe : null;
                   const rpeCol = rpe <= 3 ? "#1D9E75" : rpe <= 6 ? "#E8A020" : "#E05252";
                   return (
                     <div key={s.id} style={{
@@ -268,11 +269,11 @@ const FormeDetailPanel = memo(({ metricKey, metrics, sessions, weeklyCharge, ath
                       </div>
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <p style={{ fontSize: 12, fontWeight: 500, color: "var(--c-text-1)" }} className="truncate">{s.title}</p>
-                        <p style={{ fontSize: 10.5, color: "var(--c-text-3)" }}>{s.day} · S{s.week} · {s.durationMinutes ?? 60} min</p>
+                        <p style={{ fontSize: 12, color: "var(--c-text-2)" }}>{s.day} · S{s.week} · {actualDuration != null ? `${actualDuration} min réelles` : "durée réelle inconnue"}</p>
                       </div>
                       <div style={{ textAlign: "right", flexShrink: 0 }}>
-                        <p style={{ fontSize: 13, fontWeight: 600, color: rpeCol, fontVariantNumeric: "tabular-nums" }}>{load}</p>
-                        <p style={{ fontSize: 9, color: "var(--c-text-4)" }}>charge</p>
+                        <p style={{ fontSize: 13, fontWeight: 600, color: rpeCol, fontVariantNumeric: "tabular-nums" }}>{load ?? "—"}</p>
+                        <p style={{ fontSize: 12, color: "var(--c-text-2)" }}>charge</p>
                       </div>
                     </div>
                   );

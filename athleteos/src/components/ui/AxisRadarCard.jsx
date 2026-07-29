@@ -34,7 +34,7 @@ function RadarDot({ cx, cy, payload }) {
 }
 
 const AxisRadarCard = memo(({
-  profile, title = "Profil de charge", subtitle = "Comparé à tes semaines habituelles",
+  profile, title = "Profil de charge", subtitle = "Répartition descriptive des contraintes de la dernière semaine connue",
   sessions = null, athleteId = null, currentWeek = null,
 }) => {
   const [expanded, setExpanded] = useState(null); // axisId ouvert, ou null
@@ -72,7 +72,7 @@ const AxisRadarCard = memo(({
         {AXIS_IDS.map(id => {
           const axis     = LOAD_AXES[id];
           const p        = profile[id];
-          const flagged  = p.label !== "Normal";
+          const flagged  = p.label === "Dominant";
           const isOpen   = expanded === id;
           const contributors = isOpen && sessions && athleteId != null && currentWeek != null
             ? getAxisTopContributors(athleteId, sessions, id, currentWeek)
@@ -102,10 +102,11 @@ const AxisRadarCard = memo(({
                     <span style={{ fontSize: 9 }}>modèle {CURRENT_AXIS_MODEL_VERSION}</span>
                   </div>
                   <p>
-                    Charge récente : <strong style={{ color: "var(--c-text-2)" }}>{p.acute}</strong> · Ta charge habituelle sur cet axe : <strong style={{ color: "var(--c-text-2)" }}>{p.chronic}</strong>
+                    Charge de la semaine S{p.currentWeek} : <strong style={{ color: "var(--c-text-2)" }}>{p.currentLoad}</strong>
+                    {p.habitualLoad != null && <> · Moyenne précédente : <strong style={{ color: "var(--c-text-2)" }}>{p.habitualLoad}</strong></>}
                   </p>
                   <p style={{ marginTop: 2 }}>
-                    Fiabilité de cette baseline : <strong style={{ color: "var(--c-text-2)" }}>{p.dataQuality}</strong> ({p.weeksOfData} semaine{p.weeksOfData > 1 ? "s" : ""} de données)
+                    Qualité de l'historique : <strong style={{ color: "var(--c-text-2)" }}>{p.dataQuality}</strong> ({p.weeksOfData} semaine{p.weeksOfData > 1 ? "s" : ""} de données). Convention descriptive, pas estimation de risque.
                   </p>
                   {contributors.length > 0 && (
                     <div style={{ marginTop: 6 }}>

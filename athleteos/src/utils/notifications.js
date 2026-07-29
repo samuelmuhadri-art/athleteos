@@ -3,7 +3,6 @@
 // ============================================================
 
 import { supabase } from "./supabaseClient";
-import { getAthleteMetricsForWeek } from "./chargeCalculations";
 
 // ── Envoi push générique ──────────────────────────────────────
 // Supporte athleteIds (pour les athlètes) ET userIds (pour les coaches)
@@ -32,36 +31,13 @@ async function sendWebPush(athleteIds, payload, userIds = []) {
 }
 
 export async function checkAndAlertACWR(clubId, athletes, weeklyCharge, currentWeek) {
-  for (const athlete of athletes) {
-    const metrics = getAthleteMetricsForWeek(athlete.id, weeklyCharge, currentWeek);
-    if (metrics.acwr > 1.3) {
-      const { data: existing } = await supabase.from("alerts").select("id")
-        .eq("club_id", clubId).eq("athlete_id", athlete.id).eq("type", "charge")
-        .gte("created_at", new Date(Date.now() - 7*86400000).toISOString()).limit(1);
-      if (!existing?.length) {
-        await supabase.from("alerts").insert({
-          club_id: clubId, athlete_id: athlete.id, type: "charge",
-          title: `⚠️ Surcharge — ${athlete.name}`,
-          description: `ACWR de ${metrics.acwr.toFixed(2)} (seuil 1.30) — hors de la zone habituelle. Vaut le coup d'en discuter avec l'athlète.`,
-          severity: "élevée", is_read: false,
-        });
-      }
-    }
-    if (metrics.acwr < 0.8 && metrics.acwr > 0) {
-      const { data: existing } = await supabase.from("alerts").select("id")
-        .eq("club_id", clubId).eq("athlete_id", athlete.id).eq("type", "charge")
-        .ilike("title", "%sous-charge%")
-        .gte("created_at", new Date(Date.now() - 7*86400000).toISOString()).limit(1);
-      if (!existing?.length) {
-        await supabase.from("alerts").insert({
-          club_id: clubId, athlete_id: athlete.id, type: "charge",
-          title: `📉 Sous-charge — ${athlete.name}`,
-          description: `ACWR de ${metrics.acwr.toFixed(2)} (seuil 0.80). Risque de déconditionnement.`,
-          severity: "légère", is_read: false,
-        });
-      }
-    }
-  }
+  // API conservée pour ne pas casser les appels du Dashboard. La génération
+  // automatique d'alertes ACWR est volontairement désactivée : ce ratio
+  // expérimental ne permet pas d'inférer un risque individuel.
+  void clubId;
+  void athletes;
+  void weeklyCharge;
+  void currentWeek;
 }
 
 export async function alertSessionAbsence(clubId, athlete, session) {

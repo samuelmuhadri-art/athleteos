@@ -6,6 +6,7 @@
 import { memo, useState, useMemo } from "react";
 import { ArrowLeft, HeartPulse, Pencil, Trash2 } from "lucide-react";
 import { getAthleteMetricsForWeek } from "../utils/chargeCalculations";
+import { getISOWeek } from "../utils/helpers.js";
 import { TABS, StatusBadge, ScoreRing } from "./athleteListShared";
 import { TabPerformances, TabCharge, TabEntrainements, TabBlessures, TabProfil } from "./AthleteProfileTabs";
 import { ConfirmDialog, InlineNotice, SegmentedTabs } from "../components/ui/premium";
@@ -16,7 +17,7 @@ const AthleteProfile = memo(({ athlete, weeklyCharge, sessions, competitions, on
   const [deleting,       setDeleting]       = useState(false);
   const [deleteError,   setDeleteError]   = useState(null);
 
-  const metrics        = useMemo(() => getAthleteMetricsForWeek(athlete.id, weeklyCharge), [athlete.id, weeklyCharge]);
+  const metrics        = useMemo(() => getAthleteMetricsForWeek(athlete.id, weeklyCharge, getISOWeek(new Date())), [athlete.id, weeklyCharge]);
   const { readiness, fatigue, acwr } = metrics;
   const activeInjuries = athlete.injuries?.filter(i => i.status !== "résolu") ?? [];
 
@@ -86,19 +87,19 @@ const AthleteProfile = memo(({ athlete, weeklyCharge, sessions, competitions, on
 
           {/* Métriques inline */}
           <div className="flex items-center gap-3 flex-shrink-0">
-            <ScoreRing value={readiness} color="white" label="Readiness" size={80} />
+            <ScoreRing value={metrics.wellnessScore ?? 0} color="white" label="Bien-être" size={80} />
             <div className="space-y-2 text-[12px]">
               <div className="flex items-center justify-between gap-6">
-                <span style={{ color: "rgba(255,255,255,0.76)" }}>Fatigue</span>
-                <span className="font-bold text-white">{fatigue}</span>
+                <span style={{ color: "rgba(255,255,255,0.76)" }}>Charge 7 jours</span>
+                <span className="font-bold text-white">{metrics.load7 ?? "—"}</span>
               </div>
               <div className="flex items-center justify-between gap-6">
-                <span style={{ color: "rgba(255,255,255,0.76)" }}>Forme</span>
-                <span className="font-bold text-white">{metrics.forme}</span>
+                <span style={{ color: "rgba(255,255,255,0.76)" }}>Charge 28 jours</span>
+                <span className="font-bold text-white">{metrics.load28 ?? "—"}</span>
               </div>
               <div className="flex items-center justify-between gap-6">
-                <span style={{ color: "rgba(255,255,255,0.76)" }}>ACWR</span>
-                <span className="font-bold text-white">{acwr.toFixed(2)}</span>
+                <span style={{ color: "rgba(255,255,255,0.76)" }}>Variation</span>
+                <span className="font-bold text-white">{metrics.variationPercent == null ? "—" : `${metrics.variationPercent >= 0 ? "+" : ""}${metrics.variationPercent}%`}</span>
               </div>
             </div>
           </div>

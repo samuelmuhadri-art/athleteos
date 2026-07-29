@@ -174,10 +174,10 @@ function AthleteStatusCard({ athlete, weeklyCharge, currentWeek, injuries, sessi
   const weekSess  = sessions.filter(s => s.week === currentWeek && s.athleteIds?.includes(athlete.id));
   const doneCount = weekSess.filter(s => s.validations?.find(v => v.athleteId === athlete.id && v.status === "done")).length;
   const hasCharge = weeklyCharge.some(w => w.athleteId === athlete.id);
-  const isAtRisk  = metrics.acwr > 1.3;
+  const isAtRisk  = false;
 
   const readColor = dimColor("readiness", metrics.readiness);
-  const acwrCol   = dimColor("acwr", metrics.acwr);
+  const acwrCol   = "#378ADD";
   const fatCol    = dimColor("fatigue", metrics.fatigue);
 
   const sparkData = useMemo(() =>
@@ -214,9 +214,9 @@ function AthleteStatusCard({ athlete, weeklyCharge, currentWeek, injuries, sessi
       {hasCharge ? (
         <div className="grid grid-cols-3 gap-1.5">
           {[
-            { lbl: "Ready",   val: metrics.readiness,       col: readColor, pct: metrics.readiness },
-            { lbl: "ACWR",    val: metrics.acwr.toFixed(2), col: acwrCol,   pct: Math.min(100, (metrics.acwr / 2) * 100) },
-            { lbl: "Fatigue", val: metrics.fatigue,         col: fatCol,    pct: metrics.fatigue },
+            { lbl: "Bien-être", val: metrics.wellnessScore ?? "—", col: readColor, pct: metrics.wellnessScore ?? 0 },
+            { lbl: "Charge 7j", val: metrics.load7 ?? "—", col: acwrCol, pct: metrics.load7 && metrics.load28 ? Math.min(100, (metrics.load7 / metrics.load28) * 100) : 0 },
+            { lbl: "Charge 28j", val: metrics.load28 ?? "—", col: fatCol, pct: metrics.load28 ? 100 : 0 },
           ].map(s => (
             <div key={s.lbl} className="bg-[var(--c-surface-2)] rounded-xl px-1.5 py-2 text-center">
               <p
@@ -310,7 +310,7 @@ function CoachFeedSection({ items, onNavigate }) {
             <CheckCircle size={16} color="#1D9E75" strokeWidth={2} />
           </div>
           <p className="text-[12.5px] font-medium" style={{ color: "var(--c-text-2)" }}>
-            Aucune surcharge, blessure ou absence détectée dans le groupe.
+            Aucun retour de bien-être faible, blessure active ou absence répétée dans le groupe.
           </p>
         </div>
       ) : (
@@ -400,12 +400,14 @@ function Dashboard({
           durationMinutes: s.duration_minutes, createdBy: s.created_by,
           createdByAthlete: false,
           athleteIds:   rows.map(v => v.athlete_id),
-          validations:  rows.map(v => ({ athleteId: v.athlete_id, status: v.status, feeling: v.feeling, rpe: v.rpe, comment: v.comment })),
+          validations:  rows.map(v => ({ athleteId: v.athlete_id, status: v.status, feeling: v.feeling, rpe: v.rpe, comment: v.comment, actualDurationMinutes: v.actual_duration_minutes, durationSource: v.duration_source })),
         };
       });
 
       const charge = (chargeRes.data ?? []).map(c => ({
         athleteId: c.athlete_id, week: c.week, rawLoad: c.raw_load,
+        dailyLoads: c.daily_loads ?? [], knownDays: c.known_days ?? 0,
+        unknownDays: c.unknown_days ?? 0, estimatedDays: c.estimated_days ?? 0,
       }));
 
       const mappedAthletes = athletesRes.data.map(a => ({

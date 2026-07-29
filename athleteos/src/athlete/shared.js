@@ -89,27 +89,27 @@ export const METRIC_TAXONOMY = {
 
 export const METRIC_SCIENCE = {
   readiness: {
-    label: "Readiness", icon: "⚡", evidenceLevel: "convention",
+    label: "Bien-être déclaré", icon: "⚡", evidenceLevel: "convention",
     color: (v) => v >= 75 ? "#1D9E75" : v >= 50 ? "#EF9F27" : "#E24B4A",
     unit: "/100", optimal: "≥ 75",
-    formula: "Moyenne pondérée : Forme (40%) + Récupération (35%) + Wellness (25%)",
-    what: "Le Readiness combine forme, récupération et wellness en un score d'aide à la décision pour la journée. Un score élevé suggère que ton corps est mieux disposé à absorber une charge intense — une estimation, pas une garantie.",
+    formula: "AthleteOS Wellness Questionnaire v1 : cinq réponses 1–5 normalisées sur 0–100.",
+    what: "Ce score résume le ressenti déclaré du jour. Cet instrument interne n'est pas le Hooper Index et ses propriétés psychométriques restent à valider.",
     sources: [
       { ref: "Gabbett (2016)", detail: "Training-injury prevention paradox — BJSM" },
       { ref: "Halson (2014)",  detail: "Monitoring training load — Sports Med" },
     ],
     thresholds: [
-      { min: 75, max: 100, label: "Optimal",    color: "#1D9E75", advice: "Séance intense possible. Profites-en pour travailler vitesse ou force maximale." },
-      { min: 55, max: 74,  label: "Acceptable", color: "#EF9F27", advice: "Séance modérée recommandée. Évite les blocs à haute intensité répétée." },
-      { min: 0,  max: 54,  label: "Faible",     color: "#E24B4A", advice: "Récupération active, mobilité ou repos complet. Ne force pas." },
+      { min: 75, max: 100, label: "Ressenti favorable", color: "#1D9E75", advice: "Retour déclaré favorable, à mettre en contexte avec le coach." },
+      { min: 55, max: 74, label: "Ressenti intermédiaire", color: "#EF9F27", advice: "Retour déclaré intermédiaire, sans prescription automatique." },
+      { min: 0, max: 54, label: "Ressenti difficile", color: "#E24B4A", advice: "Prends contact avec ton coach pour expliquer le contexte." },
     ],
   },
   forme: {
-    label: "Forme", icon: "📈", evidenceLevel: "convention",
+    label: "EWMA longue", icon: "📈", evidenceLevel: "statistical",
     color: (v) => v >= 75 ? "#1D9E75" : v >= 50 ? "#EF9F27" : "#E24B4A",
     unit: "/100", optimal: "≥ 65",
-    formula: "Charge chronique (moyenne 4 semaines) normalisée sur 100.",
-    what: "La Forme (fitness) représente les adaptations positives accumulées sur les 4 dernières semaines.",
+    formula: "EWMA quotidienne, λ = 2/(28+1), calculée uniquement sur des jours connus.",
+    what: "L'EWMA longue lisse la charge interne observée. Elle ne mesure pas directement la forme ni l'adaptation physiologique.",
     sources: [
       { ref: "Banister et al. (1975)", detail: "Modèle Fitness-Fatigue — Research Quarterly" },
       { ref: "Morton et al. (1990)",   detail: "Modelling human performance — EJP" },
@@ -121,11 +121,11 @@ export const METRIC_SCIENCE = {
     ],
   },
   fatigue: {
-    label: "Fatigue", icon: "🔋", inverted: true, evidenceLevel: "convention",
+    label: "EWMA courte", icon: "🔋", inverted: true, evidenceLevel: "statistical",
     color: (v) => v > 70 ? "#E24B4A" : v > 45 ? "#EF9F27" : "#1D9E75",
     unit: "/100", optimal: "≤ 45",
-    formula: "Charge aiguë (moyenne 7 derniers jours) normalisée.",
-    what: "La fatigue représente l'accumulation de stress physiologique récent.",
+    formula: "EWMA quotidienne, λ = 2/(7+1), calculée uniquement sur des jours connus.",
+    what: "L'EWMA courte lisse la charge interne récente. Elle ne mesure pas directement la fatigue physiologique.",
     sources: [
       { ref: "Banister et al. (1975)", detail: "Modèle Fitness-Fatigue — Research Quarterly" },
       { ref: "Meeusen et al. (2013)",  detail: "Overreaching/overtraining — MSSE" },
@@ -137,19 +137,19 @@ export const METRIC_SCIENCE = {
     ],
   },
   recuperation: {
-    label: "Récupération", icon: "🌙", evidenceLevel: "convention",
+    label: "Règle d'espacement", icon: "🌙", evidenceLevel: "convention",
     color: (v) => v >= 70 ? "#1D9E75" : v >= 45 ? "#EF9F27" : "#E24B4A",
     unit: "/100", optimal: "≥ 70",
-    formula: "Milieu d'une plage d'heures estimée (pas un chiffre unique) à partir de la catégorie de la dernière séance, de la charge relative, du RPE, du wellness récent et de l'accumulation de séances difficiles — voir estimateRecovery() dans trainingLoad.js.",
-    what: "Estimation de la disponibilité neuromusculaire et métabolique, sous forme de plage assortie d'un niveau de confiance — jamais un chiffre exact ni un \"totalement récupéré\" certain. La confiance baisse quand les données (wellness, historique récent) manquent ou sont anciennes ; sans aucune séance récente, l'app dit explicitement qu'elle ne peut pas estimer, plutôt que d'inventer une valeur.",
+    formula: "Fenêtre configurable du club calculée depuis l'heure réelle de fin de la dernière séance.",
+    what: "Cette fenêtre aide à programmer l'espacement entre séances. Elle n'est pas une estimation physiologique et ne signifie jamais qu'un athlète est complètement récupéré.",
     sources: [
       { ref: "Hasegawa et al. (2024)", detail: "Recovery monitoring — IJSPP" },
       { ref: "Kellmann et al. (2018)", detail: "Recovery and Stress in Sport — Routledge" },
     ],
     thresholds: [
-      { min: 70, max: 100, label: "Probablement suffisante", color: "#1D9E75", advice: "Signaux compatibles avec une disponibilité pour une nouvelle charge — reste une estimation." },
-      { min: 45, max: 69,  label: "Probablement partielle",  color: "#EF9F27", advice: "Récupération vraisemblablement en cours. Séance technique ou légère envisageable." },
-      { min: 0,  max: 44,  label: "Probablement insuffisante", color: "#E24B4A", advice: "Signaux de récupération incomplète. Vaut le coup d'en discuter avant une séance intense." },
+      { min: 70, max: 100, label: "Fenêtre terminée", color: "#1D9E75", advice: "La règle d'espacement est terminée ; cela ne prouve pas une récupération complète." },
+      { min: 45, max: 69, label: "Transition", color: "#EF9F27", advice: "La fenêtre configurée arrive à son terme." },
+      { min: 0, max: 44, label: "Fenêtre active", color: "#E24B4A", advice: "La règle d'espacement configurée est encore active." },
     ],
   },
   risque: {
@@ -160,20 +160,20 @@ export const METRIC_SCIENCE = {
     // multifactorielle et partiellement débattue (Gabbett lui-même souligne
     // que d'autres facteurs comptent : sommeil, stress, antécédents,
     // biomécanique, génétique...). Un score bas ne garantit rien non plus.
-    label: "Signal de charge", icon: "⚠️", inverted: true, evidenceLevel: "convention",
+    label: "Qualité des données", icon: "⚠️", inverted: true, evidenceLevel: "convention",
     color: (v) => v > 60 ? "#E24B4A" : v > 30 ? "#EF9F27" : "#1D9E75",
     unit: "/100", optimal: "≤ 30",
-    formula: "Combinaison ACWR (60%) + monotonie (20%) + fatigue estimée (20%) — pondération AthleteOS inspirée des travaux de Gabbett et Foster, pas une formule qu'ils ont eux-mêmes publiée.",
-    what: "Ce signal combine plusieurs indicateurs associés statistiquement à un risque accru dans la littérature sportive (surcharge aiguë, entraînements monotones, fatigue accumulée). Ce n'est PAS une prédiction individuelle de blessure ni un diagnostic — de nombreux facteurs de blessure connus n'y sont pas intégrés (sommeil, stress, antécédents, biomécanique). À interpréter avec ton coach, jamais seul.",
+    formula: "Complétude des durées réelles, RPE et jours quotidiens connus.",
+    what: "Indique si les calculs descriptifs reposent sur assez de données quotidiennes. Ce n'est ni un risque de blessure, ni un diagnostic.",
     sources: [
       { ref: "Gabbett (2016)",      detail: "Training-injury prevention paradox — BJSM" },
       { ref: "Hulin et al. (2016)", detail: "Spikes in acute workload — BJSM" },
       { ref: "Foster (1998)",       detail: "Monotony of training — J Strength Cond" },
     ],
     thresholds: [
-      { min: 0,  max: 30,  label: "Faible", color: "#1D9E75", advice: "Aucun signal notable dans ces indicateurs. Continue ton programme normalement." },
-      { min: 31, max: 60,  label: "Modéré", color: "#EF9F27", advice: "ACWR ou monotonie élevés. Vaut le coup d'en parler avec ton coach pour varier les intensités." },
-      { min: 61, max: 100, label: "Élevé",  color: "#E24B4A", advice: "Plusieurs signaux cumulés. Parles-en à ton coach pour décider ensemble d'ajuster la charge — ce score n'est pas un ordre." },
+      { min: 0, max: 30, label: "Incomplète", color: "#E24B4A", advice: "Plusieurs données quotidiennes manquent." },
+      { min: 31, max: 60, label: "Partielle", color: "#EF9F27", advice: "Certaines fenêtres restent indisponibles." },
+      { min: 61, max: 100, label: "Bonne", color: "#1D9E75", advice: "Les données nécessaires sont majoritairement présentes." },
     ],
   },
 };

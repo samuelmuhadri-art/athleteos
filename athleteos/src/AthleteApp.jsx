@@ -144,7 +144,11 @@ export default function AthleteApp({ clubBrand, themeStyle }) {
           instructions:s.instructions, durationMinutes:s.duration_minutes, pdfUrl:s.pdf_url,
           createdBy:s.created_by,
           athleteIds:rows.map(v=>v.athlete_id),
-          validations:rows.map(v=>({athleteId:v.athlete_id,status:v.status,feeling:v.feeling,fatigue:v.fatigue,comment:v.comment,rpe:v.rpe})),
+          validations:rows.map(v=>({
+            athleteId:v.athlete_id,status:v.status,feeling:v.feeling,fatigue:v.fatigue,
+            comment:v.comment,rpe:v.rpe,actualDurationMinutes:v.actual_duration_minutes,
+            durationSource:v.duration_source,
+          })),
         };
       }).filter(s=>s.athleteIds.includes(athleteId));
 
@@ -155,7 +159,11 @@ export default function AthleteApp({ clubBrand, themeStyle }) {
         results:(c.competition_results??[]).map(r=>({athleteId:r.athlete_id,event:r.event,result:r.result,context:r.context})),
       })).filter(c=>c.athleteIds.includes(athleteId));
 
-      const charge = (weeklyChargeRes.data??[]).map(c=>({athleteId:c.athlete_id,week:c.week,rawLoad:c.raw_load}));
+      const charge = (weeklyChargeRes.data??[]).map(c=>({
+        athleteId:c.athlete_id,week:c.week,rawLoad:c.raw_load,
+        dailyLoads:c.daily_loads??[],knownDays:c.known_days??0,
+        unknownDays:c.unknown_days??0,estimatedDays:c.estimated_days??0,
+      }));
 
       setWeeklyCharge(charge);
       setSessions(allSessions);
@@ -245,9 +253,15 @@ export default function AthleteApp({ clubBrand, themeStyle }) {
     return false;
   }, [athlete?.id, myNotifs]);
 
-  const handleRpe = useCallback(async (sid,aid,rpe) => {
-    setSessions(p=>p.map(s=>s.id!==sid?s:{...s,validations:s.validations.map(v=>v.athleteId===aid?{...v,rpe}:v)}));
-    await supabase.from("session_athletes").update({rpe}).eq("session_id",sid).eq("athlete_id",aid);
+  const handleRpe = useCallback(async (sid,aid,rpe,actualDurationMinutes) => {
+    const duration = Number(actualDurationMinutes);
+    if (!Number.isFinite(duration) || duration <= 0 || duration > 1440) return;
+    setSessions(p=>p.map(s=>s.id!==sid?s:{...s,validations:s.validations.map(v=>v.athleteId===aid?{
+      ...v,rpe,actualDurationMinutes:duration,durationSource:"reported",
+    }:v)}));
+    await supabase.from("session_athletes").update({
+      rpe, actual_duration_minutes:duration, duration_source:"reported",
+    }).eq("session_id",sid).eq("athlete_id",aid);
   }, []);
   const handleStatus = useCallback(async (sid,aid,status) => {
     setSessions(p=>p.map(s=>s.id!==sid?s:{...s,validations:s.validations.map(v=>v.athleteId===aid?{...v,status}:v)}));

@@ -54,7 +54,7 @@ export function formatWeekLabel(week, dateRange) {
 }
 
 // ─── Résumé texte automatique ─────────────────────────────────────────────
-function buildSummaryText({ total, done, partial, none, totalLoad, categoriesWorked, categoriesAbsent, acwr }) {
+function buildSummaryText({ total, done, partial, none, totalLoad, categoriesWorked, categoriesAbsent, load7, load28, variationPercent }) {
   if (total === 0) return "Aucune séance planifiée cette semaine.";
   const lines = [];
 
@@ -75,10 +75,9 @@ function buildSummaryText({ total, done, partial, none, totalLoad, categoriesWor
     lines.push(`Non travaillées : ${absentLabels.join(", ")}.`);
   }
 
-  if (acwr != null) {
-    if (acwr > 1.3)      lines.push(`⚠️ ACWR de ${acwr.toFixed(2)} — zone de surcharge, à surveiller.`);
-    else if (acwr < 0.8) lines.push(`🔵 ACWR de ${acwr.toFixed(2)} — sous-charge relative.`);
-    else                 lines.push(`🟢 ACWR de ${acwr.toFixed(2)} — dans la zone optimale (0.8–1.3).`);
+  if (load7 != null && load28 != null) {
+    const variation = variationPercent == null ? "variation indisponible" : `${variationPercent >= 0 ? "+" : ""}${variationPercent} %`;
+    lines.push(`Fenêtres descriptives : ${load7} u. sur 7 jours, ${load28} u. sur 28 jours (${variation} entre les moyennes quotidiennes).`);
   }
 
   return lines.join(" ");
@@ -95,10 +94,12 @@ export function buildWeeklyReport({ athleteId, week, sessions, weeklyCharge, wel
     .filter(s => s.week === week && s.athleteIds?.includes(athleteId))
     .map(s => {
       const v = s.validations?.find(x => x.athleteId === athleteId) ?? {};
-      const load = v.rpe != null ? computeSessionLoad(s.durationMinutes, v.rpe, s.category) : null;
+      const load = v.rpe != null ? computeSessionLoad(v.actualDurationMinutes, v.rpe, s.category) : null;
       return {
         id: s.id, title: s.title, category: s.category, day: s.day,
         sessionDate: s.sessionDate, durationMinutes: s.durationMinutes,
+        actualDurationMinutes: v.actualDurationMinutes ?? null,
+        durationSource: v.durationSource ?? null,
         status: v.status ?? null, rpe: v.rpe ?? null, feeling: v.feeling ?? null,
         comment: v.comment ?? null, load,
       };
@@ -136,7 +137,7 @@ export function buildWeeklyReport({ athleteId, week, sessions, weeklyCharge, wel
 
   const summary = buildSummaryText({
     total, done, partial, none, totalLoad, categoriesWorked, categoriesAbsent,
-    acwr: total > 0 ? metrics.acwr : null,
+    load7: metrics.load7, load28: metrics.load28, variationPercent: metrics.variationPercent,
   });
 
   return {

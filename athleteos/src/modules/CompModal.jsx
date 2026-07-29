@@ -134,13 +134,13 @@ const CompModal = memo(({ competition, athletes, weeklyCharge, records, onClose,
                           />
                         ) : (
                           <div className="flex items-center gap-2 mt-2 text-[12px] text-[var(--c-text-2)] flex-wrap">
-                            <span>ACWR prévu :</span>
-                            <span className="font-bold" style={{ color: metrics.acwr > 1.3 ? "#E24B4A" : metrics.acwr < 0.8 ? "#378ADD" : "#1D9E75" }}>
-                              {metrics.acwr.toFixed(2)}
+                            <span>Charge observée sur 7 jours :</span>
+                            <span className="font-bold" style={{ color: "#A9CBFB" }}>
+                              {metrics.load7 ?? "—"}
                             </span>
-                            <span>· Readiness :</span>
-                            <span className="font-bold" style={{ color: metrics.readiness >= 70 ? "#1D9E75" : metrics.readiness >= 50 ? "#EF9F27" : "#E24B4A" }}>
-                              {metrics.readiness}/100
+                            <span>· Bien-être :</span>
+                            <span className="font-bold" style={{ color: "#7BD8B4" }}>
+                              {metrics.wellnessScore == null ? "—" : `${metrics.wellnessScore}/100`}
                             </span>
                           </div>
                         )}
@@ -189,21 +189,21 @@ const CompModal = memo(({ competition, athletes, weeklyCharge, records, onClose,
                       <div className="px-4 py-3 bg-[var(--c-surface-3)] border-b border-[var(--c-border)] flex items-center gap-4 flex-wrap text-[12px]">
                         <span className="text-[var(--c-text-3)]">À la semaine ~{week} :</span>
                         <span className="flex items-center gap-1">
-                          ACWR :
-                          <strong className="ml-1" style={{ color: metrics.acwr > 1.3 ? "#E24B4A" : metrics.acwr < 0.8 ? "#378ADD" : "#1D9E75" }}>
-                            {metrics.acwr.toFixed(2)}
+                          Charge 7 jours :
+                          <strong className="ml-1" style={{ color: "#A9CBFB" }}>
+                            {metrics.load7 ?? "—"}
                           </strong>
                         </span>
                         <span className="flex items-center gap-1">
-                          Fatigue :
-                          <strong className="ml-1" style={{ color: metrics.fatigue > 70 ? "#E24B4A" : metrics.fatigue > 45 ? "#EF9F27" : "#1D9E75" }}>
-                            {metrics.fatigue}/100
+                          Charge 28 jours :
+                          <strong className="ml-1" style={{ color: "#7BD8B4" }}>
+                            {metrics.load28 ?? "—"}
                           </strong>
                         </span>
                         <span className="flex items-center gap-1">
-                          Readiness :
-                          <strong className="ml-1" style={{ color: metrics.readiness >= 70 ? "#1D9E75" : metrics.readiness >= 50 ? "#EF9F27" : "#E24B4A" }}>
-                            {metrics.readiness}/100
+                          Bien-être déclaré :
+                          <strong className="ml-1" style={{ color: "#A9CBFB" }}>
+                            {metrics.wellnessScore == null ? "—" : `${metrics.wellnessScore}/100`}
                           </strong>
                         </span>
                       </div>

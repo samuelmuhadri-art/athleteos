@@ -107,20 +107,21 @@ async function main() {
 
     const WEEK = 1;
     const fixtures = [
-      { category: "sprint",    duration_minutes: 60, rpe: 7 },
-      { category: "force",     duration_minutes: 45, rpe: 8 },
-      { category: "technique", duration_minutes: 90, rpe: 4 },
+      { category: "sprint",    duration_minutes: 60, rpe: 7, session_date: "2026-01-01" },
+      { category: "force",     duration_minutes: 45, rpe: 8, session_date: "2026-01-02" },
+      { category: "technique", duration_minutes: 90, rpe: 4, session_date: "2026-01-03" },
     ];
 
     let expectedTotal = 0;
     for (const f of fixtures) {
       const session = await insertOrThrow("sessions", {
         club_id: club.id, title: `Parity ${f.category} ${RUN_ID}`,
-        category: f.category, week: WEEK, duration_minutes: f.duration_minutes,
+        category: f.category, week: WEEK, duration_minutes: f.duration_minutes, session_date: f.session_date,
       });
       sessionIds.push(session.id);
       await insertOrThrow("session_athletes", {
-        session_id: session.id, athlete_id: athlete.id, rpe: f.rpe,
+        session_id: session.id, athlete_id: athlete.id, status: "done", rpe: f.rpe,
+        actual_duration_minutes: f.duration_minutes, duration_source: "reported",
       });
       expectedTotal += computeSessionLoad(f.duration_minutes, f.rpe, f.category);
     }

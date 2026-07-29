@@ -125,9 +125,8 @@ export default function AthletePerfs({ athlete, competitions, myPerformances, my
     return all.sort((a, b) => new Date(b.comp.date) - new Date(a.comp.date));
   }, [competitions, athlete.id]);
 
-  // Charge (ACWR) au moment de chaque compétition vs % du PR réalisé —
-  // permet de voir si les bonnes performances arrivent en zone de charge
-  // optimale (0.8–1.3) ou plutôt en surcharge/sous-charge.
+  // Variation de la moyenne quotidienne 7 j vs 28 j au moment de chaque
+  // compétition. Relation descriptive uniquement, sans causalité supposée.
   const chargeVsPerfData = useMemo(() => {
     if (!selectedDisc || !weeklyCharge?.length) return [];
     const rec = athlete.records?.[selectedDisc];
@@ -145,7 +144,8 @@ export default function AthletePerfs({ athlete, competitions, myPerformances, my
           : Math.min(105, Math.round((prP.value / resP.value) * 1000) / 10);
         const week    = getISOWeek(parseLocalDate(comp.date.slice(0, 10)));
         const metrics = getAthleteMetricsForWeek(athlete.id, weeklyCharge, week);
-        return { x: metrics.acwr, y: pct, compName: comp.name, date: comp.date, resultStr: result.result };
+        if (metrics.variationPercent == null) return null;
+        return { x: metrics.variationPercent, y: pct, compName: comp.name, date: comp.date, resultStr: result.result };
       })
       .filter(Boolean);
   }, [compHistory, selectedDisc, athlete.id, athlete.records, weeklyCharge]);
@@ -686,18 +686,14 @@ export default function AthletePerfs({ athlete, competitions, myPerformances, my
             <div className="card" style={{ padding: 20 }}>
               <p className="card-title">Charge et niveau de performance</p>
               <p style={{ fontSize: 13, lineHeight: 1.5, color: "var(--c-text-2)", marginTop: 4, marginBottom: 16 }}>
-                ACWR au moment de chaque compétition (axe X) · % du PR réalisé (axe Y) — {selectedDisc}
+                Variation de charge moyenne 7 j vs 28 j (axe X) · % du PR réalisé (axe Y) — {selectedDisc}. Corrélation descriptive, pas prédiction.
               </p>
               <ResponsiveContainer width="100%" height={260}>
                 <ScatterChart margin={{ top: 12, right: 16, bottom: 12, left: 0 }}>
                   <CartesianGrid vertical={false} stroke="rgba(255,255,255,0.07)" />
-                  <XAxis dataKey="x" type="number" domain={[0.4, 1.8]} tick={{ fontSize: 12, fill: "var(--c-text-3)" }} axisLine={false} tickLine={false} />
+                  <XAxis dataKey="x" type="number" domain={([min, max]) => [Math.min(-20, min), Math.max(20, max)]} tickFormatter={value => `${value}%`} tick={{ fontSize: 12, fill: "var(--c-text-3)" }} axisLine={false} tickLine={false} />
                   <YAxis dataKey="y" type="number" domain={[70, 105]} tickFormatter={value => `${value}%`} tick={{ fontSize: 12, fill: "var(--c-text-3)" }} axisLine={false} tickLine={false} width={46} />
                   <ZAxis range={[90, 90]} />
-                  {/* Zone optimale infusée en fond plutôt que des lignes pointillées
-                      — même esprit que la réglette ACWR du hero (bande de couleur,
-                      pas de traits techniques) */}
-                  <ReferenceArea x1={0.8} x2={1.3} fill="#1D9E75" fillOpacity={0.08} stroke="none" />
                   <Tooltip content={({ active, payload }) => {
                     if (!active || !payload?.length) return null;
                     const d = payload[0].payload;
@@ -706,7 +702,7 @@ export default function AthletePerfs({ athlete, competitions, myPerformances, my
                         <p style={{ fontSize: 13, fontWeight: 700, color: "var(--c-text-1)" }}>{d.compName}</p>
                         <p style={{ fontSize: 12, color: "var(--c-text-2)", marginTop: 2, marginBottom: 8 }}>{parseLocalDate(d.date.slice(0, 10)).toLocaleDateString("fr-BE", { day: "numeric", month: "short", year: "numeric" })}</p>
                         <p style={{ fontSize: 12, color: "var(--c-text-2)" }}>Résultat : <strong style={{ color: "#7BD8B4" }}>{d.resultStr}</strong></p>
-                        <p style={{ fontSize: 12, color: "var(--c-text-2)", marginTop: 3 }}>ACWR : <strong>{d.x.toFixed(2)}</strong> · Niveau : <strong>{d.y}%</strong></p>
+                        <p style={{ fontSize: 12, color: "var(--c-text-2)", marginTop: 3 }}>Variation 7j/28j : <strong>{d.x >= 0 ? "+" : ""}{d.x}%</strong> · Niveau : <strong>{d.y}%</strong></p>
                       </div>
                     );
                   }} />

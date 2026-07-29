@@ -722,8 +722,10 @@ export type Database = {
       }
       session_athletes: {
         Row: {
+          actual_duration_minutes: number | null
           athlete_id: number | null
           comment: string | null
+          duration_source: string | null
           fatigue: number | null
           feeling: number | null
           id: number
@@ -733,8 +735,10 @@ export type Database = {
           status: string | null
         }
         Insert: {
+          actual_duration_minutes?: number | null
           athlete_id?: number | null
           comment?: string | null
+          duration_source?: string | null
           fatigue?: number | null
           feeling?: number | null
           id?: number
@@ -744,8 +748,10 @@ export type Database = {
           status?: string | null
         }
         Update: {
+          actual_duration_minutes?: number | null
           athlete_id?: number | null
           comment?: string | null
+          duration_source?: string | null
           fatigue?: number | null
           feeling?: number | null
           id?: number
@@ -1041,10 +1047,27 @@ export type Database = {
       }
     }
     Views: {
+      daily_training_load: {
+        Row: {
+          assigned_session_count: number | null
+          athlete_id: number | null
+          is_complete: boolean | null
+          is_estimated: boolean | null
+          load_date: string | null
+          raw_load: number | null
+          unknown_session_count: number | null
+          week: number | null
+        }
+        Relationships: []
+      }
       weekly_charge: {
         Row: {
           athlete_id: number | null
+          daily_loads: Json | null
+          estimated_days: number | null
+          known_days: number | null
           raw_load: number | null
+          unknown_days: number | null
           week: number | null
         }
         Relationships: [

@@ -19,7 +19,7 @@ import { getAthleteAxisProfile } from "../utils/loadAxes";
 import { getISOWeek } from "../utils/helpers.js";
 import { parsePerf, pctOfReference } from "../athlete/shared.js";
 import {
-  RADAR_KEYS, scoreColor, acwrColor,
+  RADAR_KEYS, scoreColor,
   ValidationBadge, StarRow, EmptySection, ChartTooltip, ScoreRing,
 } from "./athleteListShared";
 import AddRecordModal from "./AddRecordModal";
@@ -201,7 +201,7 @@ export const TabPerformances = memo(({ athlete, competitions, onAddRecord }) => 
 // ─── Onglet Charge ────────────────────────────────────────────────────────────
 
 export const TabCharge = memo(({ athlete, metrics, weeklyCharge, competitions, sessions }) => {
-  const { fatigue, forme, recuperation, readiness, risque, acwr } = metrics;
+  const { load7, load28, variationPercent, acute, chronic, acwr } = metrics;
   const chartData = useMemo(() => computeChargeChartData(athlete.id, weeklyCharge), [athlete.id, weeklyCharge]);
   const currentWeek = useMemo(() => getISOWeek(new Date()), []);
   const axisProfile = useMemo(
@@ -219,11 +219,11 @@ export const TabCharge = memo(({ athlete, metrics, weeklyCharge, competitions, s
   if (!hasCharge) return <EmptySection icon={Activity} title="Aucune charge enregistrée" sub="Les scores apparaîtront dès la première séance saisie." />;
 
   const scoreCards = [
-    { label: "Fatigue",      value: fatigue,      color: scoreColor(fatigue, true),  hint: "> 70 = alerte"  },
-    { label: "Forme",        value: forme,        color: scoreColor(forme),          hint: "> 65 = optimal" },
-    { label: "Récupération", value: recuperation, color: scoreColor(recuperation),   hint: "0–100"          },
-    { label: "Readiness",    value: readiness,    color: scoreColor(readiness),      hint: "> 75 = optimal" },
-    { label: "Signal",       value: risque,       color: scoreColor(risque, true),   hint: "> 60 = à examiner" },
+    { label: "Charge 7 jours", value: load7 ?? "—", color: "#378ADD", hint: "somme observée" },
+    { label: "Charge 28 jours", value: load28 ?? "—", color: "#A9CBFB", hint: "somme observée" },
+    { label: "EWMA courte", value: acute == null ? "—" : Math.round(acute), color: "#14B8A6", hint: "série quotidienne" },
+    { label: "EWMA longue", value: chronic == null ? "—" : Math.round(chronic), color: "#A855F7", hint: "série quotidienne" },
+    { label: "Variation", value: variationPercent == null ? "—" : `${variationPercent >= 0 ? "+" : ""}${variationPercent}%`, color: "#EF9F27", hint: "moy. 7j vs 28j" },
   ];
 
   return (
@@ -238,24 +238,14 @@ export const TabCharge = memo(({ athlete, metrics, weeklyCharge, competitions, s
         ))}
       </div>
 
-      {/* ACWR */}
+      {/* ACWR expérimental : jamais utilisé comme cible ou signal de risque. */}
       <div className="card px-6 py-5 flex items-center justify-between flex-wrap gap-4">
         <div>
-          <p className="meta-text font-bold uppercase tracking-wide mb-1">ACWR (Acute : Chronic)</p>
-          <p className="text-[32px] font-bold leading-none" style={{ color: acwrColor(acwr) }}>{acwr.toFixed(2)}</p>
-          <p className="meta-text mt-1">Cible : 0.80 – 1.30</p>
+          <p className="meta-text font-bold uppercase tracking-wide mb-1">Métrique expérimentale · ACWR EWMA</p>
+          <p className="text-[32px] font-bold leading-none" style={{ color: "#94A3B8" }}>{acwr == null ? "—" : acwr.toFixed(2)}</p>
+          <p className="meta-text mt-1">Affiché seulement avec 28 jours quotidiens continus connus</p>
         </div>
-        <div className="flex flex-col gap-1.5 text-[12px]" style={{ color: "var(--c-text-2)" }}>
-          <span className="flex items-center gap-2"><span className="w-3 h-3 rounded-full" style={{ background: "#1D9E75" }} /> 0.80 – 1.30 : Zone optimale</span>
-          <span className="flex items-center gap-2"><span className="w-3 h-3 rounded-full" style={{ background: "#378ADD" }} /> {"< 0.80 : Sous-charge"}</span>
-          <span className="flex items-center gap-2"><span className="w-3 h-3 rounded-full" style={{ background: "#E24B4A" }} /> {"> 1.30 : Surcharge aiguë"}</span>
-        </div>
-        <div className="flex-1 min-w-[200px]">
-          <div className="h-3 rounded-full overflow-hidden relative" style={{ background: "var(--c-surface-3)" }}>
-            <div className="h-full rounded-full transition-all" style={{ width:`${Math.min(100,(acwr/2)*100)}%`, background:acwrColor(acwr) }} />
-          </div>
-          <div className="flex justify-between text-[12px] mt-1" style={{ color: "var(--c-text-3)" }}><span>0</span><span>0.8</span><span>1.3</span><span>2.0</span></div>
-        </div>
+        <p className="text-[12px] max-w-md" style={{ color: "var(--c-text-2)" }}>Valeur de recherche descriptive. Elle ne constitue ni une zone optimale, ni une estimation individuelle du risque de blessure, ni une consigne d'entraînement.</p>
       </div>
 
       {/* Graphique charge */}

@@ -247,6 +247,7 @@ supabase/
     20260801030000_club_branding.sql
     20260801040000_import_club_athletes_rpc.sql
     20260801050000_claim_imported_athlete_on_signup.sql
+    20260801060000_standard_session_rpe_daily_load.sql
   .gitignore
   config.toml
   seed.sql
@@ -1270,7 +1271,8 @@ const FormeDetailPanel = memo(({ metricKey, metrics, sessions, weeklyCharge, ath
               <div>
                 {weekSessions.slice(0, 6).map((s, idx) => {
                   const rpe    = s.validation?.rpe ?? 0;
-                  const load   = (s.durationMinutes ?? 60) * rpe;
+                  const actualDuration = s.validation?.actualDurationMinutes;
+                  const load = Number.isFinite(Number(actualDuration)) ? Number(actualDuration) * rpe : null;
                   const rpeCol = rpe <= 3 ? "#1D9E75" : rpe <= 6 ? "#E8A020" : "#E05252";
                   return (
                     <div key={s.id} style={{
@@ -1288,11 +1290,11 @@ const FormeDetailPanel = memo(({ metricKey, metrics, sessions, weeklyCharge, ath
                       </div>
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <p style={{ fontSize: 12, fontWeight: 500, color: "var(--c-text-1)" }} className="truncate">{s.title}</p>
-                        <p style={{ fontSize: 10.5, color: "var(--c-text-3)" }}>{s.day} · S{s.week} · {s.durationMinutes ?? 60} min</p>
+                        <p style={{ fontSize: 12, color: "var(--c-text-2)" }}>{s.day} · S{s.week} · {actualDuration != null ? `${actualDuration} min réelles` : "durée réelle inconnue"}</p>
                       </div>
                       <div style={{ textAlign: "right", flexShrink: 0 }}>
-                        <p style={{ fontSize: 13, fontWeight: 600, color: rpeCol, fontVariantNumeric: "tabular-nums" }}>{load}</p>
-                        <p style={{ fontSize: 9, color: "var(--c-text-4)" }}>charge</p>
+                        <p style={{ fontSize: 13, fontWeight: 600, color: rpeCol, fontVariantNumeric: "tabular-nums" }}>{load ?? "—"}</p>
+                        <p style={{ fontSize: 12, color: "var(--c-text-2)" }}>charge</p>
                       </div>
                     </div>
                   );
@@ -3406,10 +3408,9 @@ import {
 } from "../../utils/chargeCalculations";
 import { getAthleteAxisProfile } from "../../utils/loadAxes";
 import {
-  getISOWeek, dimColor, acwrColor, colorsFor, parsePerf, isSameDay, parseLocalDate,
-  initialsFromName, getDiscHib, DISC_TYPE_COLORS, WELLNESS_QUESTIONS, METRIC_SCIENCE, EVIDENCE_LEVELS,
+  getISOWeek, dimColor, colorsFor, parsePerf, isSameDay, parseLocalDate,
+  initialsFromName, getDiscHib, DISC_TYPE_COLORS, WELLNESS_QUESTIONS, EVIDENCE_LEVELS,
 } from "../shared";
-import FormeDetailPanel from "../components/FormeDetailPanel";
 import AxisRadarCard from "../../components/ui/AxisRadarCard";
 import { SessionDetailModal } from "./AthletePlanning";
 import { openSessionPdf } from "../../utils/storage";
@@ -3472,10 +3473,10 @@ function computeBadges({ athlete, weeklyCharge, sessions, competitions, myPerfor
 
   const optW = (weeklyCharge.filter(w=>w.athleteId===athlete.id)).filter(w => {
     const m = getAthleteMetricsForWeek(athlete.id, weeklyCharge, w.week);
-    return m.acwr >= 0.8 && m.acwr <= 1.3;
+    return m.variationPercent != null && Math.abs(m.variationPercent) <= 20;
   }).length;
-  if (optW >= 3) add("aw3","Équilibré","3 sem. optimales","#1D9E75","check");
-  if (optW >= 8) add("aw8","Maestro",  "8 sem. optimales","#7C67C8","star");
+  if (optW >= 3) add("aw3","Régulier","3 fenêtres stables","#1D9E75","check");
+  if (optW >= 8) add("aw8","Maestro", "8 fenêtres stables","#7C67C8","star");
 
   if (streak < 3)         addLocked("l1","En feu",      `${3-streak} sem. de plus`);
   if (totalDone < 10)     addLocked("l2","Régulier",    `${10-totalDone} séance(s)`);
@@ -3557,7 +3558,7 @@ const ReadinessRing = memo(({ value, color, size = 128 }) => {
           {displayValue}
         </span>
         <span style={{ fontSize: "var(--text-meta)", fontWeight: 600, letterSpacing: "0.07em", textTransform: "uppercase", color: "var(--c-text-3)", marginTop: "var(--space-1)" }}>
-          Readiness
+          Bien-être
         </span>
       </div>
     </div>
@@ -3575,7 +3576,7 @@ const DailyFocusCard = memo(({
   const presentation = focus.kind === "wellness" ? {
     eyebrow: "Étape suivante",
     title: "Check-in du matin",
-    description: "30 secondes pour fiabiliser ton Readiness et donner le bon contexte à ton coach.",
+    description: "30 secondes pour décrire ton ressenti du jour et donner du contexte à ton coach.",
     cta: "Faire mon check-in",
     color: "var(--color-success)",
     icon: Activity,
@@ -3746,7 +3747,7 @@ export default function AthleteDashboard({
     if (!myCharge.length) return [];
     return [...myCharge].sort((a, b) => a.week - b.week).slice(-8).map(w => ({
       label: `S${w.week}`, charge: w.rawLoad,
-      color: w.rawLoad >= 450 ? "#C0392B" : w.rawLoad >= 320 ? "#C8890A" : "#1D9E75",
+      color: "#4B7BDB",
     }));
   }, [weeklyCharge, athlete.id]);
 
@@ -3796,18 +3797,7 @@ export default function AthleteDashboard({
   const doneThisWeek = weekSessions.filter(s =>
     s.validations?.find(v => v.athleteId === athlete.id && v.status === "done")).length;
 
-  const [activeMetric, setActiveMetric] = useState(null);
-
-  const statusColor =
-    metrics.acwr > 1.3 || metrics.readiness < 50 ? "#C0392B" :
-    metrics.acwr > 1.15 || metrics.fatigue > 60   ? "#C8890A" :
-    "#1D9E75";
-
-  const acwrPct = Math.min(94, Math.max(2, (metrics.acwr / 2) * 100));
-
-  const readinessThreshold = METRIC_SCIENCE.readiness.thresholds.find(
-    t => metrics.readiness >= t.min && metrics.readiness <= t.max
-  );
+  const statusColor = metrics.wellnessScore == null ? "#64748B" : metrics.wellnessScore < 40 ? "#C8890A" : "#1D9E75";
 
   // ══════════════════════════════════════════════════════════════════════════
   return (
@@ -3863,28 +3853,26 @@ export default function AthleteDashboard({
               background: `${statusColor}12`, border: `1px solid ${statusColor}22`,
             }}>
               <div style={{ width: 5, height: 5, borderRadius: "50%", background: statusColor, flexShrink: 0 }} />
-              <span style={{ fontSize: "var(--text-meta)", fontWeight: 600, color: statusColor }}>Readiness {metrics.readiness}</span>
+              <span style={{ fontSize: "var(--text-meta)", fontWeight: 600, color: statusColor }}>Bien-être {metrics.wellnessScore ?? "—"}</span>
             </div>
           </div>
 
           {/* Ring héro — readiness, LE chiffre qui compte le plus, avec le
               reste (fatigue/ACWR/streak) en soutien à côté */}
           <div style={{ display: "flex", alignItems: "center", gap: 18, flexWrap: "wrap" }}>
-            <ReadinessRing value={metrics.readiness} color={dimColor("readiness", metrics.readiness)} />
+            <ReadinessRing value={metrics.wellnessScore ?? 0} color={statusColor} />
 
             <div style={{ flex: 1, minWidth: 190 }}>
-              {readinessThreshold && (
-                <p style={{ fontSize: "var(--text-body)", color: "var(--c-text-2)", lineHeight: "var(--leading-body)", marginBottom: "var(--space-4)" }}>
-                  {readinessThreshold.advice}
-                </p>
-              )}
+              <p style={{ fontSize: "var(--text-body)", color: "var(--c-text-2)", lineHeight: "var(--leading-body)", marginBottom: "var(--space-4)" }}>
+                Ton questionnaire décrit ton ressenti du jour. Il ne prédit pas à lui seul ta récupération ou ta performance.
+              </p>
               <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 8 }}>
                 {[
-                  { key: "fatigue", label: "Fatigue", value: metrics.fatigue,         unit: "",     pct: metrics.fatigue,        danger: metrics.fatigue > 70 },
-                  { key: "acwr",    label: "ACWR",     value: metrics.acwr.toFixed(2),unit: "",     pct: Math.min(100,(metrics.acwr/2)*100), danger: metrics.acwr > 1.3 },
+                  { key: "load7", label: "Charge 7j", value: metrics.load7 ?? "—", unit: "", pct: metrics.load7 && metrics.load28 ? Math.min(100,(metrics.load7/metrics.load28)*100) : 0, danger: false },
+                  { key: "load28", label: "Charge 28j", value: metrics.load28 ?? "—", unit: "", pct: metrics.load28 ? 100 : 0, danger: false },
                   { key: "streak",  label: "Streak",   value: streak,                  unit: " sem", pct: Math.min(100,streak*10), danger: false },
                 ].map(s => {
-                  const col = dimColor(s.key, s.key === "acwr" ? metrics.acwr : Number(s.value));
+                  const col = s.key === "streak" ? dimColor("streak", Number(s.value)) : "#5B8DEF";
                   return (
                     <div key={s.key} className={s.danger ? "pulse-danger-card" : undefined} style={{
                       background: "rgba(255,255,255,0.03)", border: "0.5px solid rgba(255,255,255,0.055)",
@@ -3990,7 +3978,7 @@ export default function AthleteDashboard({
                 <div>
                   <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
                     <p className="card-title">Charge d'entraînement</p>
-                    <span className={`chip ${EVIDENCE_LEVELS.validated.chip}`}>ACWR validé</span>
+                    <span className={`chip ${EVIDENCE_LEVELS.statistical.chip}`}>session-RPE</span>
                   </div>
                   <p className="card-subtitle">8 dernières semaines</p>
                 </div>
@@ -4057,9 +4045,9 @@ export default function AthleteDashboard({
               {/* Métriques inline sous le graphe — pas de cards séparées */}
               <div style={{ padding: "12px 16px", display: "flex", alignItems: "center", gap: 0, borderTop: "1px solid var(--c-border)", marginTop: 4 }}>
                 {[
-                  { label: "ACWR",      value: metrics.acwr.toFixed(2), color: acwrColor(metrics.acwr), sub: "0.8–1.3 optimal" },
-                  { label: "Aiguë",     value: metrics.acute,           color: "#4B7BDB",               sub: "4 sem." },
-                  { label: "Chronique", value: metrics.chronic,         color: "var(--c-text-3)",               sub: "12 sem." },
+                  { label: "7 jours", value: metrics.load7 ?? "—", color: "#4B7BDB", sub: "somme" },
+                  { label: "28 jours", value: metrics.load28 ?? "—", color: "#14B8A6", sub: "somme" },
+                  { label: "Variation", value: metrics.variationPercent == null ? "—" : `${metrics.variationPercent >= 0 ? "+" : ""}${metrics.variationPercent}%`, color: "var(--c-text-2)", sub: "moy. 7j vs 28j" },
                 ].map((s, idx) => (
                   <div key={s.label} style={{
                     flex: 1, textAlign: "center", paddingTop: 2, paddingBottom: 2,
@@ -4076,24 +4064,9 @@ export default function AthleteDashboard({
                 ))}
               </div>
 
-              {/* Réglette ACWR */}
+              {/* Information méthodologique */}
               <div style={{ padding: "0 16px 14px" }}>
-                <div style={{ display: "flex", justifyContent: "space-between", fontSize: "var(--text-meta)", color: "var(--c-text-3)", marginBottom: 6 }}>
-                  <span>Sous-charge</span>
-                  <span style={{ color: "#1D9E75", fontWeight: 500 }}>Zone optimale</span>
-                  <span>Surcharge</span>
-                </div>
-                <div style={{ position: "relative", height: 5, borderRadius: 99, background: "linear-gradient(to right, #4B7BDB 0%, #1D9E75 38%, #1D9E75 62%, #C8890A 78%, #C0392B 100%)" }}>
-                  <div style={{
-                    position: "absolute", top: "50%", transform: "translate(-50%, -50%)",
-                    left: `${acwrPct}%`, width: 11, height: 11, borderRadius: "50%",
-                    background: "white", boxShadow: "0 1px 4px rgba(0,0,0,0.25)",
-                    transition: "left 0.7s cubic-bezier(0.16,1,0.3,1)",
-                  }} />
-                </div>
-                <div style={{ display: "flex", justifyContent: "space-between", fontSize: "var(--text-meta)", color: "var(--c-text-3)", marginTop: 4 }}>
-                  <span>0</span><span>0.8</span><span>1.3</span><span>2.0</span>
-                </div>
+                <p style={{ fontSize: "var(--text-meta)", color: "var(--c-text-2)", lineHeight: 1.5 }}>Charge = durée réellement effectuée × RPE CR10. Les variations sont descriptives et ne correspondent pas à des zones de risque.</p>
               </div>
             </div>
           )}
@@ -4114,20 +4087,19 @@ export default function AthleteDashboard({
               <p className="card-subtitle mb-4">Basé sur ta charge réelle</p>
               <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                 {[
-                  { key: "readiness",    label: "Readiness"       },
-                  { key: "forme",        label: "Forme"           },
-                  { key: "fatigue",      label: "Fatigue"         },
-                  { key: "recuperation", label: "Récupération"    },
-                  { key: "risque",       label: "Signal de charge" },
+                  { key: "readiness", label: "Bien-être déclaré", value: metrics.wellnessScore, color: "#1D9E75" },
+                  { key: "forme", label: "Charge sur 7 jours", value: metrics.load7, color: "#4B7BDB" },
+                  { key: "fatigue", label: "Charge sur 28 jours", value: metrics.load28, color: "#14B8A6" },
+                  { key: "recuperation", label: "EWMA courte", value: metrics.acute == null ? null : Math.round(metrics.acute), color: "#A855F7" },
+                  { key: "risque", label: "EWMA longue", value: metrics.chronic == null ? null : Math.round(metrics.chronic), color: "#EC4899" },
                 ].map(s => {
-                  const val    = metrics[s.key];
-                  const col    = dimColor(s.key, val);
-                  const sci    = METRIC_SCIENCE[s.key];
-                  const thresh = sci?.thresholds.find(t => val >= t.min && val <= t.max);
+                  const val = s.value;
+                  const col = s.color;
+                  const thresh = null;
                   return (
-                    <button key={s.key} onClick={() => setActiveMetric(s.key)}
+                    <div key={s.key}
                       className="tap-feedback"
-                      style={{ background: "var(--c-surface-2)", borderRadius: 10, padding: "10px 12px", textAlign: "left", border: "none", cursor: "pointer", transition: "background 0.15s ease", width: "100%" }}>
+                      style={{ background: "var(--c-surface-2)", borderRadius: 10, padding: "10px 12px", textAlign: "left", border: "none", transition: "background 0.15s ease", width: "100%" }}>
                       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: 7 }}>
                         <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
                           <span style={{ fontSize: 12.5, fontWeight: 400, color: "var(--c-text-1)" }}>{s.label}</span>
@@ -4139,14 +4111,13 @@ export default function AthleteDashboard({
                         </div>
                         <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
                           <span style={{ fontSize: 14, fontWeight: 600, color: col, fontVariantNumeric: "tabular-nums", letterSpacing: "-0.02em" }}>{val}</span>
-                          <ChevronRight size={11} color="var(--c-text-3)" />
                         </div>
                       </div>
                       {/* Barre 3px */}
                       <div style={{ height: 3, background: "rgba(255,255,255,0.07)", borderRadius: 99, overflow: "hidden" }}>
                         <div style={{ height: "100%", width: `${val}%`, background: col, borderRadius: 99, transition: "width 0.8s cubic-bezier(0.16,1,0.3,1)" }} />
                       </div>
-                    </button>
+                    </div>
                   );
                 })}
               </div>
@@ -4440,14 +4411,6 @@ export default function AthleteDashboard({
           )}
         </div>
       </div>
-
-      {activeMetric && (
-        <FormeDetailPanel
-          metricKey={activeMetric} metrics={metrics}
-          sessions={sessions} weeklyCharge={weeklyCharge}
-          athlete={athlete} onClose={() => setActiveMetric(null)}
-        />
-      )}
 
       {openedTodaySession && (
         <SessionDetailModal
@@ -5351,9 +5314,8 @@ export default function AthletePerfs({ athlete, competitions, myPerformances, my
     return all.sort((a, b) => new Date(b.comp.date) - new Date(a.comp.date));
   }, [competitions, athlete.id]);
 
-  // Charge (ACWR) au moment de chaque compétition vs % du PR réalisé —
-  // permet de voir si les bonnes performances arrivent en zone de charge
-  // optimale (0.8–1.3) ou plutôt en surcharge/sous-charge.
+  // Variation de la moyenne quotidienne 7 j vs 28 j au moment de chaque
+  // compétition. Relation descriptive uniquement, sans causalité supposée.
   const chargeVsPerfData = useMemo(() => {
     if (!selectedDisc || !weeklyCharge?.length) return [];
     const rec = athlete.records?.[selectedDisc];
@@ -5371,7 +5333,8 @@ export default function AthletePerfs({ athlete, competitions, myPerformances, my
           : Math.min(105, Math.round((prP.value / resP.value) * 1000) / 10);
         const week    = getISOWeek(parseLocalDate(comp.date.slice(0, 10)));
         const metrics = getAthleteMetricsForWeek(athlete.id, weeklyCharge, week);
-        return { x: metrics.acwr, y: pct, compName: comp.name, date: comp.date, resultStr: result.result };
+        if (metrics.variationPercent == null) return null;
+        return { x: metrics.variationPercent, y: pct, compName: comp.name, date: comp.date, resultStr: result.result };
       })
       .filter(Boolean);
   }, [compHistory, selectedDisc, athlete.id, athlete.records, weeklyCharge]);
@@ -5912,18 +5875,14 @@ export default function AthletePerfs({ athlete, competitions, myPerformances, my
             <div className="card" style={{ padding: 20 }}>
               <p className="card-title">Charge et niveau de performance</p>
               <p style={{ fontSize: 13, lineHeight: 1.5, color: "var(--c-text-2)", marginTop: 4, marginBottom: 16 }}>
-                ACWR au moment de chaque compétition (axe X) · % du PR réalisé (axe Y) — {selectedDisc}
+                Variation de charge moyenne 7 j vs 28 j (axe X) · % du PR réalisé (axe Y) — {selectedDisc}. Corrélation descriptive, pas prédiction.
               </p>
               <ResponsiveContainer width="100%" height={260}>
                 <ScatterChart margin={{ top: 12, right: 16, bottom: 12, left: 0 }}>
                   <CartesianGrid vertical={false} stroke="rgba(255,255,255,0.07)" />
-                  <XAxis dataKey="x" type="number" domain={[0.4, 1.8]} tick={{ fontSize: 12, fill: "var(--c-text-3)" }} axisLine={false} tickLine={false} />
+                  <XAxis dataKey="x" type="number" domain={([min, max]) => [Math.min(-20, min), Math.max(20, max)]} tickFormatter={value => `${value}%`} tick={{ fontSize: 12, fill: "var(--c-text-3)" }} axisLine={false} tickLine={false} />
                   <YAxis dataKey="y" type="number" domain={[70, 105]} tickFormatter={value => `${value}%`} tick={{ fontSize: 12, fill: "var(--c-text-3)" }} axisLine={false} tickLine={false} width={46} />
                   <ZAxis range={[90, 90]} />
-                  {/* Zone optimale infusée en fond plutôt que des lignes pointillées
-                      — même esprit que la réglette ACWR du hero (bande de couleur,
-                      pas de traits techniques) */}
-                  <ReferenceArea x1={0.8} x2={1.3} fill="#1D9E75" fillOpacity={0.08} stroke="none" />
                   <Tooltip content={({ active, payload }) => {
                     if (!active || !payload?.length) return null;
                     const d = payload[0].payload;
@@ -5932,7 +5891,7 @@ export default function AthletePerfs({ athlete, competitions, myPerformances, my
                         <p style={{ fontSize: 13, fontWeight: 700, color: "var(--c-text-1)" }}>{d.compName}</p>
                         <p style={{ fontSize: 12, color: "var(--c-text-2)", marginTop: 2, marginBottom: 8 }}>{parseLocalDate(d.date.slice(0, 10)).toLocaleDateString("fr-BE", { day: "numeric", month: "short", year: "numeric" })}</p>
                         <p style={{ fontSize: 12, color: "var(--c-text-2)" }}>Résultat : <strong style={{ color: "#7BD8B4" }}>{d.resultStr}</strong></p>
-                        <p style={{ fontSize: 12, color: "var(--c-text-2)", marginTop: 3 }}>ACWR : <strong>{d.x.toFixed(2)}</strong> · Niveau : <strong>{d.y}%</strong></p>
+                        <p style={{ fontSize: 12, color: "var(--c-text-2)", marginTop: 3 }}>Variation 7j/28j : <strong>{d.x >= 0 ? "+" : ""}{d.x}%</strong> · Niveau : <strong>{d.y}%</strong></p>
                       </div>
                     );
                   }} />
@@ -7069,7 +7028,7 @@ import {
 } from "lucide-react";
 import { LineChart, Line, ResponsiveContainer } from "recharts";
 import { supabase } from "../../utils/supabaseClient";
-import { CATEGORIES, colorsFor, acwrColor } from "../shared";
+import { CATEGORIES, colorsFor } from "../shared";
 import { getRPELabel } from "../../utils/chargeCalculations";
 import { parseLocalDate } from "../../utils/helpers";
 import {
@@ -7131,13 +7090,13 @@ function WeekReportDetail({ report }) {
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 8 }}>
         <div style={{ padding: "12px 10px", borderRadius: 14, background: "var(--c-surface-2)", border: "1px solid var(--c-border)", textAlign: "center" }}>
-          <p style={{ fontSize: 12, fontWeight: 700, color: "var(--c-text-2)", textTransform: "uppercase", letterSpacing: "0.05em" }}>Charge aiguë</p>
+          <p style={{ fontSize: 12, fontWeight: 700, color: "var(--c-text-2)", textTransform: "uppercase", letterSpacing: "0.05em" }}>EWMA courte</p>
           <p style={{ fontSize: 19, fontWeight: 700, color: "var(--c-text-1)", marginTop: 4 }}>{stats.total > 0 ? metrics.acute : "—"}</p>
         </div>
         <div style={{ padding: "12px 10px", borderRadius: 14, background: "var(--c-surface-2)", border: "1px solid var(--c-border)", textAlign: "center" }}>
-          <p style={{ fontSize: 12, fontWeight: 700, color: "var(--c-text-2)", textTransform: "uppercase", letterSpacing: "0.05em" }}>ACWR</p>
-          <p style={{ fontSize: 19, fontWeight: 700, color: stats.total > 0 ? acwrColor(metrics.acwr) : "var(--c-text-1)", marginTop: 4 }}>
-            {stats.total > 0 ? metrics.acwr.toFixed(2) : "—"}
+          <p style={{ fontSize: 12, fontWeight: 700, color: "var(--c-text-2)", textTransform: "uppercase", letterSpacing: "0.05em" }}>Charge 7 jours</p>
+          <p style={{ fontSize: 19, fontWeight: 700, color: "#A9CBFB", marginTop: 4 }}>
+            {stats.total > 0 ? (metrics.load7 ?? "—") : "—"}
           </p>
         </div>
         <div style={{ padding: "12px 10px", borderRadius: 14, background: "var(--c-surface-2)", border: "1px solid var(--c-border)", textAlign: "center" }}>
@@ -7698,6 +7657,22 @@ const SessionDetailModal = memo(({ session, athlete, allAthletes, onClose, onSet
   const c   = cat(session.category);
   const val = session.validations?.find(v => v.athleteId === athlete.id);
   const [comment, setComment] = useState(val?.comment ?? "");
+  const [actualDuration, setActualDuration] = useState(
+    val?.durationSource === "reported" && val?.actualDurationMinutes != null
+      ? String(val.actualDurationMinutes)
+      : "",
+  );
+  const [loadError, setLoadError] = useState("");
+
+  const submitRpe = (rpe) => {
+    const duration = Number(actualDuration);
+    if (!Number.isFinite(duration) || duration <= 0 || duration > 1440) {
+      setLoadError("Indique d’abord la durée réellement effectuée (entre 1 et 1 440 minutes).");
+      return;
+    }
+    setLoadError("");
+    onSetRpe(session.id, athlete.id, rpe, duration);
+  };
 
   const dateStr = session.sessionDate
     ? parseLocalDate(session.sessionDate.slice(0, 10)).toLocaleDateString("fr-BE", {
@@ -7871,6 +7846,29 @@ const SessionDetailModal = memo(({ session, athlete, allAthletes, onClose, onSet
           {/* ── RPE ── */}
           {hasPerf && (
             <div>
+              <label htmlFor="athlete-actual-duration" style={labelStyle}>Durée réellement effectuée</label>
+              <div className="flex items-center gap-3 mb-4">
+                <input
+                  id="athlete-actual-duration"
+                  type="number"
+                  min="1"
+                  max="1440"
+                  inputMode="numeric"
+                  value={actualDuration}
+                  onChange={event => { setActualDuration(event.target.value); setLoadError(""); }}
+                  placeholder={session.durationMinutes ? String(session.durationMinutes) : "Minutes"}
+                  className="input-premium"
+                  style={{ width: 132 }}
+                />
+                <span style={{ fontSize: 13, color: "var(--c-text-2)" }}>
+                  minutes{session.durationMinutes ? ` · prévu : ${session.durationMinutes} min` : ""}
+                </span>
+              </div>
+              {val?.durationSource === "planned_legacy" && (
+                <p style={{ fontSize: 12, color: "#F0CB61", marginTop: -8, marginBottom: 12 }}>
+                  Ancienne charge estimée avec la durée planifiée. Renseigne la durée réelle pour la fiabiliser.
+                </p>
+              )}
               <label style={labelStyle}>
                 Effort ressenti (RPE)
                 {val?.rpe != null && (
@@ -7884,7 +7882,7 @@ const SessionDetailModal = memo(({ session, athlete, allAthletes, onClose, onSet
                   const rc  = rpeColor(i);
                   const sel = val?.rpe === i;
                   return (
-                    <button key={i} type="button" aria-label={`RPE ${i} sur 10`} aria-pressed={sel} onClick={() => onSetRpe(session.id, athlete.id, i)}
+                    <button key={i} type="button" aria-label={`RPE ${i} sur 10`} aria-pressed={sel} onClick={() => submitRpe(i)}
                       className="tap-feedback"
                       style={{
                         width: 44, height: 44, borderRadius: 12, fontSize: 13, fontWeight: 800,
@@ -7908,6 +7906,7 @@ const SessionDetailModal = memo(({ session, athlete, allAthletes, onClose, onSet
                   </div>
                 ))}
               </div>
+              {loadError && <p role="alert" style={{ marginTop: 10, fontSize: 13, color: "#F19A9A" }}>{loadError}</p>}
             </div>
           )}
 
@@ -8387,27 +8386,27 @@ export const METRIC_TAXONOMY = {
 
 export const METRIC_SCIENCE = {
   readiness: {
-    label: "Readiness", icon: "⚡", evidenceLevel: "convention",
+    label: "Bien-être déclaré", icon: "⚡", evidenceLevel: "convention",
     color: (v) => v >= 75 ? "#1D9E75" : v >= 50 ? "#EF9F27" : "#E24B4A",
     unit: "/100", optimal: "≥ 75",
-    formula: "Moyenne pondérée : Forme (40%) + Récupération (35%) + Wellness (25%)",
-    what: "Le Readiness combine forme, récupération et wellness en un score d'aide à la décision pour la journée. Un score élevé suggère que ton corps est mieux disposé à absorber une charge intense — une estimation, pas une garantie.",
+    formula: "AthleteOS Wellness Questionnaire v1 : cinq réponses 1–5 normalisées sur 0–100.",
+    what: "Ce score résume le ressenti déclaré du jour. Cet instrument interne n'est pas le Hooper Index et ses propriétés psychométriques restent à valider.",
     sources: [
       { ref: "Gabbett (2016)", detail: "Training-injury prevention paradox — BJSM" },
       { ref: "Halson (2014)",  detail: "Monitoring training load — Sports Med" },
     ],
     thresholds: [
-      { min: 75, max: 100, label: "Optimal",    color: "#1D9E75", advice: "Séance intense possible. Profites-en pour travailler vitesse ou force maximale." },
-      { min: 55, max: 74,  label: "Acceptable", color: "#EF9F27", advice: "Séance modérée recommandée. Évite les blocs à haute intensité répétée." },
-      { min: 0,  max: 54,  label: "Faible",     color: "#E24B4A", advice: "Récupération active, mobilité ou repos complet. Ne force pas." },
+      { min: 75, max: 100, label: "Ressenti favorable", color: "#1D9E75", advice: "Retour déclaré favorable, à mettre en contexte avec le coach." },
+      { min: 55, max: 74, label: "Ressenti intermédiaire", color: "#EF9F27", advice: "Retour déclaré intermédiaire, sans prescription automatique." },
+      { min: 0, max: 54, label: "Ressenti difficile", color: "#E24B4A", advice: "Prends contact avec ton coach pour expliquer le contexte." },
     ],
   },
   forme: {
-    label: "Forme", icon: "📈", evidenceLevel: "convention",
+    label: "EWMA longue", icon: "📈", evidenceLevel: "statistical",
     color: (v) => v >= 75 ? "#1D9E75" : v >= 50 ? "#EF9F27" : "#E24B4A",
     unit: "/100", optimal: "≥ 65",
-    formula: "Charge chronique (moyenne 4 semaines) normalisée sur 100.",
-    what: "La Forme (fitness) représente les adaptations positives accumulées sur les 4 dernières semaines.",
+    formula: "EWMA quotidienne, λ = 2/(28+1), calculée uniquement sur des jours connus.",
+    what: "L'EWMA longue lisse la charge interne observée. Elle ne mesure pas directement la forme ni l'adaptation physiologique.",
     sources: [
       { ref: "Banister et al. (1975)", detail: "Modèle Fitness-Fatigue — Research Quarterly" },
       { ref: "Morton et al. (1990)",   detail: "Modelling human performance — EJP" },
@@ -8419,11 +8418,11 @@ export const METRIC_SCIENCE = {
     ],
   },
   fatigue: {
-    label: "Fatigue", icon: "🔋", inverted: true, evidenceLevel: "convention",
+    label: "EWMA courte", icon: "🔋", inverted: true, evidenceLevel: "statistical",
     color: (v) => v > 70 ? "#E24B4A" : v > 45 ? "#EF9F27" : "#1D9E75",
     unit: "/100", optimal: "≤ 45",
-    formula: "Charge aiguë (moyenne 7 derniers jours) normalisée.",
-    what: "La fatigue représente l'accumulation de stress physiologique récent.",
+    formula: "EWMA quotidienne, λ = 2/(7+1), calculée uniquement sur des jours connus.",
+    what: "L'EWMA courte lisse la charge interne récente. Elle ne mesure pas directement la fatigue physiologique.",
     sources: [
       { ref: "Banister et al. (1975)", detail: "Modèle Fitness-Fatigue — Research Quarterly" },
       { ref: "Meeusen et al. (2013)",  detail: "Overreaching/overtraining — MSSE" },
@@ -8435,19 +8434,19 @@ export const METRIC_SCIENCE = {
     ],
   },
   recuperation: {
-    label: "Récupération", icon: "🌙", evidenceLevel: "convention",
+    label: "Règle d'espacement", icon: "🌙", evidenceLevel: "convention",
     color: (v) => v >= 70 ? "#1D9E75" : v >= 45 ? "#EF9F27" : "#E24B4A",
     unit: "/100", optimal: "≥ 70",
-    formula: "Milieu d'une plage d'heures estimée (pas un chiffre unique) à partir de la catégorie de la dernière séance, de la charge relative, du RPE, du wellness récent et de l'accumulation de séances difficiles — voir estimateRecovery() dans trainingLoad.js.",
-    what: "Estimation de la disponibilité neuromusculaire et métabolique, sous forme de plage assortie d'un niveau de confiance — jamais un chiffre exact ni un \"totalement récupéré\" certain. La confiance baisse quand les données (wellness, historique récent) manquent ou sont anciennes ; sans aucune séance récente, l'app dit explicitement qu'elle ne peut pas estimer, plutôt que d'inventer une valeur.",
+    formula: "Fenêtre configurable du club calculée depuis l'heure réelle de fin de la dernière séance.",
+    what: "Cette fenêtre aide à programmer l'espacement entre séances. Elle n'est pas une estimation physiologique et ne signifie jamais qu'un athlète est complètement récupéré.",
     sources: [
       { ref: "Hasegawa et al. (2024)", detail: "Recovery monitoring — IJSPP" },
       { ref: "Kellmann et al. (2018)", detail: "Recovery and Stress in Sport — Routledge" },
     ],
     thresholds: [
-      { min: 70, max: 100, label: "Probablement suffisante", color: "#1D9E75", advice: "Signaux compatibles avec une disponibilité pour une nouvelle charge — reste une estimation." },
-      { min: 45, max: 69,  label: "Probablement partielle",  color: "#EF9F27", advice: "Récupération vraisemblablement en cours. Séance technique ou légère envisageable." },
-      { min: 0,  max: 44,  label: "Probablement insuffisante", color: "#E24B4A", advice: "Signaux de récupération incomplète. Vaut le coup d'en discuter avant une séance intense." },
+      { min: 70, max: 100, label: "Fenêtre terminée", color: "#1D9E75", advice: "La règle d'espacement est terminée ; cela ne prouve pas une récupération complète." },
+      { min: 45, max: 69, label: "Transition", color: "#EF9F27", advice: "La fenêtre configurée arrive à son terme." },
+      { min: 0, max: 44, label: "Fenêtre active", color: "#E24B4A", advice: "La règle d'espacement configurée est encore active." },
     ],
   },
   risque: {
@@ -8458,20 +8457,20 @@ export const METRIC_SCIENCE = {
     // multifactorielle et partiellement débattue (Gabbett lui-même souligne
     // que d'autres facteurs comptent : sommeil, stress, antécédents,
     // biomécanique, génétique...). Un score bas ne garantit rien non plus.
-    label: "Signal de charge", icon: "⚠️", inverted: true, evidenceLevel: "convention",
+    label: "Qualité des données", icon: "⚠️", inverted: true, evidenceLevel: "convention",
     color: (v) => v > 60 ? "#E24B4A" : v > 30 ? "#EF9F27" : "#1D9E75",
     unit: "/100", optimal: "≤ 30",
-    formula: "Combinaison ACWR (60%) + monotonie (20%) + fatigue estimée (20%) — pondération AthleteOS inspirée des travaux de Gabbett et Foster, pas une formule qu'ils ont eux-mêmes publiée.",
-    what: "Ce signal combine plusieurs indicateurs associés statistiquement à un risque accru dans la littérature sportive (surcharge aiguë, entraînements monotones, fatigue accumulée). Ce n'est PAS une prédiction individuelle de blessure ni un diagnostic — de nombreux facteurs de blessure connus n'y sont pas intégrés (sommeil, stress, antécédents, biomécanique). À interpréter avec ton coach, jamais seul.",
+    formula: "Complétude des durées réelles, RPE et jours quotidiens connus.",
+    what: "Indique si les calculs descriptifs reposent sur assez de données quotidiennes. Ce n'est ni un risque de blessure, ni un diagnostic.",
     sources: [
       { ref: "Gabbett (2016)",      detail: "Training-injury prevention paradox — BJSM" },
       { ref: "Hulin et al. (2016)", detail: "Spikes in acute workload — BJSM" },
       { ref: "Foster (1998)",       detail: "Monotony of training — J Strength Cond" },
     ],
     thresholds: [
-      { min: 0,  max: 30,  label: "Faible", color: "#1D9E75", advice: "Aucun signal notable dans ces indicateurs. Continue ton programme normalement." },
-      { min: 31, max: 60,  label: "Modéré", color: "#EF9F27", advice: "ACWR ou monotonie élevés. Vaut le coup d'en parler avec ton coach pour varier les intensités." },
-      { min: 61, max: 100, label: "Élevé",  color: "#E24B4A", advice: "Plusieurs signaux cumulés. Parles-en à ton coach pour décider ensemble d'ajuster la charge — ce score n'est pas un ordre." },
+      { min: 0, max: 30, label: "Incomplète", color: "#E24B4A", advice: "Plusieurs données quotidiennes manquent." },
+      { min: 31, max: 60, label: "Partielle", color: "#EF9F27", advice: "Certaines fenêtres restent indisponibles." },
+      { min: 61, max: 100, label: "Bonne", color: "#1D9E75", advice: "Les données nécessaires sont majoritairement présentes." },
     ],
   },
 };
@@ -11979,7 +11978,7 @@ function RadarDot({ cx, cy, payload }) {
 }
 
 const AxisRadarCard = memo(({
-  profile, title = "Profil de charge", subtitle = "Comparé à tes semaines habituelles",
+  profile, title = "Profil de charge", subtitle = "Répartition descriptive des contraintes de la dernière semaine connue",
   sessions = null, athleteId = null, currentWeek = null,
 }) => {
   const [expanded, setExpanded] = useState(null); // axisId ouvert, ou null
@@ -12017,7 +12016,7 @@ const AxisRadarCard = memo(({
         {AXIS_IDS.map(id => {
           const axis     = LOAD_AXES[id];
           const p        = profile[id];
-          const flagged  = p.label !== "Normal";
+          const flagged  = p.label === "Dominant";
           const isOpen   = expanded === id;
           const contributors = isOpen && sessions && athleteId != null && currentWeek != null
             ? getAxisTopContributors(athleteId, sessions, id, currentWeek)
@@ -12047,10 +12046,11 @@ const AxisRadarCard = memo(({
                     <span style={{ fontSize: 9 }}>modèle {CURRENT_AXIS_MODEL_VERSION}</span>
                   </div>
                   <p>
-                    Charge récente : <strong style={{ color: "var(--c-text-2)" }}>{p.acute}</strong> · Ta charge habituelle sur cet axe : <strong style={{ color: "var(--c-text-2)" }}>{p.chronic}</strong>
+                    Charge de la semaine S{p.currentWeek} : <strong style={{ color: "var(--c-text-2)" }}>{p.currentLoad}</strong>
+                    {p.habitualLoad != null && <> · Moyenne précédente : <strong style={{ color: "var(--c-text-2)" }}>{p.habitualLoad}</strong></>}
                   </p>
                   <p style={{ marginTop: 2 }}>
-                    Fiabilité de cette baseline : <strong style={{ color: "var(--c-text-2)" }}>{p.dataQuality}</strong> ({p.weeksOfData} semaine{p.weeksOfData > 1 ? "s" : ""} de données)
+                    Qualité de l'historique : <strong style={{ color: "var(--c-text-2)" }}>{p.dataQuality}</strong> ({p.weeksOfData} semaine{p.weeksOfData > 1 ? "s" : ""} de données). Convention descriptive, pas estimation de risque.
                   </p>
                   {contributors.length > 0 && (
                     <div style={{ marginTop: 6 }}>
@@ -15417,10 +15417,11 @@ export default memo(Alerts);
 import { memo, useMemo } from "react";
 import { ChevronRight, HeartPulse } from "lucide-react";
 import { getAthleteMetricsForWeek, getStatusLabel } from "../utils/chargeCalculations";
-import { scoreColor, acwrColor } from "./athleteListShared";
+import { getISOWeek } from "../utils/helpers.js";
+import { scoreColor } from "./athleteListShared";
 
 const AthleteCard = memo(({ athlete, weeklyCharge, onClick }) => {
-  const metrics        = useMemo(() => getAthleteMetricsForWeek(athlete.id, weeklyCharge), [athlete.id, weeklyCharge]);
+  const metrics        = useMemo(() => getAthleteMetricsForWeek(athlete.id, weeklyCharge, getISOWeek(new Date())), [athlete.id, weeklyCharge]);
   const { readiness, fatigue, acwr } = metrics;
   const status         = getStatusLabel(readiness, fatigue, acwr);
   const activeInjuries = athlete.injuries?.filter(i => i.status !== "résolu") ?? [];
@@ -15471,9 +15472,9 @@ const AthleteCard = memo(({ athlete, weeklyCharge, onClick }) => {
       {hasCharge ? (
         <div className="grid grid-cols-3 gap-2">
           {[
-            { label: "Readiness", value: readiness,       color: scoreColor(readiness)       },
-            { label: "Fatigue",   value: fatigue,         color: scoreColor(fatigue, true)   },
-            { label: "ACWR",      value: acwr.toFixed(2), color: acwrColor(acwr)             },
+            { label: "Bien-être", value: metrics.wellnessScore ?? "—", color: scoreColor(metrics.wellnessScore ?? 0) },
+            { label: "Charge 7j", value: metrics.load7 ?? "—", color: "#378ADD" },
+            { label: "Charge 28j", value: metrics.load28 ?? "—", color: "#A9CBFB" },
           ].map(s => (
             <div key={s.label} className="rounded-2xl p-2.5 text-center" style={{ background: "var(--c-surface-2)" }}>
               <p className="text-[18px] font-bold leading-tight" style={{ color: s.color }}>{s.value}</p>
@@ -15570,6 +15571,8 @@ function AthleteList() {
 
       const remappedCharge = (weeklyChargeRes.data ?? []).map(c => ({
         athleteId: c.athlete_id, week: c.week, rawLoad: c.raw_load,
+        dailyLoads: c.daily_loads ?? [], knownDays: c.known_days ?? 0,
+        unknownDays: c.unknown_days ?? 0, estimatedDays: c.estimated_days ?? 0,
       }));
 
       setAthletes((athletesRes.data ?? []).map(a => {
@@ -15594,7 +15597,7 @@ function AthleteList() {
       setExistingEmails((usersRes.data ?? []).map((row) => row.email).filter(Boolean));
       setSessions((sessionsRes.data ?? []).map(s => {
         const rows = (sessionAthletesRes.data ?? []).filter(v => v.session_id === s.id);
-        return { id: s.id, week: s.week, day: s.day, time: s.time, type: s.type, category: s.category, title: s.title, description: s.description, instructions: s.instructions, loadWeight: s.load_weight, pdfUrl: s.pdf_url, athleteIds: rows.map(v => v.athlete_id), validations: rows.map(v => ({ athleteId: v.athlete_id, status: v.status, feeling: v.feeling, fatigue: v.fatigue, comment: v.comment })) };
+        return { id: s.id, week: s.week, day: s.day, sessionDate: s.session_date, time: s.time, type: s.type, category: s.category, title: s.title, description: s.description, instructions: s.instructions, durationMinutes: s.duration_minutes, loadWeight: s.load_weight, pdfUrl: s.pdf_url, athleteIds: rows.map(v => v.athlete_id), validations: rows.map(v => ({ athleteId: v.athlete_id, status: v.status, feeling: v.feeling, fatigue: v.fatigue, comment: v.comment, rpe: v.rpe, actualDurationMinutes: v.actual_duration_minutes, durationSource: v.duration_source })) };
       }));
       setCompetitions((competitionsRes.data ?? []).map(c => ({
         id: c.id, name: c.name, date: c.date, location: c.location, type: c.type,
@@ -16071,6 +16074,7 @@ export const labelCls = "block text-[12px] font-bold uppercase tracking-wide mb-
 import { memo, useState, useMemo } from "react";
 import { ArrowLeft, HeartPulse, Pencil, Trash2 } from "lucide-react";
 import { getAthleteMetricsForWeek } from "../utils/chargeCalculations";
+import { getISOWeek } from "../utils/helpers.js";
 import { TABS, StatusBadge, ScoreRing } from "./athleteListShared";
 import { TabPerformances, TabCharge, TabEntrainements, TabBlessures, TabProfil } from "./AthleteProfileTabs";
 import { ConfirmDialog, InlineNotice, SegmentedTabs } from "../components/ui/premium";
@@ -16081,7 +16085,7 @@ const AthleteProfile = memo(({ athlete, weeklyCharge, sessions, competitions, on
   const [deleting,       setDeleting]       = useState(false);
   const [deleteError,   setDeleteError]   = useState(null);
 
-  const metrics        = useMemo(() => getAthleteMetricsForWeek(athlete.id, weeklyCharge), [athlete.id, weeklyCharge]);
+  const metrics        = useMemo(() => getAthleteMetricsForWeek(athlete.id, weeklyCharge, getISOWeek(new Date())), [athlete.id, weeklyCharge]);
   const { readiness, fatigue, acwr } = metrics;
   const activeInjuries = athlete.injuries?.filter(i => i.status !== "résolu") ?? [];
 
@@ -16151,19 +16155,19 @@ const AthleteProfile = memo(({ athlete, weeklyCharge, sessions, competitions, on
 
           {/* Métriques inline */}
           <div className="flex items-center gap-3 flex-shrink-0">
-            <ScoreRing value={readiness} color="white" label="Readiness" size={80} />
+            <ScoreRing value={metrics.wellnessScore ?? 0} color="white" label="Bien-être" size={80} />
             <div className="space-y-2 text-[12px]">
               <div className="flex items-center justify-between gap-6">
-                <span style={{ color: "rgba(255,255,255,0.76)" }}>Fatigue</span>
-                <span className="font-bold text-white">{fatigue}</span>
+                <span style={{ color: "rgba(255,255,255,0.76)" }}>Charge 7 jours</span>
+                <span className="font-bold text-white">{metrics.load7 ?? "—"}</span>
               </div>
               <div className="flex items-center justify-between gap-6">
-                <span style={{ color: "rgba(255,255,255,0.76)" }}>Forme</span>
-                <span className="font-bold text-white">{metrics.forme}</span>
+                <span style={{ color: "rgba(255,255,255,0.76)" }}>Charge 28 jours</span>
+                <span className="font-bold text-white">{metrics.load28 ?? "—"}</span>
               </div>
               <div className="flex items-center justify-between gap-6">
-                <span style={{ color: "rgba(255,255,255,0.76)" }}>ACWR</span>
-                <span className="font-bold text-white">{acwr.toFixed(2)}</span>
+                <span style={{ color: "rgba(255,255,255,0.76)" }}>Variation</span>
+                <span className="font-bold text-white">{metrics.variationPercent == null ? "—" : `${metrics.variationPercent >= 0 ? "+" : ""}${metrics.variationPercent}%`}</span>
               </div>
             </div>
           </div>
@@ -16236,7 +16240,7 @@ import { getAthleteAxisProfile } from "../utils/loadAxes";
 import { getISOWeek } from "../utils/helpers.js";
 import { parsePerf, pctOfReference } from "../athlete/shared.js";
 import {
-  RADAR_KEYS, scoreColor, acwrColor,
+  RADAR_KEYS, scoreColor,
   ValidationBadge, StarRow, EmptySection, ChartTooltip, ScoreRing,
 } from "./athleteListShared";
 import AddRecordModal from "./AddRecordModal";
@@ -16418,7 +16422,7 @@ export const TabPerformances = memo(({ athlete, competitions, onAddRecord }) => 
 // ─── Onglet Charge ────────────────────────────────────────────────────────────
 
 export const TabCharge = memo(({ athlete, metrics, weeklyCharge, competitions, sessions }) => {
-  const { fatigue, forme, recuperation, readiness, risque, acwr } = metrics;
+  const { load7, load28, variationPercent, acute, chronic, acwr } = metrics;
   const chartData = useMemo(() => computeChargeChartData(athlete.id, weeklyCharge), [athlete.id, weeklyCharge]);
   const currentWeek = useMemo(() => getISOWeek(new Date()), []);
   const axisProfile = useMemo(
@@ -16436,11 +16440,11 @@ export const TabCharge = memo(({ athlete, metrics, weeklyCharge, competitions, s
   if (!hasCharge) return <EmptySection icon={Activity} title="Aucune charge enregistrée" sub="Les scores apparaîtront dès la première séance saisie." />;
 
   const scoreCards = [
-    { label: "Fatigue",      value: fatigue,      color: scoreColor(fatigue, true),  hint: "> 70 = alerte"  },
-    { label: "Forme",        value: forme,        color: scoreColor(forme),          hint: "> 65 = optimal" },
-    { label: "Récupération", value: recuperation, color: scoreColor(recuperation),   hint: "0–100"          },
-    { label: "Readiness",    value: readiness,    color: scoreColor(readiness),      hint: "> 75 = optimal" },
-    { label: "Signal",       value: risque,       color: scoreColor(risque, true),   hint: "> 60 = à examiner" },
+    { label: "Charge 7 jours", value: load7 ?? "—", color: "#378ADD", hint: "somme observée" },
+    { label: "Charge 28 jours", value: load28 ?? "—", color: "#A9CBFB", hint: "somme observée" },
+    { label: "EWMA courte", value: acute == null ? "—" : Math.round(acute), color: "#14B8A6", hint: "série quotidienne" },
+    { label: "EWMA longue", value: chronic == null ? "—" : Math.round(chronic), color: "#A855F7", hint: "série quotidienne" },
+    { label: "Variation", value: variationPercent == null ? "—" : `${variationPercent >= 0 ? "+" : ""}${variationPercent}%`, color: "#EF9F27", hint: "moy. 7j vs 28j" },
   ];
 
   return (
@@ -16455,24 +16459,14 @@ export const TabCharge = memo(({ athlete, metrics, weeklyCharge, competitions, s
         ))}
       </div>
 
-      {/* ACWR */}
+      {/* ACWR expérimental : jamais utilisé comme cible ou signal de risque. */}
       <div className="card px-6 py-5 flex items-center justify-between flex-wrap gap-4">
         <div>
-          <p className="meta-text font-bold uppercase tracking-wide mb-1">ACWR (Acute : Chronic)</p>
-          <p className="text-[32px] font-bold leading-none" style={{ color: acwrColor(acwr) }}>{acwr.toFixed(2)}</p>
-          <p className="meta-text mt-1">Cible : 0.80 – 1.30</p>
+          <p className="meta-text font-bold uppercase tracking-wide mb-1">Métrique expérimentale · ACWR EWMA</p>
+          <p className="text-[32px] font-bold leading-none" style={{ color: "#94A3B8" }}>{acwr == null ? "—" : acwr.toFixed(2)}</p>
+          <p className="meta-text mt-1">Affiché seulement avec 28 jours quotidiens continus connus</p>
         </div>
-        <div className="flex flex-col gap-1.5 text-[12px]" style={{ color: "var(--c-text-2)" }}>
-          <span className="flex items-center gap-2"><span className="w-3 h-3 rounded-full" style={{ background: "#1D9E75" }} /> 0.80 – 1.30 : Zone optimale</span>
-          <span className="flex items-center gap-2"><span className="w-3 h-3 rounded-full" style={{ background: "#378ADD" }} /> {"< 0.80 : Sous-charge"}</span>
-          <span className="flex items-center gap-2"><span className="w-3 h-3 rounded-full" style={{ background: "#E24B4A" }} /> {"> 1.30 : Surcharge aiguë"}</span>
-        </div>
-        <div className="flex-1 min-w-[200px]">
-          <div className="h-3 rounded-full overflow-hidden relative" style={{ background: "var(--c-surface-3)" }}>
-            <div className="h-full rounded-full transition-all" style={{ width:`${Math.min(100,(acwr/2)*100)}%`, background:acwrColor(acwr) }} />
-          </div>
-          <div className="flex justify-between text-[12px] mt-1" style={{ color: "var(--c-text-3)" }}><span>0</span><span>0.8</span><span>1.3</span><span>2.0</span></div>
-        </div>
+        <p className="text-[12px] max-w-md" style={{ color: "var(--c-text-2)" }}>Valeur de recherche descriptive. Elle ne constitue ni une zone optimale, ni une estimation individuelle du risque de blessure, ni une consigne d'entraînement.</p>
       </div>
 
       {/* Graphique charge */}
@@ -16830,7 +16824,7 @@ import { memo, useMemo, useState, useEffect, useCallback } from "react";
 import {
   LineChart, Line, AreaChart, Area,
   XAxis, YAxis, Tooltip, ResponsiveContainer,
-  CartesianGrid, ReferenceLine, Legend,
+  CartesianGrid, Legend,
 } from "recharts";
 import {
   Activity, TrendingUp, TrendingDown, Minus,
@@ -16875,15 +16869,13 @@ function getRawLoad(weeklyCharge, athleteId, week) {
 }
 
 function chargeColor(rawLoad) {
-  if (rawLoad >= 450) return "#E24B4A";
-  if (rawLoad >= 320) return "#EF9F27";
-  return "#1D9E75";
+  return rawLoad > 0 ? "#378ADD" : "#64748B";
 }
 
 function chargeLabel(rawLoad) {
-  if (rawLoad >= 450) return { dot: "🔴", label: "Surcharge",  cls: "bg-[rgba(224,82,82,0.15)] text-[#E05252]"  };
-  if (rawLoad >= 320) return { dot: "🟡", label: "Modéré",     cls: "bg-[rgba(232,160,32,0.15)] text-[#E8A020]" };
-  return                     { dot: "🟢", label: "Optimal",    cls: "bg-[rgba(29,158,117,0.15)] text-[#4DC9A0]" };
+  return rawLoad > 0
+    ? { dot: "●", label: "Observée", cls: "bg-[rgba(55,138,221,0.15)] text-[#A9CBFB]" }
+    : { dot: "○", label: "Aucune", cls: "bg-[rgba(100,116,139,0.15)] text-[#94A3B8]" };
 }
 
 function computeGroupACWRSeries(athletes, weeklyCharge) {
@@ -16955,8 +16947,8 @@ const MetricCard = memo(({ icon: Icon, label, value, sub, color, trend }) => (
   </div>
 ));
 
-const AlertSignals = memo(({ fatigueAlerts, acwrAlerts }) => {
-  const signalCount = fatigueAlerts.length + acwrAlerts.length;
+const AlertSignals = memo(({ fatigueAlerts }) => {
+  const signalCount = fatigueAlerts.length;
   return (
     <section className="card overflow-hidden" aria-labelledby="charge-signals-title">
       <div className="px-5 py-4 flex items-center justify-between gap-3 border-b" style={{ borderColor: "var(--c-border)" }}>
@@ -16977,7 +16969,7 @@ const AlertSignals = memo(({ fatigueAlerts, acwrAlerts }) => {
             <CheckCircle size={17} color="#1D9E75" />
           </div>
           <p className="text-[13px] font-medium" style={{ color: "var(--c-text-2)" }}>
-            Aucun signal critique détecté sur la fatigue ou l'ACWR cette semaine.
+            Aucun questionnaire de bien-être faible à examiner aujourd'hui.
           </p>
         </div>
       ) : (
@@ -16986,15 +16978,7 @@ const AlertSignals = memo(({ fatigueAlerts, acwrAlerts }) => {
             <div key={`f-${athlete.id}`} className="flex items-center gap-3 rounded-xl px-4 py-3" style={{ background: "rgba(224,82,82,0.10)", border: "1px solid rgba(224,82,82,0.20)" }}>
               <AlertTriangle size={15} color="#E24B4A" className="flex-shrink-0" />
               <span className="text-[12px]" style={{ color: "#F19A9A" }}>
-                <strong>{athlete.name.split(" ")[0]}</strong> — Fatigue élevée ({metrics.fatigue}/100)
-              </span>
-            </div>
-          ))}
-          {acwrAlerts.map(({ athlete, metrics }) => (
-            <div key={`a-${athlete.id}`} className="flex items-center gap-3 rounded-xl px-4 py-3" style={{ background: "rgba(232,160,32,0.10)", border: "1px solid rgba(232,160,32,0.20)" }}>
-              <Activity size={15} color="#EF9F27" className="flex-shrink-0" />
-              <span className="text-[12px]" style={{ color: "#F0CB61" }}>
-                <strong>{athlete.name.split(" ")[0]}</strong> — ACWR élevé ({metrics.acwr.toFixed(2)}) — hors de la zone habituelle, à examiner
+                <strong>{athlete.name.split(" ")[0]}</strong> — bien-être déclaré faible ({metrics.wellnessScore ?? "—"}/100). À contextualiser avec l'athlète.
               </span>
             </div>
           ))}
@@ -17026,18 +17010,15 @@ const MethodologyPanel = memo(() => {
           <p>
             La charge de chaque séance est calculée selon la méthode <strong>session-RPE</strong> :
             {" "}<code className="px-1.5 py-0.5 rounded text-[12px]" style={{ background: "var(--c-surface-3)" }}>Durée (min) × RPE (0–10)</code>,
-            où le RPE est le ressenti d'effort de l'athlète noté juste après la séance
-            (échelle de Borg CR10). Un coefficient par catégorie de séance ajuste ensuite cette valeur.
+            où la durée est celle réellement effectuée et le RPE le ressenti d'effort de l'athlète
+            (échelle CR10). Aucun coefficient de discipline ne modifie cette charge totale.
           </p>
           <p style={{ color: "var(--c-text-3)" }}>
             <strong>Références :</strong> Foster C. et al. (2001), <em>"A New Approach to Monitoring Exercise Training"</em>,
             Journal of Strength and Conditioning Research, 15(1) · Foster C. (1998), Medicine & Science in Sports & Exercise,
             30(7) · Borg G. (1998), Borg's Perceived Exertion and Pain Scales, Human Kinetics.
           </p>
-          <p className="italic" style={{ color: "var(--c-text-3)" }}>
-            Les coefficients par catégorie (ex : musculation ×1.3, technique ×0.7) sont un paramètre
-            d'ajustement pratique courant en planification sportive — calibrable par le coach.
-          </p>
+          <p className="italic" style={{ color: "var(--c-text-3)" }}>Les contraintes sprint, saut, lancer, force ou technique sont présentées séparément comme dimensions descriptives.</p>
         </div>
       )}
     </div>
@@ -17079,7 +17060,7 @@ function ChargeView() {
       const athleteIds = athletesRes.data.map((a) => a.id);
       const [sessionAthletesRes, weeklyChargeRes] = await Promise.all([
         sessionIds.length
-          ? supabase.from("session_athletes").select("session_id, athlete_id, rpe").in("session_id", sessionIds)
+          ? supabase.from("session_athletes").select("session_id, athlete_id, rpe, actual_duration_minutes, duration_source").in("session_id", sessionIds)
           : Promise.resolve({ data: [], error: null }),
         // Total hebdomadaire calculé côté serveur (vue weekly_charge, voir
         // migration 20260726120000). La ventilation par catégorie ci-dessous
@@ -17106,13 +17087,15 @@ function ChargeView() {
           category:        s.category,
           durationMinutes: s.duration_minutes,
           athleteIds:      rows.map((r) => r.athlete_id),
-          validations:     rows.map((r) => ({ athleteId: r.athlete_id, rpe: r.rpe })),
+          validations:     rows.map((r) => ({ athleteId: r.athlete_id, rpe: r.rpe, actualDurationMinutes: r.actual_duration_minutes, durationSource: r.duration_source })),
         };
       });
 
       setAthletes(remappedAthletes);
       setWeeklyCharge((weeklyChargeRes.data ?? []).map((c) => ({
         athleteId: c.athlete_id, week: c.week, rawLoad: c.raw_load,
+        dailyLoads: c.daily_loads ?? [], knownDays: c.known_days ?? 0,
+        unknownDays: c.unknown_days ?? 0, estimatedDays: c.estimated_days ?? 0,
       })));
       setSessionsForBreakdown(enrichedSessions);
     } catch (err) {
@@ -17137,20 +17120,20 @@ function ChargeView() {
   const hasAnyCharge = weeklyCharge.length > 0;
 
   const globalMetrics = useMemo(() => {
-    if (!allMetrics.length) return { avgLoad: 0, avgACWR: 0, topLoader: null, critFatigue: 0, trendLoad: 0 };
+    if (!allMetrics.length) return { avgLoad: 0, avgLoad7: null, topLoader: null, critFatigue: 0, trendLoad: 0 };
     const avgLoad      = Math.round(allMetrics.reduce((s, m) => s + m.rawLoad, 0) / allMetrics.length);
-    const avgACWR      = Math.round((allMetrics.reduce((s, m) => s + m.metrics.acwr, 0) / allMetrics.length) * 100) / 100;
+    const load7Values  = allMetrics.map(item => item.metrics.load7).filter(Number.isFinite);
+    const avgLoad7     = load7Values.length ? Math.round(load7Values.reduce((sum, value) => sum + value, 0) / load7Values.length) : null;
     const topLoader    = [...allMetrics].sort((a, b) => b.rawLoad - a.rawLoad)[0];
     const critFatigue  = allMetrics.filter((m) => m.metrics.fatigue > 75).length;
     const avgLoadPrev  = athletes.length
       ? Math.round(athletes.reduce((s, a) => s + getRawLoad(weeklyCharge, a.id, CURRENT_WEEK - 1), 0) / athletes.length)
       : 0;
-    return { avgLoad, avgACWR, topLoader, critFatigue, trendLoad: avgLoad - avgLoadPrev };
+    return { avgLoad, avgLoad7, topLoader, critFatigue, trendLoad: avgLoad - avgLoadPrev };
   }, [allMetrics, athletes, weeklyCharge, CURRENT_WEEK]);
 
   const acwrSeries       = useMemo(() => computeGroupACWRSeries(athletes, weeklyCharge), [athletes, weeklyCharge]);
   const fatigueAlerts    = useMemo(() => allMetrics.filter((m) => m.metrics.fatigue > 75), [allMetrics]);
-  const acwrAlerts       = useMemo(() => allMetrics.filter((m) => m.metrics.acwr > 1.3), [allMetrics]);
   const sortedByLoad     = useMemo(() => [...allMetrics].sort((a, b) => b.rawLoad - a.rawLoad), [allMetrics]);
   const maxLoad          = sortedByLoad[0]?.rawLoad ?? 1;
 
@@ -17200,12 +17183,12 @@ function ChargeView() {
           {/* ── KPIs globaux ─────────────────────────────────────────── */}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
             <MetricCard icon={BarChart2}   label="Charge moyenne groupe"  value={globalMetrics.avgLoad}              sub="unités"                                color="#378ADD" trend={globalMetrics.trendLoad} />
-            <MetricCard icon={Activity}    label="ACWR moyen groupe"      value={globalMetrics.avgACWR.toFixed(2)}   color={globalMetrics.avgACWR > 1.3 ? "#E24B4A" : globalMetrics.avgACWR < 0.8 ? "#378ADD" : "#1D9E75"} />
+            <MetricCard icon={Activity}    label="Charge moyenne sur 7j" value={globalMetrics.avgLoad7 ?? "—"} sub="jours connus uniquement" color="#14B8A6" />
             <MetricCard icon={Zap}         label="Athlète le plus chargé" value={globalMetrics.topLoader?.athlete.name.split(" ")[0] ?? "—"} sub={`${globalMetrics.topLoader?.rawLoad ?? 0} u`} color="#EF9F27" />
-            <MetricCard icon={AlertTriangle} label="Fatigue critique"      value={globalMetrics.critFatigue}        sub={`athlète${globalMetrics.critFatigue > 1 ? "s" : ""} > 75`} color={globalMetrics.critFatigue > 0 ? "#E24B4A" : "#1D9E75"} />
+            <MetricCard icon={AlertTriangle} label="Bien-être à revoir" value={globalMetrics.critFatigue} sub={`athlète${globalMetrics.critFatigue > 1 ? "s" : ""}`} color={globalMetrics.critFatigue > 0 ? "#EF9F27" : "#1D9E75"} />
           </div>
 
-          <AlertSignals fatigueAlerts={fatigueAlerts} acwrAlerts={acwrAlerts} />
+          <AlertSignals fatigueAlerts={fatigueAlerts} />
 
           {/* ── Tableau charge par athlète ───────────────────────────── */}
           <div className="card overflow-hidden">
@@ -17214,18 +17197,7 @@ function ChargeView() {
                 <h3 className="card-title">Charge calculée — Semaine {CURRENT_WEEK}</h3>
                 <p className="card-subtitle mt-0.5">Triée par charge décroissante · Basée sur durée × RPE</p>
               </div>
-              <div className="flex items-center gap-3 text-[12px]">
-                {[
-                  { color: "#1D9E75", label: "Optimal (< 320)"   },
-                  { color: "#EF9F27", label: "Modéré (320–449)"  },
-                  { color: "#E24B4A", label: "Surcharge (≥ 450)" },
-                ].map((l) => (
-                  <div key={l.label} className="flex items-center gap-1.5">
-                    <span className="w-2.5 h-2.5 rounded-sm" style={{ background: l.color }} />
-                    <span style={{ color: "var(--c-text-2)" }}>{l.label}</span>
-                  </div>
-                ))}
-              </div>
+              <p className="text-[12px]" style={{ color: "var(--c-text-2)" }}>Comparaison descriptive dans le groupe · aucun seuil de risque</p>
             </div>
 
             {sortedByLoad.every((m) => m.rawLoad === 0) ? (
@@ -17269,16 +17241,16 @@ function ChargeView() {
                         {badge.dot} {badge.label}
                       </span>
                       <div className="w-16 text-right flex-shrink-0">
-                        <p className="text-[12px] font-bold" style={{ color: metrics.acwr > 1.3 ? "#E24B4A" : metrics.acwr < 0.8 ? "#378ADD" : "#1D9E75" }}>
-                          {metrics.acwr.toFixed(2)}
+                        <p className="text-[12px] font-bold" style={{ color: "#A9CBFB" }}>
+                          {metrics.load7 ?? "—"}
                         </p>
-                        <p className="meta-text">ACWR</p>
+                        <p className="meta-text">7 jours</p>
                       </div>
                       <div className="w-16 text-right flex-shrink-0">
                         <p className="text-[12px] font-bold" style={{ color: metrics.fatigue > 70 ? "#E24B4A" : metrics.fatigue > 45 ? "#EF9F27" : "#1D9E75" }}>
-                          {metrics.fatigue}
+                          {metrics.load28 ?? "—"}
                         </p>
-                        <p className="meta-text">Fatigue</p>
+                        <p className="meta-text">28 jours</p>
                       </div>
                     </div>
                   );
@@ -17291,9 +17263,9 @@ function ChargeView() {
           {/* ── Courbes ACWR ─────────────────────────────────────────── */}
           <div className="card p-5">
             <div className="mb-4">
-              <h3 className="card-title">Évolution ACWR du groupe</h3>
+              <h3 className="card-title">ACWR EWMA · métrique expérimentale</h3>
               <p className="card-subtitle mt-0.5">
-                Une courbe par athlète · Zone optimale : 0.80 – 1.30 · Zone à surveiller : &gt; 1.50
+                Affiché uniquement lorsque 28 jours quotidiens continus sont connus. Aucun seuil n'est interprété comme optimal ou comme risque.
               </p>
             </div>
             <div className="flex flex-wrap gap-3 mb-4">
@@ -17330,9 +17302,6 @@ function ChargeView() {
                     <XAxis dataKey="label" tick={{ fontSize: 12, fill: "var(--c-text-3)" }} axisLine={false} tickLine={false} />
                     <YAxis domain={[0.4, 1.8]} tick={{ fontSize: 12, fill: "var(--c-text-3)" }} axisLine={false} tickLine={false} width={36} />
                     <Tooltip content={<ChartTooltip />} />
-                    <ReferenceLine y={0.8} stroke="#1D9E75" strokeDasharray="5 3" strokeWidth={1.5} label={{ value: "0.80", position: "right", fontSize: 12, fill: "#1D9E75" }} />
-                    <ReferenceLine y={1.3} stroke="#EF9F27" strokeDasharray="5 3" strokeWidth={1.5} label={{ value: "1.30", position: "right", fontSize: 12, fill: "#EF9F27" }} />
-                    <ReferenceLine y={1.5} stroke="#E24B4A" strokeDasharray="3 2" strokeWidth={2}   label={{ value: "1.50 ⚠", position: "right", fontSize: 12, fill: "#E24B4A" }} />
                     {athletes.map((a, i) => {
                       const prenom = a.name.split(" ")[0];
                       const isHL   = highlightedAthlete === null || highlightedAthlete === a.id;
@@ -17347,11 +17316,7 @@ function ChargeView() {
                     })}
                   </LineChart>
                 </ResponsiveContainer>
-                <div className="flex items-center gap-4 mt-3 text-[12px] flex-wrap">
-                  <span className="flex items-center gap-1.5"><span className="w-8 h-0.5 inline-block rounded" style={{ background: "#1D9E75", borderTop: "2px dashed #1D9E75" }} /><span style={{ color: "var(--c-text-2)" }}>0.80 — Seuil bas</span></span>
-                  <span className="flex items-center gap-1.5"><span className="w-8 h-0.5 inline-block rounded" style={{ background: "#EF9F27", borderTop: "2px dashed #EF9F27" }} /><span style={{ color: "var(--c-text-2)" }}>1.30 — Seuil haut</span></span>
-                  <span className="flex items-center gap-1.5"><span className="w-8 h-0.5 inline-block rounded" style={{ background: "#E24B4A" }} /><span style={{ color: "var(--c-text-2)" }}>1.50 — Zone à surveiller</span></span>
-                </div>
+                <p className="text-[12px] mt-3" style={{ color: "var(--c-text-2)" }}>Section réservée à l'exploration et à la recherche ; aucune décision automatique n'en découle.</p>
               </>
             )}
           </div>
@@ -17626,6 +17591,10 @@ function Competitions() {
         athleteId: c.athlete_id,
         week:      c.week,
         rawLoad:   c.raw_load,
+        dailyLoads: c.daily_loads ?? [],
+        knownDays: c.known_days ?? 0,
+        unknownDays: c.unknown_days ?? 0,
+        estimatedDays: c.estimated_days ?? 0,
       }));
 
       const remappedCompetitions = competitionsRes.data.map((c) => {
@@ -17975,41 +17944,18 @@ export function dateToWeek(dateStr) {
 export function generateResultAnalysis(result, competition, athlete, weeklyCharge) {
   const week    = dateToWeek(competition.date);
   const metrics = getAthleteMetricsForWeek(athlete.id, weeklyCharge, week);
-  const { acwr, fatigue, readiness } = metrics;
+  const { load7, load28, variationPercent, wellnessScore } = metrics;
   const lines = [];
 
-  if (acwr > 1.3) {
-    lines.push(
-      `⚠️ ACWR de ${acwr.toFixed(2)} à la date de cette compétition (semaine ~${week}). ` +
-      `L'athlète était en phase de charge élevée — une performance en deçà du PR est normale et attendue dans ce contexte.`
-    );
-  } else if (acwr >= 0.8 && acwr <= 1.3) {
-    lines.push(
-      `✅ ACWR optimal à ${acwr.toFixed(2)} à la date de cette compétition. ` +
-      `L'athlète était dans une fenêtre de performance favorable.`
-    );
+  if (load7 != null && load28 != null) {
+    const variation = variationPercent == null ? "variation indisponible" : `${variationPercent >= 0 ? "+" : ""}${variationPercent} %`;
+    lines.push(`Contexte de charge à cette date : ${load7} unités sur 7 jours, ${load28} unités sur 28 jours (${variation} entre les moyennes quotidiennes). Cette observation ne prédit pas la performance ni le risque de blessure.`);
   } else {
-    lines.push(
-      `📉 ACWR bas (${acwr.toFixed(2)}) à la date de cette compétition. ` +
-      `L'athlète était en sous-charge — possibilité de déconditionnement léger.`
-    );
+    lines.push("Contexte de charge indisponible : l'historique quotidien n'est pas assez complet à cette date.");
   }
 
-  if (fatigue > 65) {
-    lines.push(
-      `Fatigue estimée à ${fatigue}/100 — niveau élevé. Le résultat doit être interprété avec prudence : ` +
-      `la fatigue accumulée peut masquer le vrai niveau de l'athlète.`
-    );
-  } else if (fatigue < 35) {
-    lines.push(
-      `Fatigue estimée à ${fatigue}/100 — athlète frais. Les conditions étaient réunies pour une bonne performance.`
-    );
-  }
-
-  if (readiness >= 70) {
-    lines.push(`Readiness estimé : ${readiness}/100 — l'athlète était prêt à performer.`);
-  } else if (readiness < 50) {
-    lines.push(`Readiness estimé : ${readiness}/100 — disponibilité physique limitée à cette date.`);
+  if (wellnessScore != null) {
+    lines.push(`Questionnaire de bien-être AthleteOS : ${wellnessScore}/100. Il s'agit d'un retour déclaré, pas d'un diagnostic de récupération.`);
   }
 
   const activeInjuries = athlete.injuries?.filter((inj) => {
@@ -18211,13 +18157,13 @@ const CompModal = memo(({ competition, athletes, weeklyCharge, records, onClose,
                           />
                         ) : (
                           <div className="flex items-center gap-2 mt-2 text-[12px] text-[var(--c-text-2)] flex-wrap">
-                            <span>ACWR prévu :</span>
-                            <span className="font-bold" style={{ color: metrics.acwr > 1.3 ? "#E24B4A" : metrics.acwr < 0.8 ? "#378ADD" : "#1D9E75" }}>
-                              {metrics.acwr.toFixed(2)}
+                            <span>Charge observée sur 7 jours :</span>
+                            <span className="font-bold" style={{ color: "#A9CBFB" }}>
+                              {metrics.load7 ?? "—"}
                             </span>
-                            <span>· Readiness :</span>
-                            <span className="font-bold" style={{ color: metrics.readiness >= 70 ? "#1D9E75" : metrics.readiness >= 50 ? "#EF9F27" : "#E24B4A" }}>
-                              {metrics.readiness}/100
+                            <span>· Bien-être :</span>
+                            <span className="font-bold" style={{ color: "#7BD8B4" }}>
+                              {metrics.wellnessScore == null ? "—" : `${metrics.wellnessScore}/100`}
                             </span>
                           </div>
                         )}
@@ -18266,21 +18212,21 @@ const CompModal = memo(({ competition, athletes, weeklyCharge, records, onClose,
                       <div className="px-4 py-3 bg-[var(--c-surface-3)] border-b border-[var(--c-border)] flex items-center gap-4 flex-wrap text-[12px]">
                         <span className="text-[var(--c-text-3)]">À la semaine ~{week} :</span>
                         <span className="flex items-center gap-1">
-                          ACWR :
-                          <strong className="ml-1" style={{ color: metrics.acwr > 1.3 ? "#E24B4A" : metrics.acwr < 0.8 ? "#378ADD" : "#1D9E75" }}>
-                            {metrics.acwr.toFixed(2)}
+                          Charge 7 jours :
+                          <strong className="ml-1" style={{ color: "#A9CBFB" }}>
+                            {metrics.load7 ?? "—"}
                           </strong>
                         </span>
                         <span className="flex items-center gap-1">
-                          Fatigue :
-                          <strong className="ml-1" style={{ color: metrics.fatigue > 70 ? "#E24B4A" : metrics.fatigue > 45 ? "#EF9F27" : "#1D9E75" }}>
-                            {metrics.fatigue}/100
+                          Charge 28 jours :
+                          <strong className="ml-1" style={{ color: "#7BD8B4" }}>
+                            {metrics.load28 ?? "—"}
                           </strong>
                         </span>
                         <span className="flex items-center gap-1">
-                          Readiness :
-                          <strong className="ml-1" style={{ color: metrics.readiness >= 70 ? "#1D9E75" : metrics.readiness >= 50 ? "#EF9F27" : "#E24B4A" }}>
-                            {metrics.readiness}/100
+                          Bien-être déclaré :
+                          <strong className="ml-1" style={{ color: "#A9CBFB" }}>
+                            {metrics.wellnessScore == null ? "—" : `${metrics.wellnessScore}/100`}
                           </strong>
                         </span>
                       </div>
@@ -18710,10 +18656,10 @@ function AthleteStatusCard({ athlete, weeklyCharge, currentWeek, injuries, sessi
   const weekSess  = sessions.filter(s => s.week === currentWeek && s.athleteIds?.includes(athlete.id));
   const doneCount = weekSess.filter(s => s.validations?.find(v => v.athleteId === athlete.id && v.status === "done")).length;
   const hasCharge = weeklyCharge.some(w => w.athleteId === athlete.id);
-  const isAtRisk  = metrics.acwr > 1.3;
+  const isAtRisk  = false;
 
   const readColor = dimColor("readiness", metrics.readiness);
-  const acwrCol   = dimColor("acwr", metrics.acwr);
+  const acwrCol   = "#378ADD";
   const fatCol    = dimColor("fatigue", metrics.fatigue);
 
   const sparkData = useMemo(() =>
@@ -18750,9 +18696,9 @@ function AthleteStatusCard({ athlete, weeklyCharge, currentWeek, injuries, sessi
       {hasCharge ? (
         <div className="grid grid-cols-3 gap-1.5">
           {[
-            { lbl: "Ready",   val: metrics.readiness,       col: readColor, pct: metrics.readiness },
-            { lbl: "ACWR",    val: metrics.acwr.toFixed(2), col: acwrCol,   pct: Math.min(100, (metrics.acwr / 2) * 100) },
-            { lbl: "Fatigue", val: metrics.fatigue,         col: fatCol,    pct: metrics.fatigue },
+            { lbl: "Bien-être", val: metrics.wellnessScore ?? "—", col: readColor, pct: metrics.wellnessScore ?? 0 },
+            { lbl: "Charge 7j", val: metrics.load7 ?? "—", col: acwrCol, pct: metrics.load7 && metrics.load28 ? Math.min(100, (metrics.load7 / metrics.load28) * 100) : 0 },
+            { lbl: "Charge 28j", val: metrics.load28 ?? "—", col: fatCol, pct: metrics.load28 ? 100 : 0 },
           ].map(s => (
             <div key={s.lbl} className="bg-[var(--c-surface-2)] rounded-xl px-1.5 py-2 text-center">
               <p
@@ -18846,7 +18792,7 @@ function CoachFeedSection({ items, onNavigate }) {
             <CheckCircle size={16} color="#1D9E75" strokeWidth={2} />
           </div>
           <p className="text-[12.5px] font-medium" style={{ color: "var(--c-text-2)" }}>
-            Aucune surcharge, blessure ou absence détectée dans le groupe.
+            Aucun retour de bien-être faible, blessure active ou absence répétée dans le groupe.
           </p>
         </div>
       ) : (
@@ -18936,12 +18882,14 @@ function Dashboard({
           durationMinutes: s.duration_minutes, createdBy: s.created_by,
           createdByAthlete: false,
           athleteIds:   rows.map(v => v.athlete_id),
-          validations:  rows.map(v => ({ athleteId: v.athlete_id, status: v.status, feeling: v.feeling, rpe: v.rpe, comment: v.comment })),
+          validations:  rows.map(v => ({ athleteId: v.athlete_id, status: v.status, feeling: v.feeling, rpe: v.rpe, comment: v.comment, actualDurationMinutes: v.actual_duration_minutes, durationSource: v.duration_source })),
         };
       });
 
       const charge = (chargeRes.data ?? []).map(c => ({
         athleteId: c.athlete_id, week: c.week, rawLoad: c.raw_load,
+        dailyLoads: c.daily_loads ?? [], knownDays: c.known_days ?? 0,
+        unknownDays: c.unknown_days ?? 0, estimatedDays: c.estimated_days ?? 0,
       }));
 
       const mappedAthletes = athletesRes.data.map(a => ({
@@ -20797,6 +20745,8 @@ function Performances() {
         if (!chargeRes.error) {
           weeklyChargeComputed = (chargeRes.data ?? []).map((c) => ({
             athleteId: c.athlete_id, week: c.week, rawLoad: c.raw_load,
+            dailyLoads: c.daily_loads ?? [], knownDays: c.known_days ?? 0,
+            unknownDays: c.unknown_days ?? 0, estimatedDays: c.estimated_days ?? 0,
           }));
         }
       }
@@ -21115,7 +21065,6 @@ import { useAuth }   from "../context/AuthContext";
 import LoadingState  from "../components/ui/LoadingState";
 import ErrorState    from "../components/ui/ErrorState";
 import { SegmentedTabs } from "../components/ui/premium";
-import { LOAD_COEFFICIENTS } from "../utils/trainingLoad";
 import { initialsFromName } from "../utils/helpers.js";
 import {
   alertSessionAbsence,
@@ -21191,6 +21140,8 @@ function Planning() {
             athleteId: v.athlete_id, status: v.status,
             feeling: v.feeling, fatigue: v.fatigue,
             comment: v.comment, rpe: v.rpe,
+            actualDurationMinutes: v.actual_duration_minutes,
+            durationSource: v.duration_source,
           })),
         };
       }));
@@ -21215,7 +21166,7 @@ function Planning() {
         description: form.description || null,
         instructions: form.instructions || null,
         duration_minutes: form.durationMinutes,
-        load_weight: LOAD_COEFFICIENTS[form.category] ?? 1.0,
+        load_weight: 1.0,
         pdf_url: form.pdfUrl ?? null,
       })
       .select().single();
@@ -21236,7 +21187,7 @@ function Planning() {
       time: form.time, type: form.type, category: form.category, title: form.title,
       description: form.description || null, instructions: form.instructions || null,
       duration_minutes: form.durationMinutes,
-      load_weight: LOAD_COEFFICIENTS[form.category] ?? 1.0,
+      load_weight: 1.0,
       pdf_url: form.pdfUrl ?? null,
     }).eq("id", sessionId);
     if (sessionError) throw sessionError;
@@ -21265,11 +21216,17 @@ function Planning() {
     await fetchAll();
   }, [fetchAll, sessionList]);
 
-  const setRpe = useCallback(async (sessionId, athleteId, rpe) => {
+  const setRpe = useCallback(async (sessionId, athleteId, rpe, actualDurationMinutes) => {
+    const duration = Number(actualDurationMinutes);
+    if (!Number.isFinite(duration) || duration <= 0 || duration > 1440) return;
     setSessionList(prev => prev.map(s => s.id !== sessionId ? s : {
-      ...s, validations: s.validations.map(v => v.athleteId === athleteId ? { ...v, rpe } : v),
+      ...s, validations: s.validations.map(v => v.athleteId === athleteId ? {
+        ...v, rpe, actualDurationMinutes: duration, durationSource: "reported",
+      } : v),
     }));
-    await supabase.from("session_athletes").update({ rpe }).eq("session_id", sessionId).eq("athlete_id", athleteId);
+    await supabase.from("session_athletes").update({
+      rpe, actual_duration_minutes: duration, duration_source: "reported",
+    }).eq("session_id", sessionId).eq("athlete_id", athleteId);
   }, []);
 
   const setStatus = useCallback(async (sessionId, athleteId, status) => {
@@ -21356,7 +21313,7 @@ function Planning() {
     return {
       title: s.title, type: s.type, category: s.category,
       day: s.day, time: s.time, week: s.week,
-      durationMinutes: s.durationMinutes ?? 60,
+      durationMinutes: s.durationMinutes ?? "",
       description: s.description ?? "", instructions: s.instructions ?? "",
       athleteIds: s.athleteIds, pdfUrl: s.pdfUrl ?? null,
       sessionDate: s.sessionDate?.slice(0, 10) ?? "",
@@ -22055,7 +22012,7 @@ import LoadingState  from "../components/ui/LoadingState";
 import ErrorState    from "../components/ui/ErrorState";
 import { EmptyState, PageHeader, SegmentedTabs, StatCard } from "../components/ui/premium";
 import { getISOWeek, initialsFromName } from "../utils/helpers.js";
-import { CATEGORIES, colorsFor, acwrColor } from "../athlete/shared";
+import { CATEGORIES, colorsFor } from "../athlete/shared";
 import { getRPELabel } from "../utils/chargeCalculations";
 import {
   getAvailableWeeks, formatWeekLabel,
@@ -22139,8 +22096,8 @@ function AthleteWeekRow({ athlete, report, onClick }) {
       </div>
       {stats.total > 0 && (
         <div className="flex items-center gap-1.5 flex-shrink-0">
-          <span style={{ width: 7, height: 7, borderRadius: "50%", background: acwrColor(metrics.acwr) }} />
-          <span className="text-[12px] font-semibold" style={{ color: acwrColor(metrics.acwr) }}>{metrics.acwr.toFixed(2)}</span>
+          <span style={{ width: 7, height: 7, borderRadius: "50%", background: "#378ADD" }} />
+          <span className="text-[12px] font-semibold" style={{ color: "#A9CBFB" }}>{metrics.load7 ?? "—"} u. / 7j</span>
         </div>
       )}
       <ChevronRight size={15} color="var(--c-text-3)" style={{ flexShrink: 0 }} />
@@ -22181,13 +22138,13 @@ function AthleteWeekDetail({ athlete, report, onClose }) {
           {/* Métriques — style gauges Garmin/Whoop */}
           <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 8 }}>
             <div style={{ padding: "12px 10px", borderRadius: 14, background: "var(--c-surface-2)", border: "1px solid var(--c-border)", textAlign: "center" }}>
-              <p className="metric-label">Charge aiguë</p>
+              <p className="metric-label">EWMA courte</p>
               <p style={{ fontSize: 19, fontWeight: 700, color: "var(--c-text-1)", marginTop: 4 }}>{stats.total > 0 ? metrics.acute : "—"}</p>
             </div>
             <div style={{ padding: "12px 10px", borderRadius: 14, background: "var(--c-surface-2)", border: "1px solid var(--c-border)", textAlign: "center" }}>
-              <p className="metric-label">ACWR</p>
-              <p style={{ fontSize: 19, fontWeight: 700, color: stats.total > 0 ? acwrColor(metrics.acwr) : "var(--c-text-1)", marginTop: 4 }}>
-                {stats.total > 0 ? metrics.acwr.toFixed(2) : "—"}
+              <p className="metric-label">Charge 7 jours</p>
+              <p style={{ fontSize: 19, fontWeight: 700, color: "#A9CBFB", marginTop: 4 }}>
+                {stats.total > 0 ? (metrics.load7 ?? "—") : "—"}
               </p>
             </div>
             <div style={{ padding: "12px 10px", borderRadius: 14, background: "var(--c-surface-2)", border: "1px solid var(--c-border)", textAlign: "center" }}>
@@ -22351,12 +22308,12 @@ export default function Rapports() {
           id: s.id, week: s.week, day: s.day, sessionDate: s.session_date,
           category: s.category, title: s.title, durationMinutes: s.duration_minutes,
           athleteIds:  rows.map(v => v.athlete_id),
-          validations: rows.map(v => ({ athleteId: v.athlete_id, status: v.status, feeling: v.feeling, rpe: v.rpe, comment: v.comment })),
+          validations: rows.map(v => ({ athleteId: v.athlete_id, status: v.status, feeling: v.feeling, rpe: v.rpe, comment: v.comment, actualDurationMinutes: v.actual_duration_minutes, durationSource: v.duration_source })),
         };
       });
 
       const mappedCharge = (chargeRes.data ?? [])
-        .map(c => ({ athleteId: c.athlete_id, week: c.week, rawLoad: c.raw_load }));
+        .map(c => ({ athleteId: c.athlete_id, week: c.week, rawLoad: c.raw_load, dailyLoads: c.daily_loads ?? [], knownDays: c.known_days ?? 0, unknownDays: c.unknown_days ?? 0, estimatedDays: c.estimated_days ?? 0 }));
 
       const mappedWellness = (wellnessRes.data ?? []).map(w => ({
         athleteId: w.athlete_id, date: w.date, sleep: w.sleep, energy: w.energy,
@@ -22531,6 +22488,15 @@ const SessionModal = memo(({ session, athletes, onClose, onSetRpe, onSetStatus, 
   const [deleting,    setDeleting]    = useState(false);
   const [deleteError, setDeleteError] = useState(null);
   const [confirmDel,  setConfirmDel]  = useState(false);
+  const [durationDrafts, setDurationDrafts] = useState(() => Object.fromEntries(
+    (session.validations ?? []).map(validation => [
+      validation.athleteId,
+      validation.durationSource === "reported" && validation.actualDurationMinutes != null
+        ? String(validation.actualDurationMinutes)
+        : "",
+    ]),
+  ));
+  const [loadErrors, setLoadErrors] = useState({});
   const c      = colors(session.category);
   const status = sessionStatus(session);
 
@@ -22546,8 +22512,20 @@ const SessionModal = memo(({ session, athletes, onClose, onSetRpe, onSetStatus, 
 
   const pendingFeedback = session.athleteIds.filter(id => {
     const v = session.validations?.find(val => val.athleteId === id);
-    return v?.status == null;
+    return v?.status == null || ((v?.status === "done" || v?.status === "partial") && (
+      v?.rpe == null || v?.durationSource !== "reported" || v?.actualDurationMinutes == null
+    ));
   });
+
+  const submitRpe = (athleteId, rpe) => {
+    const duration = Number(durationDrafts[athleteId]);
+    if (!Number.isFinite(duration) || duration <= 0 || duration > 1440) {
+      setLoadErrors(previous => ({ ...previous, [athleteId]: "Durée réelle requise (1 à 1 440 min)." }));
+      return;
+    }
+    setLoadErrors(previous => ({ ...previous, [athleteId]: "" }));
+    onSetRpe(session.id, athleteId, rpe, duration);
+  };
 
   return (
     <div
@@ -22655,13 +22633,36 @@ const SessionModal = memo(({ session, athletes, onClose, onSetRpe, onSetStatus, 
                       </div>
                       {v?.status && v.status !== "none" && (
                         <div>
+                          <label className="meta-text font-bold uppercase tracking-wide mb-1.5 block" htmlFor={`duration-${id}`}>
+                            Durée réellement effectuée
+                          </label>
+                          <div className="flex items-center gap-2 mb-3">
+                            <input
+                              id={`duration-${id}`}
+                              type="number"
+                              min="1"
+                              max="1440"
+                              inputMode="numeric"
+                              value={durationDrafts[id] ?? ""}
+                              onChange={event => {
+                                setDurationDrafts(previous => ({ ...previous, [id]: event.target.value }));
+                                setLoadErrors(previous => ({ ...previous, [id]: "" }));
+                              }}
+                              placeholder={session.durationMinutes ? String(session.durationMinutes) : "Minutes"}
+                              className="input-premium"
+                              style={{ width: 120 }}
+                            />
+                            <span className="text-[12px]" style={{ color: "var(--c-text-2)" }}>
+                              min{session.durationMinutes ? ` · prévu ${session.durationMinutes}` : ""}
+                            </span>
+                          </div>
                           <p className="meta-text font-bold uppercase tracking-wide mb-1.5">RPE</p>
                           <div className="flex gap-1 flex-wrap">
                             {Array.from({ length: 11 }, (_, i) => {
                               const sel = v?.rpe === i;
                               const rpeColor = i <= 3 ? "#3DBE8B" : i <= 6 ? "#EAB308" : "#EF6B6B";
                               return (
-                                <button key={i} onClick={() => onSetRpe(session.id, id, i)}
+                                <button key={i} onClick={() => submitRpe(id, i)}
                                   className="w-9 h-9 rounded-xl text-[12px] font-bold border-2 transition-all tap-feedback"
                                   style={sel
                                     ? { background: rpeColor, borderColor: rpeColor, color: "#0A150F" }
@@ -22670,6 +22671,7 @@ const SessionModal = memo(({ session, athletes, onClose, onSetRpe, onSetStatus, 
                               );
                             })}
                           </div>
+                          {loadErrors[id] && <p role="alert" className="text-[12px] mt-2" style={{ color: "#F19A9A" }}>{loadErrors[id]}</p>}
                         </div>
                       )}
                     </div>
@@ -24256,8 +24258,10 @@ export type Database = {
       }
       session_athletes: {
         Row: {
+          actual_duration_minutes: number | null
           athlete_id: number | null
           comment: string | null
+          duration_source: string | null
           fatigue: number | null
           feeling: number | null
           id: number
@@ -24267,8 +24271,10 @@ export type Database = {
           status: string | null
         }
         Insert: {
+          actual_duration_minutes?: number | null
           athlete_id?: number | null
           comment?: string | null
+          duration_source?: string | null
           fatigue?: number | null
           feeling?: number | null
           id?: number
@@ -24278,8 +24284,10 @@ export type Database = {
           status?: string | null
         }
         Update: {
+          actual_duration_minutes?: number | null
           athlete_id?: number | null
           comment?: string | null
+          duration_source?: string | null
           fatigue?: number | null
           feeling?: number | null
           id?: number
@@ -24575,10 +24583,27 @@ export type Database = {
       }
     }
     Views: {
+      daily_training_load: {
+        Row: {
+          assigned_session_count: number | null
+          athlete_id: number | null
+          is_complete: boolean | null
+          is_estimated: boolean | null
+          load_date: string | null
+          raw_load: number | null
+          unknown_session_count: number | null
+          week: number | null
+        }
+        Relationships: []
+      }
       weekly_charge: {
         Row: {
           athlete_id: number | null
+          daily_loads: Json | null
+          estimated_days: number | null
+          known_days: number | null
           raw_load: number | null
+          unknown_days: number | null
           week: number | null
         }
         Relationships: [
@@ -25385,7 +25410,7 @@ describe("fichier et modèle CSV", () => {
 //     "The training-injury prevention paradox: should athletes be training
 //     smarter and harder?"
 //     British Journal of Sports Medicine, 50(5), 273-280.
-//     → ACWR, zone optimale 0.8-1.3, paradoxe charge/blessure
+//     → Référence historique ACWR ; AthleteOS le classe désormais comme expérimental.
 //
 // [4] Williams S, Booton T, Watson M, et al. (2017).
 //     "Monitoring of athlete training loads with injury risk in mind."
@@ -25402,7 +25427,7 @@ describe("fichier et modèle CSV", () => {
 //     "Neuromuscular, endocrine, and perceptual fatigue responses during
 //     different length between-match microcycles in professional rugby league."
 //     International Journal of Sports Physiology and Performance.
-//     → Questionnaire Hooper : sommeil, énergie, courbatures, stress
+//     → Mesures subjectives ; le questionnaire interne AthleteOS n'est pas le Hooper Index.
 //
 // [7] Hasegawa T, et al. (2024).
 //     "Effects of high-intensity sprint exercise on neuromuscular function
@@ -25415,10 +25440,8 @@ describe("fichier et modèle CSV", () => {
 //     → Échelle RPE CR10 (0-10)
 //
 // ⚠️  TRANSPARENCE :
-//     Les coefficients par catégorie (LOAD_COEFFICIENTS) et les
-//     pondérations des scores dérivés (readiness, forme, récupération)
-//     sont des CONVENTIONS DE COACHING, pas des valeurs publiées.
-//     Ils sont explicitement séparés des formules scientifiques validées.
+//     La charge globale ne contient plus de coefficient de discipline.
+//     L'ACWR n'est jamais utilisé comme prédicteur individuel de blessure.
 //
 // Les constantes (LOAD_COEFFICIENTS, RECOVERY_HOURS) et les fonctions de
 // calcul de base (EWMA, monotonie/contrainte, wellness, récupération) vivent
@@ -25443,6 +25466,8 @@ import {
   computeMonotonyAndStrain,
   computeWellnessScore,
   estimateRecovery,
+  extractDailyLoads,
+  computeLoadWindows,
 } from "./trainingLoad.js";
 
 // ─── Calcul des métriques complètes pour un athlète à une semaine donnée ──────
@@ -25456,37 +25481,14 @@ import {
 export function getAthleteMetricsForWeek(athleteId, weeklyCharge, currentWeek, wellnessData = [], sessions = []) {
   const myCharge = weeklyCharge
     .filter(w => w.athleteId === athleteId)
+    .filter(w => currentWeek == null || w.week <= currentWeek)
     .sort((a, b) => a.week - b.week);
-
-  if (!myCharge.length) {
-    return {
-      acute: 0, chronic: 0, acwr: 1.0,
-      fatigue: 0, forme: 0, readiness: 0, recuperation: 0, risque: 0,
-      monotony: 0, strain: 0,
-      wellnessScore: null,
-      recovery: {
-        status: "insufficient_data", confidence: "faible", confidenceScore: 0,
-        rangeHoursMin: null, rangeHoursMax: null, lastSession: null, factors: [],
-      },
-      ewmaHistory: [],
-    };
-  }
-
-  // ── Conversion semaines → charges journalières pour EWMA ──────────────────
-  // On approxime : 1 semaine = 1 point de données (charge hebdomadaire)
-  // Pour un calcul journalier précis, il faudrait des données par séance
-  const dailyLoads = myCharge.map(w => ({
-    date: `W${w.week}`,
-    load: w.rawLoad,
-  }));
-
-  // ── ACWR via EWMA [4] ──────────────────────────────────────────────────────
-  const { acute, chronic, acwr, ewmaHistory } = computeEWMA(dailyLoads);
-
-  // ── Monotonie et Contrainte [2] ────────────────────────────────────────────
-  // Sur les 4 dernières semaines
-  const last4Weeks = myCharge.slice(-4).map(w => w.rawLoad);
-  const { monotony, strain } = computeMonotonyAndStrain(last4Weeks);
+  const dailyLoads = extractDailyLoads(athleteId, myCharge, currentWeek);
+  const { acute, chronic, acwr, ewmaHistory, observedDays, status: acwrStatus } = computeEWMA(dailyLoads);
+  const loadWindows = computeLoadWindows(dailyLoads);
+  const { monotony, strain, status: monotonyStatus } = computeMonotonyAndStrain(
+    dailyLoads.slice(-7).map((point) => point.load),
+  );
 
   // ── Wellness [5][6] ────────────────────────────────────────────────────────
   // Prend le dernier questionnaire disponible (7 derniers jours)
@@ -25495,89 +25497,35 @@ export function getAthleteMetricsForWeek(athleteId, weeklyCharge, currentWeek, w
     .sort((a, b) => new Date(b.date) - new Date(a.date))[0] ?? null;
   const wellnessScore = computeWellnessScore(recentWellness);
 
-  // ── Récupération neuromusculaire [7] — plage + confiance (tâche 17) ───────
+  // Règle de programmation du club, pas estimation physiologique.
   const recovery = estimateRecovery(sessions, athleteId, recentWellness);
-
-  // ── Scores dérivés (CONVENTION COACHING — non scientifique) ───────────────
-  // Ces formules sont des proxies raisonnables mais leurs pondérations
-  // ne sont pas issues de publications scientifiques.
-  const acwrNorm = Math.max(0, Math.min(100, (1 - Math.abs(acwr - 1.05)) * 100));
-
-  // Fatigue : basée sur l'ACWR et la charge aiguë relative
-  const rawFatigue = Math.min(100, (acwr > 1.0 ? (acwr - 1.0) * 120 : 0) + (acute / Math.max(chronic, 1) - 0.8) * 30);
-  const fatigue    = Math.max(0, Math.round(rawFatigue));
-
-  // Forme : basée sur la charge chronique (fitness) et l'EWMA
-  const maxChronicKnown = Math.max(...myCharge.map(w => w.rawLoad), 1);
-  const forme = Math.round(Math.min(100, (chronic / maxChronicKnown) * 100));
-
-  // Récupération (score 0-100, pour la jauge et le composite readiness) :
-  // dérivé du MILIEU de la plage estimée par estimateRecovery (tâche 17),
-  // pas d'un point fixe. Si les données sont insuffisantes pour estimer,
-  // score neutre (50) plutôt qu'un extrême inventé.
-  const maxRecoveryHours = 72;
-  const recuperation = recovery.status === "insufficient_data"
-    ? 50
-    : Math.round(Math.max(0, (1 - (recovery.rangeHoursMin + recovery.rangeHoursMax) / 2 / maxRecoveryHours) * 100));
-
-  // Readiness : combine forme, récupération, wellness et ACWR [5]
-  // Si wellness disponible → intégré à 25%, sinon réparti sur les autres
-  let readiness;
-  if (wellnessScore !== null) {
-    readiness = Math.round(
-      forme        * 0.30 +
-      recuperation * 0.25 +
-      wellnessScore * 0.25 +
-      acwrNorm     * 0.20
-    );
-  } else {
-    readiness = Math.round(
-      forme        * 0.40 +
-      recuperation * 0.35 +
-      acwrNorm     * 0.25
-    );
-  }
-
-  // Signal de charge (nommé "risque" en interne, affiché "Signal de charge"
-  // — voir athlete/shared.js) : combine ACWR élevé + monotonie élevée +
-  // récupération insuffisante. Un signal composite, pas une probabilité de
-  // blessure mesurée ou validée.
-  const acwrRisk    = acwr > 1.3 ? Math.min(100, (acwr - 1.3) * 200) : acwr < 0.8 ? 10 : 0;
-  const monotonyRisk = monotony > 2 ? Math.min(50, (monotony - 2) * 25) : 0;
-  const recoveryRisk = recovery.status !== "insufficient_data" && recovery.rangeHoursMax > 48 ? 20 : 0;
-  const risque = Math.round(Math.min(100, acwrRisk + monotonyRisk + recoveryRisk));
+  const readiness = wellnessScore;
+  const fatigue = wellnessScore == null ? null : 100 - wellnessScore;
 
   return {
-    // Métriques scientifiques [1][3][4]
-    acute,
-    chronic,
-    acwr,
+    acute, chronic, acwr, acwrStatus, acwrExperimental: true, observedDays,
     ewmaHistory,
-    // Métriques Foster [2]
-    monotony,
-    strain,
-    // Wellness [5][6]
+    ...loadWindows,
+    monotony, strain, monotonyStatus,
     wellnessScore,
-    // Récupération [7]
     recovery,
-    // Scores dérivés (convention coaching)
-    fatigue:      Math.max(0, Math.min(100, fatigue)),
-    forme:        Math.max(0, Math.min(100, forme)),
-    readiness:    Math.max(0, Math.min(100, readiness)),
-    recuperation: Math.max(0, Math.min(100, recuperation)),
-    risque:       Math.max(0, Math.min(100, risque)),
+    fatigue,
+    forme: null,
+    readiness,
+    recuperation: null,
+    risque: null,
+    hasDailyLoadData: dailyLoads.length > 0,
   };
 }
 
 // ─── getStatusLabel (inchangé) ────────────────────────────────────────────────
 export function getStatusLabel(readiness, fatigue, acwr) {
-  if (acwr > 1.5)         return { label: "Surcharge critique", dot: "🔴", color: "#E24B4A" };
-  if (acwr > 1.3)         return { label: "Surcharge",          dot: "🟠", color: "#EF9F27" };
-  if (fatigue > 75)       return { label: "Fatigue élevée",     dot: "🟡", color: "#EF9F27" };
-  if (readiness >= 75)    return { label: "Optimal",            dot: "🟢", color: "#1D9E75" };
-  if (readiness >= 55)    return { label: "Modéré",             dot: "🟡", color: "#EF9F27" };
-  if (readiness >= 35)    return { label: "Fatigué",            dot: "🟠", color: "#EF9F27" };
-  return                         { label: "Récupération",       dot: "🔵", color: "#378ADD" };
+  void acwr;
+  if (readiness == null) return { label: "Données à compléter", dot: "⚪", color: "#8A9B90" };
+  if (readiness >= 75) return { label: "Ressenti favorable", dot: "🟢", color: "#1D9E75" };
+  if (readiness >= 50) return { label: "Ressenti intermédiaire", dot: "🟡", color: "#EF9F27" };
+  if (fatigue != null && fatigue >= 75) return { label: "Ressenti difficile", dot: "🟠", color: "#E24B4A" };
+  return { label: "Ressenti à discuter", dot: "🔵", color: "#378ADD" };
 }
 // ─── computeChargeChartData ───────────────────────────────────────────────────
 // Prépare les données du graphique charge vs forme sur les 12 dernières semaines.
@@ -25589,48 +25537,34 @@ export function computeChargeChartData(athleteId, weeklyCharge) {
 
   if (!myCharge.length) return [];
 
-  const dailyLoads = myCharge.map(w => ({ date: `W${w.week}`, load: w.rawLoad }));
-  const { ewmaHistory } = computeEWMA(dailyLoads);
-  const maxLoad = Math.max(...myCharge.map(w => w.rawLoad), 1);
-
-  return myCharge.map((w, i) => {
-    const ewma = ewmaHistory[i] ?? { acute: 0, chronic: 0 };
-    const acwr = ewma.chronic > 0 ? ewma.acute / ewma.chronic : 1.0;
-    const fatigue = Math.max(0, Math.round(Math.min(100, acwr > 1.0 ? (acwr - 1.0) * 120 : 0)));
-    const forme   = Math.round(Math.min(100, (ewma.chronic / maxLoad) * 100));
-    return { label: `S${w.week}`, rawLoad: w.rawLoad, forme, fatigue };
-  });
+  return myCharge.map((week) => ({ label: `S${week.week}`, rawLoad: week.rawLoad, forme: null, fatigue: null }));
 }
 
 // ─── generateContextAnalysis ──────────────────────────────────────────────────
 // Génère des phrases d'analyse contextuelle à partir des métriques et de la prochaine compétition.
 export function generateContextAnalysis(metrics, nextComp) {
-  const { acwr, fatigue, readiness, monotony, recovery } = metrics;
+  const { load7, load28, variationPercent, monotony, monotonyStatus, recovery } = metrics;
   const lines = [];
 
-  if (acwr > 1.5)       lines.push("⚠️ ACWR très élevé (" + acwr.toFixed(2) + ") : hors de la zone associée à un risque plus faible dans la littérature (Gabbett 2016). Envisage de réduire la charge, à valider avec l'athlète.");
-  else if (acwr > 1.3)  lines.push("🟠 ACWR élevé (" + acwr.toFixed(2) + ") : zone de surcharge aiguë. Surveiller la récupération.");
-  else if (acwr < 0.8)  lines.push("🔵 ACWR faible (" + acwr.toFixed(2) + ") : sous-charge relative. Augmentation progressive possible.");
-  else                  lines.push("🟢 ACWR optimal (" + acwr.toFixed(2) + ") : balance charge aiguë/chronique dans la zone cible (0.8–1.3).");
+  if (load7 == null || load28 == null) {
+    lines.push("ℹ️ Historique quotidien incomplet : les charges 7 et 28 jours ne sont pas encore comparables.");
+  } else {
+    const variation = variationPercent == null ? "" : ` · variation descriptive ${variationPercent >= 0 ? "+" : ""}${variationPercent}%`;
+    lines.push(`Charge observée : ${load7} u sur 7 jours et ${load28} u sur 28 jours${variation}.`);
+  }
 
-  if (fatigue > 75)       lines.push("🔴 Fatigue élevée (" + fatigue + "/100) : prévoir récupération ou repos.");
-  else if (fatigue > 50)  lines.push("🟡 Fatigue modérée (" + fatigue + "/100) : surveiller l'accumulation.");
-  else                    lines.push("✅ Fatigue bien gérée (" + fatigue + "/100).");
-
-  if (readiness >= 75)     lines.push("🌟 Readiness optimal (" + readiness + "/100) : prêt pour haute intensité.");
-  else if (readiness >= 50) lines.push("🟡 Readiness modéré (" + readiness + "/100) : privilégier technique ou intensité réduite.");
-  else                     lines.push("🔴 Readiness faible (" + readiness + "/100) : séance légère ou repos recommandé.");
-
-  if (monotony > 2.5) lines.push("⚠️ Monotonie élevée (" + monotony.toFixed(1) + ") : varier les types de séances.");
+  if (monotonyStatus === "undefined_zero_variance") {
+    lines.push("Monotonie non définie : les sept charges quotidiennes sont identiques.");
+  } else if (monotony != null) {
+    lines.push(`Monotonie descriptive sur 7 jours : ${monotony.toFixed(2)}.`);
+  }
 
   if (recovery?.status === "insufficient_data") {
     lines.push("ℹ️ Pas assez de séances récentes pour estimer la récupération.");
-  } else if (recovery?.status === "recovering") {
-    lines.push(`⏱️ Récupération estimée entre ${recovery.rangeHoursMin}h et ${recovery.rangeHoursMax}h restantes (confiance ${recovery.confidence}). Prudent d'éviter la haute intensité en attendant.`);
-  } else if (recovery?.status === "uncertain") {
-    lines.push(`⏱️ Récupération probablement en cours, mais estimation incertaine (confiance ${recovery.confidence}).`);
-  } else if (recovery?.status === "likely_recovered") {
-    lines.push(`✅ Récupération probablement suffisante (confiance ${recovery.confidence}).`);
+  } else if (recovery?.status === "spacing_active" || recovery?.status === "spacing_transition") {
+    lines.push(`Règle de programmation : encore ${recovery.rangeHoursMin}–${recovery.rangeHoursMax} h dans la fenêtre configurée. Ce n'est pas une estimation physiologique.`);
+  } else if (recovery?.status === "window_elapsed") {
+    lines.push("La fenêtre d'espacement configurée est terminée ; cela ne prouve pas une récupération complète.");
   }
 
   if (nextComp) {
@@ -25843,34 +25777,25 @@ export function buildCoachFeed({ athletes, weeklyCharge, sessions, injuries, com
     if (hasCharge) {
       const metrics = getAthleteMetricsForWeek(athlete.id, weeklyCharge, currentWeek);
 
-      if (metrics.acwr > 1.5) {
+      if (metrics.variationPercent != null && Math.abs(metrics.variationPercent) >= 20) {
+        const direction = metrics.variationPercent > 0 ? "au-dessus" : "en dessous";
         items.push({
-          id: `acwr-crit-${athlete.id}`, priority: "critical", icon: "alert", color: "#E24B4A",
-          sentence: `${name} est en surcharge critique (ACWR ${metrics.acwr.toFixed(2)}) — hors de la zone habituelle, à examiner cette semaine.`,
-        });
-      } else if (metrics.acwr > 1.3) {
-        items.push({
-          id: `acwr-warn-${athlete.id}`, priority: "warning", icon: "activity", color: "#EF9F27",
-          sentence: `${name} approche la zone de surcharge (ACWR ${metrics.acwr.toFixed(2)}) — à surveiller cette semaine.`,
-        });
-      } else if (metrics.acwr < 0.8) {
-        items.push({
-          id: `acwr-low-${athlete.id}`, priority: "info", icon: "activity", color: "#378ADD",
-          sentence: `${name} est en sous-charge (ACWR ${metrics.acwr.toFixed(2)}) — risque de déconditionnement si ça se prolonge.`,
+          id: `load-variation-${athlete.id}`, priority: "info", icon: "activity", color: "#378ADD",
+          sentence: `${name} a une charge moyenne sur 7 jours ${Math.abs(metrics.variationPercent)} % ${direction} de sa moyenne sur 28 jours. Observation descriptive à mettre en contexte avec son retour.`,
         });
       }
 
       if (metrics.fatigue > 75) {
         items.push({
           id: `fatigue-${athlete.id}`, priority: "warning", icon: "zap", color: "#EF9F27",
-          sentence: `${name} affiche une fatigue élevée (${metrics.fatigue}/100) — envisage une séance allégée.`,
+          sentence: `${name} signale un bien-être faible dans le questionnaire AthleteOS — prends contact pour comprendre le contexte.`,
         });
       }
 
-      if (metrics.readiness >= 85 && metrics.acwr >= 0.8 && metrics.acwr <= 1.3) {
+      if (metrics.readiness >= 85) {
         items.push({
           id: `top-${athlete.id}`, priority: "positive", icon: "trending", color: "#1D9E75",
-          sentence: `${name} est en forme optimale (readiness ${metrics.readiness}/100) — bon moment pour une séance exigeante.`,
+          sentence: `${name} signale un bien-être élevé aujourd'hui (${metrics.readiness}/100).`,
         });
       }
     }
@@ -25882,12 +25807,12 @@ export function buildCoachFeed({ athletes, weeklyCharge, sessions, injuries, com
     const axisProfile = getAthleteAxisProfile(athlete.id, sessions, currentWeek);
     if (axisProfile) {
       const worst = Object.entries(axisProfile).sort((a, b) => b[1].score - a[1].score)[0];
-      if (worst && worst[1].score > 75) {
+      if (worst && worst[1].score >= 75) {
         const [axisId, axisData] = worst;
         const axis = LOAD_AXES[axisId];
         items.push({
-          id: `axis-${athlete.id}`, priority: "warning", icon: "activity", color: axisData.color,
-          sentence: `${name} a une charge ${axis.nounPhrase} nettement plus élevée que d'habitude cette semaine — ${axis.what}`,
+          id: `axis-${athlete.id}`, priority: "info", icon: "activity", color: axisData.color,
+          sentence: `${name} a surtout travaillé la dimension ${axis.nounPhrase} cette semaine — ${axis.what}`,
         });
       }
     }
@@ -25914,23 +25839,9 @@ export function buildCoachFeed({ athletes, weeklyCharge, sessions, injuries, com
     });
   });
 
-  // Compétition dans les 7 jours + athlète en zone de surcharge.
-  const in7Days = new Date(Date.now() + 7 * 86400000);
-  (competitions ?? []).forEach(comp => {
-    const compDate = new Date(comp.date);
-    if (compDate > in7Days || compDate < new Date()) return;
-    (comp.athleteIds ?? []).forEach(athleteId => {
-      const athlete = athletes.find(a => a.id === athleteId);
-      if (!athlete || !weeklyCharge.some(w => w.athleteId === athleteId)) return;
-      const metrics = getAthleteMetricsForWeek(athleteId, weeklyCharge, currentWeek);
-      if (metrics.acwr <= 1.3) return;
-      const days = Math.max(0, Math.round((compDate - new Date()) / 86400000));
-      items.push({
-        id: `comp-risk-${comp.id}-${athleteId}`, priority: "warning", icon: "trophy", color: "#EF9F27",
-        sentence: `${firstName(athlete.name)} dispute "${comp.name}" dans ${days === 0 ? "moins d'un jour" : `${days}j`}, en zone de surcharge (ACWR ${metrics.acwr.toFixed(2)}).`,
-      });
-    });
-  });
+  // Les compétitions restent visibles ailleurs dans le dashboard. Aucun
+  // signal de risque n'est généré automatiquement à partir d'un ratio de charge.
+  void competitions;
 
   return items.sort((a, b) => PRIORITY[a.priority] - PRIORITY[b.priority]);
 }
@@ -25964,202 +25875,104 @@ export function initialsFromName(name) {
 </file>
 
 <file path="src/utils/loadAxes.js">
-// ============================================================
-// AthleteOS — src/utils/loadAxes.js
-//
-// "Profil de charge athlétique" — décompose la charge d'entraînement
-// (déjà calculée par trainingLoad.js selon la méthode session-RPE) sur
-// 6 axes physiologiques au lieu d'un seul chiffre agrégé. Objectif :
-// repérer PAR TYPE DE CONTRAINTE ce qui est inhabituel pour un athlète
-// donné — pas seulement "sa charge totale est haute", mais "c'est sa
-// charge élastique qui sort de l'ordinaire cette semaine, pas le reste".
-//
-// Volontairement 100% côté client, calculé à partir des `sessions` déjà
-// chargées par les vues existantes (Dashboard, AthleteProfile,
-// AthleteDashboard) — aucune migration, aucune nouvelle requête. La vue
-// SQL weekly_charge (charge agrégée globale, utilisée pour l'ACWR/
-// readiness/forme historiques) n'est pas touchée : les 6 axes sont un
-// raffinement affiché en plus, pas un remplacement.
-//
-// Le "score" par axe reprend le principe ACWR déjà utilisé partout
-// ailleurs dans l'app (charge aiguë récente / charge chronique
-// habituelle, via la même EWMA que trainingLoad.js) — appliqué à
-// chaque axe séparément plutôt qu'à la charge totale. C'est très
-// exactement la "capacité habituelle de CET athlète", pas une moyenne
-// de population.
-//
-// ⚠️ Comme LOAD_COEFFICIENTS dans trainingLoad.js, la table AXIS_WEIGHTS
-// ci-dessous est une CONVENTION DE COACHING AthleteOS. Qu'un sprint et
-// un bond ne sollicitent pas les mêmes structures est établi en
-// sciences du sport ; les poids numériques exacts par catégorie
-// n'existent dans aucune publication spécifique — ils sont calibrables
-// par le coach, pas un standard validé.
-//
-// ⚠️ SOURCE CANONIQUE (tâche 18) : AXIS_WEIGHTS DOIT rester identique à la
-// ligne 'v1' de la table Postgres `axis_model_versions` (migration
-// 20260728010000_axis_model_versioning.sql). Comme pour LOAD_COEFFICIENTS
-// (trainingLoad.js, tâche 16), cette copie JS reste nécessaire au calcul
-// 100% côté client (voir plus haut : "aucune migration, aucune nouvelle
-// requête" pour le calcul lui-même — mais les POIDS, eux, sont maintenant
-// gouvernés en base). La parité est vérifiée par
-// test_axis_model_parity.mjs. Changer une valeur ici sans créer une
-// nouvelle version dans axis_model_versions casse cette parité et doit
-// être traité comme un bug, pas une simple config.
-// ============================================================
-
-import { computeEWMA } from "./trainingLoad.js";
+// Profil descriptif des contraintes AthleteOS.
+// Les poids ventilent la charge session-RPE entre six dimensions séparées.
+// Ils ne modifient jamais la charge totale et ne prédisent aucun risque.
 
 export const CURRENT_AXIS_MODEL_VERSION = "v1";
 
 export const LOAD_AXES = {
-  neuromuscular: {
-    label: "Nerveux", nounPhrase: "neuromusculaire",
-    what: "Vitesse et force maximale : sprints, départs, charges lourdes.",
-    color: "#E24B4A",
-  },
-  elastic: {
-    label: "Élastique", nounPhrase: "élastique",
-    what: "Bonds et rebonds : la capacité de tes tendons à encaisser des chocs répétés.",
-    color: "#EF9F27",
-  },
-  metabolic: {
-    label: "Métabolique", nounPhrase: "métabolique",
-    what: "Ton endurance : la capacité de ton corps à tenir un effort long.",
-    color: "#378ADD",
-  },
-  muscular: {
-    label: "Musculaire", nounPhrase: "musculaire",
-    what: "La fatigue de tes muscles après l'effort — courbatures, musculation.",
-    color: "#A855F7",
-  },
-  technical: {
-    label: "Technique", nounPhrase: "technique",
-    what: "L'apprentissage d'un geste précis — haies, perche, sauts.",
-    color: "#14B8A6",
-  },
-  mental: {
-    label: "Mental", nounPhrase: "mentale",
-    what: "Le stress et la concentration liés à la compétition ou à l'intensité.",
-    color: "#EC4899",
-  },
+  neuromuscular: { label: "Nerveux", nounPhrase: "neuromusculaire", what: "Vitesse et force maximale : sprints, départs, charges lourdes.", color: "#E24B4A" },
+  elastic: { label: "Élastique", nounPhrase: "élastique", what: "Bonds et rebonds : exposition aux impacts répétés.", color: "#EF9F27" },
+  metabolic: { label: "Métabolique", nounPhrase: "métabolique", what: "Efforts prolongés et travail d'endurance.", color: "#378ADD" },
+  muscular: { label: "Musculaire", nounPhrase: "musculaire", what: "Travail musculaire et musculation.", color: "#A855F7" },
+  technical: { label: "Technique", nounPhrase: "technique", what: "Apprentissage et répétition d'un geste précis.", color: "#14B8A6" },
+  mental: { label: "Mental", nounPhrase: "mentale", what: "Concentration et exigences perçues de la séance.", color: "#EC4899" },
 };
 
 const AXIS_IDS = Object.keys(LOAD_AXES);
 
-// Poids relatif (0-1) de chaque catégorie de séance sur chacun des 6 axes.
+// Convention de coaching configurable. Ces poids ne sont pas des coefficients
+// de charge : la somme session-RPE reste durée réelle × RPE.
 export const AXIS_WEIGHTS = {
-  sprint:       { neuromuscular: 1.0,  elastic: 0.7,  metabolic: 0.3, muscular: 0.3, technical: 0.5, mental: 0.4 },
-  haies:        { neuromuscular: 0.9,  elastic: 0.8,  metabolic: 0.3, muscular: 0.3, technical: 0.8, mental: 0.5 },
-  force:        { neuromuscular: 0.6,  elastic: 0.3,  metabolic: 0.3, muscular: 1.0, technical: 0.3, mental: 0.3 },
-  saut:         { neuromuscular: 0.8,  elastic: 1.0,  metabolic: 0.3, muscular: 0.4, technical: 0.8, mental: 0.5 },
-  lancer:       { neuromuscular: 0.7,  elastic: 0.5,  metabolic: 0.2, muscular: 0.7, technical: 0.9, mental: 0.4 },
-  endurance:    { neuromuscular: 0.2,  elastic: 0.2,  metabolic: 1.0, muscular: 0.3, technical: 0.2, mental: 0.3 },
-  technique:    { neuromuscular: 0.3,  elastic: 0.3,  metabolic: 0.2, muscular: 0.2, technical: 1.0, mental: 0.3 },
-  mobilite:     { neuromuscular: 0.1,  elastic: 0.2,  metabolic: 0.1, muscular: 0.1, technical: 0.2, mental: 0.2 },
+  sprint:       { neuromuscular: 1.0, elastic: 0.7, metabolic: 0.3, muscular: 0.3, technical: 0.5, mental: 0.4 },
+  haies:        { neuromuscular: 0.9, elastic: 0.8, metabolic: 0.3, muscular: 0.3, technical: 0.8, mental: 0.5 },
+  force:        { neuromuscular: 0.6, elastic: 0.3, metabolic: 0.3, muscular: 1.0, technical: 0.3, mental: 0.3 },
+  saut:         { neuromuscular: 0.8, elastic: 1.0, metabolic: 0.3, muscular: 0.4, technical: 0.8, mental: 0.5 },
+  lancer:       { neuromuscular: 0.7, elastic: 0.5, metabolic: 0.2, muscular: 0.7, technical: 0.9, mental: 0.4 },
+  endurance:    { neuromuscular: 0.2, elastic: 0.2, metabolic: 1.0, muscular: 0.3, technical: 0.2, mental: 0.3 },
+  technique:    { neuromuscular: 0.3, elastic: 0.3, metabolic: 0.2, muscular: 0.2, technical: 1.0, mental: 0.3 },
+  mobilite:     { neuromuscular: 0.1, elastic: 0.2, metabolic: 0.1, muscular: 0.1, technical: 0.2, mental: 0.2 },
   recuperation: { neuromuscular: 0.05, elastic: 0.05, metabolic: 0.1, muscular: 0.05, technical: 0.05, mental: 0.1 },
 };
 
-/** Charge d'une séance ventilée sur les 6 axes (même base durée × RPE que computeSessionLoad). */
-export function computeSessionAxisLoads(durationMinutes, rpe, category) {
-  if (durationMinutes == null || rpe == null) return null;
-  const base    = durationMinutes * rpe;
+export function computeSessionAxisLoads(actualDurationMinutes, rpe, category) {
+  const duration = Number(actualDurationMinutes);
+  const effort = Number(rpe);
+  if (!Number.isFinite(duration) || duration <= 0 || !Number.isFinite(effort) || effort < 0 || effort > 10) return null;
+  const base = duration * effort;
   const weights = AXIS_WEIGHTS[category] ?? AXIS_WEIGHTS.technique;
-  const loads = {};
-  AXIS_IDS.forEach(axis => { loads[axis] = Math.round((base * (weights[axis] ?? 0)) / 10); });
-  return loads;
+  return Object.fromEntries(AXIS_IDS.map(axis => [axis, Math.round(base * (weights[axis] ?? 0))]));
 }
 
-/** Charge hebdomadaire par axe pour un athlète, à partir de ses séances (RPE renseigné uniquement). */
 export function computeWeeklyAxisLoads(athleteId, sessions) {
   const byWeek = new Map();
-  (sessions ?? []).forEach(s => {
-    if (!s.athleteIds?.includes(athleteId)) return;
-    const v = s.validations?.find(x => x.athleteId === athleteId);
-    if (v?.rpe == null) return;
-    const loads = computeSessionAxisLoads(s.durationMinutes, v.rpe, s.category);
+  (sessions ?? []).forEach(session => {
+    if (!session.athleteIds?.includes(athleteId)) return;
+    const validation = session.validations?.find(item => item.athleteId === athleteId);
+    const loads = computeSessionAxisLoads(validation?.actualDurationMinutes, validation?.rpe, session.category);
     if (!loads) return;
-    if (!byWeek.has(s.week)) byWeek.set(s.week, Object.fromEntries(AXIS_IDS.map(a => [a, 0])));
-    const acc = byWeek.get(s.week);
-    AXIS_IDS.forEach(axis => { acc[axis] += loads[axis]; });
+    if (!byWeek.has(session.week)) byWeek.set(session.week, Object.fromEntries(AXIS_IDS.map(axis => [axis, 0])));
+    AXIS_IDS.forEach(axis => { byWeek.get(session.week)[axis] += loads[axis]; });
   });
   return [...byWeek.entries()].sort((a, b) => a[0] - b[0]).map(([week, loads]) => ({ week, loads }));
 }
 
-// Score 0-100 centré sur 50 = "normal" (ratio aigu/chronique ≈ 1). Mêmes
-// seuils que l'ACWR global déjà utilisé partout dans l'app (0.8 / 1.3 / 1.5)
-// pour rester cohérent : 50±10 = optimal, >65 = élevé, >75 = très élevé,
-// <40 = faible.
-export function axisScoreFromAcwr(acwr) {
-  return Math.max(0, Math.min(100, Math.round(50 + (acwr - 1) * 50)));
-}
-
 export function axisStatus(score) {
-  if (score > 75) return { label: "Très élevé", color: "#E24B4A" };
-  if (score > 65) return { label: "Élevé",       color: "#EF9F27" };
-  if (score >= 40) return { label: "Normal",     color: "#1D9E75" };
-  return                  { label: "Faible",     color: "#378ADD" };
+  if (score >= 75) return { label: "Dominant", color: "#A9CBFB" };
+  if (score >= 40) return { label: "Présent", color: "#7BD8B4" };
+  return { label: "Secondaire", color: "#94A3B8" };
 }
 
-// Qualité de la baseline "capacité habituelle" (tâche 18) : plus il y a de
-// semaines d'historique, plus la charge chronique par axe reflète une vraie
-// habitude plutôt que 2-3 séances récentes. Mêmes paliers que la confiance
-// de estimateRecovery (chargeCalculations.js) pour rester cohérent dans
-// toute l'app.
 function axisDataQuality(weeksOfData) {
   if (weeksOfData >= 8) return "élevée";
   if (weeksOfData >= 4) return "modérée";
   return "faible";
 }
 
-/**
- * Profil de charge complet d'un athlète : pour chacun des 6 axes, le
- * ratio aigu/chronique (l'équivalent ACWR par axe — "capacité habituelle
- * de cet athlète"), un score 0-100 + statut en langage clair, ET (tâche 18)
- * les valeurs brutes acute/chronic pour comparer à la baseline personnelle,
- * plus une qualité de donnée basée sur le nombre de semaines disponibles.
- * Retourne null tant qu'il n'y a pas au moins 2 semaines de données —
- * baseline insuffisante, pas de score inventé (comme les autres métriques
- * de l'app).
- */
 export function getAthleteAxisProfile(athleteId, sessions, currentWeek) {
-  const weekly = computeWeeklyAxisLoads(athleteId, sessions).filter(w => w.week <= currentWeek);
-  if (weekly.length < 2) return null;
+  const cutoff = Number.isFinite(currentWeek) ? currentWeek : Infinity;
+  const weekly = computeWeeklyAxisLoads(athleteId, sessions).filter(item => item.week <= cutoff);
+  if (!weekly.length) return null;
 
-  const dataQuality = axisDataQuality(weekly.length);
+  const current = weekly.at(-1);
+  const baselineWeeks = weekly.slice(-5, -1);
+  const maxCurrentLoad = Math.max(1, ...AXIS_IDS.map(axis => current.loads[axis]));
   const profile = {};
   AXIS_IDS.forEach(axis => {
-    const dailyLoads = weekly.map(w => ({ date: `W${w.week}`, load: w.loads[axis] }));
-    const { acute, chronic, acwr } = computeEWMA(dailyLoads);
-    const score = axisScoreFromAcwr(acwr);
+    const currentLoad = current.loads[axis];
+    const habitualLoad = baselineWeeks.length
+      ? Math.round(baselineWeeks.reduce((sum, week) => sum + week.loads[axis], 0) / baselineWeeks.length)
+      : null;
+    const variationPercent = habitualLoad > 0 ? Math.round(((currentLoad - habitualLoad) / habitualLoad) * 100) : null;
+    const score = Math.round((currentLoad / maxCurrentLoad) * 100);
     profile[axis] = {
-      acwr, score, ...axisStatus(score),
-      acute, chronic, dataQuality, weeksOfData: weekly.length,
+      score, ...axisStatus(score), currentLoad, habitualLoad, variationPercent,
+      dataQuality: axisDataQuality(weekly.length), weeksOfData: weekly.length, currentWeek: current.week,
     };
   });
   return profile;
 }
 
-/**
- * Séances qui ont le plus contribué à UN axe donné, sur les 2 dernières
- * semaines (même fenêtre que "Séances ayant contribué" dans
- * FormeDetailPanel.jsx, pour rester cohérent) — répond concrètement à
- * "pourquoi cet axe est élevé cette semaine" plutôt que de laisser un
- * chiffre sans explication (DoD tâche 18 : "chaque axe explique ses
- * principales contributions").
- */
 export function getAxisTopContributors(athleteId, sessions, axis, currentWeek, limit = 3) {
   return (sessions ?? [])
-    .filter(s => s.week != null && s.week >= currentWeek - 1 && s.week <= currentWeek)
-    .filter(s => s.athleteIds?.includes(athleteId))
-    .map(s => {
-      const v = s.validations?.find(x => x.athleteId === athleteId);
-      if (v?.rpe == null) return null;
-      const loads = computeSessionAxisLoads(s.durationMinutes, v.rpe, s.category);
-      if (!loads || !loads[axis]) return null;
-      return {
-        id: s.id, title: s.title, category: s.category,
-        week: s.week, sessionDate: s.sessionDate, axisLoad: loads[axis],
-      };
+    .filter(session => session.week != null && session.week >= currentWeek - 1 && session.week <= currentWeek)
+    .filter(session => session.athleteIds?.includes(athleteId))
+    .map(session => {
+      const validation = session.validations?.find(item => item.athleteId === athleteId);
+      const loads = computeSessionAxisLoads(validation?.actualDurationMinutes, validation?.rpe, session.category);
+      if (!loads?.[axis]) return null;
+      return { id: session.id, title: session.title, category: session.category, week: session.week, sessionDate: session.sessionDate, axisLoad: loads[axis] };
     })
     .filter(Boolean)
     .sort((a, b) => b.axisLoad - a.axisLoad)
@@ -26168,14 +25981,6 @@ export function getAxisTopContributors(athleteId, sessions, axis, currentWeek, l
 </file>
 
 <file path="src/utils/loadAxes.test.js">
-// ============================================================
-// AthleteOS — src/utils/loadAxes.test.js
-//
-// Profil de charge à 6 axes (tâche 18), porté ici en Vitest (tâche 19)
-// depuis test_axis_profile.mjs — fonctions pures, aucune base de
-// données requise.
-// ============================================================
-
 import { describe, it, expect } from "vitest";
 import {
   LOAD_AXES, AXIS_WEIGHTS, computeSessionAxisLoads, getAthleteAxisProfile, getAxisTopContributors,
@@ -26183,98 +25988,65 @@ import {
 
 const AXIS_IDS = Object.keys(LOAD_AXES);
 
-function session(id, week, category, durationMinutes, rpe, athleteId = 1) {
+function session(id, week, category, actualDurationMinutes, rpe, athleteId = 1) {
   return {
-    id, week, category, durationMinutes, athleteIds: [athleteId],
-    validations: [{ athleteId, rpe }],
+    id, week, category, athleteIds: [athleteId],
+    validations: [{ athleteId, rpe, actualDurationMinutes, durationSource: "reported" }],
   };
 }
 
-describe("AXIS_WEIGHTS — bornes et complétude", () => {
-  it("chaque poids catégorie->axe est dans [0,1]", () => {
-    for (const [cat, weights] of Object.entries(AXIS_WEIGHTS)) {
-      for (const axis of AXIS_IDS) {
-        const w = weights[axis];
-        expect(typeof w, `${cat}.${axis}`).toBe("number");
-        expect(w, `${cat}.${axis}`).toBeGreaterThanOrEqual(0);
-        expect(w, `${cat}.${axis}`).toBeLessThanOrEqual(1);
-      }
-    }
+describe("dimensions de contrainte", () => {
+  it("définit tous les poids dans [0,1]", () => {
+    Object.values(AXIS_WEIGHTS).forEach(weights => AXIS_IDS.forEach(axis => {
+      expect(weights[axis]).toBeGreaterThanOrEqual(0);
+      expect(weights[axis]).toBeLessThanOrEqual(1);
+    }));
   });
 
-  it("chaque catégorie a un poids défini pour les 6 axes (pas de trou silencieux)", () => {
-    for (const [, weights] of Object.entries(AXIS_WEIGHTS)) {
-      for (const axis of AXIS_IDS) {
-        expect(typeof weights[axis]).toBe("number");
-      }
-    }
-  });
-});
-
-describe("computeSessionAxisLoads — golden dataset", () => {
-  it("sprint 60min RPE7 -> axe nerveux = 42, axe métabolique = 13", () => {
+  it("ventile la charge standard sans la diviser par dix", () => {
     const loads = computeSessionAxisLoads(60, 7, "sprint");
-    expect(loads.neuromuscular).toBe(42);
-    expect(loads.metabolic).toBe(13);
+    expect(loads.neuromuscular).toBe(420);
+    expect(loads.metabolic).toBe(126);
+  });
+
+  it("refuse une durée réelle absente", () => {
+    expect(computeSessionAxisLoads(null, 7, "sprint")).toBeNull();
   });
 });
 
-describe("getAthleteAxisProfile — baseline insuffisante", () => {
-  it("1 seule semaine de données -> profil null (pas de score inventé)", () => {
-    const oneWeek = [session(1, 10, "sprint", 60, 7)];
-    expect(getAthleteAxisProfile(1, oneWeek, 10)).toBeNull();
-  });
-
-  it("aucune séance -> profil null", () => {
-    expect(getAthleteAxisProfile(1, [], 10)).toBeNull();
-  });
-});
-
-describe("getAthleteAxisProfile — reproductibilité et qualité de données", () => {
+describe("profil descriptif", () => {
   const sessions = [
     session(1, 8, "sprint", 60, 7), session(2, 8, "force", 45, 8),
     session(3, 9, "sprint", 60, 6), session(4, 9, "endurance", 50, 5),
     session(5, 10, "sprint", 70, 8), session(6, 10, "force", 40, 7),
   ];
 
-  it("mêmes séances -> exactement le même score (reproductible)", () => {
-    const profile1 = getAthleteAxisProfile(1, sessions, 10);
-    const profile2 = getAthleteAxisProfile(1, sessions, 10);
-    for (const axis of AXIS_IDS) {
-      expect(profile1[axis].score).toBe(profile2[axis].score);
-      expect(profile1[axis].acwr).toBe(profile2[axis].acwr);
-    }
+  it("est reproductible et ne publie aucun ACWR par axe", () => {
+    const first = getAthleteAxisProfile(1, sessions, 10);
+    const second = getAthleteAxisProfile(1, sessions, 10);
+    AXIS_IDS.forEach(axis => {
+      expect(first[axis].score).toBe(second[axis].score);
+      expect(first[axis].acwr).toBeUndefined();
+    });
   });
 
-  it("3 semaines de données -> qualité 'faible'", () => {
+  it("compare la dernière semaine à une moyenne précédente", () => {
     const profile = getAthleteAxisProfile(1, sessions, 10);
+    expect(profile.neuromuscular.currentLoad).toBeGreaterThan(0);
+    expect(profile.neuromuscular.habitualLoad).toBeGreaterThan(0);
     expect(profile.neuromuscular.dataQuality).toBe("faible");
   });
 
-  it("9 semaines de données -> qualité 'élevée'", () => {
-    const manyWeeks = Array.from({ length: 9 }, (_, i) => session(100 + i, i + 1, "sprint", 60, 7));
-    const profile = getAthleteAxisProfile(1, manyWeeks, 9);
-    expect(profile.neuromuscular.dataQuality).toBe("élevée");
-  });
-
-  it("expose acute ET chronic (comparaison à la baseline, pas juste un ratio)", () => {
-    const profile = getAthleteAxisProfile(1, sessions, 10);
-    expect(typeof profile.neuromuscular.acute).toBe("number");
-    expect(typeof profile.neuromuscular.chronic).toBe("number");
+  it("respecte la semaine de coupure historique", () => {
+    const before = getAthleteAxisProfile(1, sessions, 9);
+    expect(before.neuromuscular.currentWeek).toBe(9);
   });
 });
 
-describe("getAxisTopContributors", () => {
-  it("la séance la plus dure sur un axe ressort en premier", () => {
-    const currentWeek = 10;
-    const sessions = [
-      session(1, currentWeek, "sprint", 30, 5),
-      session(2, currentWeek, "sprint", 90, 9),
-      session(3, currentWeek, "mobilite", 60, 3),
-    ];
-    const top = getAxisTopContributors(1, sessions, "neuromuscular", currentWeek);
-    expect(top.length).toBeGreaterThan(0);
-    expect(top[0].id).toBe(2);
+describe("contributeurs", () => {
+  it("classe la séance la plus contributrice en premier", () => {
+    const sessions = [session(1, 10, "sprint", 30, 5), session(2, 10, "sprint", 90, 9), session(3, 10, "mobilite", 60, 3)];
+    expect(getAxisTopContributors(1, sessions, "neuromuscular", 10)[0].id).toBe(2);
   });
 });
 </file>
@@ -26285,7 +26057,6 @@ describe("getAxisTopContributors", () => {
 // ============================================================
 
 import { supabase } from "./supabaseClient";
-import { getAthleteMetricsForWeek } from "./chargeCalculations";
 
 // ── Envoi push générique ──────────────────────────────────────
 // Supporte athleteIds (pour les athlètes) ET userIds (pour les coaches)
@@ -26314,36 +26085,13 @@ async function sendWebPush(athleteIds, payload, userIds = []) {
 }
 
 export async function checkAndAlertACWR(clubId, athletes, weeklyCharge, currentWeek) {
-  for (const athlete of athletes) {
-    const metrics = getAthleteMetricsForWeek(athlete.id, weeklyCharge, currentWeek);
-    if (metrics.acwr > 1.3) {
-      const { data: existing } = await supabase.from("alerts").select("id")
-        .eq("club_id", clubId).eq("athlete_id", athlete.id).eq("type", "charge")
-        .gte("created_at", new Date(Date.now() - 7*86400000).toISOString()).limit(1);
-      if (!existing?.length) {
-        await supabase.from("alerts").insert({
-          club_id: clubId, athlete_id: athlete.id, type: "charge",
-          title: `⚠️ Surcharge — ${athlete.name}`,
-          description: `ACWR de ${metrics.acwr.toFixed(2)} (seuil 1.30) — hors de la zone habituelle. Vaut le coup d'en discuter avec l'athlète.`,
-          severity: "élevée", is_read: false,
-        });
-      }
-    }
-    if (metrics.acwr < 0.8 && metrics.acwr > 0) {
-      const { data: existing } = await supabase.from("alerts").select("id")
-        .eq("club_id", clubId).eq("athlete_id", athlete.id).eq("type", "charge")
-        .ilike("title", "%sous-charge%")
-        .gte("created_at", new Date(Date.now() - 7*86400000).toISOString()).limit(1);
-      if (!existing?.length) {
-        await supabase.from("alerts").insert({
-          club_id: clubId, athlete_id: athlete.id, type: "charge",
-          title: `📉 Sous-charge — ${athlete.name}`,
-          description: `ACWR de ${metrics.acwr.toFixed(2)} (seuil 0.80). Risque de déconditionnement.`,
-          severity: "légère", is_read: false,
-        });
-      }
-    }
-  }
+  // API conservée pour ne pas casser les appels du Dashboard. La génération
+  // automatique d'alertes ACWR est volontairement désactivée : ce ratio
+  // expérimental ne permet pas d'inférer un risque individuel.
+  void clubId;
+  void athletes;
+  void weeklyCharge;
+  void currentWeek;
 }
 
 export async function alertSessionAbsence(clubId, athlete, session) {
@@ -26779,7 +26527,7 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey);
 // - Williams S, Booton T, Watson M, et al. (2017).
 //   → EWMA supérieur à la moyenne mobile simple
 // - Hasegawa T, et al. (2024). PeerJ 12:e17443.
-//   → Temps de récupération neuromusculaire par type de séance
+//   → Mesures aiguës après sprint ; ne valide pas des délais fixes de récupération.
 // - Saw AE, Main LC, Gastin PB. (2016). BJSM 50(5), 281-291.
 //   → Wellness questionnaire = mesure la plus sensible et fiable
 //
@@ -26793,17 +26541,11 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey);
 // minutes après la fin de la séance.
 //
 // ⚠️ TRANSPARENCE IMPORTANTE :
-// Le COEFFICIENT PAR CATÉGORIE ci-dessous (sprint, force, technique...)
-// n'est PAS une valeur tirée directement d'une publication scientifique
-// spécifique à l'athlétisme — une table universelle de ce type n'existe
-// pas dans la littérature. C'est un paramètre d'AJUSTEMENT PRATIQUE,
-// couramment utilisé en planification sportive (périodisation) pour
-// refléter que deux séances au même RPE n'ont pas le même impact
-// structurel (ex: une séance de force sollicite davantage le système
-// neuromusculaire qu'une séance technique à ressenti égal).
+// La charge globale n'applique aucun coefficient de catégorie. Les
+// contraintes spécifiques sont des dimensions descriptives séparées.
 //
-// ⚠️ SOURCE CANONIQUE (tâche 16) : ces constantes DOIVENT rester identiques
-// à la ligne 'v1' de la table Postgres `charge_model_versions`
+// ⚠️ SOURCE CANONIQUE : ces constantes DOIVENT rester identiques
+// à la version active de la table Postgres `charge_model_versions`
 // (migration 20260727040000_charge_model_versioning.sql) — c'est cette
 // table, pas ce fichier, qui fait foi pour le calcul serveur (vue SQL
 // weekly_charge) et pour la reproductibilité historique (chaque ligne
@@ -26816,33 +26558,21 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey);
 // être considéré comme un bug, pas une simple config.
 // ============================================================
 
-export const CURRENT_MODEL_VERSION = "v1";
+export const CURRENT_MODEL_VERSION = "v2-session-rpe-standard";
 
 /**
- * Coefficients d'ajustement par catégorie de séance.
- * Valeurs par défaut inspirées des pratiques courantes en périodisation
- * (plus élevé = impact structurel/neuromusculaire plus important).
- * Modifiables uniquement en créant une nouvelle version dans
- * charge_model_versions (jamais en éditant ces valeurs in-place — voir
- * l'avertissement "SOURCE CANONIQUE" ci-dessus).
+ * Compatibilité avec les formulaires historiques qui enregistrent encore
+ * `load_weight`. La charge session-RPE globale n'utilise plus ces valeurs :
+ * les contraintes spécifiques sont exposées séparément dans loadAxes.js.
  */
 export const LOAD_COEFFICIENTS = {
-  force:        1.3,  // Musculation — forte sollicitation neuromusculaire
-  sprint:       1.1,  // Sprint — haute intensité nerveuse
-  haies:        1.1,  // Haies — proche du sprint techniquement exigeant
-  lancer:       1.0,  // Lancers — explosif, charge articulaire
-  saut:         1.0,  // Sauts — explosif, charge articulaire
-  endurance:    0.9,  // Endurance — métabolique, moins neuromusculaire
-  technique:    0.7,  // Technique — intensité généralement plus faible
-  mobilite:     0.4,  // Mobilité — très faible impact structurel
-  recuperation: 0.3,  // Récupération active — impact minimal
+  force: 1, sprint: 1, haies: 1, lancer: 1, saut: 1,
+  endurance: 1, technique: 1, mobilite: 1, recuperation: 1,
 };
 
 // ─── AJOUT v2.0 : Temps de récupération par catégorie (heures) ───────────────
-// Basé sur Hasegawa et al. (2024) [7] :
-// Sprint/force = récupération neuromusculaire 48-72h
-// Saut = 48h, technique = 24h
-// Même remarque "SOURCE CANONIQUE" que LOAD_COEFFICIENTS ci-dessus.
+// Valeurs historiques conservées comme règles d'espacement de programmation.
+// Elles sont configurables et ne constituent pas des temps physiologiques.
 export const RECOVERY_HOURS = {
   sprint:       72,
   haies:        72,
@@ -26859,13 +26589,15 @@ export const RECOVERY_HOURS = {
  * Calcule la charge d'UNE séance pour UN athlète.
  * @param {number} durationMinutes - Durée de la séance en minutes
  * @param {number} rpe - Ressenti de l'athlète, 0 à 10 (échelle de Borg CR10)
- * @param {string} category - Catégorie de la séance (clé de LOAD_COEFFICIENTS)
  * @returns {number|null} Charge arrondie, ou null si données manquantes
  */
-export function computeSessionLoad(durationMinutes, rpe, category) {
+export function computeSessionLoad(durationMinutes, rpe) {
   if (durationMinutes == null || rpe == null) return null;
-  const coef = LOAD_COEFFICIENTS[category] ?? 1.0;
-  return Math.round((durationMinutes * rpe * coef) / 10);
+  const duration = Number(durationMinutes);
+  const perceivedExertion = Number(rpe);
+  if (!Number.isFinite(duration) || duration <= 0) return null;
+  if (!Number.isFinite(perceivedExertion) || perceivedExertion < 0 || perceivedExertion > 10) return null;
+  return Math.round(duration * perceivedExertion);
 }
 
 /**
@@ -26888,7 +26620,8 @@ export function computeWeeklyLoadFromSessions(athleteId, week, sessions) {
       missingRpeCount += 1;
       return;
     }
-    const load = computeSessionLoad(s.durationMinutes, rpe, s.category);
+    const duration = validation?.actualDurationMinutes;
+    const load = computeSessionLoad(duration, rpe);
     if (load !== null) {
       total += load;
       sessionCount += 1;
@@ -26934,7 +26667,8 @@ export function computeWeeklyLoadByCategory(athletes, sessions) {
         const validation = s.validations?.find((v) => v.athleteId === athleteId);
         const rpe = validation?.rpe;
         if (rpe == null) return;
-        const load = computeSessionLoad(s.durationMinutes, rpe, s.category);
+        const duration = validation?.actualDurationMinutes;
+        const load = computeSessionLoad(duration, rpe);
         if (load === null) return;
         byCategory[s.category] = (byCategory[s.category] ?? 0) + load;
       });
@@ -26964,78 +26698,152 @@ export function getRPELabel(rpe) {
 // ─── AJOUT v2.0 : EWMA (Exponentially Weighted Moving Average) ───────────────
 // Williams S, et al. (2017). International Journal of Sports Physiology
 // and Performance.
-// λa = 2/(7+1) = 0.25 (charge aiguë ~1 semaine)
-// λc = 2/(28+1) ≈ 0.067 (charge chronique ~4 semaines)
+// λ courte = 2/(7+1) ; λ longue = 2/(28+1). Ces paramètres supposent
+// strictement un point par JOUR, jamais un total hebdomadaire déguisé.
 const LAMBDA_ACUTE   = 2 / (7  + 1);
 const LAMBDA_CHRONIC = 2 / (28 + 1);
 
 export function computeEWMA(dailyLoads) {
-  if (!dailyLoads?.length) return { acute: 0, chronic: 0, acwr: 1.0, ewmaHistory: [] };
-
-  let ewmaAcute   = dailyLoads[0].load;
-  let ewmaChronic = dailyLoads[0].load;
-  const history   = [];
-
-  for (const { date, load } of dailyLoads) {
-    ewmaAcute   = load * LAMBDA_ACUTE   + ewmaAcute   * (1 - LAMBDA_ACUTE);
-    ewmaChronic = load * LAMBDA_CHRONIC + ewmaChronic * (1 - LAMBDA_CHRONIC);
-    history.push({ date, acute: Math.round(ewmaAcute), chronic: Math.round(ewmaChronic) });
+  const ordered = (dailyLoads ?? [])
+    .filter((point) => point?.date)
+    .map((point) => ({ ...point, load: point.load == null ? null : Number(point.load) }))
+    .sort((a, b) => String(a.date).localeCompare(String(b.date)));
+  if (!ordered.length) {
+    return { acute: null, chronic: null, acwr: null, ewmaHistory: [], observedDays: 0, status: "insufficient_data" };
   }
 
-  const acwr = ewmaChronic > 0 ? ewmaAcute / ewmaChronic : 1.0;
+  // Une valeur inconnue casse la continuité : l'algorithme reprend au
+  // prochain point connu, mais aucun ratio n'est publié avant 28 nouveaux
+  // jours consécutifs. On ne transforme jamais silencieusement null en 0.
+  let ewmaAcute = null;
+  let ewmaChronic = null;
+  let observedDays = 0;
+  const history   = [];
+
+  for (const { date, load } of ordered) {
+    if (!Number.isFinite(load) || load < 0) {
+      ewmaAcute = null;
+      ewmaChronic = null;
+      observedDays = 0;
+      history.push({ date, load: null, acute: null, chronic: null });
+      continue;
+    }
+    if (ewmaAcute == null || ewmaChronic == null) {
+      ewmaAcute = load;
+      ewmaChronic = load;
+    } else {
+      ewmaAcute   = load * LAMBDA_ACUTE   + ewmaAcute   * (1 - LAMBDA_ACUTE);
+      ewmaChronic = load * LAMBDA_CHRONIC + ewmaChronic * (1 - LAMBDA_CHRONIC);
+    }
+    observedDays += 1;
+    history.push({ date, load, acute: Math.round(ewmaAcute), chronic: Math.round(ewmaChronic) });
+  }
+
+  const enoughForExperimentalRatio = observedDays >= 28 && ewmaChronic > 0;
+  const acwr = enoughForExperimentalRatio ? ewmaAcute / ewmaChronic : null;
   return {
-    acute:       Math.round(ewmaAcute),
-    chronic:     Math.round(ewmaChronic),
-    acwr:        Math.round(acwr * 100) / 100,
+    acute:       ewmaAcute == null ? null : Math.round(ewmaAcute),
+    chronic:     ewmaChronic == null ? null : Math.round(ewmaChronic),
+    acwr:        acwr == null ? null : Math.round(acwr * 100) / 100,
     ewmaHistory: history,
+    observedDays,
+    status: enoughForExperimentalRatio ? "experimental" : "insufficient_data",
   };
+}
+
+function toDateKey(value) {
+  if (!value) return null;
+  const match = String(value).match(/^(\d{4}-\d{2}-\d{2})/u);
+  return match?.[1] ?? null;
+}
+
+function addUtcDays(dateKey, amount) {
+  const date = new Date(`${dateKey}T00:00:00Z`);
+  date.setUTCDate(date.getUTCDate() + amount);
+  return date.toISOString().slice(0, 10);
+}
+
+/** Construit une série civile continue. Les dates absentes restent `null`. */
+export function buildContinuousDailyLoadSeries(points, startDate, endDate) {
+  const normalized = new Map();
+  (points ?? []).forEach((point) => {
+    const date = toDateKey(point?.date);
+    if (!date) return;
+    const load = point.load == null || point.estimated ? null : Number(point.load);
+    normalized.set(date, Number.isFinite(load) && load >= 0 ? load : null);
+  });
+  const keys = [...normalized.keys()].sort();
+  const start = toDateKey(startDate) ?? keys[0] ?? null;
+  const end = toDateKey(endDate) ?? keys.at(-1) ?? null;
+  if (!start || !end || start > end) return [];
+
+  const series = [];
+  for (let date = start; date <= end; date = addUtcDays(date, 1)) {
+    series.push({ date, load: normalized.has(date) ? normalized.get(date) : null });
+  }
+  return series;
+}
+
+/** Extrait les jours détaillés fournis par la vue SQL weekly_charge v2. */
+export function extractDailyLoads(athleteId, weeklyCharge, currentWeek) {
+  const rows = (weeklyCharge ?? [])
+    .filter((row) => row.athleteId === athleteId)
+    .filter((row) => currentWeek == null || row.week <= currentWeek);
+  const points = rows.flatMap((row) => row.dailyLoads ?? []);
+  if (!points.length) return [];
+  const end = points.map((point) => toDateKey(point.date)).filter(Boolean).sort().at(-1);
+  const start = addUtcDays(end, -55);
+  return buildContinuousDailyLoadSeries(points, start, end);
+}
+
+export function computeLoadWindows(dailyLoads) {
+  const last = (dailyLoads ?? []).slice(-28);
+  const last7 = last.slice(-7);
+  const known7 = last7.length === 7 && last7.every((point) => Number.isFinite(point.load));
+  const known28 = last.length === 28 && last.every((point) => Number.isFinite(point.load));
+  const load7 = known7 ? last7.reduce((sum, point) => sum + point.load, 0) : null;
+  const load28 = known28 ? last.reduce((sum, point) => sum + point.load, 0) : null;
+  const previous21 = known28 ? last.slice(0, 21) : [];
+  const recentDailyAverage = load7 == null ? null : load7 / 7;
+  const habitualDailyAverage = known28
+    ? previous21.reduce((sum, point) => sum + point.load, 0) / 21
+    : null;
+  const variationPercent = habitualDailyAverage > 0
+    ? Math.round(((recentDailyAverage - habitualDailyAverage) / habitualDailyAverage) * 100)
+    : null;
+  return { load7, load28, recentDailyAverage, habitualDailyAverage, variationPercent, known7, known28 };
 }
 
 // ─── AJOUT v2.0 : Monotonie et Contrainte ────────────────────────────────────
 // Foster C. (1998). Medicine & Science in Sports & Exercise, 30(7), 1164-1168.
 // Monotonie  = charge_moyenne / écart-type
 // Contrainte = charge_totale × monotonie
-export function computeMonotonyAndStrain(weeklyLoads) {
-  if (!weeklyLoads?.length) return { monotony: 0, strain: 0 };
-  const n    = weeklyLoads.length;
-  const mean = weeklyLoads.reduce((a, b) => a + b, 0) / n;
-  const sd   = Math.sqrt(weeklyLoads.reduce((acc, v) => acc + Math.pow(v - mean, 2), 0) / n);
-  const monotony = sd > 0 ? Math.round((mean / sd) * 100) / 100 : 0;
-  const strain   = Math.round(mean * n * monotony);
-  return { monotony, strain };
+export function computeMonotonyAndStrain(dailyLoads) {
+  if (!Array.isArray(dailyLoads) || dailyLoads.length !== 7 || dailyLoads.some((value) => !Number.isFinite(value) || value < 0)) {
+    return { monotony: null, strain: null, status: "insufficient_data" };
+  }
+  const mean = dailyLoads.reduce((a, b) => a + b, 0) / 7;
+  const sd = Math.sqrt(dailyLoads.reduce((acc, value) => acc + Math.pow(value - mean, 2), 0) / 7);
+  if (sd === 0) return { monotony: null, strain: null, status: "undefined_zero_variance" };
+  const monotony = Math.round((mean / sd) * 100) / 100;
+  return { monotony, strain: Math.round(dailyLoads.reduce((a, b) => a + b, 0) * monotony), status: "available" };
 }
 
-// ─── AJOUT v2.0 : Score Wellness (Hooper Index) ──────────────────────────────
-// Saw AE, Main LC, Gastin PB. (2016). BJSM 50(5), 281-291.
-// McLean BD, et al. (2010). Int J Sports Physiol Perform.
-// 5 questions, chacune 1-5 : sommeil, énergie, courbatures, humeur, stress
-// soreness et stress sont INVERSÉS (5 = mauvais)
+// AthleteOS Wellness Questionnaire v1 — instrument interne non validé.
+// Il ne doit pas être présenté comme le Hooper Index, qui utilise quatre
+// dimensions différentes. Les cinq réponses 1..5 sont normalisées sur 0..100.
 export function computeWellnessScore(wellness) {
   if (!wellness) return null;
   const { sleep, energy, soreness, mood, stress } = wellness;
   if ([sleep, energy, soreness, mood, stress].some(v => v == null)) return null;
-  const score = (
-    sleep            * 20 +
-    energy           * 20 +
-    (6 - soreness)   * 20 +
-    mood             * 20 +
-    (6 - stress)     * 20
-  ) / 5;
+  const normalizedMean = (sleep + energy + (6 - soreness) + mood + (6 - stress)) / 5;
+  const score = ((normalizedMean - 1) / 4) * 100;
   return Math.round(Math.max(0, Math.min(100, score)));
 }
 
-// ─── AJOUT v3.0 (tâche 17) : récupération = plage + confiance, pas un point ──
-// Hasegawa T, et al. (2024). PeerJ 12:e17443, pour l'ordre de grandeur par
-// catégorie. RECOVERY_HOURS_RANGE (ci-dessous) remplace un chiffre unique
-// par une fourchette : personne ne récupère en exactement 72h, ni tout le
-// monde à la même vitesse. Voir l'avertissement "SOURCE CANONIQUE" plus
-// haut dans ce fichier — ces plages sont des paramètres expérimentaux
-// AthleteOS (liés à CURRENT_MODEL_VERSION), pas des bornes publiées.
-//
-// Ancien comportement corrigé : sans séance récente, computeRecoveryStatus
-// renvoyait `fullyRecovered: true` — une certitude fabriquée à partir de
-// rien. estimateRecovery renvoie maintenant explicitement
-// status: "insufficient_data" dans ce cas.
+// Règles de programmation configurables — pas des temps physiologiques.
+// Elles servent uniquement à espacer deux séances ciblant une même
+// contrainte. Le nom historique est conservé pour compatibilité d'import.
 export const RECOVERY_HOURS_RANGE = {
   sprint:       { min: 48, max: 96 },  // centre historique 72h
   haies:        { min: 48, max: 96 },
@@ -27048,286 +26856,218 @@ export const RECOVERY_HOURS_RANGE = {
   recuperation: { min: 6,  max: 18 },
 };
 
-const WELLNESS_FRESH_HOURS = 36; // au-delà, wellness jugé périmé — pas fiable pour "maintenant"
-const BAND_WIDTH = 0.4;          // la plage affichée couvre toujours au moins 40% de l'étendue de la catégorie
-
-function clamp01(x) { return Math.max(0, Math.min(1, x)); }
+function sessionEndDate(session, actualDurationMinutes) {
+  if (!session?.sessionDate || !session?.time) return null;
+  const time = String(session.time).match(/^(\d{1,2}):(\d{2})/u);
+  if (!time) return null;
+  const end = new Date(`${String(session.sessionDate).slice(0, 10)}T00:00:00`);
+  end.setHours(Number(time[1]), Number(time[2]), 0, 0);
+  const duration = Number(actualDurationMinutes);
+  if (Number.isFinite(duration) && duration > 0) end.setMinutes(end.getMinutes() + duration);
+  return Number.isNaN(end.getTime()) ? null : end;
+}
 
 /**
- * Estimation de récupération neuromusculaire/métabolique après la dernière
- * séance validée d'un athlète. Renvoie une PLAGE d'heures restantes (jamais
- * un chiffre unique ni un "totalement récupéré" catégorique), un niveau de
- * confiance qui baisse quand les données manquent ou sont anciennes, et la
- * liste des facteurs qui ont fait varier l'estimation — pour que l'athlète
- * et le coach voient POURQUOI, pas juste un nombre.
- *
- * @param sessions  séances mappées (comme ailleurs dans l'app)
- * @param athleteId number
- * @param wellness  dernier questionnaire wellness connu ({date, sleep,
- *                  energy, soreness, mood, stress}) ou null si aucun
- * @param now       Date — paramétrable pour les tests
+ * Fenêtre de programmation après la dernière séance. Le paramètre `wellness`
+ * reste accepté pour ne casser aucun appel, mais n'allonge ni ne raccourcit
+ * la règle : AthleteOS ne prétend plus estimer une récupération biologique.
  */
-export function estimateRecovery(sessions, athleteId, wellness = null, now = new Date()) {
+export function estimateRecovery(sessions, athleteId, _wellness = null, now = new Date(), rules = RECOVERY_HOURS_RANGE) {
   const doneSessions = (sessions ?? [])
     .map(s => {
       const v = s.validations?.find(x => x.athleteId === athleteId);
-      return v?.status === "done" && s.sessionDate ? { ...s, rpe: v.rpe ?? null } : null;
+      const endAt = v?.status === "done" || v?.status === "partial"
+        ? sessionEndDate(s, v.actualDurationMinutes)
+        : null;
+      return endAt ? { ...s, validation: v, endAt } : null;
     })
     .filter(Boolean)
-    .sort((a, b) => new Date(b.sessionDate) - new Date(a.sessionDate));
+    .sort((a, b) => b.endAt - a.endAt);
 
   if (!doneSessions.length) {
     return {
-      status: "insufficient_data", confidence: "faible", confidenceScore: 0,
-      rangeHoursMin: null, rangeHoursMax: null, lastSession: null, factors: [],
+      status: "insufficient_data", kind: "programming_rule", confidence: null, confidenceScore: null,
+      rangeHoursMin: null, rangeHoursMax: null, lastSession: null, factors: [], ruleSource: "club_default",
     };
   }
 
-  const last  = doneSessions[0];
-  const range = RECOVERY_HOURS_RANGE[last.category] ?? RECOVERY_HOURS_RANGE.technique;
-  const sessionEnd = new Date(last.sessionDate);
-  sessionEnd.setHours(20, 0, 0, 0);
-  const hoursElapsed = Math.max(0, (now - sessionEnd) / (1000 * 60 * 60));
-
-  let center = 0.5; // position normalisée dans la plage de la catégorie (0 = borne basse, 1 = borne haute)
-  const factors = [];
-  let confidenceScore = 30; // séance de référence connue (catégorie + date) — toujours acquis ici
-
-  // ── Charge relative : cette séance vs la moyenne récente de l'athlète ──
-  const recentWithLoad = doneSessions
-    .slice(0, 8)
-    .filter(s => s.rpe != null && s.durationMinutes != null)
-    .map(s => ({ ...s, load: s.durationMinutes * s.rpe }));
-  if (recentWithLoad.length >= 2) {
-    const lastLoad = recentWithLoad[0].load;
-    const avgLoad  = recentWithLoad.slice(1).reduce((a, s) => a + s.load, 0) / (recentWithLoad.length - 1);
-    if (avgLoad > 0) {
-      const relLoad = lastLoad / avgLoad;
-      if (relLoad > 1.3)      { center += 0.20; factors.push({ label: "Séance plus dure que d'habitude pour cet athlète", direction: "increase" }); }
-      else if (relLoad < 0.7) { center -= 0.15; factors.push({ label: "Séance plus légère que d'habitude", direction: "decrease" }); }
-      confidenceScore += 20;
-    }
-  }
-
-  // ── RPE brut de la séance déclenchante ──
-  if (last.rpe != null) {
-    if (last.rpe >= 8)      { center += 0.15; factors.push({ label: `RPE élevé (${last.rpe}/10)`, direction: "increase" }); }
-    else if (last.rpe <= 3) { center -= 0.10; factors.push({ label: `RPE faible (${last.rpe}/10)`, direction: "decrease" }); }
-  }
-
-  // ── Wellness — uniquement si présent ET récent (sinon on ne l'utilise pas
-  //    silencieusement comme s'il reflétait l'état actuel) ──
-  if (wellness) {
-    const ageHours = wellness.date ? (now - new Date(wellness.date)) / (1000 * 60 * 60) : Infinity;
-    const fresh = ageHours <= WELLNESS_FRESH_HOURS;
-    confidenceScore += fresh ? 25 : 10;
-    if (fresh) {
-      if (wellness.sleep <= 2)      { center += 0.15; factors.push({ label: "Sommeil rapporté mauvais", direction: "increase" }); }
-      else if (wellness.sleep >= 4) { center -= 0.10; factors.push({ label: "Sommeil rapporté bon", direction: "decrease" }); }
-      if (wellness.soreness >= 4)   { center += 0.15; factors.push({ label: "Courbatures importantes rapportées", direction: "increase" }); }
-      if (wellness.stress >= 4)     { center += 0.10; factors.push({ label: "Stress élevé rapporté", direction: "increase" }); }
-    }
-  }
-
-  // ── Accumulation récente : séances difficiles sur les 7 derniers jours ──
-  const sevenDaysAgo   = new Date(now.getTime() - 7 * 86400000);
-  const recentSessions = doneSessions.filter(s => new Date(s.sessionDate) >= sevenDaysAgo);
-  if (recentSessions.length >= 2) {
-    confidenceScore += 25;
-    const hardRecent = recentSessions.filter(s => s.rpe != null && s.rpe >= 7).length;
-    if (hardRecent >= 3) { center += 0.15; factors.push({ label: `${hardRecent} séances difficiles cette semaine`, direction: "increase" }); }
-  }
-
-  center = clamp01(center);
-  const halfBand = BAND_WIDTH / 2;
-  const posMin = clamp01(center - halfBand);
-  const posMax = clamp01(center + halfBand);
-  const estimateMin = range.min + (range.max - range.min) * posMin;
-  const estimateMax = range.min + (range.max - range.min) * posMax;
-
-  const rangeHoursMin = Math.max(0, Math.round(estimateMin - hoursElapsed));
-  const rangeHoursMax = Math.max(0, Math.round(estimateMax - hoursElapsed));
-
-  let status;
-  if (rangeHoursMax === 0)    status = "likely_recovered";
-  else if (rangeHoursMin > 0) status = "recovering";
-  else                        status = "uncertain";
-
-  confidenceScore = Math.max(0, Math.min(100, confidenceScore));
-  const confidence = confidenceScore >= 70 ? "élevée" : confidenceScore >= 40 ? "modérée" : "faible";
-
-  return { status, confidence, confidenceScore, rangeHoursMin, rangeHoursMax, lastSession: last, factors };
+  const last = doneSessions[0];
+  const range = rules[last.category] ?? rules.technique ?? { min: 24, max: 48 };
+  const hoursElapsed = Math.max(0, (now - last.endAt) / 3_600_000);
+  const rangeHoursMin = Math.max(0, Math.round(range.min - hoursElapsed));
+  const rangeHoursMax = Math.max(0, Math.round(range.max - hoursElapsed));
+  const status = rangeHoursMax === 0 ? "window_elapsed" : rangeHoursMin > 0 ? "spacing_active" : "spacing_transition";
+  return {
+    status,
+    kind: "programming_rule",
+    confidence: null,
+    confidenceScore: null,
+    rangeHoursMin,
+    rangeHoursMax,
+    lastSession: last,
+    factors: [{ label: `Règle ${last.category || "générale"} configurée : ${range.min}–${range.max} h`, direction: "neutral" }],
+    ruleSource: "club_default",
+  };
 }
 </file>
 
 <file path="src/utils/trainingLoad.test.js">
-// ============================================================
-// AthleteOS — src/utils/trainingLoad.test.js
-//
-// Fonctions pures de calcul de charge (méthode session-RPE, tâche 16),
-// EWMA/monotonie/contrainte, score wellness (Hooper Index) et
-// estimateRecovery() (tâche 17). estimateRecovery est portée depuis
-// test_recovery_estimate.mjs ; les autres fonctions n'avaient encore
-// aucun test (tâche 19) — golden datasets vérifiés par calcul réel du
-// module avant écriture (jamais de valeur attendue devinée à la main).
-// ============================================================
-
 import { describe, it, expect } from "vitest";
 import {
-  computeSessionLoad, computeWellnessScore, computeEWMA, computeMonotonyAndStrain,
-  getRPELabel, estimateRecovery, RECOVERY_HOURS_RANGE,
+  buildContinuousDailyLoadSeries,
+  computeEWMA,
+  computeLoadWindows,
+  computeMonotonyAndStrain,
+  computeSessionLoad,
+  computeWellnessScore,
+  estimateRecovery,
+  getRPELabel,
 } from "./trainingLoad.js";
 
-describe("computeSessionLoad — golden dataset", () => {
-  it("60min RPE7 sprint (coef 1.1) -> 46", () => {
-    expect(computeSessionLoad(60, 7, "sprint")).toBe(46);
+function dailySeries(length, load = 100, start = "2026-01-01") {
+  const first = new Date(`${start}T00:00:00Z`);
+  return Array.from({ length }, (_, index) => {
+    const date = new Date(first);
+    date.setUTCDate(first.getUTCDate() + index);
+    return { date: date.toISOString().slice(0, 10), load: typeof load === "function" ? load(index) : load };
+  });
+}
+
+describe("session-RPE standard", () => {
+  it("calcule durée réelle × RPE CR10, sans division ni coefficient", () => {
+    expect(computeSessionLoad(60, 7, "sprint")).toBe(420);
+    expect(computeSessionLoad(45, 8, "force")).toBe(360);
+    expect(computeSessionLoad(60, 5, "unknown")).toBe(300);
   });
 
-  it("45min RPE8 force (coef 1.3) -> 47", () => {
-    expect(computeSessionLoad(45, 8, "force")).toBe(47);
-  });
-
-  it("catégorie inconnue -> coefficient par défaut 1.0", () => {
-    expect(computeSessionLoad(60, 5, "unknown_category")).toBe(30);
-  });
-
-  it("durée ou RPE manquant -> null (jamais une charge inventée)", () => {
-    expect(computeSessionLoad(null, 5, "sprint")).toBeNull();
-    expect(computeSessionLoad(60, null, "sprint")).toBeNull();
+  it("refuse les données absentes ou hors bornes", () => {
+    expect(computeSessionLoad(null, 5)).toBeNull();
+    expect(computeSessionLoad(60, null)).toBeNull();
+    expect(computeSessionLoad(0, 5)).toBeNull();
+    expect(computeSessionLoad(60, 11)).toBeNull();
   });
 });
 
-describe("computeWellnessScore — Hooper Index (soreness/stress inversés)", () => {
-  it("toutes les réponses au mieux -> 100", () => {
+describe("série quotidienne continue", () => {
+  it("conserve 0 comme repos confirmé et null comme inconnu", () => {
+    const series = buildContinuousDailyLoadSeries([
+      { date: "2026-01-01", load: 200 },
+      { date: "2026-01-03", load: 0 },
+    ], "2026-01-01", "2026-01-03");
+    expect(series).toEqual([
+      { date: "2026-01-01", load: 200 },
+      { date: "2026-01-02", load: null },
+      { date: "2026-01-03", load: 0 },
+    ]);
+  });
+
+  it("exclut une durée historique estimée des métriques quotidiennes", () => {
+    const series = buildContinuousDailyLoadSeries([{ date: "2026-01-01", load: 300, estimated: true }]);
+    expect(series[0].load).toBeNull();
+  });
+});
+
+describe("EWMA quotidienne et ACWR expérimental", () => {
+  it("ne fabrique pas un ratio parfait sans données", () => {
+    const result = computeEWMA([]);
+    expect(result.acute).toBeNull();
+    expect(result.chronic).toBeNull();
+    expect(result.acwr).toBeNull();
+    expect(result.status).toBe("insufficient_data");
+  });
+
+  it("attend 28 observations quotidiennes continues avant le ratio", () => {
+    expect(computeEWMA(dailySeries(27)).acwr).toBeNull();
+    const result = computeEWMA(dailySeries(28, index => 50 + index * 5));
+    expect(result.acwr).toBeGreaterThan(1);
+    expect(result.status).toBe("experimental");
+  });
+
+  it("un jour inconnu casse la continuité", () => {
+    const series = dailySeries(35);
+    series[10].load = null;
+    const result = computeEWMA(series);
+    expect(result.observedDays).toBe(24);
+    expect(result.acwr).toBeNull();
+  });
+});
+
+describe("fenêtres 7/28 jours", () => {
+  it("retourne null si un jour est inconnu", () => {
+    const series = dailySeries(28);
+    series[25].load = null;
+    expect(computeLoadWindows(series).load7).toBeNull();
+    expect(computeLoadWindows(series).load28).toBeNull();
+  });
+
+  it("calcule séparément les deux sommes et leur variation", () => {
+    const result = computeLoadWindows(dailySeries(28, index => index < 21 ? 100 : 200));
+    expect(result.load7).toBe(1400);
+    expect(result.load28).toBe(3500);
+    expect(result.variationPercent).toBe(100);
+  });
+});
+
+describe("monotonie sur sept charges quotidiennes", () => {
+  it("requiert exactement sept jours connus", () => {
+    expect(computeMonotonyAndStrain([100, 200, 300]).status).toBe("insufficient_data");
+  });
+
+  it("signale explicitement un écart-type nul", () => {
+    const result = computeMonotonyAndStrain([100, 100, 100, 100, 100, 100, 100]);
+    expect(result.monotony).toBeNull();
+    expect(result.status).toBe("undefined_zero_variance");
+  });
+
+  it("calcule monotonie et contrainte sur une semaine variable", () => {
+    const result = computeMonotonyAndStrain([0, 100, 200, 0, 300, 100, 0]);
+    expect(result.monotony).toBeGreaterThan(0);
+    expect(result.strain).toBeGreaterThan(0);
+    expect(result.status).toBe("available");
+  });
+});
+
+describe("AthleteOS Wellness Questionnaire v1", () => {
+  it("normalise réellement toute l'échelle sur 0–100", () => {
     expect(computeWellnessScore({ sleep: 5, energy: 5, soreness: 1, mood: 5, stress: 1 })).toBe(100);
+    expect(computeWellnessScore({ sleep: 1, energy: 1, soreness: 5, mood: 1, stress: 5 })).toBe(0);
   });
 
-  it("toutes les réponses au pire -> 20 (jamais 0, l'échelle part de 1)", () => {
-    expect(computeWellnessScore({ sleep: 1, energy: 1, soreness: 5, mood: 1, stress: 5 })).toBe(20);
-  });
-
-  it("un champ manquant -> null, jamais un score partiel trompeur", () => {
+  it("refuse un questionnaire incomplet", () => {
     expect(computeWellnessScore({ sleep: 5, energy: null, soreness: 1, mood: 5, stress: 1 })).toBeNull();
   });
+});
 
-  it("wellness absent -> null", () => {
-    expect(computeWellnessScore(null)).toBeNull();
+describe("règle d'espacement de programmation", () => {
+  const now = new Date("2026-07-29T12:00:00");
+  const session = {
+    id: 1, category: "sprint", sessionDate: "2026-07-28", time: "10:00",
+    validations: [{ athleteId: 1, status: "done", rpe: 8, actualDurationMinutes: 60 }],
+  };
+
+  it("utilise l'heure et la durée réelles de fin de séance", () => {
+    const result = estimateRecovery([session], 1, null, now);
+    expect(result.kind).toBe("programming_rule");
+    expect(result.rangeHoursMin).toBe(23);
+    expect(result.rangeHoursMax).toBe(71);
+  });
+
+  it("le wellness ne modifie pas arbitrairement la règle", () => {
+    const bad = estimateRecovery([session], 1, { sleep: 1 }, now);
+    const good = estimateRecovery([session], 1, { sleep: 5 }, now);
+    expect(bad.rangeHoursMin).toBe(good.rangeHoursMin);
+    expect(bad.rangeHoursMax).toBe(good.rangeHoursMax);
+  });
+
+  it("reste indisponible sans date, heure ou durée réelles", () => {
+    const incomplete = { ...session, time: null };
+    expect(estimateRecovery([incomplete], 1, null, now).status).toBe("insufficient_data");
   });
 });
 
-describe("computeEWMA — charge aiguë/chronique et ACWR", () => {
-  it("aucune donnée -> zéros, ACWR neutre à 1.0", () => {
-    expect(computeEWMA([])).toEqual({ acute: 0, chronic: 0, acwr: 1, ewmaHistory: [] });
-  });
-
-  it("un seul jour -> acute = chronic = charge du jour, ACWR = 1", () => {
-    const r = computeEWMA([{ date: "2026-01-01", load: 100 }]);
-    expect(r.acute).toBe(100);
-    expect(r.chronic).toBe(100);
-    expect(r.acwr).toBe(1);
-  });
-
-  it("charge croissante -> ACWR > 1 (charge aiguë monte plus vite que la chronique)", () => {
-    const rising = [{ date: "d1", load: 50 }, { date: "d2", load: 100 }, { date: "d3", load: 150 }, { date: "d4", load: 200 }];
-    const r = computeEWMA(rising);
-    expect(r.acute).toBe(113);
-    expect(r.chronic).toBe(70);
-    expect(r.acwr).toBe(1.62);
-    expect(r.ewmaHistory).toHaveLength(4);
-  });
-});
-
-describe("computeMonotonyAndStrain", () => {
-  it("aucune donnée -> zéros", () => {
-    expect(computeMonotonyAndStrain([])).toEqual({ monotony: 0, strain: 0 });
-  });
-
-  it("charge parfaitement constante -> monotonie 0 (écart-type nul, pas une division par zéro qui plante)", () => {
-    expect(computeMonotonyAndStrain([100, 100, 100])).toEqual({ monotony: 0, strain: 0 });
-  });
-
-  it("charge variable -> golden dataset [100,200,300]", () => {
-    expect(computeMonotonyAndStrain([100, 200, 300])).toEqual({ monotony: 2.45, strain: 1470 });
-  });
-});
-
-describe("getRPELabel", () => {
-  it.each([
-    [0, "Repos"],
-    [10, "Maximum"],
-    [null, "Non renseigné"],
-  ])("RPE %s -> %s", (rpe, label) => {
+describe("libellé RPE", () => {
+  it.each([[0, "Repos"], [10, "Maximum"], [null, "Non renseigné"]])("RPE %s", (rpe, label) => {
     expect(getRPELabel(rpe).label).toBe(label);
-  });
-});
-
-describe("estimateRecovery — plage + confiance, jamais une fausse certitude", () => {
-  function doneSession({ id, category, durationMinutes, rpe, daysAgo }) {
-    const d = new Date(Date.now() - daysAgo * 86400000);
-    const sessionDate = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-    return { id, category, durationMinutes, sessionDate, validations: [{ athleteId: 1, status: "done", rpe }] };
-  }
-
-  const baseSession = doneSession({ id: 1, category: "sprint", durationMinutes: 60, rpe: 8, daysAgo: 1 });
-
-  it("aucune séance -> insufficient_data, pas de fausse certitude", () => {
-    const r = estimateRecovery([], 1, null, new Date());
-    expect(r.status).toBe("insufficient_data");
-    expect(r.rangeHoursMin).toBeNull();
-    expect(r.rangeHoursMax).toBeNull();
-  });
-
-  it("séance seule, sans wellness -> statut valide, plage dans les bornes de la catégorie", () => {
-    const r = estimateRecovery([baseSession], 1, null, new Date());
-    expect(r.status).not.toBe("insufficient_data");
-    expect(r.rangeHoursMin).toBeGreaterThanOrEqual(0);
-    expect(r.rangeHoursMax).toBeLessThanOrEqual(RECOVERY_HOURS_RANGE.sprint.max);
-  });
-
-  it("wellness mauvais vs bon -> plages différentes, mauvais implique une récup plus longue", () => {
-    const now = new Date();
-    const wellnessBad  = { date: now.toISOString(), sleep: 1, energy: 1, soreness: 5, mood: 1, stress: 5 };
-    const wellnessGood = { date: now.toISOString(), sleep: 5, energy: 5, soreness: 1, mood: 5, stress: 1 };
-    const rBad  = estimateRecovery([baseSession], 1, wellnessBad, now);
-    const rGood = estimateRecovery([baseSession], 1, wellnessGood, now);
-    expect(rBad.rangeHoursMax >= rGood.rangeHoursMax).toBe(true);
-    expect(rBad.factors.length).toBeGreaterThan(0);
-  });
-
-  it("wellness ancien (>36h) -> traité comme absent, aucun facteur sommeil/courbatures/stress ajouté", () => {
-    const now = new Date();
-    const oldWellness = { date: new Date(now.getTime() - 5 * 86400000).toISOString(), sleep: 1, energy: 1, soreness: 5, mood: 1, stress: 5 };
-    const rOld = estimateRecovery([baseSession], 1, oldWellness, now);
-    expect(rOld.factors.some((f) => /sommeil|courbature|stress/i.test(f.label))).toBe(false);
-  });
-
-  it("sans donnée subjective -> pas de crash, confiance <= avec wellness frais", () => {
-    const now = new Date();
-    const freshWellness = { date: now.toISOString(), sleep: 3, energy: 3, soreness: 3, mood: 3, stress: 3 };
-    const rNone = estimateRecovery([baseSession], 1, null, now);
-    const rWith = estimateRecovery([baseSession], 1, freshWellness, now);
-    expect(rNone.status).not.toBeUndefined();
-    expect(rNone.confidenceScore).toBeLessThanOrEqual(rWith.confidenceScore);
-  });
-
-  it("valeurs extrêmes -> bornes plafonnées, confiance dans [0,100], min <= max", () => {
-    const now = new Date();
-    const manyHardSessions = Array.from({ length: 6 }, (_, i) =>
-      doneSession({ id: 100 + i, category: "sprint", durationMinutes: 120, rpe: 10, daysAgo: i })
-    );
-    const extremeWellness = { date: now.toISOString(), sleep: 1, energy: 1, soreness: 5, mood: 1, stress: 5 };
-    const r = estimateRecovery(manyHardSessions, 1, extremeWellness, now);
-    expect(r.rangeHoursMax).toBeLessThanOrEqual(RECOVERY_HOURS_RANGE.sprint.max);
-    expect(r.confidenceScore).toBeGreaterThanOrEqual(0);
-    expect(r.confidenceScore).toBeLessThanOrEqual(100);
-    expect(r.rangeHoursMin).toBeLessThanOrEqual(r.rangeHoursMax);
-  });
-
-  it("ne renvoie jamais une clé de blocage automatique (une estimation, pas un verdict interdit)", () => {
-    const r = estimateRecovery([baseSession], 1, null, new Date());
-    for (const key of ["blocked", "forbidden", "disallowed", "denied"]) {
-      expect(key in r).toBe(false);
-    }
   });
 });
 </file>
@@ -27389,7 +27129,7 @@ export function formatWeekLabel(week, dateRange) {
 }
 
 // ─── Résumé texte automatique ─────────────────────────────────────────────
-function buildSummaryText({ total, done, partial, none, totalLoad, categoriesWorked, categoriesAbsent, acwr }) {
+function buildSummaryText({ total, done, partial, none, totalLoad, categoriesWorked, categoriesAbsent, load7, load28, variationPercent }) {
   if (total === 0) return "Aucune séance planifiée cette semaine.";
   const lines = [];
 
@@ -27410,10 +27150,9 @@ function buildSummaryText({ total, done, partial, none, totalLoad, categoriesWor
     lines.push(`Non travaillées : ${absentLabels.join(", ")}.`);
   }
 
-  if (acwr != null) {
-    if (acwr > 1.3)      lines.push(`⚠️ ACWR de ${acwr.toFixed(2)} — zone de surcharge, à surveiller.`);
-    else if (acwr < 0.8) lines.push(`🔵 ACWR de ${acwr.toFixed(2)} — sous-charge relative.`);
-    else                 lines.push(`🟢 ACWR de ${acwr.toFixed(2)} — dans la zone optimale (0.8–1.3).`);
+  if (load7 != null && load28 != null) {
+    const variation = variationPercent == null ? "variation indisponible" : `${variationPercent >= 0 ? "+" : ""}${variationPercent} %`;
+    lines.push(`Fenêtres descriptives : ${load7} u. sur 7 jours, ${load28} u. sur 28 jours (${variation} entre les moyennes quotidiennes).`);
   }
 
   return lines.join(" ");
@@ -27430,10 +27169,12 @@ export function buildWeeklyReport({ athleteId, week, sessions, weeklyCharge, wel
     .filter(s => s.week === week && s.athleteIds?.includes(athleteId))
     .map(s => {
       const v = s.validations?.find(x => x.athleteId === athleteId) ?? {};
-      const load = v.rpe != null ? computeSessionLoad(s.durationMinutes, v.rpe, s.category) : null;
+      const load = v.rpe != null ? computeSessionLoad(v.actualDurationMinutes, v.rpe, s.category) : null;
       return {
         id: s.id, title: s.title, category: s.category, day: s.day,
         sessionDate: s.sessionDate, durationMinutes: s.durationMinutes,
+        actualDurationMinutes: v.actualDurationMinutes ?? null,
+        durationSource: v.durationSource ?? null,
         status: v.status ?? null, rpe: v.rpe ?? null, feeling: v.feeling ?? null,
         comment: v.comment ?? null, load,
       };
@@ -27471,7 +27212,7 @@ export function buildWeeklyReport({ athleteId, week, sessions, weeklyCharge, wel
 
   const summary = buildSummaryText({
     total, done, partial, none, totalLoad, categoriesWorked, categoriesAbsent,
-    acwr: total > 0 ? metrics.acwr : null,
+    load7: metrics.load7, load28: metrics.load28, variationPercent: metrics.variationPercent,
   });
 
   return {
@@ -28278,7 +28019,11 @@ export default function AthleteApp({ clubBrand, themeStyle }) {
           instructions:s.instructions, durationMinutes:s.duration_minutes, pdfUrl:s.pdf_url,
           createdBy:s.created_by,
           athleteIds:rows.map(v=>v.athlete_id),
-          validations:rows.map(v=>({athleteId:v.athlete_id,status:v.status,feeling:v.feeling,fatigue:v.fatigue,comment:v.comment,rpe:v.rpe})),
+          validations:rows.map(v=>({
+            athleteId:v.athlete_id,status:v.status,feeling:v.feeling,fatigue:v.fatigue,
+            comment:v.comment,rpe:v.rpe,actualDurationMinutes:v.actual_duration_minutes,
+            durationSource:v.duration_source,
+          })),
         };
       }).filter(s=>s.athleteIds.includes(athleteId));
 
@@ -28289,7 +28034,11 @@ export default function AthleteApp({ clubBrand, themeStyle }) {
         results:(c.competition_results??[]).map(r=>({athleteId:r.athlete_id,event:r.event,result:r.result,context:r.context})),
       })).filter(c=>c.athleteIds.includes(athleteId));
 
-      const charge = (weeklyChargeRes.data??[]).map(c=>({athleteId:c.athlete_id,week:c.week,rawLoad:c.raw_load}));
+      const charge = (weeklyChargeRes.data??[]).map(c=>({
+        athleteId:c.athlete_id,week:c.week,rawLoad:c.raw_load,
+        dailyLoads:c.daily_loads??[],knownDays:c.known_days??0,
+        unknownDays:c.unknown_days??0,estimatedDays:c.estimated_days??0,
+      }));
 
       setWeeklyCharge(charge);
       setSessions(allSessions);
@@ -28379,9 +28128,15 @@ export default function AthleteApp({ clubBrand, themeStyle }) {
     return false;
   }, [athlete?.id, myNotifs]);
 
-  const handleRpe = useCallback(async (sid,aid,rpe) => {
-    setSessions(p=>p.map(s=>s.id!==sid?s:{...s,validations:s.validations.map(v=>v.athleteId===aid?{...v,rpe}:v)}));
-    await supabase.from("session_athletes").update({rpe}).eq("session_id",sid).eq("athlete_id",aid);
+  const handleRpe = useCallback(async (sid,aid,rpe,actualDurationMinutes) => {
+    const duration = Number(actualDurationMinutes);
+    if (!Number.isFinite(duration) || duration <= 0 || duration > 1440) return;
+    setSessions(p=>p.map(s=>s.id!==sid?s:{...s,validations:s.validations.map(v=>v.athleteId===aid?{
+      ...v,rpe,actualDurationMinutes:duration,durationSource:"reported",
+    }:v)}));
+    await supabase.from("session_athletes").update({
+      rpe, actual_duration_minutes:duration, duration_source:"reported",
+    }).eq("session_id",sid).eq("athlete_id",aid);
   }, []);
   const handleStatus = useCallback(async (sid,aid,status) => {
     setSessions(p=>p.map(s=>s.id!==sid?s:{...s,validations:s.validations.map(v=>v.athleteId===aid?{...v,status}:v)}));
@@ -34130,6 +33885,166 @@ GRANT EXECUTE ON FUNCTION public.signup_create_account(text, text, text, text, t
 COMMIT;
 </file>
 
+<file path="supabase/migrations/20260801060000_standard_session_rpe_daily_load.sql">
+BEGIN;
+
+-- AthleteOS charge model v2
+-- Global internal load = actual duration in minutes x session RPE CR10.
+-- Category-specific constraints stay in the separate axis model and are no
+-- longer hidden multipliers of the global session-RPE value.
+
+ALTER TABLE public.session_athletes
+  ADD COLUMN IF NOT EXISTS actual_duration_minutes integer,
+  ADD COLUMN IF NOT EXISTS duration_source text;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint
+    WHERE conrelid = 'public.session_athletes'::regclass
+      AND conname = 'session_athletes_actual_duration_check'
+  ) THEN
+    ALTER TABLE public.session_athletes
+      ADD CONSTRAINT session_athletes_actual_duration_check
+      CHECK (actual_duration_minutes IS NULL OR actual_duration_minutes BETWEEN 1 AND 1440);
+  END IF;
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint
+    WHERE conrelid = 'public.session_athletes'::regclass
+      AND conname = 'session_athletes_duration_source_check'
+  ) THEN
+    ALTER TABLE public.session_athletes
+      ADD CONSTRAINT session_athletes_duration_source_check
+      CHECK (duration_source IS NULL OR duration_source IN ('reported', 'planned_legacy'));
+  END IF;
+END;
+$$;
+
+COMMENT ON COLUMN public.session_athletes.actual_duration_minutes IS
+  'Durée réellement effectuée et déclarée pour le calcul session-RPE standard.';
+COMMENT ON COLUMN public.session_athletes.duration_source IS
+  'reported = durée déclarée; planned_legacy = ancienne durée planifiée conservée et signalée comme estimation.';
+
+-- Preserve historical charts without pretending that the planned duration was
+-- measured. Scientific daily metrics can exclude these estimated points.
+UPDATE public.session_athletes sa
+SET
+  actual_duration_minutes = s.duration_minutes,
+  duration_source = 'planned_legacy'
+FROM public.sessions s
+WHERE s.id = sa.session_id
+  AND sa.rpe IS NOT NULL
+  AND sa.actual_duration_minutes IS NULL
+  AND s.duration_minutes IS NOT NULL;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint
+    WHERE conrelid = 'public.session_athletes'::regclass
+      AND conname = 'session_athletes_rpe_requires_duration_check'
+  ) THEN
+    ALTER TABLE public.session_athletes
+      ADD CONSTRAINT session_athletes_rpe_requires_duration_check
+      CHECK (
+        rpe IS NULL
+        OR status = 'none'
+        OR (actual_duration_minutes IS NOT NULL AND duration_source IS NOT NULL)
+      );
+  END IF;
+END;
+$$;
+
+UPDATE public.charge_model_versions SET is_active = false WHERE is_active;
+INSERT INTO public.charge_model_versions (
+  version, load_coefficients, recovery_hours, is_active, notes
+) VALUES (
+  'v2-session-rpe-standard',
+  '{"force":1,"sprint":1,"haies":1,"lancer":1,"saut":1,"endurance":1,"technique":1,"mobilite":1,"recuperation":1}'::jsonb,
+  '{"sprint":72,"haies":72,"force":72,"saut":48,"lancer":48,"endurance":36,"technique":24,"mobilite":12,"recuperation":12}'::jsonb,
+  true,
+  'Session-RPE standard durée réelle x RPE, sans coefficient ni division. recovery_hours est une règle configurable d espacement de programmation, pas une estimation physiologique.'
+)
+ON CONFLICT (version) DO UPDATE SET
+  load_coefficients = EXCLUDED.load_coefficients,
+  recovery_hours = EXCLUDED.recovery_hours,
+  is_active = true,
+  notes = EXCLUDED.notes;
+
+CREATE OR REPLACE VIEW public.daily_training_load
+WITH (security_invoker = true)
+AS
+SELECT
+  sa.athlete_id,
+  s.session_date AS load_date,
+  s.week,
+  CASE
+    WHEN bool_and(
+      sa.status = 'none'
+      OR (
+        sa.rpe IS NOT NULL
+        AND sa.actual_duration_minutes IS NOT NULL
+      )
+    ) THEN SUM(
+      CASE
+        WHEN sa.status = 'none' THEN 0
+        ELSE sa.actual_duration_minutes * sa.rpe
+      END
+    )::integer
+    ELSE NULL
+  END AS raw_load,
+  bool_and(
+    sa.status = 'none'
+    OR (sa.rpe IS NOT NULL AND sa.actual_duration_minutes IS NOT NULL)
+  ) AS is_complete,
+  bool_or(
+    sa.status IS DISTINCT FROM 'none'
+    AND sa.rpe IS NOT NULL
+    AND sa.duration_source = 'planned_legacy'
+  ) AS is_estimated,
+  count(*)::integer AS assigned_session_count,
+  count(*) FILTER (
+    WHERE sa.status IS DISTINCT FROM 'none'
+      AND (sa.rpe IS NULL OR sa.actual_duration_minutes IS NULL)
+  )::integer AS unknown_session_count
+FROM public.session_athletes sa
+JOIN public.sessions s ON s.id = sa.session_id
+WHERE s.session_date IS NOT NULL
+GROUP BY sa.athlete_id, s.session_date, s.week;
+
+GRANT SELECT ON public.daily_training_load TO authenticated;
+
+-- Keep the historical API shape and add daily detail/quality columns at the
+-- end. Existing pages continue reading athlete_id/week/raw_load unchanged.
+CREATE OR REPLACE VIEW public.weekly_charge
+WITH (security_invoker = true)
+AS
+SELECT
+  d.athlete_id,
+  d.week,
+  CASE
+    WHEN bool_and(d.raw_load IS NOT NULL) THEN SUM(d.raw_load)::integer
+    ELSE NULL
+  END AS raw_load,
+  jsonb_agg(
+    jsonb_build_object(
+      'date', d.load_date,
+      'load', d.raw_load,
+      'estimated', d.is_estimated,
+      'complete', d.is_complete
+    ) ORDER BY d.load_date
+  ) AS daily_loads,
+  count(*) FILTER (WHERE d.raw_load IS NOT NULL)::integer AS known_days,
+  count(*) FILTER (WHERE d.raw_load IS NULL)::integer AS unknown_days,
+  count(*) FILTER (WHERE d.is_estimated)::integer AS estimated_days
+FROM public.daily_training_load d
+GROUP BY d.athlete_id, d.week;
+
+GRANT SELECT ON public.weekly_charge TO authenticated;
+
+COMMIT;
+</file>
+
 <file path="supabase/.gitignore">
 # Supabase
 .branches
@@ -35764,20 +35679,21 @@ async function main() {
 
     const WEEK = 1;
     const fixtures = [
-      { category: "sprint",    duration_minutes: 60, rpe: 7 },
-      { category: "force",     duration_minutes: 45, rpe: 8 },
-      { category: "technique", duration_minutes: 90, rpe: 4 },
+      { category: "sprint",    duration_minutes: 60, rpe: 7, session_date: "2026-01-01" },
+      { category: "force",     duration_minutes: 45, rpe: 8, session_date: "2026-01-02" },
+      { category: "technique", duration_minutes: 90, rpe: 4, session_date: "2026-01-03" },
     ];
 
     let expectedTotal = 0;
     for (const f of fixtures) {
       const session = await insertOrThrow("sessions", {
         club_id: club.id, title: `Parity ${f.category} ${RUN_ID}`,
-        category: f.category, week: WEEK, duration_minutes: f.duration_minutes,
+        category: f.category, week: WEEK, duration_minutes: f.duration_minutes, session_date: f.session_date,
       });
       sessionIds.push(session.id);
       await insertOrThrow("session_athletes", {
-        session_id: session.id, athlete_id: athlete.id, rpe: f.rpe,
+        session_id: session.id, athlete_id: athlete.id, status: "done", rpe: f.rpe,
+        actual_duration_minutes: f.duration_minutes, duration_source: "reported",
       });
       expectedTotal += computeSessionLoad(f.duration_minutes, f.rpe, f.category);
     }

@@ -18,7 +18,7 @@ import LoadingState  from "../components/ui/LoadingState";
 import ErrorState    from "../components/ui/ErrorState";
 import { EmptyState, PageHeader, SegmentedTabs, StatCard } from "../components/ui/premium";
 import { getISOWeek, initialsFromName } from "../utils/helpers.js";
-import { CATEGORIES, colorsFor, acwrColor } from "../athlete/shared";
+import { CATEGORIES, colorsFor } from "../athlete/shared";
 import { getRPELabel } from "../utils/chargeCalculations";
 import {
   getAvailableWeeks, formatWeekLabel,
@@ -102,8 +102,8 @@ function AthleteWeekRow({ athlete, report, onClick }) {
       </div>
       {stats.total > 0 && (
         <div className="flex items-center gap-1.5 flex-shrink-0">
-          <span style={{ width: 7, height: 7, borderRadius: "50%", background: acwrColor(metrics.acwr) }} />
-          <span className="text-[12px] font-semibold" style={{ color: acwrColor(metrics.acwr) }}>{metrics.acwr.toFixed(2)}</span>
+          <span style={{ width: 7, height: 7, borderRadius: "50%", background: "#378ADD" }} />
+          <span className="text-[12px] font-semibold" style={{ color: "#A9CBFB" }}>{metrics.load7 ?? "—"} u. / 7j</span>
         </div>
       )}
       <ChevronRight size={15} color="var(--c-text-3)" style={{ flexShrink: 0 }} />
@@ -144,13 +144,13 @@ function AthleteWeekDetail({ athlete, report, onClose }) {
           {/* Métriques — style gauges Garmin/Whoop */}
           <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 8 }}>
             <div style={{ padding: "12px 10px", borderRadius: 14, background: "var(--c-surface-2)", border: "1px solid var(--c-border)", textAlign: "center" }}>
-              <p className="metric-label">Charge aiguë</p>
+              <p className="metric-label">EWMA courte</p>
               <p style={{ fontSize: 19, fontWeight: 700, color: "var(--c-text-1)", marginTop: 4 }}>{stats.total > 0 ? metrics.acute : "—"}</p>
             </div>
             <div style={{ padding: "12px 10px", borderRadius: 14, background: "var(--c-surface-2)", border: "1px solid var(--c-border)", textAlign: "center" }}>
-              <p className="metric-label">ACWR</p>
-              <p style={{ fontSize: 19, fontWeight: 700, color: stats.total > 0 ? acwrColor(metrics.acwr) : "var(--c-text-1)", marginTop: 4 }}>
-                {stats.total > 0 ? metrics.acwr.toFixed(2) : "—"}
+              <p className="metric-label">Charge 7 jours</p>
+              <p style={{ fontSize: 19, fontWeight: 700, color: "#A9CBFB", marginTop: 4 }}>
+                {stats.total > 0 ? (metrics.load7 ?? "—") : "—"}
               </p>
             </div>
             <div style={{ padding: "12px 10px", borderRadius: 14, background: "var(--c-surface-2)", border: "1px solid var(--c-border)", textAlign: "center" }}>
@@ -314,12 +314,12 @@ export default function Rapports() {
           id: s.id, week: s.week, day: s.day, sessionDate: s.session_date,
           category: s.category, title: s.title, durationMinutes: s.duration_minutes,
           athleteIds:  rows.map(v => v.athlete_id),
-          validations: rows.map(v => ({ athleteId: v.athlete_id, status: v.status, feeling: v.feeling, rpe: v.rpe, comment: v.comment })),
+          validations: rows.map(v => ({ athleteId: v.athlete_id, status: v.status, feeling: v.feeling, rpe: v.rpe, comment: v.comment, actualDurationMinutes: v.actual_duration_minutes, durationSource: v.duration_source })),
         };
       });
 
       const mappedCharge = (chargeRes.data ?? [])
-        .map(c => ({ athleteId: c.athlete_id, week: c.week, rawLoad: c.raw_load }));
+        .map(c => ({ athleteId: c.athlete_id, week: c.week, rawLoad: c.raw_load, dailyLoads: c.daily_loads ?? [], knownDays: c.known_days ?? 0, unknownDays: c.unknown_days ?? 0, estimatedDays: c.estimated_days ?? 0 }));
 
       const mappedWellness = (wellnessRes.data ?? []).map(w => ({
         athleteId: w.athlete_id, date: w.date, sleep: w.sleep, energy: w.energy,

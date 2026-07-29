@@ -17,6 +17,22 @@ const SessionDetailModal = memo(({ session, athlete, allAthletes, onClose, onSet
   const c   = cat(session.category);
   const val = session.validations?.find(v => v.athleteId === athlete.id);
   const [comment, setComment] = useState(val?.comment ?? "");
+  const [actualDuration, setActualDuration] = useState(
+    val?.durationSource === "reported" && val?.actualDurationMinutes != null
+      ? String(val.actualDurationMinutes)
+      : "",
+  );
+  const [loadError, setLoadError] = useState("");
+
+  const submitRpe = (rpe) => {
+    const duration = Number(actualDuration);
+    if (!Number.isFinite(duration) || duration <= 0 || duration > 1440) {
+      setLoadError("Indique d’abord la durée réellement effectuée (entre 1 et 1 440 minutes).");
+      return;
+    }
+    setLoadError("");
+    onSetRpe(session.id, athlete.id, rpe, duration);
+  };
 
   const dateStr = session.sessionDate
     ? parseLocalDate(session.sessionDate.slice(0, 10)).toLocaleDateString("fr-BE", {
@@ -190,6 +206,29 @@ const SessionDetailModal = memo(({ session, athlete, allAthletes, onClose, onSet
           {/* ── RPE ── */}
           {hasPerf && (
             <div>
+              <label htmlFor="athlete-actual-duration" style={labelStyle}>Durée réellement effectuée</label>
+              <div className="flex items-center gap-3 mb-4">
+                <input
+                  id="athlete-actual-duration"
+                  type="number"
+                  min="1"
+                  max="1440"
+                  inputMode="numeric"
+                  value={actualDuration}
+                  onChange={event => { setActualDuration(event.target.value); setLoadError(""); }}
+                  placeholder={session.durationMinutes ? String(session.durationMinutes) : "Minutes"}
+                  className="input-premium"
+                  style={{ width: 132 }}
+                />
+                <span style={{ fontSize: 13, color: "var(--c-text-2)" }}>
+                  minutes{session.durationMinutes ? ` · prévu : ${session.durationMinutes} min` : ""}
+                </span>
+              </div>
+              {val?.durationSource === "planned_legacy" && (
+                <p style={{ fontSize: 12, color: "#F0CB61", marginTop: -8, marginBottom: 12 }}>
+                  Ancienne charge estimée avec la durée planifiée. Renseigne la durée réelle pour la fiabiliser.
+                </p>
+              )}
               <label style={labelStyle}>
                 Effort ressenti (RPE)
                 {val?.rpe != null && (
@@ -203,7 +242,7 @@ const SessionDetailModal = memo(({ session, athlete, allAthletes, onClose, onSet
                   const rc  = rpeColor(i);
                   const sel = val?.rpe === i;
                   return (
-                    <button key={i} type="button" aria-label={`RPE ${i} sur 10`} aria-pressed={sel} onClick={() => onSetRpe(session.id, athlete.id, i)}
+                    <button key={i} type="button" aria-label={`RPE ${i} sur 10`} aria-pressed={sel} onClick={() => submitRpe(i)}
                       className="tap-feedback"
                       style={{
                         width: 44, height: 44, borderRadius: 12, fontSize: 13, fontWeight: 800,
@@ -227,6 +266,7 @@ const SessionDetailModal = memo(({ session, athlete, allAthletes, onClose, onSet
                   </div>
                 ))}
               </div>
+              {loadError && <p role="alert" style={{ marginTop: 10, fontSize: 13, color: "#F19A9A" }}>{loadError}</p>}
             </div>
           )}
 

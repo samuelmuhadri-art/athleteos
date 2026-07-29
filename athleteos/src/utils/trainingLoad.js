@@ -17,7 +17,7 @@
 // - Williams S, Booton T, Watson M, et al. (2017).
 //   → EWMA supérieur à la moyenne mobile simple
 // - Hasegawa T, et al. (2024). PeerJ 12:e17443.
-//   → Temps de récupération neuromusculaire par type de séance
+//   → Mesures aiguës après sprint ; ne valide pas des délais fixes de récupération.
 // - Saw AE, Main LC, Gastin PB. (2016). BJSM 50(5), 281-291.
 //   → Wellness questionnaire = mesure la plus sensible et fiable
 //
@@ -31,17 +31,11 @@
 // minutes après la fin de la séance.
 //
 // ⚠️ TRANSPARENCE IMPORTANTE :
-// Le COEFFICIENT PAR CATÉGORIE ci-dessous (sprint, force, technique...)
-// n'est PAS une valeur tirée directement d'une publication scientifique
-// spécifique à l'athlétisme — une table universelle de ce type n'existe
-// pas dans la littérature. C'est un paramètre d'AJUSTEMENT PRATIQUE,
-// couramment utilisé en planification sportive (périodisation) pour
-// refléter que deux séances au même RPE n'ont pas le même impact
-// structurel (ex: une séance de force sollicite davantage le système
-// neuromusculaire qu'une séance technique à ressenti égal).
+// La charge globale n'applique aucun coefficient de catégorie. Les
+// contraintes spécifiques sont des dimensions descriptives séparées.
 //
-// ⚠️ SOURCE CANONIQUE (tâche 16) : ces constantes DOIVENT rester identiques
-// à la ligne 'v1' de la table Postgres `charge_model_versions`
+// ⚠️ SOURCE CANONIQUE : ces constantes DOIVENT rester identiques
+// à la version active de la table Postgres `charge_model_versions`
 // (migration 20260727040000_charge_model_versioning.sql) — c'est cette
 // table, pas ce fichier, qui fait foi pour le calcul serveur (vue SQL
 // weekly_charge) et pour la reproductibilité historique (chaque ligne
@@ -54,33 +48,21 @@
 // être considéré comme un bug, pas une simple config.
 // ============================================================
 
-export const CURRENT_MODEL_VERSION = "v1";
+export const CURRENT_MODEL_VERSION = "v2-session-rpe-standard";
 
 /**
- * Coefficients d'ajustement par catégorie de séance.
- * Valeurs par défaut inspirées des pratiques courantes en périodisation
- * (plus élevé = impact structurel/neuromusculaire plus important).
- * Modifiables uniquement en créant une nouvelle version dans
- * charge_model_versions (jamais en éditant ces valeurs in-place — voir
- * l'avertissement "SOURCE CANONIQUE" ci-dessus).
+ * Compatibilité avec les formulaires historiques qui enregistrent encore
+ * `load_weight`. La charge session-RPE globale n'utilise plus ces valeurs :
+ * les contraintes spécifiques sont exposées séparément dans loadAxes.js.
  */
 export const LOAD_COEFFICIENTS = {
-  force:        1.3,  // Musculation — forte sollicitation neuromusculaire
-  sprint:       1.1,  // Sprint — haute intensité nerveuse
-  haies:        1.1,  // Haies — proche du sprint techniquement exigeant
-  lancer:       1.0,  // Lancers — explosif, charge articulaire
-  saut:         1.0,  // Sauts — explosif, charge articulaire
-  endurance:    0.9,  // Endurance — métabolique, moins neuromusculaire
-  technique:    0.7,  // Technique — intensité généralement plus faible
-  mobilite:     0.4,  // Mobilité — très faible impact structurel
-  recuperation: 0.3,  // Récupération active — impact minimal
+  force: 1, sprint: 1, haies: 1, lancer: 1, saut: 1,
+  endurance: 1, technique: 1, mobilite: 1, recuperation: 1,
 };
 
 // ─── AJOUT v2.0 : Temps de récupération par catégorie (heures) ───────────────
-// Basé sur Hasegawa et al. (2024) [7] :
-// Sprint/force = récupération neuromusculaire 48-72h
-// Saut = 48h, technique = 24h
-// Même remarque "SOURCE CANONIQUE" que LOAD_COEFFICIENTS ci-dessus.
+// Valeurs historiques conservées comme règles d'espacement de programmation.
+// Elles sont configurables et ne constituent pas des temps physiologiques.
 export const RECOVERY_HOURS = {
   sprint:       72,
   haies:        72,
@@ -97,13 +79,15 @@ export const RECOVERY_HOURS = {
  * Calcule la charge d'UNE séance pour UN athlète.
  * @param {number} durationMinutes - Durée de la séance en minutes
  * @param {number} rpe - Ressenti de l'athlète, 0 à 10 (échelle de Borg CR10)
- * @param {string} category - Catégorie de la séance (clé de LOAD_COEFFICIENTS)
  * @returns {number|null} Charge arrondie, ou null si données manquantes
  */
-export function computeSessionLoad(durationMinutes, rpe, category) {
+export function computeSessionLoad(durationMinutes, rpe) {
   if (durationMinutes == null || rpe == null) return null;
-  const coef = LOAD_COEFFICIENTS[category] ?? 1.0;
-  return Math.round((durationMinutes * rpe * coef) / 10);
+  const duration = Number(durationMinutes);
+  const perceivedExertion = Number(rpe);
+  if (!Number.isFinite(duration) || duration <= 0) return null;
+  if (!Number.isFinite(perceivedExertion) || perceivedExertion < 0 || perceivedExertion > 10) return null;
+  return Math.round(duration * perceivedExertion);
 }
 
 /**
@@ -126,7 +110,8 @@ export function computeWeeklyLoadFromSessions(athleteId, week, sessions) {
       missingRpeCount += 1;
       return;
     }
-    const load = computeSessionLoad(s.durationMinutes, rpe, s.category);
+    const duration = validation?.actualDurationMinutes;
+    const load = computeSessionLoad(duration, rpe);
     if (load !== null) {
       total += load;
       sessionCount += 1;
@@ -172,7 +157,8 @@ export function computeWeeklyLoadByCategory(athletes, sessions) {
         const validation = s.validations?.find((v) => v.athleteId === athleteId);
         const rpe = validation?.rpe;
         if (rpe == null) return;
-        const load = computeSessionLoad(s.durationMinutes, rpe, s.category);
+        const duration = validation?.actualDurationMinutes;
+        const load = computeSessionLoad(duration, rpe);
         if (load === null) return;
         byCategory[s.category] = (byCategory[s.category] ?? 0) + load;
       });
@@ -202,78 +188,152 @@ export function getRPELabel(rpe) {
 // ─── AJOUT v2.0 : EWMA (Exponentially Weighted Moving Average) ───────────────
 // Williams S, et al. (2017). International Journal of Sports Physiology
 // and Performance.
-// λa = 2/(7+1) = 0.25 (charge aiguë ~1 semaine)
-// λc = 2/(28+1) ≈ 0.067 (charge chronique ~4 semaines)
+// λ courte = 2/(7+1) ; λ longue = 2/(28+1). Ces paramètres supposent
+// strictement un point par JOUR, jamais un total hebdomadaire déguisé.
 const LAMBDA_ACUTE   = 2 / (7  + 1);
 const LAMBDA_CHRONIC = 2 / (28 + 1);
 
 export function computeEWMA(dailyLoads) {
-  if (!dailyLoads?.length) return { acute: 0, chronic: 0, acwr: 1.0, ewmaHistory: [] };
-
-  let ewmaAcute   = dailyLoads[0].load;
-  let ewmaChronic = dailyLoads[0].load;
-  const history   = [];
-
-  for (const { date, load } of dailyLoads) {
-    ewmaAcute   = load * LAMBDA_ACUTE   + ewmaAcute   * (1 - LAMBDA_ACUTE);
-    ewmaChronic = load * LAMBDA_CHRONIC + ewmaChronic * (1 - LAMBDA_CHRONIC);
-    history.push({ date, acute: Math.round(ewmaAcute), chronic: Math.round(ewmaChronic) });
+  const ordered = (dailyLoads ?? [])
+    .filter((point) => point?.date)
+    .map((point) => ({ ...point, load: point.load == null ? null : Number(point.load) }))
+    .sort((a, b) => String(a.date).localeCompare(String(b.date)));
+  if (!ordered.length) {
+    return { acute: null, chronic: null, acwr: null, ewmaHistory: [], observedDays: 0, status: "insufficient_data" };
   }
 
-  const acwr = ewmaChronic > 0 ? ewmaAcute / ewmaChronic : 1.0;
+  // Une valeur inconnue casse la continuité : l'algorithme reprend au
+  // prochain point connu, mais aucun ratio n'est publié avant 28 nouveaux
+  // jours consécutifs. On ne transforme jamais silencieusement null en 0.
+  let ewmaAcute = null;
+  let ewmaChronic = null;
+  let observedDays = 0;
+  const history   = [];
+
+  for (const { date, load } of ordered) {
+    if (!Number.isFinite(load) || load < 0) {
+      ewmaAcute = null;
+      ewmaChronic = null;
+      observedDays = 0;
+      history.push({ date, load: null, acute: null, chronic: null });
+      continue;
+    }
+    if (ewmaAcute == null || ewmaChronic == null) {
+      ewmaAcute = load;
+      ewmaChronic = load;
+    } else {
+      ewmaAcute   = load * LAMBDA_ACUTE   + ewmaAcute   * (1 - LAMBDA_ACUTE);
+      ewmaChronic = load * LAMBDA_CHRONIC + ewmaChronic * (1 - LAMBDA_CHRONIC);
+    }
+    observedDays += 1;
+    history.push({ date, load, acute: Math.round(ewmaAcute), chronic: Math.round(ewmaChronic) });
+  }
+
+  const enoughForExperimentalRatio = observedDays >= 28 && ewmaChronic > 0;
+  const acwr = enoughForExperimentalRatio ? ewmaAcute / ewmaChronic : null;
   return {
-    acute:       Math.round(ewmaAcute),
-    chronic:     Math.round(ewmaChronic),
-    acwr:        Math.round(acwr * 100) / 100,
+    acute:       ewmaAcute == null ? null : Math.round(ewmaAcute),
+    chronic:     ewmaChronic == null ? null : Math.round(ewmaChronic),
+    acwr:        acwr == null ? null : Math.round(acwr * 100) / 100,
     ewmaHistory: history,
+    observedDays,
+    status: enoughForExperimentalRatio ? "experimental" : "insufficient_data",
   };
+}
+
+function toDateKey(value) {
+  if (!value) return null;
+  const match = String(value).match(/^(\d{4}-\d{2}-\d{2})/u);
+  return match?.[1] ?? null;
+}
+
+function addUtcDays(dateKey, amount) {
+  const date = new Date(`${dateKey}T00:00:00Z`);
+  date.setUTCDate(date.getUTCDate() + amount);
+  return date.toISOString().slice(0, 10);
+}
+
+/** Construit une série civile continue. Les dates absentes restent `null`. */
+export function buildContinuousDailyLoadSeries(points, startDate, endDate) {
+  const normalized = new Map();
+  (points ?? []).forEach((point) => {
+    const date = toDateKey(point?.date);
+    if (!date) return;
+    const load = point.load == null || point.estimated ? null : Number(point.load);
+    normalized.set(date, Number.isFinite(load) && load >= 0 ? load : null);
+  });
+  const keys = [...normalized.keys()].sort();
+  const start = toDateKey(startDate) ?? keys[0] ?? null;
+  const end = toDateKey(endDate) ?? keys.at(-1) ?? null;
+  if (!start || !end || start > end) return [];
+
+  const series = [];
+  for (let date = start; date <= end; date = addUtcDays(date, 1)) {
+    series.push({ date, load: normalized.has(date) ? normalized.get(date) : null });
+  }
+  return series;
+}
+
+/** Extrait les jours détaillés fournis par la vue SQL weekly_charge v2. */
+export function extractDailyLoads(athleteId, weeklyCharge, currentWeek) {
+  const rows = (weeklyCharge ?? [])
+    .filter((row) => row.athleteId === athleteId)
+    .filter((row) => currentWeek == null || row.week <= currentWeek);
+  const points = rows.flatMap((row) => row.dailyLoads ?? []);
+  if (!points.length) return [];
+  const end = points.map((point) => toDateKey(point.date)).filter(Boolean).sort().at(-1);
+  const start = addUtcDays(end, -55);
+  return buildContinuousDailyLoadSeries(points, start, end);
+}
+
+export function computeLoadWindows(dailyLoads) {
+  const last = (dailyLoads ?? []).slice(-28);
+  const last7 = last.slice(-7);
+  const known7 = last7.length === 7 && last7.every((point) => Number.isFinite(point.load));
+  const known28 = last.length === 28 && last.every((point) => Number.isFinite(point.load));
+  const load7 = known7 ? last7.reduce((sum, point) => sum + point.load, 0) : null;
+  const load28 = known28 ? last.reduce((sum, point) => sum + point.load, 0) : null;
+  const previous21 = known28 ? last.slice(0, 21) : [];
+  const recentDailyAverage = load7 == null ? null : load7 / 7;
+  const habitualDailyAverage = known28
+    ? previous21.reduce((sum, point) => sum + point.load, 0) / 21
+    : null;
+  const variationPercent = habitualDailyAverage > 0
+    ? Math.round(((recentDailyAverage - habitualDailyAverage) / habitualDailyAverage) * 100)
+    : null;
+  return { load7, load28, recentDailyAverage, habitualDailyAverage, variationPercent, known7, known28 };
 }
 
 // ─── AJOUT v2.0 : Monotonie et Contrainte ────────────────────────────────────
 // Foster C. (1998). Medicine & Science in Sports & Exercise, 30(7), 1164-1168.
 // Monotonie  = charge_moyenne / écart-type
 // Contrainte = charge_totale × monotonie
-export function computeMonotonyAndStrain(weeklyLoads) {
-  if (!weeklyLoads?.length) return { monotony: 0, strain: 0 };
-  const n    = weeklyLoads.length;
-  const mean = weeklyLoads.reduce((a, b) => a + b, 0) / n;
-  const sd   = Math.sqrt(weeklyLoads.reduce((acc, v) => acc + Math.pow(v - mean, 2), 0) / n);
-  const monotony = sd > 0 ? Math.round((mean / sd) * 100) / 100 : 0;
-  const strain   = Math.round(mean * n * monotony);
-  return { monotony, strain };
+export function computeMonotonyAndStrain(dailyLoads) {
+  if (!Array.isArray(dailyLoads) || dailyLoads.length !== 7 || dailyLoads.some((value) => !Number.isFinite(value) || value < 0)) {
+    return { monotony: null, strain: null, status: "insufficient_data" };
+  }
+  const mean = dailyLoads.reduce((a, b) => a + b, 0) / 7;
+  const sd = Math.sqrt(dailyLoads.reduce((acc, value) => acc + Math.pow(value - mean, 2), 0) / 7);
+  if (sd === 0) return { monotony: null, strain: null, status: "undefined_zero_variance" };
+  const monotony = Math.round((mean / sd) * 100) / 100;
+  return { monotony, strain: Math.round(dailyLoads.reduce((a, b) => a + b, 0) * monotony), status: "available" };
 }
 
-// ─── AJOUT v2.0 : Score Wellness (Hooper Index) ──────────────────────────────
-// Saw AE, Main LC, Gastin PB. (2016). BJSM 50(5), 281-291.
-// McLean BD, et al. (2010). Int J Sports Physiol Perform.
-// 5 questions, chacune 1-5 : sommeil, énergie, courbatures, humeur, stress
-// soreness et stress sont INVERSÉS (5 = mauvais)
+// AthleteOS Wellness Questionnaire v1 — instrument interne non validé.
+// Il ne doit pas être présenté comme le Hooper Index, qui utilise quatre
+// dimensions différentes. Les cinq réponses 1..5 sont normalisées sur 0..100.
 export function computeWellnessScore(wellness) {
   if (!wellness) return null;
   const { sleep, energy, soreness, mood, stress } = wellness;
   if ([sleep, energy, soreness, mood, stress].some(v => v == null)) return null;
-  const score = (
-    sleep            * 20 +
-    energy           * 20 +
-    (6 - soreness)   * 20 +
-    mood             * 20 +
-    (6 - stress)     * 20
-  ) / 5;
+  const normalizedMean = (sleep + energy + (6 - soreness) + mood + (6 - stress)) / 5;
+  const score = ((normalizedMean - 1) / 4) * 100;
   return Math.round(Math.max(0, Math.min(100, score)));
 }
 
-// ─── AJOUT v3.0 (tâche 17) : récupération = plage + confiance, pas un point ──
-// Hasegawa T, et al. (2024). PeerJ 12:e17443, pour l'ordre de grandeur par
-// catégorie. RECOVERY_HOURS_RANGE (ci-dessous) remplace un chiffre unique
-// par une fourchette : personne ne récupère en exactement 72h, ni tout le
-// monde à la même vitesse. Voir l'avertissement "SOURCE CANONIQUE" plus
-// haut dans ce fichier — ces plages sont des paramètres expérimentaux
-// AthleteOS (liés à CURRENT_MODEL_VERSION), pas des bornes publiées.
-//
-// Ancien comportement corrigé : sans séance récente, computeRecoveryStatus
-// renvoyait `fullyRecovered: true` — une certitude fabriquée à partir de
-// rien. estimateRecovery renvoie maintenant explicitement
-// status: "insufficient_data" dans ce cas.
+// Règles de programmation configurables — pas des temps physiologiques.
+// Elles servent uniquement à espacer deux séances ciblant une même
+// contrainte. Le nom historique est conservé pour compatibilité d'import.
 export const RECOVERY_HOURS_RANGE = {
   sprint:       { min: 48, max: 96 },  // centre historique 72h
   haies:        { min: 48, max: 96 },
@@ -286,113 +346,56 @@ export const RECOVERY_HOURS_RANGE = {
   recuperation: { min: 6,  max: 18 },
 };
 
-const WELLNESS_FRESH_HOURS = 36; // au-delà, wellness jugé périmé — pas fiable pour "maintenant"
-const BAND_WIDTH = 0.4;          // la plage affichée couvre toujours au moins 40% de l'étendue de la catégorie
-
-function clamp01(x) { return Math.max(0, Math.min(1, x)); }
+function sessionEndDate(session, actualDurationMinutes) {
+  if (!session?.sessionDate || !session?.time) return null;
+  const time = String(session.time).match(/^(\d{1,2}):(\d{2})/u);
+  if (!time) return null;
+  const end = new Date(`${String(session.sessionDate).slice(0, 10)}T00:00:00`);
+  end.setHours(Number(time[1]), Number(time[2]), 0, 0);
+  const duration = Number(actualDurationMinutes);
+  if (Number.isFinite(duration) && duration > 0) end.setMinutes(end.getMinutes() + duration);
+  return Number.isNaN(end.getTime()) ? null : end;
+}
 
 /**
- * Estimation de récupération neuromusculaire/métabolique après la dernière
- * séance validée d'un athlète. Renvoie une PLAGE d'heures restantes (jamais
- * un chiffre unique ni un "totalement récupéré" catégorique), un niveau de
- * confiance qui baisse quand les données manquent ou sont anciennes, et la
- * liste des facteurs qui ont fait varier l'estimation — pour que l'athlète
- * et le coach voient POURQUOI, pas juste un nombre.
- *
- * @param sessions  séances mappées (comme ailleurs dans l'app)
- * @param athleteId number
- * @param wellness  dernier questionnaire wellness connu ({date, sleep,
- *                  energy, soreness, mood, stress}) ou null si aucun
- * @param now       Date — paramétrable pour les tests
+ * Fenêtre de programmation après la dernière séance. Le paramètre `wellness`
+ * reste accepté pour ne casser aucun appel, mais n'allonge ni ne raccourcit
+ * la règle : AthleteOS ne prétend plus estimer une récupération biologique.
  */
-export function estimateRecovery(sessions, athleteId, wellness = null, now = new Date()) {
+export function estimateRecovery(sessions, athleteId, _wellness = null, now = new Date(), rules = RECOVERY_HOURS_RANGE) {
   const doneSessions = (sessions ?? [])
     .map(s => {
       const v = s.validations?.find(x => x.athleteId === athleteId);
-      return v?.status === "done" && s.sessionDate ? { ...s, rpe: v.rpe ?? null } : null;
+      const endAt = v?.status === "done" || v?.status === "partial"
+        ? sessionEndDate(s, v.actualDurationMinutes)
+        : null;
+      return endAt ? { ...s, validation: v, endAt } : null;
     })
     .filter(Boolean)
-    .sort((a, b) => new Date(b.sessionDate) - new Date(a.sessionDate));
+    .sort((a, b) => b.endAt - a.endAt);
 
   if (!doneSessions.length) {
     return {
-      status: "insufficient_data", confidence: "faible", confidenceScore: 0,
-      rangeHoursMin: null, rangeHoursMax: null, lastSession: null, factors: [],
+      status: "insufficient_data", kind: "programming_rule", confidence: null, confidenceScore: null,
+      rangeHoursMin: null, rangeHoursMax: null, lastSession: null, factors: [], ruleSource: "club_default",
     };
   }
 
-  const last  = doneSessions[0];
-  const range = RECOVERY_HOURS_RANGE[last.category] ?? RECOVERY_HOURS_RANGE.technique;
-  const sessionEnd = new Date(last.sessionDate);
-  sessionEnd.setHours(20, 0, 0, 0);
-  const hoursElapsed = Math.max(0, (now - sessionEnd) / (1000 * 60 * 60));
-
-  let center = 0.5; // position normalisée dans la plage de la catégorie (0 = borne basse, 1 = borne haute)
-  const factors = [];
-  let confidenceScore = 30; // séance de référence connue (catégorie + date) — toujours acquis ici
-
-  // ── Charge relative : cette séance vs la moyenne récente de l'athlète ──
-  const recentWithLoad = doneSessions
-    .slice(0, 8)
-    .filter(s => s.rpe != null && s.durationMinutes != null)
-    .map(s => ({ ...s, load: s.durationMinutes * s.rpe }));
-  if (recentWithLoad.length >= 2) {
-    const lastLoad = recentWithLoad[0].load;
-    const avgLoad  = recentWithLoad.slice(1).reduce((a, s) => a + s.load, 0) / (recentWithLoad.length - 1);
-    if (avgLoad > 0) {
-      const relLoad = lastLoad / avgLoad;
-      if (relLoad > 1.3)      { center += 0.20; factors.push({ label: "Séance plus dure que d'habitude pour cet athlète", direction: "increase" }); }
-      else if (relLoad < 0.7) { center -= 0.15; factors.push({ label: "Séance plus légère que d'habitude", direction: "decrease" }); }
-      confidenceScore += 20;
-    }
-  }
-
-  // ── RPE brut de la séance déclenchante ──
-  if (last.rpe != null) {
-    if (last.rpe >= 8)      { center += 0.15; factors.push({ label: `RPE élevé (${last.rpe}/10)`, direction: "increase" }); }
-    else if (last.rpe <= 3) { center -= 0.10; factors.push({ label: `RPE faible (${last.rpe}/10)`, direction: "decrease" }); }
-  }
-
-  // ── Wellness — uniquement si présent ET récent (sinon on ne l'utilise pas
-  //    silencieusement comme s'il reflétait l'état actuel) ──
-  if (wellness) {
-    const ageHours = wellness.date ? (now - new Date(wellness.date)) / (1000 * 60 * 60) : Infinity;
-    const fresh = ageHours <= WELLNESS_FRESH_HOURS;
-    confidenceScore += fresh ? 25 : 10;
-    if (fresh) {
-      if (wellness.sleep <= 2)      { center += 0.15; factors.push({ label: "Sommeil rapporté mauvais", direction: "increase" }); }
-      else if (wellness.sleep >= 4) { center -= 0.10; factors.push({ label: "Sommeil rapporté bon", direction: "decrease" }); }
-      if (wellness.soreness >= 4)   { center += 0.15; factors.push({ label: "Courbatures importantes rapportées", direction: "increase" }); }
-      if (wellness.stress >= 4)     { center += 0.10; factors.push({ label: "Stress élevé rapporté", direction: "increase" }); }
-    }
-  }
-
-  // ── Accumulation récente : séances difficiles sur les 7 derniers jours ──
-  const sevenDaysAgo   = new Date(now.getTime() - 7 * 86400000);
-  const recentSessions = doneSessions.filter(s => new Date(s.sessionDate) >= sevenDaysAgo);
-  if (recentSessions.length >= 2) {
-    confidenceScore += 25;
-    const hardRecent = recentSessions.filter(s => s.rpe != null && s.rpe >= 7).length;
-    if (hardRecent >= 3) { center += 0.15; factors.push({ label: `${hardRecent} séances difficiles cette semaine`, direction: "increase" }); }
-  }
-
-  center = clamp01(center);
-  const halfBand = BAND_WIDTH / 2;
-  const posMin = clamp01(center - halfBand);
-  const posMax = clamp01(center + halfBand);
-  const estimateMin = range.min + (range.max - range.min) * posMin;
-  const estimateMax = range.min + (range.max - range.min) * posMax;
-
-  const rangeHoursMin = Math.max(0, Math.round(estimateMin - hoursElapsed));
-  const rangeHoursMax = Math.max(0, Math.round(estimateMax - hoursElapsed));
-
-  let status;
-  if (rangeHoursMax === 0)    status = "likely_recovered";
-  else if (rangeHoursMin > 0) status = "recovering";
-  else                        status = "uncertain";
-
-  confidenceScore = Math.max(0, Math.min(100, confidenceScore));
-  const confidence = confidenceScore >= 70 ? "élevée" : confidenceScore >= 40 ? "modérée" : "faible";
-
-  return { status, confidence, confidenceScore, rangeHoursMin, rangeHoursMax, lastSession: last, factors };
+  const last = doneSessions[0];
+  const range = rules[last.category] ?? rules.technique ?? { min: 24, max: 48 };
+  const hoursElapsed = Math.max(0, (now - last.endAt) / 3_600_000);
+  const rangeHoursMin = Math.max(0, Math.round(range.min - hoursElapsed));
+  const rangeHoursMax = Math.max(0, Math.round(range.max - hoursElapsed));
+  const status = rangeHoursMax === 0 ? "window_elapsed" : rangeHoursMin > 0 ? "spacing_active" : "spacing_transition";
+  return {
+    status,
+    kind: "programming_rule",
+    confidence: null,
+    confidenceScore: null,
+    rangeHoursMin,
+    rangeHoursMax,
+    lastSession: last,
+    factors: [{ label: `Règle ${last.category || "générale"} configurée : ${range.min}–${range.max} h`, direction: "neutral" }],
+    ruleSource: "club_default",
+  };
 }
