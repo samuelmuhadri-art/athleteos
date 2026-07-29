@@ -26,7 +26,7 @@ import MobileMoreSheet from "./components/navigation/MobileMoreSheet";
 import InviteClubModal from "./components/club/InviteClubModal";
 import ClubDemoPreview from "./components/club/ClubDemoPreview";
 import { useClubBranding } from "./hooks/useClubBranding";
-import { getClubThemeVariables } from "./utils/clubBranding";
+import { getClubThemeVariables, normalizeInviteCode } from "./utils/clubBranding";
 import {
   COACH_MOBILE_MORE_ITEMS,
   COACH_MOBILE_PRIMARY_ITEMS,
@@ -499,7 +499,7 @@ function CoachShell({ user, profile, clubId, signOut, club, clubLoading, refresh
 export default function App() {
   const { user, profile, clubId, loading: authLoading, signOut, passwordRecovery } = useAuth();
   const inviteCodeFromUrl = useMemo(() => (
-    new URLSearchParams(globalThis.location?.search ?? "").get("invite")?.trim().toUpperCase() ?? ""
+    normalizeInviteCode(new URLSearchParams(globalThis.location?.search ?? "").get("invite") ?? "")
   ), []);
   const [showSignup, setShowSignup] = useState(Boolean(inviteCodeFromUrl));
   const { club, loading: clubLoading, refresh: refreshClub } = useClubBranding(clubId);
@@ -512,7 +512,7 @@ export default function App() {
   if (!user) {
     return showSignup
       ? <SignupPage initialInviteCode={inviteCodeFromUrl} onBack={() => setShowSignup(false)} />
-      : <LoginPage onSignupClick={() => setShowSignup(true)} />;
+      : <LoginPage inviteCode={inviteCodeFromUrl} onSignupClick={() => setShowSignup(true)} />;
   }
   if (profile?.role === "athlete") return <AthleteApp clubBrand={club} themeStyle={themeStyle} />;
   if (!profile) return <AuthLoader />;

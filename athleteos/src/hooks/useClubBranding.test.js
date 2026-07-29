@@ -15,6 +15,10 @@ describe("loadClubBranding", () => {
       data: {
         name: "AC Namur",
         invite_code: "A1B2C3D4",
+        invite_code_created_at: "2026-07-20T10:00:00Z",
+        invite_code_use_count: 3,
+        invite_code_last_used_at: "2026-07-28T10:00:00Z",
+        invite_code_expires_at: null,
         logo_path: "7/logo.webp",
         cover_path: "7/cover.webp",
         accent_color: "#378ADD",
@@ -29,6 +33,7 @@ describe("loadClubBranding", () => {
       logoUrl: "signed:7/logo.webp",
       coverUrl: "signed:7/cover.webp",
       accentColor: "#378ADD",
+      inviteStatus: expect.objectContaining({ active: true, useCount: 3 }),
     });
   });
 

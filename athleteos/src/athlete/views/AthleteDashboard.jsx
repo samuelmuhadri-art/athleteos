@@ -25,7 +25,7 @@ import {
 } from "../shared";
 import AxisRadarCard from "../../components/ui/AxisRadarCard";
 import FormeDetailPanel from "../components/FormeDetailPanel";
-import { getMonitoringOverview, getMonitoringReading } from "../../domain/monitoringMetrics.js";
+import { getAthleteLoadStory, getMonitoringReading } from "../../domain/monitoringMetrics.js";
 import { SessionDetailModal } from "./AthletePlanning";
 import { openSessionPdf } from "../../utils/storage";
 import { getTodayFocus } from "../dashboardFocus";
@@ -343,9 +343,14 @@ export default function AthleteDashboard({
     getAthleteMetricsForWeek(athlete.id, weeklyCharge, currentWeek, wellnessToday ? [wellnessToday] : [], sessions),
   [athlete.id, weeklyCharge, currentWeek, wellnessToday, sessions]);
 
-  const monitoringOverview = useMemo(() => getMonitoringOverview(metrics), [metrics]);
-  const secondaryMonitoring = useMemo(() => ["variation", "monotony", "spacing", "acwrExperimental"]
+  const athleteMonitoring = useMemo(() => ["wellness", "load7", "load28", "variation", "spacing", "dataQuality"]
     .map((key) => getMonitoringReading(key, metrics)), [metrics]);
+  const advancedMonitoring = useMemo(() => ["ewmaAcute", "ewmaChronic", "monotony", "acwrExperimental"]
+    .map((key) => getMonitoringReading(key, metrics)), [metrics]);
+  const loadStory = useMemo(
+    () => getAthleteLoadStory(metrics, sessions, athlete.id),
+    [metrics, sessions, athlete.id],
+  );
 
   const status = getWellnessStatus(metrics.wellnessScore);
 
@@ -494,13 +499,13 @@ export default function AthleteDashboard({
 
             <div style={{ flex: 1, minWidth: 190 }}>
               <p style={{ fontSize: "var(--text-body)", color: "var(--c-text-2)", lineHeight: "var(--leading-body)", marginBottom: "var(--space-4)" }}>
-                Ton questionnaire décrit ton ressenti du jour. Il ne prédit pas à lui seul ta récupération ou ta performance.
+                Ton check-in résume simplement comment tu te sens aujourd’hui. Ouvre une donnée si tu veux comprendre son calcul.
               </p>
               <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 8 }}>
                 {[
-                  { key: "load7", label: "Charge 7j", value: metrics.load7 ?? "—", unit: "", pct: metrics.load7 && metrics.load28 ? Math.min(100,(metrics.load7/metrics.load28)*100) : 0, danger: false },
-                  { key: "load28", label: "Charge 28j", value: metrics.load28 ?? "—", unit: "", pct: metrics.load28 ? 100 : 0, danger: false },
-                  { key: "streak",  label: "Streak",   value: streak,                  unit: " sem", pct: Math.min(100,streak*10), danger: false },
+                  { key: "load7", label: "Cette semaine", value: metrics.load7 ?? "—", unit: "", pct: metrics.load7 && metrics.load28 ? Math.min(100,(metrics.load7/metrics.load28)*100) : 0, danger: false },
+                  { key: "load28", label: "Dernier mois", value: metrics.load28 ?? "—", unit: "", pct: metrics.load28 ? 100 : 0, danger: false },
+                  { key: "streak",  label: "Régularité",  value: streak,                  unit: " sem", pct: Math.min(100,streak*10), danger: false },
                 ].map(s => {
                   const col = s.key === "streak" ? "#1D9E75" : "#5B8DEF";
                   return (
@@ -623,10 +628,33 @@ export default function AthleteDashboard({
                     fontSize: "var(--text-meta)", fontWeight: 600,
                   }}>
                     {chargeTrend > 0 ? <TrendingUp size={10} /> : chargeTrend < 0 ? <TrendingDown size={10} /> : <Minus size={10} />}
-                    {chargeTrend > 0 ? "+" : ""}{chargeTrend}% vs S-1
+                    {chargeTrend > 0 ? "+" : ""}{chargeTrend}% vs semaine passée
                   </div>
                 )}
               </div>
+
+              <button
+                type="button"
+                onClick={() => setActiveMetric("variation")}
+                className="tap-feedback"
+                aria-label="Comprendre l’évolution de ta charge"
+                style={{
+                  display: "block", width: "calc(100% - 32px)", margin: "14px 16px 0", padding: 14,
+                  textAlign: "left", borderRadius: 14, border: "1px solid rgba(91,141,239,0.2)",
+                  background: "linear-gradient(135deg, rgba(91,141,239,0.12), rgba(20,184,166,0.055))",
+                }}
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p style={{ fontSize: 15, fontWeight: 600, color: "var(--c-text-1)", lineHeight: 1.35 }}>{loadStory.headline}</p>
+                    <p className="secondary-text mt-1" style={{ lineHeight: 1.55 }}>{loadStory.summary}</p>
+                  </div>
+                  <ChevronRight size={17} style={{ color: "#8DB6FF", flexShrink: 0, marginTop: 2 }} />
+                </div>
+                <p className="mt-3 rounded-xl px-3 py-2 text-[12px] leading-5" style={{ background: "rgba(2,7,12,0.2)", color: "var(--c-text-2)" }}>
+                  {loadStory.cause}
+                </p>
+              </button>
 
               {/* Graphique en colonnes — flex-1 = colonnes qui occupent tout l'espace */}
               <div style={{ padding: "16px 16px 0" }}>
@@ -679,9 +707,9 @@ export default function AthleteDashboard({
               {/* Métriques inline sous le graphe — pas de cards séparées */}
               <div style={{ padding: "12px 16px", display: "flex", alignItems: "center", gap: 0, borderTop: "1px solid var(--c-border)", marginTop: 4 }}>
                 {[
-                  { label: "7 jours", value: metrics.load7 ?? "—", color: "#4B7BDB", sub: "somme" },
-                  { label: "28 jours", value: metrics.load28 ?? "—", color: "#14B8A6", sub: "somme" },
-                  { label: "Variation", value: metrics.variationPercent == null ? "—" : `${metrics.variationPercent >= 0 ? "+" : ""}${metrics.variationPercent}%`, color: "var(--c-text-2)", sub: "moy. 7j vs 28j" },
+                  { label: "Cette semaine", value: metrics.load7 ?? "—", color: "#4B7BDB", sub: "7 derniers jours" },
+                  { label: "Dernier mois", value: metrics.load28 ?? "—", color: "#14B8A6", sub: "4 dernières semaines" },
+                  { label: "Évolution", value: metrics.variationPercent == null ? "—" : `${metrics.variationPercent >= 0 ? "+" : ""}${metrics.variationPercent}%`, color: "var(--c-text-2)", sub: "face à tes habitudes" },
                 ].map((s, idx) => (
                   <div key={s.label} style={{
                     flex: 1, textAlign: "center", paddingTop: 2, paddingBottom: 2,
@@ -700,7 +728,7 @@ export default function AthleteDashboard({
 
               {/* Information méthodologique */}
               <div style={{ padding: "0 16px 14px" }}>
-                <p style={{ fontSize: "var(--text-meta)", color: "var(--c-text-2)", lineHeight: 1.5 }}>Charge = durée réellement effectuée × RPE CR10. Les variations sont descriptives et ne correspondent pas à des zones de risque.</p>
+                <p style={{ fontSize: "var(--text-meta)", color: "var(--c-text-2)", lineHeight: 1.5 }}>Appuie sur le résumé pour voir les séances prises en compte, le calcul exact et ses limites.</p>
               </div>
             </div>
           )}
@@ -711,18 +739,15 @@ export default function AthleteDashboard({
             sessions={sessions} athleteId={athlete.id} currentWeek={currentWeek}
           />
 
-          {/* ── État de forme ───────────────────────────────────────────────── */}
+          {/* ── Repères du jour : lecture simple, détails scientifiques au clic */}
           <div className="card p-4">
               <div className="flex items-center justify-between mb-1">
-                <p className="card-title">Mesures & signaux du jour</p>
-                <span className="chip chip-neutral">Aucun score caché</span>
+                <p className="card-title">Tes repères du jour</p>
+                <span className="chip chip-neutral">Appuie pour comprendre</span>
               </div>
-              <p className="card-subtitle mb-4">Ouvre chaque ligne pour voir le calcul, les données utilisées et ses limites.</p>
+              <p className="card-subtitle mb-4">D’abord l’essentiel. Les calculs complets restent accessibles dans chaque ligne.</p>
               <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                {[
-                  ...monitoringOverview,
-                  ...secondaryMonitoring,
-                ].map(s => {
+                {athleteMonitoring.map(s => {
                   const val = s.displayValue;
                   const col = s.color;
                   return (
@@ -732,15 +757,13 @@ export default function AthleteDashboard({
                       className="tap-feedback"
                       style={{ background: "var(--c-surface-2)", borderRadius: 10, padding: "11px 12px", textAlign: "left", border: "1px solid var(--c-border)", transition: "background 0.15s ease", width: "100%" }}>
                       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: 7 }}>
-                        <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
-                          <span style={{ fontSize: 12.5, fontWeight: 500, color: "var(--c-text-1)" }}>{s.shortLabel}</span>
-                          <span className="meta-text">{s.kind}</span>
-                        </div>
+                        <span style={{ fontSize: 13, fontWeight: 600, color: "var(--c-text-1)" }}>{s.shortLabel}</span>
                         <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
                           <span style={{ fontSize: 14, fontWeight: 600, color: col, fontVariantNumeric: "tabular-nums", letterSpacing: "-0.02em" }}>{val}{s.unit ? ` ${s.unit}` : ""}</span>
                           <ChevronRight size={14} style={{ color: "var(--c-text-3)" }} />
                         </div>
                       </div>
+                      <p className="meta-text" style={{ marginBottom: 7 }}>{s.athleteMeaning}</p>
                       {/* Barre 3px */}
                       <div style={{ height: 3, background: "rgba(255,255,255,0.07)", borderRadius: 99, overflow: "hidden" }}>
                         <div style={{ height: "100%", width: s.available ? "100%" : "28%", background: col, opacity: s.available ? 0.72 : 0.28, borderRadius: 99, transition: "width 0.8s cubic-bezier(0.16,1,0.3,1)" }} />
@@ -749,9 +772,25 @@ export default function AthleteDashboard({
                   );
                 })}
               </div>
-              <p className="meta-text" style={{ marginTop: "var(--space-3)", textAlign: "center" }}>
-                Mesures descriptives · aucune zone optimale · aucune estimation individuelle du risque
-              </p>
+              <details style={{ marginTop: "var(--space-3)" }}>
+                <summary className="tap-feedback" style={{ cursor: "pointer", color: "var(--c-text-2)", fontSize: 13, fontWeight: 600, padding: "10px 2px" }}>
+                  Voir les mesures avancées
+                </summary>
+                <div style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: 4 }}>
+                  {advancedMonitoring.map((reading) => (
+                    <button type="button" key={reading.key} onClick={() => setActiveMetric(reading.key)} className="tap-feedback"
+                      style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, width: "100%", padding: "11px 12px", textAlign: "left", borderRadius: 10, border: "1px solid var(--c-border)", background: "var(--c-surface-2)" }}>
+                      <span>
+                        <span style={{ display: "block", fontSize: 13, fontWeight: 600, color: "var(--c-text-1)" }}>{reading.shortLabel}</span>
+                        <span className="meta-text">{reading.athleteMeaning}</span>
+                      </span>
+                      <span className="flex items-center gap-1.5" style={{ color: reading.color, fontSize: 13, fontWeight: 600, flexShrink: 0 }}>
+                        {reading.displayValue}{reading.unit ? ` ${reading.unit}` : ""}<ChevronRight size={14} />
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </details>
           </div>
 
           {/* ── Séances cette semaine ───────────────────────────────────────── */}

@@ -45,10 +45,16 @@ export function getClubThemeVariables(accentColor) {
   };
 }
 
+export function normalizeInviteCode(value) {
+  return typeof value === "string"
+    ? value.trim().toUpperCase().replace(/[\s-]+/gu, "").slice(0, 8)
+    : "";
+}
+
 export function buildInviteUrl(inviteCode, origin = globalThis.location?.origin) {
   if (!inviteCode || !origin) return "";
   const url = new URL("/", origin);
-  url.searchParams.set("invite", String(inviteCode).trim().toUpperCase());
+  url.searchParams.set("invite", normalizeInviteCode(String(inviteCode)));
   return url.toString();
 }
 

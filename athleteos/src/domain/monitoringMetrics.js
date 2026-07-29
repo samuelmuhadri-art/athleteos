@@ -5,7 +5,8 @@
 export const MONITORING_METRICS = {
   wellness: {
     label: "Bien-être déclaré",
-    shortLabel: "Bien-être",
+    shortLabel: "Comment tu te sens",
+    athleteMeaning: "Ton ressenti du jour",
     color: "#1D9E75",
     kind: "Questionnaire interne",
     evidence: "Convention AthleteOS",
@@ -16,7 +17,8 @@ export const MONITORING_METRICS = {
   },
   load7: {
     label: "Charge observée · 7 jours",
-    shortLabel: "Charge 7 j",
+    shortLabel: "Charge de la semaine",
+    athleteMeaning: "Ce que tu as réellement effectué ces 7 derniers jours",
     color: "#4B7BDB",
     kind: "Mesure de charge interne",
     evidence: "Méthode publiée",
@@ -27,7 +29,8 @@ export const MONITORING_METRICS = {
   },
   load28: {
     label: "Charge observée · 28 jours",
-    shortLabel: "Charge 28 j",
+    shortLabel: "Charge du dernier mois",
+    athleteMeaning: "Ton historique des 4 dernières semaines",
     color: "#14B8A6",
     kind: "Mesure de charge interne",
     evidence: "Méthode publiée",
@@ -38,7 +41,8 @@ export const MONITORING_METRICS = {
   },
   ewmaAcute: {
     label: "EWMA courte · 7 jours",
-    shortLabel: "EWMA courte",
+    shortLabel: "Rythme récent",
+    athleteMeaning: "Une moyenne qui donne plus de poids à tes derniers jours",
     color: "#A855F7",
     kind: "Lissage statistique",
     evidence: "Méthode statistique",
@@ -49,7 +53,8 @@ export const MONITORING_METRICS = {
   },
   ewmaChronic: {
     label: "EWMA longue · 28 jours",
-    shortLabel: "EWMA longue",
+    shortLabel: "Repère habituel",
+    athleteMeaning: "Une moyenne plus stable de ton dernier mois",
     color: "#EC4899",
     kind: "Lissage statistique",
     evidence: "Méthode statistique",
@@ -60,7 +65,8 @@ export const MONITORING_METRICS = {
   },
   variation: {
     label: "Variation du profil habituel",
-    shortLabel: "Variation",
+    shortLabel: "Évolution de ta charge",
+    athleteMeaning: "La différence entre cette semaine et tes 3 semaines précédentes",
     color: "#F59E0B",
     kind: "Comparaison descriptive",
     evidence: "Calcul transparent",
@@ -71,7 +77,8 @@ export const MONITORING_METRICS = {
   },
   monotony: {
     label: "Monotonie · 7 jours",
-    shortLabel: "Monotonie",
+    shortLabel: "Variété de la semaine",
+    athleteMeaning: "À quel point tes journées ont été différentes entre elles",
     color: "#F97316",
     kind: "Mesure descriptive",
     evidence: "Méthode publiée",
@@ -82,7 +89,8 @@ export const MONITORING_METRICS = {
   },
   spacing: {
     label: "Règle d'espacement",
-    shortLabel: "Espacement",
+    shortLabel: "Temps entre les séances",
+    athleteMeaning: "Le délai prévu par ton club entre deux contraintes similaires",
     color: "#38BDF8",
     kind: "Règle de programmation",
     evidence: "Configuration du club",
@@ -93,7 +101,8 @@ export const MONITORING_METRICS = {
   },
   dataQuality: {
     label: "Qualité de l'historique",
-    shortLabel: "Données connues",
+    shortLabel: "Données disponibles",
+    athleteMeaning: "Les jours assez renseignés pour interpréter ta charge",
     color: "#94A3B8",
     kind: "Contrôle de complétude",
     evidence: "Contrôle technique",
@@ -104,7 +113,8 @@ export const MONITORING_METRICS = {
   },
   acwrExperimental: {
     label: "ACWR EWMA expérimental",
-    shortLabel: "ACWR expérimental",
+    shortLabel: "Ratio de recherche",
+    athleteMeaning: "Un calcul expérimental réservé à la lecture avancée",
     color: "#8B5CF6",
     kind: "Métrique de recherche",
     evidence: "Usage controversé",
@@ -212,4 +222,91 @@ export function getMonitoringReading(key, metrics = {}) {
 export function getMonitoringOverview(metrics = {}) {
   return ["wellness", "load7", "load28", "ewmaAcute", "ewmaChronic", "dataQuality"]
     .map((key) => getMonitoringReading(key, metrics));
+}
+
+function formatPercent(value) {
+  return `${value > 0 ? "+" : ""}${Math.round(value)} %`;
+}
+
+/**
+ * Traduit les mesures descriptives en une histoire courte destinée à
+ * l'athlète. Les seuils servent uniquement à choisir des mots lisibles : ils
+ * ne définissent ni une zone optimale, ni un danger, ni une prescription.
+ */
+export function getAthleteLoadStory(metrics = {}, sessions = [], athleteId, now = new Date()) {
+  const variation = Number.isFinite(metrics.variationPercent) ? metrics.variationPercent : null;
+  let headline = "Complète ton historique de charge";
+  let summary = "Il manque encore quelques jours renseignés pour comparer cette semaine à tes habitudes.";
+  let tone = "neutral";
+
+  if (variation != null) {
+    if (variation >= 25) {
+      headline = "Ta charge est nettement plus élevée que d’habitude";
+      summary = `Ta moyenne quotidienne a augmenté de ${formatPercent(variation)} par rapport aux 3 semaines précédentes.`;
+      tone = "up";
+    } else if (variation >= 10) {
+      headline = "Ta charge est un peu plus élevée que d’habitude";
+      summary = `Ta moyenne quotidienne a augmenté de ${formatPercent(variation)} par rapport aux 3 semaines précédentes.`;
+      tone = "up";
+    } else if (variation <= -25) {
+      headline = "Ta charge a nettement diminué cette semaine";
+      summary = `Ta moyenne quotidienne a diminué de ${Math.abs(Math.round(variation))} % par rapport aux 3 semaines précédentes.`;
+      tone = "down";
+    } else if (variation <= -10) {
+      headline = "Ta charge a un peu diminué cette semaine";
+      summary = `Ta moyenne quotidienne a diminué de ${Math.abs(Math.round(variation))} % par rapport aux 3 semaines précédentes.`;
+      tone = "down";
+    } else {
+      headline = "Ta charge est stable";
+      summary = "Ta moyenne quotidienne reste proche de celle de tes 3 semaines précédentes.";
+      tone = "stable";
+    }
+  }
+
+  const end = new Date(now);
+  end.setHours(23, 59, 59, 999);
+  const start = new Date(end);
+  start.setDate(start.getDate() - 6);
+  start.setHours(0, 0, 0, 0);
+  const contributions = (sessions ?? [])
+    .map((session) => {
+      const validation = session.validations?.find((item) => item.athleteId === athleteId);
+      const date = session.sessionDate ? new Date(`${String(session.sessionDate).slice(0, 10)}T12:00:00`) : null;
+      const duration = Number(validation?.actualDurationMinutes);
+      const rpe = Number(validation?.rpe);
+      const load = Number.isFinite(duration) && duration > 0 && Number.isFinite(rpe) && rpe >= 0 && rpe <= 10
+        ? Math.round(duration * rpe)
+        : null;
+      return { session, validation, date, load, rpe };
+    })
+    .filter((item) => item.date && item.date >= start && item.date <= end && item.load != null)
+    .sort((a, b) => b.date - a.date);
+
+  const total = contributions.reduce((sum, item) => sum + item.load, 0);
+  const lastTwo = contributions.slice(0, 2);
+  const lastTwoShare = total > 0 ? Math.round((lastTwo.reduce((sum, item) => sum + item.load, 0) / total) * 100) : null;
+  let cause = contributions.length
+    ? `${contributions.length} séance${contributions.length > 1 ? "s" : ""} renseignée${contributions.length > 1 ? "s" : ""} expliquent la charge de cette semaine.`
+    : "Renseigne la durée réellement effectuée et ton effort après les séances pour voir ce qui influence la courbe.";
+
+  if (lastTwo.length === 2 && lastTwoShare >= 55) {
+    cause = `Tes deux dernières séances représentent ${lastTwoShare} % de la charge de cette semaine.`;
+  }
+
+  const hardSessions = contributions.filter((item) => item.rpe >= 7);
+  if (hardSessions.length >= 2) {
+    const gapDays = Math.abs(hardSessions[0].date - hardSessions[1].date) / 86_400_000;
+    if (gapDays <= 2) {
+      cause = `Tu as enchaîné ${hardSessions.length} séances ressenties difficiles sur une période courte. Parles-en avec ton coach si ce rythme ne correspond pas au programme.`;
+    }
+  }
+
+  return {
+    headline,
+    summary,
+    cause,
+    tone,
+    variationLabel: variation == null ? "Comparaison indisponible" : formatPercent(variation),
+    convention: "AthleteOS considère la charge stable entre −10 % et +10 %. Ces repères servent à expliquer la courbe, pas à définir un risque ou une zone idéale.",
+  };
 }

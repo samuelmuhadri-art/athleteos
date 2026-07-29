@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { getMonitoringOverview, getMonitoringReading } from "./monitoringMetrics.js";
+import { getAthleteLoadStory, getMonitoringOverview, getMonitoringReading } from "./monitoringMetrics.js";
 
 describe("panneau de mesures descriptives", () => {
   it("n'invente aucune valeur quand l'historique est incomplet", () => {
@@ -27,5 +27,23 @@ describe("panneau de mesures descriptives", () => {
     expect(overview.map((item) => item.key)).toEqual([
       "wellness", "load7", "load28", "ewmaAcute", "ewmaChronic", "dataQuality",
     ]);
+  });
+
+  it("traduit une hausse en langage simple sans inventer une zone de risque", () => {
+    const story = getAthleteLoadStory({ variationPercent: 31 }, [], 7, new Date("2026-07-29T12:00:00"));
+    expect(story.headline).toBe("Ta charge est nettement plus élevée que d’habitude");
+    expect(story.summary).toContain("+31 %");
+    expect(story.convention).toContain("pas à définir un risque");
+  });
+
+  it("explique quand les deux dernières séances dominent la semaine", () => {
+    const sessions = [
+      { sessionDate: "2026-07-29", validations: [{ athleteId: 7, rpe: 6, actualDurationMinutes: 60 }] },
+      { sessionDate: "2026-07-27", validations: [{ athleteId: 7, rpe: 6, actualDurationMinutes: 50 }] },
+      { sessionDate: "2026-07-25", validations: [{ athleteId: 7, rpe: 3, actualDurationMinutes: 20 }] },
+    ];
+    const story = getAthleteLoadStory({ variationPercent: 5 }, sessions, 7, new Date("2026-07-29T12:00:00"));
+    expect(story.headline).toBe("Ta charge est stable");
+    expect(story.cause).toContain("deux dernières séances représentent");
   });
 });

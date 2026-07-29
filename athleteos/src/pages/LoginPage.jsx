@@ -10,9 +10,10 @@ import {
   AuthTrustNote,
 } from "../components/auth/AuthFormControls";
 import { translateAuthError } from "../components/auth/authFormUtils";
+import { supabase } from "../utils/supabaseClient";
 
-export default function LoginPage({ onSignupClick }) {
-  const { signIn, sendPasswordReset } = useAuth();
+export default function LoginPage({ onSignupClick, inviteCode = "" }) {
+  const { signIn, signOut, sendPasswordReset } = useAuth();
   const [mode, setMode] = useState("login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -36,6 +37,24 @@ export default function LoginPage({ onSignupClick }) {
       if (authError) {
         setError(translateAuthError(authError));
         setLoading(false);
+        return;
+      }
+      if (inviteCode) {
+        const { data, error: inviteError } = await supabase.functions.invoke("admin-actions", {
+          body: { action: "accept_club_invitation", inviteCode },
+        });
+        if (inviteError || !data?.success) {
+          let message = data?.error ?? "Cette invitation n’a pas pu être vérifiée.";
+          if (inviteError?.context?.json) {
+            try {
+              const body = await inviteError.context.json();
+              message = body?.error ?? message;
+            } catch { /* garde le message lisible */ }
+          }
+          await signOut();
+          setError(message);
+          setLoading(false);
+        }
       }
     } catch (authError) {
       setError(translateAuthError(authError));
@@ -121,7 +140,12 @@ export default function LoginPage({ onSignupClick }) {
           )}
         </form>
       ) : (
-        <form className="auth-form" onSubmit={handleSubmit} noValidate>
+      <form className="auth-form" onSubmit={handleSubmit} noValidate>
+        {inviteCode && (
+          <AuthFeedback type="info">
+            Invitation {inviteCode} détectée. Connecte-toi avec ton compte existant ; AthleteOS conservera ce parcours.
+          </AuthFeedback>
+        )}
           {error && <AuthFeedback>{error}</AuthFeedback>}
 
           <AuthField

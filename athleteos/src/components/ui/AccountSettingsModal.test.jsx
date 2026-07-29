@@ -26,6 +26,7 @@ vi.mock("../../utils/supabaseClient", () => ({
 
 beforeEach(() => {
   vi.clearAllMocks();
+  vi.stubGlobal("URL", { createObjectURL: vi.fn(() => "blob:club-logo"), revokeObjectURL: vi.fn() });
   mocks.invoke.mockResolvedValue({ data: { success: true, inviteCode: "NEWCODE1" }, error: null });
   mocks.updateUser.mockResolvedValue({ error: null });
   mocks.from.mockImplementation((table) => {
@@ -42,7 +43,10 @@ beforeEach(() => {
   });
 });
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  vi.unstubAllGlobals();
+});
 
 describe("AccountSettingsModal", () => {
   it("ouvre directement l’identité du club et enregistre une couleur contrôlée", async () => {
@@ -76,5 +80,30 @@ describe("AccountSettingsModal", () => {
       body: expect.objectContaining({ action: "regenerate_invite_code" }),
     }));
     expect(await screen.findByText("NEWCODE1")).toBeTruthy();
+  });
+
+  it("envoie le logo via l'action serveur avant de sauvegarder son chemin", async () => {
+    mocks.invoke.mockImplementation(async (_functionName, { body }) => {
+      if (body.action === "upload_club_branding") {
+        return { data: { success: true, path: "club-1/logo-safe.webp" }, error: null };
+      }
+      return { data: { success: true }, error: null };
+    });
+    render(<AccountSettingsModal onClose={vi.fn()} initialSection="club" />);
+    await screen.findByText("Identité visuelle");
+
+    const file = new File(["logo"], "logo.webp", { type: "image/webp" });
+    Object.defineProperty(file, "arrayBuffer", {
+      value: vi.fn().mockResolvedValue(new TextEncoder().encode("logo").buffer),
+    });
+    fireEvent.change(screen.getByLabelText(/Choisir un logo/i), { target: { files: [file] } });
+    fireEvent.click(screen.getByRole("button", { name: "Enregistrer l’identité" }));
+
+    await waitFor(() => expect(mocks.invoke).toHaveBeenCalledWith("admin-actions", {
+      body: expect.objectContaining({ action: "upload_club_branding", kind: "logo", contentType: "image/webp" }),
+    }));
+    expect(mocks.invoke).toHaveBeenCalledWith("admin-actions", {
+      body: expect.objectContaining({ action: "update_club_branding", logoPath: "club-1/logo-safe.webp" }),
+    });
   });
 });

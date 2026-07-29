@@ -10,6 +10,7 @@ import {
   AuthTrustNote,
 } from "../components/auth/AuthFormControls";
 import { translateAuthError } from "../components/auth/authFormUtils";
+import { normalizeInviteCode } from "../utils/clubBranding";
 
 const SIGNUP_MODES = Object.freeze([
   {
@@ -29,7 +30,7 @@ const SIGNUP_MODES = Object.freeze([
 ]);
 
 export default function SignupPage({ onBack, initialInviteCode = "" }) {
-  const normalizedInviteCode = initialInviteCode.trim().toUpperCase().slice(0, 8);
+  const normalizedInviteCode = normalizeInviteCode(initialInviteCode);
   const [mode, setMode] = useState(normalizedInviteCode ? "join_club" : "create_club");
   const [form, setForm] = useState({ name: "", email: "", password: "", clubName: "", inviteCode: normalizedInviteCode });
   const [loading, setLoading] = useState(false);
@@ -63,7 +64,7 @@ export default function SignupPage({ onBack, initialInviteCode = "" }) {
           email: form.email.trim(),
           password: form.password,
           clubName: form.clubName.trim(),
-          inviteCode: form.inviteCode.trim(),
+          inviteCode: normalizeInviteCode(form.inviteCode),
           company: honeypot,
           formLoadedAt: formLoadedAt.current,
         },
@@ -76,6 +77,22 @@ export default function SignupPage({ onBack, initialInviteCode = "" }) {
         password: form.password,
       });
       if (signInError) throw signInError;
+      if (mode === "join_club") {
+        const { data: inviteData, error: inviteError } = await supabase.functions.invoke("admin-actions", {
+          body: { action: "accept_club_invitation", inviteCode: normalizeInviteCode(form.inviteCode) },
+        });
+        if (inviteError || !inviteData?.success) {
+          let inviteMessage = inviteData?.error ?? "Cette invitation n’a pas pu être vérifiée.";
+          if (inviteError?.context?.json) {
+            try {
+              const errorBody = await inviteError.context.json();
+              inviteMessage = errorBody?.error ?? inviteMessage;
+            } catch { /* garde le message compréhensible */ }
+          }
+          await supabase.auth.signOut();
+          throw new Error(inviteMessage);
+        }
+      }
     } catch (signupError) {
       let message = translateAuthError(signupError);
       if (signupError?.context?.json) {
@@ -171,7 +188,7 @@ export default function SignupPage({ onBack, initialInviteCode = "" }) {
             hint="Ce code de 8 caractères est disponible auprès de ton coach."
             value={form.inviteCode}
             maxLength={8}
-            onChange={(event) => setField("inviteCode", event.target.value.toUpperCase())}
+            onChange={(event) => setField("inviteCode", normalizeInviteCode(event.target.value))}
             disabled={loading}
             required
           />

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildClubSetupSteps,
   buildInviteUrl,
+  normalizeInviteCode,
   darkenHex,
   getClubSetupProgress,
   getClubThemeVariables,
@@ -38,5 +39,11 @@ describe("clubBranding", () => {
     });
     expect(steps.map((step) => step.complete)).toEqual([false, true, true, false, true]);
     expect(getClubSetupProgress(steps)).toBe(60);
+  });
+});
+
+describe("normalizeInviteCode", () => {
+  it("accepte les anciens caractères et retire les séparateurs de copie", () => {
+    expect(normalizeInviteCode(" 0ilO-12a3 ")).toBe("0ILO12A3");
   });
 });

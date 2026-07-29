@@ -51,7 +51,9 @@ const ATTEMPT_RETENTION_HOURS = 24;
 
 const EMAIL_RE = /^[^\s@]{1,64}@[^\s@]{1,190}\.[^\s@]{2,24}$/;
 const CODE_CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // sans 0/O/1/I/L
-const CODE_RE = new RegExp(`^[${CODE_CHARS}]{${INVITE_CODE_LEN}}$`);
+// Les nouveaux codes évitent les caractères ambigus. La lecture accepte
+// aussi 0/1/I/L/O car les premiers clubs ont reçu un code issu d'un MD5.
+const CODE_RE = new RegExp(`^[A-Z0-9]{${INVITE_CODE_LEN}}$`);
 
 const DEFAULT_ALLOWED_ORIGINS = [
   "https://athleteos-by-samuelmuhadri.vercel.app",
@@ -78,6 +80,10 @@ function genCode(): string {
   let s = "";
   for (let i = 0; i < INVITE_CODE_LEN; i++) s += CODE_CHARS[Math.floor(Math.random() * CODE_CHARS.length)];
   return s;
+}
+
+function normalizeInviteCode(value: unknown): string {
+  return typeof value === "string" ? value.trim().toUpperCase().replace(/[\s-]+/g, "") : "";
 }
 
 function isDuplicateEmailError(err: { message?: string; code?: string; status?: number } | null): boolean {
@@ -205,13 +211,21 @@ serve(async (req) => {
       clubName = typeof body.clubName === "string" ? body.clubName.trim() : "";
       if (!clubName || clubName.length > MAX_CLUB_NAME_LEN) return fail(400, "Nom du club invalide.");
     } else {
-      inviteCode = typeof body.inviteCode === "string" ? body.inviteCode.trim().toUpperCase() : "";
-      if (!CODE_RE.test(inviteCode)) return fail(400, "Code d'invitation invalide.");
+      inviteCode = normalizeInviteCode(body.inviteCode);
+      if (!CODE_RE.test(inviteCode)) return fail(400, "Le code d’invitation doit contenir 8 caractères.");
 
-      const { data: club, error: clubErr } = await admin
-        .from("clubs").select("id").eq("invite_code", inviteCode).maybeSingle();
+      let { data: club, error: clubErr } = await admin
+        .from("clubs").select("id, invite_code_expires_at").ilike("invite_code", inviteCode).maybeSingle();
+      if (clubErr?.code === "42703") {
+        const legacyResult = await admin.from("clubs").select("id").ilike("invite_code", inviteCode).maybeSingle();
+        club = legacyResult.data;
+        clubErr = legacyResult.error;
+      }
       if (clubErr) return fail(500, "Erreur serveur.");
-      if (!club) return fail(400, "Code d'invitation invalide.");
+      if (!club) return fail(400, "Cette invitation n’est plus active. Demande un nouveau lien à ton coach.");
+      if (club.invite_code_expires_at && new Date(club.invite_code_expires_at) <= new Date()) {
+        return fail(400, "Cette invitation a expiré. Demande un nouveau lien à ton coach.");
+      }
     }
 
     if (mode === "create_club") {
@@ -251,6 +265,15 @@ serve(async (req) => {
       p_auth_uid: authData.user.id, p_name: name, p_email: emailRaw,
     });
     if (rpcErr) throw rpcErr;
+
+    if (mode === "join_club") {
+      const { error: trackingError } = await admin.rpc("mark_club_invitation_used", {
+        p_invite_code: inviteCode,
+      });
+      // Le rattachement est déjà validé et transactionnel. Un éventuel retard
+      // de migration du compteur ne doit jamais annuler le compte créé.
+      if (trackingError) console.error(`signup[${correlationId}] invitation tracking:`, trackingError.message);
+    }
 
     return new Response(JSON.stringify({ success: true, correlationId }), {
       headers: { ...corsHeaders(origin), "Content-Type": "application/json" },

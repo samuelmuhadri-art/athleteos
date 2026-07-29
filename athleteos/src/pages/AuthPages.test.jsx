@@ -25,7 +25,7 @@ vi.mock("../context/AuthContext", () => ({
 vi.mock("../utils/supabaseClient", () => ({
   supabase: {
     functions: { invoke: mocks.invoke },
-    auth: { signInWithPassword: mocks.signInWithPassword },
+    auth: { signInWithPassword: mocks.signInWithPassword, signOut: mocks.signOut },
   },
 }));
 
@@ -67,6 +67,18 @@ describe("LoginPage", () => {
     await waitFor(() => expect(mocks.sendPasswordReset).toHaveBeenCalledWith("coach@club.be"));
     expect(screen.getByRole("status").textContent).toContain("Email envoyé");
   });
+
+  it("vérifie l'invitation après la connexion d'un compte existant", async () => {
+    render(<LoginPage inviteCode="0IL012A3" onSignupClick={vi.fn()} />);
+    fireEvent.change(screen.getByLabelText("Adresse email"), { target: { value: "athlete@club.be" } });
+    fireEvent.change(screen.getByLabelText("Mot de passe"), { target: { value: "mot-de-passe" } });
+    fireEvent.click(screen.getByRole("button", { name: "Se connecter" }));
+
+    await waitFor(() => expect(mocks.invoke).toHaveBeenCalledWith("admin-actions", {
+      body: { action: "accept_club_invitation", inviteCode: "0IL012A3" },
+    }));
+    expect(mocks.signOut).not.toHaveBeenCalled();
+  });
 });
 
 describe("SignupPage", () => {
@@ -87,7 +99,7 @@ describe("SignupPage", () => {
     fireEvent.change(screen.getByLabelText("Mot de passe"), { target: { value: "AthleteOS2026!" } });
     fireEvent.click(screen.getByRole("button", { name: "Rejoindre mon club" }));
 
-    await waitFor(() => expect(mocks.invoke).toHaveBeenCalledOnce());
+    await waitFor(() => expect(mocks.invoke).toHaveBeenCalledTimes(2));
     expect(mocks.invoke.mock.calls[0][0]).toBe("signup");
     expect(mocks.invoke.mock.calls[0][1].body).toMatchObject({
       mode: "join_club",
@@ -99,6 +111,9 @@ describe("SignupPage", () => {
     expect(mocks.signInWithPassword).toHaveBeenCalledWith({
       email: "alice@club.be",
       password: "AthleteOS2026!",
+    });
+    expect(mocks.invoke).toHaveBeenLastCalledWith("admin-actions", {
+      body: { action: "accept_club_invitation", inviteCode: "A3F7K9P2" },
     });
   });
 });

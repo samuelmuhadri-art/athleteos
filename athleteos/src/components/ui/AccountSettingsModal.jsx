@@ -41,6 +41,16 @@ const BRAND_IMAGE_TYPES = Object.freeze({
 });
 const MAX_BRAND_IMAGE_SIZE = 5 * 1024 * 1024;
 
+async function fileToBase64(file) {
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  const chunks = [];
+  const chunkSize = 32_768;
+  for (let index = 0; index < bytes.length; index += chunkSize) {
+    chunks.push(String.fromCharCode(...bytes.subarray(index, index + chunkSize)));
+  }
+  return btoa(chunks.join(""));
+}
+
 function SettingsSectionHeader({ icon: Icon, title, description }) {
   return (
     <div className="settings-section-header">
@@ -71,6 +81,7 @@ export default function AccountSettingsModal({ onClose, initialSection = "accoun
   const [password, setPassword] = useState("");
   const [clubName, setClubName] = useState("");
   const [inviteCode, setInviteCode] = useState(null);
+  const [inviteStatus, setInviteStatus] = useState(null);
   const [logoPath, setLogoPath] = useState(null);
   const [coverPath, setCoverPath] = useState(null);
   const [logoPreview, setLogoPreview] = useState(null);
@@ -104,6 +115,7 @@ export default function AccountSettingsModal({ onClose, initialSection = "accoun
         if (!active) return;
         setClubName(data.name ?? "");
         setInviteCode(data.inviteCode ?? null);
+        setInviteStatus(data.inviteStatus ?? null);
         setLogoPath(data.logoPath ?? null);
         setCoverPath(data.coverPath ?? null);
         setLogoPreview(data.logoUrl ?? null);
@@ -159,7 +171,17 @@ export default function AccountSettingsModal({ onClose, initialSection = "accoun
 
   const callAdmin = async (payload) => {
     const { data, error } = await supabase.functions.invoke("admin-actions", { body: payload });
-    if (error) throw error;
+    if (error) {
+      if (error.context?.json) {
+        try {
+          const body = await error.context.json();
+          if (body?.error) throw new Error(body.error);
+        } catch (contextError) {
+          if (contextError instanceof Error && contextError.message !== "Unexpected end of JSON input") throw contextError;
+        }
+      }
+      throw error;
+    }
     if (!data?.success) throw new Error(data?.error ?? "Une erreur est survenue.");
     return data;
   };
@@ -246,47 +268,36 @@ export default function AccountSettingsModal({ onClose, initialSection = "accoun
   };
 
   const uploadBrandImage = async (kind, file) => {
-    const extension = BRAND_IMAGE_TYPES[file.type];
-    const path = `${clubId}/${kind}-${crypto.randomUUID()}.${extension}`;
-    const { error } = await supabase.storage.from("club-branding").upload(path, file, {
-      cacheControl: "3600",
+    const data = await callAdmin({
+      action: "upload_club_branding",
+      kind,
       contentType: file.type,
-      upsert: false,
+      fileBase64: await fileToBase64(file),
     });
-    if (error) throw error;
-    return path;
+    if (!data.path) throw new Error("L’image n’a pas pu être enregistrée.");
+    return data.path;
   };
 
   const saveClubBranding = () => {
     const dirty = logoFile || coverFile || accentColor !== savedAccentColor;
     if (!dirty) return;
     runAction("branding", async () => {
-      const uploadedPaths = [];
-      try {
-        const nextLogoPath = logoFile ? await uploadBrandImage("logo", logoFile) : logoPath;
-        if (logoFile) uploadedPaths.push(nextLogoPath);
-        const nextCoverPath = coverFile ? await uploadBrandImage("cover", coverFile) : coverPath;
-        if (coverFile) uploadedPaths.push(nextCoverPath);
+      const nextLogoPath = logoFile ? await uploadBrandImage("logo", logoFile) : logoPath;
+      const nextCoverPath = coverFile ? await uploadBrandImage("cover", coverFile) : coverPath;
 
-        await callAdmin({
-          action: "update_club_branding",
-          logoPath: nextLogoPath,
-          coverPath: nextCoverPath,
-          accentColor,
-          idempotencyKey: crypto.randomUUID(),
-        });
-        setLogoPath(nextLogoPath);
-        setCoverPath(nextCoverPath);
-        setSavedAccentColor(accentColor);
-        setLogoFile(null);
-        setCoverFile(null);
-        await onClubUpdated?.();
-      } catch (brandingError) {
-        if (uploadedPaths.length) {
-          await supabase.storage.from("club-branding").remove(uploadedPaths).catch(() => {});
-        }
-        throw brandingError;
-      }
+      await callAdmin({
+        action: "update_club_branding",
+        logoPath: nextLogoPath,
+        coverPath: nextCoverPath,
+        accentColor,
+        idempotencyKey: crypto.randomUUID(),
+      });
+      setLogoPath(nextLogoPath);
+      setCoverPath(nextCoverPath);
+      setSavedAccentColor(accentColor);
+      setLogoFile(null);
+      setCoverFile(null);
+      await onClubUpdated?.();
     }, "L’identité visuelle du club a bien été mise à jour.");
   };
 
@@ -297,6 +308,7 @@ export default function AccountSettingsModal({ onClose, initialSection = "accoun
         idempotencyKey: crypto.randomUUID(),
       });
       setInviteCode(data.inviteCode);
+      setInviteStatus({ active: true, useCount: 0, lastUsedAt: null, expiresAt: null, createdAt: new Date().toISOString() });
       setConfirmRegeneration(false);
     }, "Nouveau code généré. L’ancien code ne fonctionne plus.");
   };
@@ -591,6 +603,21 @@ export default function AccountSettingsModal({ onClose, initialSection = "accoun
                         <RefreshCw size={18} aria-hidden="true" />
                       </button>
                     </div>
+                    {inviteCode && (
+                      <div className="flex flex-wrap items-center gap-2 mt-3" aria-label="État de l’invitation">
+                        <span className={`chip ${inviteStatus?.active === false ? "chip-danger" : "chip-success"}`}>
+                          {inviteStatus?.active === false ? "Expirée" : "Active"}
+                        </span>
+                        <span className="chip chip-neutral">
+                          {inviteStatus?.useCount > 0
+                            ? `Utilisée ${inviteStatus.useCount} fois`
+                            : "Pas encore utilisée"}
+                        </span>
+                        <span className="meta-text">
+                          {inviteStatus?.expiresAt ? `Expire le ${new Date(inviteStatus.expiresAt).toLocaleDateString("fr-BE")}` : "Sans expiration automatique"}
+                        </span>
+                      </div>
+                    )}
                   </div>
 
                   {confirmRegeneration && (

@@ -256,6 +256,7 @@ supabase/
     20260801060000_standard_session_rpe_daily_load.sql
     20260801070000_confirmed_rest_days.sql
     20260801080000_structured_performance_context.sql
+    20260801090000_reliable_invites_and_branding_storage.sql
   .gitignore
   config.toml
   seed.sql
@@ -854,7 +855,10 @@ test("un identifiant invalide affiche une erreur, ne fait pas planter l'app", as
   await page.getByPlaceholder("coach@club.be").fill("inexistant@example.invalid");
   await page.getByPlaceholder("••••••••").fill("mot-de-passe-invalide");
   await page.getByRole("button", { name: "Se connecter" }).click();
-  await expect(page.getByText("Email ou mot de passe incorrect.")).toBeVisible({ timeout: 10000 });
+  // Sans accès réseau au projet Supabase, l'interface doit rester stable et
+  // expliquer le problème ; avec Supabase joignable, elle traduit les
+  // identifiants invalides. Les deux réponses sont correctes pour ce smoke.
+  await expect(page.getByText(/Email ou mot de passe incorrect|Connexion impossible/)).toBeVisible({ timeout: 15000 });
 });
 
 test.describe("authentification mobile", () => {
@@ -1099,10 +1103,10 @@ const FormeDetailPanel = memo(({ metricKey, metrics, sessions, weeklyCharge, ath
                 <span className="chip chip-neutral">{reading.evidence}</span>
               </div>
               <h2 id="monitoring-detail-title" className="text-[22px] font-bold tracking-[-0.025em]" style={{ color: "var(--c-text-1)" }}>
-                {reading.label}
+                {reading.shortLabel}
               </h2>
               <p className="mt-2 max-w-xl text-[13px] leading-6" style={{ color: "var(--c-text-2)" }}>
-                Une lecture transparente de tes données, sans score caché ni décision automatique.
+                {reading.athleteMeaning}. Le détail scientifique reste disponible ci-dessous.
               </p>
             </div>
             <button type="button" aria-label="Fermer le détail" onClick={onClose} className="btn-icon flex-shrink-0">
@@ -1151,7 +1155,7 @@ const FormeDetailPanel = memo(({ metricKey, metrics, sessions, weeklyCharge, ath
           <article className="card mt-3 overflow-hidden">
             <div className="flex items-center gap-2 border-b px-4 py-3" style={{ borderColor: "var(--c-border)", color }}>
               <Calculator size={16} />
-              <h3 className="card-title">Calcul exact</h3>
+              <h3 className="card-title">Méthode de calcul</h3>
             </div>
             <div className="p-4">
               <code className="block rounded-xl px-3 py-3 text-[12px] leading-6" style={{ background: "var(--c-surface-2)", color: "var(--c-text-1)", whiteSpace: "normal" }}>
@@ -1159,6 +1163,9 @@ const FormeDetailPanel = memo(({ metricKey, metrics, sessions, weeklyCharge, ath
               </code>
               <p className="mt-3 text-[12px] leading-5" style={{ color: "var(--c-text-2)" }}>
                 <strong style={{ color: "var(--c-text-1)" }}>Limite :</strong> {reading.limits}
+              </p>
+              <p className="mt-2 text-[12px] leading-5" style={{ color: "var(--c-text-3)" }}>
+                Nom scientifique dans AthleteOS : {reading.label}.
               </p>
             </div>
           </article>
@@ -3265,7 +3272,7 @@ import {
 } from "../shared";
 import AxisRadarCard from "../../components/ui/AxisRadarCard";
 import FormeDetailPanel from "../components/FormeDetailPanel";
-import { getMonitoringOverview, getMonitoringReading } from "../../domain/monitoringMetrics.js";
+import { getAthleteLoadStory, getMonitoringReading } from "../../domain/monitoringMetrics.js";
 import { SessionDetailModal } from "./AthletePlanning";
 import { openSessionPdf } from "../../utils/storage";
 import { getTodayFocus } from "../dashboardFocus";
@@ -3583,9 +3590,14 @@ export default function AthleteDashboard({
     getAthleteMetricsForWeek(athlete.id, weeklyCharge, currentWeek, wellnessToday ? [wellnessToday] : [], sessions),
   [athlete.id, weeklyCharge, currentWeek, wellnessToday, sessions]);
 
-  const monitoringOverview = useMemo(() => getMonitoringOverview(metrics), [metrics]);
-  const secondaryMonitoring = useMemo(() => ["variation", "monotony", "spacing", "acwrExperimental"]
+  const athleteMonitoring = useMemo(() => ["wellness", "load7", "load28", "variation", "spacing", "dataQuality"]
     .map((key) => getMonitoringReading(key, metrics)), [metrics]);
+  const advancedMonitoring = useMemo(() => ["ewmaAcute", "ewmaChronic", "monotony", "acwrExperimental"]
+    .map((key) => getMonitoringReading(key, metrics)), [metrics]);
+  const loadStory = useMemo(
+    () => getAthleteLoadStory(metrics, sessions, athlete.id),
+    [metrics, sessions, athlete.id],
+  );
 
   const status = getWellnessStatus(metrics.wellnessScore);
 
@@ -3734,13 +3746,13 @@ export default function AthleteDashboard({
 
             <div style={{ flex: 1, minWidth: 190 }}>
               <p style={{ fontSize: "var(--text-body)", color: "var(--c-text-2)", lineHeight: "var(--leading-body)", marginBottom: "var(--space-4)" }}>
-                Ton questionnaire décrit ton ressenti du jour. Il ne prédit pas à lui seul ta récupération ou ta performance.
+                Ton check-in résume simplement comment tu te sens aujourd’hui. Ouvre une donnée si tu veux comprendre son calcul.
               </p>
               <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 8 }}>
                 {[
-                  { key: "load7", label: "Charge 7j", value: metrics.load7 ?? "—", unit: "", pct: metrics.load7 && metrics.load28 ? Math.min(100,(metrics.load7/metrics.load28)*100) : 0, danger: false },
-                  { key: "load28", label: "Charge 28j", value: metrics.load28 ?? "—", unit: "", pct: metrics.load28 ? 100 : 0, danger: false },
-                  { key: "streak",  label: "Streak",   value: streak,                  unit: " sem", pct: Math.min(100,streak*10), danger: false },
+                  { key: "load7", label: "Cette semaine", value: metrics.load7 ?? "—", unit: "", pct: metrics.load7 && metrics.load28 ? Math.min(100,(metrics.load7/metrics.load28)*100) : 0, danger: false },
+                  { key: "load28", label: "Dernier mois", value: metrics.load28 ?? "—", unit: "", pct: metrics.load28 ? 100 : 0, danger: false },
+                  { key: "streak",  label: "Régularité",  value: streak,                  unit: " sem", pct: Math.min(100,streak*10), danger: false },
                 ].map(s => {
                   const col = s.key === "streak" ? "#1D9E75" : "#5B8DEF";
                   return (
@@ -3863,10 +3875,33 @@ export default function AthleteDashboard({
                     fontSize: "var(--text-meta)", fontWeight: 600,
                   }}>
                     {chargeTrend > 0 ? <TrendingUp size={10} /> : chargeTrend < 0 ? <TrendingDown size={10} /> : <Minus size={10} />}
-                    {chargeTrend > 0 ? "+" : ""}{chargeTrend}% vs S-1
+                    {chargeTrend > 0 ? "+" : ""}{chargeTrend}% vs semaine passée
                   </div>
                 )}
               </div>
+
+              <button
+                type="button"
+                onClick={() => setActiveMetric("variation")}
+                className="tap-feedback"
+                aria-label="Comprendre l’évolution de ta charge"
+                style={{
+                  display: "block", width: "calc(100% - 32px)", margin: "14px 16px 0", padding: 14,
+                  textAlign: "left", borderRadius: 14, border: "1px solid rgba(91,141,239,0.2)",
+                  background: "linear-gradient(135deg, rgba(91,141,239,0.12), rgba(20,184,166,0.055))",
+                }}
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p style={{ fontSize: 15, fontWeight: 600, color: "var(--c-text-1)", lineHeight: 1.35 }}>{loadStory.headline}</p>
+                    <p className="secondary-text mt-1" style={{ lineHeight: 1.55 }}>{loadStory.summary}</p>
+                  </div>
+                  <ChevronRight size={17} style={{ color: "#8DB6FF", flexShrink: 0, marginTop: 2 }} />
+                </div>
+                <p className="mt-3 rounded-xl px-3 py-2 text-[12px] leading-5" style={{ background: "rgba(2,7,12,0.2)", color: "var(--c-text-2)" }}>
+                  {loadStory.cause}
+                </p>
+              </button>
 
               {/* Graphique en colonnes — flex-1 = colonnes qui occupent tout l'espace */}
               <div style={{ padding: "16px 16px 0" }}>
@@ -3919,9 +3954,9 @@ export default function AthleteDashboard({
               {/* Métriques inline sous le graphe — pas de cards séparées */}
               <div style={{ padding: "12px 16px", display: "flex", alignItems: "center", gap: 0, borderTop: "1px solid var(--c-border)", marginTop: 4 }}>
                 {[
-                  { label: "7 jours", value: metrics.load7 ?? "—", color: "#4B7BDB", sub: "somme" },
-                  { label: "28 jours", value: metrics.load28 ?? "—", color: "#14B8A6", sub: "somme" },
-                  { label: "Variation", value: metrics.variationPercent == null ? "—" : `${metrics.variationPercent >= 0 ? "+" : ""}${metrics.variationPercent}%`, color: "var(--c-text-2)", sub: "moy. 7j vs 28j" },
+                  { label: "Cette semaine", value: metrics.load7 ?? "—", color: "#4B7BDB", sub: "7 derniers jours" },
+                  { label: "Dernier mois", value: metrics.load28 ?? "—", color: "#14B8A6", sub: "4 dernières semaines" },
+                  { label: "Évolution", value: metrics.variationPercent == null ? "—" : `${metrics.variationPercent >= 0 ? "+" : ""}${metrics.variationPercent}%`, color: "var(--c-text-2)", sub: "face à tes habitudes" },
                 ].map((s, idx) => (
                   <div key={s.label} style={{
                     flex: 1, textAlign: "center", paddingTop: 2, paddingBottom: 2,
@@ -3940,7 +3975,7 @@ export default function AthleteDashboard({
 
               {/* Information méthodologique */}
               <div style={{ padding: "0 16px 14px" }}>
-                <p style={{ fontSize: "var(--text-meta)", color: "var(--c-text-2)", lineHeight: 1.5 }}>Charge = durée réellement effectuée × RPE CR10. Les variations sont descriptives et ne correspondent pas à des zones de risque.</p>
+                <p style={{ fontSize: "var(--text-meta)", color: "var(--c-text-2)", lineHeight: 1.5 }}>Appuie sur le résumé pour voir les séances prises en compte, le calcul exact et ses limites.</p>
               </div>
             </div>
           )}
@@ -3951,18 +3986,15 @@ export default function AthleteDashboard({
             sessions={sessions} athleteId={athlete.id} currentWeek={currentWeek}
           />
 
-          {/* ── État de forme ───────────────────────────────────────────────── */}
+          {/* ── Repères du jour : lecture simple, détails scientifiques au clic */}
           <div className="card p-4">
               <div className="flex items-center justify-between mb-1">
-                <p className="card-title">Mesures & signaux du jour</p>
-                <span className="chip chip-neutral">Aucun score caché</span>
+                <p className="card-title">Tes repères du jour</p>
+                <span className="chip chip-neutral">Appuie pour comprendre</span>
               </div>
-              <p className="card-subtitle mb-4">Ouvre chaque ligne pour voir le calcul, les données utilisées et ses limites.</p>
+              <p className="card-subtitle mb-4">D’abord l’essentiel. Les calculs complets restent accessibles dans chaque ligne.</p>
               <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                {[
-                  ...monitoringOverview,
-                  ...secondaryMonitoring,
-                ].map(s => {
+                {athleteMonitoring.map(s => {
                   const val = s.displayValue;
                   const col = s.color;
                   return (
@@ -3972,15 +4004,13 @@ export default function AthleteDashboard({
                       className="tap-feedback"
                       style={{ background: "var(--c-surface-2)", borderRadius: 10, padding: "11px 12px", textAlign: "left", border: "1px solid var(--c-border)", transition: "background 0.15s ease", width: "100%" }}>
                       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: 7 }}>
-                        <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
-                          <span style={{ fontSize: 12.5, fontWeight: 500, color: "var(--c-text-1)" }}>{s.shortLabel}</span>
-                          <span className="meta-text">{s.kind}</span>
-                        </div>
+                        <span style={{ fontSize: 13, fontWeight: 600, color: "var(--c-text-1)" }}>{s.shortLabel}</span>
                         <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
                           <span style={{ fontSize: 14, fontWeight: 600, color: col, fontVariantNumeric: "tabular-nums", letterSpacing: "-0.02em" }}>{val}{s.unit ? ` ${s.unit}` : ""}</span>
                           <ChevronRight size={14} style={{ color: "var(--c-text-3)" }} />
                         </div>
                       </div>
+                      <p className="meta-text" style={{ marginBottom: 7 }}>{s.athleteMeaning}</p>
                       {/* Barre 3px */}
                       <div style={{ height: 3, background: "rgba(255,255,255,0.07)", borderRadius: 99, overflow: "hidden" }}>
                         <div style={{ height: "100%", width: s.available ? "100%" : "28%", background: col, opacity: s.available ? 0.72 : 0.28, borderRadius: 99, transition: "width 0.8s cubic-bezier(0.16,1,0.3,1)" }} />
@@ -3989,9 +4019,25 @@ export default function AthleteDashboard({
                   );
                 })}
               </div>
-              <p className="meta-text" style={{ marginTop: "var(--space-3)", textAlign: "center" }}>
-                Mesures descriptives · aucune zone optimale · aucune estimation individuelle du risque
-              </p>
+              <details style={{ marginTop: "var(--space-3)" }}>
+                <summary className="tap-feedback" style={{ cursor: "pointer", color: "var(--c-text-2)", fontSize: 13, fontWeight: 600, padding: "10px 2px" }}>
+                  Voir les mesures avancées
+                </summary>
+                <div style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: 4 }}>
+                  {advancedMonitoring.map((reading) => (
+                    <button type="button" key={reading.key} onClick={() => setActiveMetric(reading.key)} className="tap-feedback"
+                      style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, width: "100%", padding: "11px 12px", textAlign: "left", borderRadius: 10, border: "1px solid var(--c-border)", background: "var(--c-surface-2)" }}>
+                      <span>
+                        <span style={{ display: "block", fontSize: 13, fontWeight: 600, color: "var(--c-text-1)" }}>{reading.shortLabel}</span>
+                        <span className="meta-text">{reading.athleteMeaning}</span>
+                      </span>
+                      <span className="flex items-center gap-1.5" style={{ color: reading.color, fontSize: 13, fontWeight: 600, flexShrink: 0 }}>
+                        {reading.displayValue}{reading.unit ? ` ${reading.unit}` : ""}<ChevronRight size={14} />
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </details>
           </div>
 
           {/* ── Séances cette semaine ───────────────────────────────────────── */}
@@ -11327,6 +11373,16 @@ const BRAND_IMAGE_TYPES = Object.freeze({
 });
 const MAX_BRAND_IMAGE_SIZE = 5 * 1024 * 1024;
 
+async function fileToBase64(file) {
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  const chunks = [];
+  const chunkSize = 32_768;
+  for (let index = 0; index < bytes.length; index += chunkSize) {
+    chunks.push(String.fromCharCode(...bytes.subarray(index, index + chunkSize)));
+  }
+  return btoa(chunks.join(""));
+}
+
 function SettingsSectionHeader({ icon: Icon, title, description }) {
   return (
     <div className="settings-section-header">
@@ -11357,6 +11413,7 @@ export default function AccountSettingsModal({ onClose, initialSection = "accoun
   const [password, setPassword] = useState("");
   const [clubName, setClubName] = useState("");
   const [inviteCode, setInviteCode] = useState(null);
+  const [inviteStatus, setInviteStatus] = useState(null);
   const [logoPath, setLogoPath] = useState(null);
   const [coverPath, setCoverPath] = useState(null);
   const [logoPreview, setLogoPreview] = useState(null);
@@ -11390,6 +11447,7 @@ export default function AccountSettingsModal({ onClose, initialSection = "accoun
         if (!active) return;
         setClubName(data.name ?? "");
         setInviteCode(data.inviteCode ?? null);
+        setInviteStatus(data.inviteStatus ?? null);
         setLogoPath(data.logoPath ?? null);
         setCoverPath(data.coverPath ?? null);
         setLogoPreview(data.logoUrl ?? null);
@@ -11445,7 +11503,17 @@ export default function AccountSettingsModal({ onClose, initialSection = "accoun
 
   const callAdmin = async (payload) => {
     const { data, error } = await supabase.functions.invoke("admin-actions", { body: payload });
-    if (error) throw error;
+    if (error) {
+      if (error.context?.json) {
+        try {
+          const body = await error.context.json();
+          if (body?.error) throw new Error(body.error);
+        } catch (contextError) {
+          if (contextError instanceof Error && contextError.message !== "Unexpected end of JSON input") throw contextError;
+        }
+      }
+      throw error;
+    }
     if (!data?.success) throw new Error(data?.error ?? "Une erreur est survenue.");
     return data;
   };
@@ -11532,47 +11600,36 @@ export default function AccountSettingsModal({ onClose, initialSection = "accoun
   };
 
   const uploadBrandImage = async (kind, file) => {
-    const extension = BRAND_IMAGE_TYPES[file.type];
-    const path = `${clubId}/${kind}-${crypto.randomUUID()}.${extension}`;
-    const { error } = await supabase.storage.from("club-branding").upload(path, file, {
-      cacheControl: "3600",
+    const data = await callAdmin({
+      action: "upload_club_branding",
+      kind,
       contentType: file.type,
-      upsert: false,
+      fileBase64: await fileToBase64(file),
     });
-    if (error) throw error;
-    return path;
+    if (!data.path) throw new Error("L’image n’a pas pu être enregistrée.");
+    return data.path;
   };
 
   const saveClubBranding = () => {
     const dirty = logoFile || coverFile || accentColor !== savedAccentColor;
     if (!dirty) return;
     runAction("branding", async () => {
-      const uploadedPaths = [];
-      try {
-        const nextLogoPath = logoFile ? await uploadBrandImage("logo", logoFile) : logoPath;
-        if (logoFile) uploadedPaths.push(nextLogoPath);
-        const nextCoverPath = coverFile ? await uploadBrandImage("cover", coverFile) : coverPath;
-        if (coverFile) uploadedPaths.push(nextCoverPath);
+      const nextLogoPath = logoFile ? await uploadBrandImage("logo", logoFile) : logoPath;
+      const nextCoverPath = coverFile ? await uploadBrandImage("cover", coverFile) : coverPath;
 
-        await callAdmin({
-          action: "update_club_branding",
-          logoPath: nextLogoPath,
-          coverPath: nextCoverPath,
-          accentColor,
-          idempotencyKey: crypto.randomUUID(),
-        });
-        setLogoPath(nextLogoPath);
-        setCoverPath(nextCoverPath);
-        setSavedAccentColor(accentColor);
-        setLogoFile(null);
-        setCoverFile(null);
-        await onClubUpdated?.();
-      } catch (brandingError) {
-        if (uploadedPaths.length) {
-          await supabase.storage.from("club-branding").remove(uploadedPaths).catch(() => {});
-        }
-        throw brandingError;
-      }
+      await callAdmin({
+        action: "update_club_branding",
+        logoPath: nextLogoPath,
+        coverPath: nextCoverPath,
+        accentColor,
+        idempotencyKey: crypto.randomUUID(),
+      });
+      setLogoPath(nextLogoPath);
+      setCoverPath(nextCoverPath);
+      setSavedAccentColor(accentColor);
+      setLogoFile(null);
+      setCoverFile(null);
+      await onClubUpdated?.();
     }, "L’identité visuelle du club a bien été mise à jour.");
   };
 
@@ -11583,6 +11640,7 @@ export default function AccountSettingsModal({ onClose, initialSection = "accoun
         idempotencyKey: crypto.randomUUID(),
       });
       setInviteCode(data.inviteCode);
+      setInviteStatus({ active: true, useCount: 0, lastUsedAt: null, expiresAt: null, createdAt: new Date().toISOString() });
       setConfirmRegeneration(false);
     }, "Nouveau code généré. L’ancien code ne fonctionne plus.");
   };
@@ -11877,6 +11935,21 @@ export default function AccountSettingsModal({ onClose, initialSection = "accoun
                         <RefreshCw size={18} aria-hidden="true" />
                       </button>
                     </div>
+                    {inviteCode && (
+                      <div className="flex flex-wrap items-center gap-2 mt-3" aria-label="État de l’invitation">
+                        <span className={`chip ${inviteStatus?.active === false ? "chip-danger" : "chip-success"}`}>
+                          {inviteStatus?.active === false ? "Expirée" : "Active"}
+                        </span>
+                        <span className="chip chip-neutral">
+                          {inviteStatus?.useCount > 0
+                            ? `Utilisée ${inviteStatus.useCount} fois`
+                            : "Pas encore utilisée"}
+                        </span>
+                        <span className="meta-text">
+                          {inviteStatus?.expiresAt ? `Expire le ${new Date(inviteStatus.expiresAt).toLocaleDateString("fr-BE")}` : "Sans expiration automatique"}
+                        </span>
+                      </div>
+                    )}
                   </div>
 
                   {confirmRegeneration && (
@@ -11933,6 +12006,7 @@ vi.mock("../../utils/supabaseClient", () => ({
 
 beforeEach(() => {
   vi.clearAllMocks();
+  vi.stubGlobal("URL", { createObjectURL: vi.fn(() => "blob:club-logo"), revokeObjectURL: vi.fn() });
   mocks.invoke.mockResolvedValue({ data: { success: true, inviteCode: "NEWCODE1" }, error: null });
   mocks.updateUser.mockResolvedValue({ error: null });
   mocks.from.mockImplementation((table) => {
@@ -11949,7 +12023,10 @@ beforeEach(() => {
   });
 });
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  vi.unstubAllGlobals();
+});
 
 describe("AccountSettingsModal", () => {
   it("ouvre directement l’identité du club et enregistre une couleur contrôlée", async () => {
@@ -11983,6 +12060,31 @@ describe("AccountSettingsModal", () => {
       body: expect.objectContaining({ action: "regenerate_invite_code" }),
     }));
     expect(await screen.findByText("NEWCODE1")).toBeTruthy();
+  });
+
+  it("envoie le logo via l'action serveur avant de sauvegarder son chemin", async () => {
+    mocks.invoke.mockImplementation(async (_functionName, { body }) => {
+      if (body.action === "upload_club_branding") {
+        return { data: { success: true, path: "club-1/logo-safe.webp" }, error: null };
+      }
+      return { data: { success: true }, error: null };
+    });
+    render(<AccountSettingsModal onClose={vi.fn()} initialSection="club" />);
+    await screen.findByText("Identité visuelle");
+
+    const file = new File(["logo"], "logo.webp", { type: "image/webp" });
+    Object.defineProperty(file, "arrayBuffer", {
+      value: vi.fn().mockResolvedValue(new TextEncoder().encode("logo").buffer),
+    });
+    fireEvent.change(screen.getByLabelText(/Choisir un logo/i), { target: { files: [file] } });
+    fireEvent.click(screen.getByRole("button", { name: "Enregistrer l’identité" }));
+
+    await waitFor(() => expect(mocks.invoke).toHaveBeenCalledWith("admin-actions", {
+      body: expect.objectContaining({ action: "upload_club_branding", kind: "logo", contentType: "image/webp" }),
+    }));
+    expect(mocks.invoke).toHaveBeenCalledWith("admin-actions", {
+      body: expect.objectContaining({ action: "update_club_branding", logoPath: "club-1/logo-safe.webp" }),
+    });
   });
 });
 </file>
@@ -13947,7 +14049,8 @@ describe("compat — les façades existantes délèguent au même registre (pas 
 export const MONITORING_METRICS = {
   wellness: {
     label: "Bien-être déclaré",
-    shortLabel: "Bien-être",
+    shortLabel: "Comment tu te sens",
+    athleteMeaning: "Ton ressenti du jour",
     color: "#1D9E75",
     kind: "Questionnaire interne",
     evidence: "Convention AthleteOS",
@@ -13958,7 +14061,8 @@ export const MONITORING_METRICS = {
   },
   load7: {
     label: "Charge observée · 7 jours",
-    shortLabel: "Charge 7 j",
+    shortLabel: "Charge de la semaine",
+    athleteMeaning: "Ce que tu as réellement effectué ces 7 derniers jours",
     color: "#4B7BDB",
     kind: "Mesure de charge interne",
     evidence: "Méthode publiée",
@@ -13969,7 +14073,8 @@ export const MONITORING_METRICS = {
   },
   load28: {
     label: "Charge observée · 28 jours",
-    shortLabel: "Charge 28 j",
+    shortLabel: "Charge du dernier mois",
+    athleteMeaning: "Ton historique des 4 dernières semaines",
     color: "#14B8A6",
     kind: "Mesure de charge interne",
     evidence: "Méthode publiée",
@@ -13980,7 +14085,8 @@ export const MONITORING_METRICS = {
   },
   ewmaAcute: {
     label: "EWMA courte · 7 jours",
-    shortLabel: "EWMA courte",
+    shortLabel: "Rythme récent",
+    athleteMeaning: "Une moyenne qui donne plus de poids à tes derniers jours",
     color: "#A855F7",
     kind: "Lissage statistique",
     evidence: "Méthode statistique",
@@ -13991,7 +14097,8 @@ export const MONITORING_METRICS = {
   },
   ewmaChronic: {
     label: "EWMA longue · 28 jours",
-    shortLabel: "EWMA longue",
+    shortLabel: "Repère habituel",
+    athleteMeaning: "Une moyenne plus stable de ton dernier mois",
     color: "#EC4899",
     kind: "Lissage statistique",
     evidence: "Méthode statistique",
@@ -14002,7 +14109,8 @@ export const MONITORING_METRICS = {
   },
   variation: {
     label: "Variation du profil habituel",
-    shortLabel: "Variation",
+    shortLabel: "Évolution de ta charge",
+    athleteMeaning: "La différence entre cette semaine et tes 3 semaines précédentes",
     color: "#F59E0B",
     kind: "Comparaison descriptive",
     evidence: "Calcul transparent",
@@ -14013,7 +14121,8 @@ export const MONITORING_METRICS = {
   },
   monotony: {
     label: "Monotonie · 7 jours",
-    shortLabel: "Monotonie",
+    shortLabel: "Variété de la semaine",
+    athleteMeaning: "À quel point tes journées ont été différentes entre elles",
     color: "#F97316",
     kind: "Mesure descriptive",
     evidence: "Méthode publiée",
@@ -14024,7 +14133,8 @@ export const MONITORING_METRICS = {
   },
   spacing: {
     label: "Règle d'espacement",
-    shortLabel: "Espacement",
+    shortLabel: "Temps entre les séances",
+    athleteMeaning: "Le délai prévu par ton club entre deux contraintes similaires",
     color: "#38BDF8",
     kind: "Règle de programmation",
     evidence: "Configuration du club",
@@ -14035,7 +14145,8 @@ export const MONITORING_METRICS = {
   },
   dataQuality: {
     label: "Qualité de l'historique",
-    shortLabel: "Données connues",
+    shortLabel: "Données disponibles",
+    athleteMeaning: "Les jours assez renseignés pour interpréter ta charge",
     color: "#94A3B8",
     kind: "Contrôle de complétude",
     evidence: "Contrôle technique",
@@ -14046,7 +14157,8 @@ export const MONITORING_METRICS = {
   },
   acwrExperimental: {
     label: "ACWR EWMA expérimental",
-    shortLabel: "ACWR expérimental",
+    shortLabel: "Ratio de recherche",
+    athleteMeaning: "Un calcul expérimental réservé à la lecture avancée",
     color: "#8B5CF6",
     kind: "Métrique de recherche",
     evidence: "Usage controversé",
@@ -14155,11 +14267,98 @@ export function getMonitoringOverview(metrics = {}) {
   return ["wellness", "load7", "load28", "ewmaAcute", "ewmaChronic", "dataQuality"]
     .map((key) => getMonitoringReading(key, metrics));
 }
+
+function formatPercent(value) {
+  return `${value > 0 ? "+" : ""}${Math.round(value)} %`;
+}
+
+/**
+ * Traduit les mesures descriptives en une histoire courte destinée à
+ * l'athlète. Les seuils servent uniquement à choisir des mots lisibles : ils
+ * ne définissent ni une zone optimale, ni un danger, ni une prescription.
+ */
+export function getAthleteLoadStory(metrics = {}, sessions = [], athleteId, now = new Date()) {
+  const variation = Number.isFinite(metrics.variationPercent) ? metrics.variationPercent : null;
+  let headline = "Complète ton historique de charge";
+  let summary = "Il manque encore quelques jours renseignés pour comparer cette semaine à tes habitudes.";
+  let tone = "neutral";
+
+  if (variation != null) {
+    if (variation >= 25) {
+      headline = "Ta charge est nettement plus élevée que d’habitude";
+      summary = `Ta moyenne quotidienne a augmenté de ${formatPercent(variation)} par rapport aux 3 semaines précédentes.`;
+      tone = "up";
+    } else if (variation >= 10) {
+      headline = "Ta charge est un peu plus élevée que d’habitude";
+      summary = `Ta moyenne quotidienne a augmenté de ${formatPercent(variation)} par rapport aux 3 semaines précédentes.`;
+      tone = "up";
+    } else if (variation <= -25) {
+      headline = "Ta charge a nettement diminué cette semaine";
+      summary = `Ta moyenne quotidienne a diminué de ${Math.abs(Math.round(variation))} % par rapport aux 3 semaines précédentes.`;
+      tone = "down";
+    } else if (variation <= -10) {
+      headline = "Ta charge a un peu diminué cette semaine";
+      summary = `Ta moyenne quotidienne a diminué de ${Math.abs(Math.round(variation))} % par rapport aux 3 semaines précédentes.`;
+      tone = "down";
+    } else {
+      headline = "Ta charge est stable";
+      summary = "Ta moyenne quotidienne reste proche de celle de tes 3 semaines précédentes.";
+      tone = "stable";
+    }
+  }
+
+  const end = new Date(now);
+  end.setHours(23, 59, 59, 999);
+  const start = new Date(end);
+  start.setDate(start.getDate() - 6);
+  start.setHours(0, 0, 0, 0);
+  const contributions = (sessions ?? [])
+    .map((session) => {
+      const validation = session.validations?.find((item) => item.athleteId === athleteId);
+      const date = session.sessionDate ? new Date(`${String(session.sessionDate).slice(0, 10)}T12:00:00`) : null;
+      const duration = Number(validation?.actualDurationMinutes);
+      const rpe = Number(validation?.rpe);
+      const load = Number.isFinite(duration) && duration > 0 && Number.isFinite(rpe) && rpe >= 0 && rpe <= 10
+        ? Math.round(duration * rpe)
+        : null;
+      return { session, validation, date, load, rpe };
+    })
+    .filter((item) => item.date && item.date >= start && item.date <= end && item.load != null)
+    .sort((a, b) => b.date - a.date);
+
+  const total = contributions.reduce((sum, item) => sum + item.load, 0);
+  const lastTwo = contributions.slice(0, 2);
+  const lastTwoShare = total > 0 ? Math.round((lastTwo.reduce((sum, item) => sum + item.load, 0) / total) * 100) : null;
+  let cause = contributions.length
+    ? `${contributions.length} séance${contributions.length > 1 ? "s" : ""} renseignée${contributions.length > 1 ? "s" : ""} expliquent la charge de cette semaine.`
+    : "Renseigne la durée réellement effectuée et ton effort après les séances pour voir ce qui influence la courbe.";
+
+  if (lastTwo.length === 2 && lastTwoShare >= 55) {
+    cause = `Tes deux dernières séances représentent ${lastTwoShare} % de la charge de cette semaine.`;
+  }
+
+  const hardSessions = contributions.filter((item) => item.rpe >= 7);
+  if (hardSessions.length >= 2) {
+    const gapDays = Math.abs(hardSessions[0].date - hardSessions[1].date) / 86_400_000;
+    if (gapDays <= 2) {
+      cause = `Tu as enchaîné ${hardSessions.length} séances ressenties difficiles sur une période courte. Parles-en avec ton coach si ce rythme ne correspond pas au programme.`;
+    }
+  }
+
+  return {
+    headline,
+    summary,
+    cause,
+    tone,
+    variationLabel: variation == null ? "Comparaison indisponible" : formatPercent(variation),
+    convention: "AthleteOS considère la charge stable entre −10 % et +10 %. Ces repères servent à expliquer la courbe, pas à définir un risque ou une zone idéale.",
+  };
+}
 </file>
 
 <file path="src/domain/monitoringMetrics.test.js">
 import { describe, expect, it } from "vitest";
-import { getMonitoringOverview, getMonitoringReading } from "./monitoringMetrics.js";
+import { getAthleteLoadStory, getMonitoringOverview, getMonitoringReading } from "./monitoringMetrics.js";
 
 describe("panneau de mesures descriptives", () => {
   it("n'invente aucune valeur quand l'historique est incomplet", () => {
@@ -14187,6 +14386,24 @@ describe("panneau de mesures descriptives", () => {
     expect(overview.map((item) => item.key)).toEqual([
       "wellness", "load7", "load28", "ewmaAcute", "ewmaChronic", "dataQuality",
     ]);
+  });
+
+  it("traduit une hausse en langage simple sans inventer une zone de risque", () => {
+    const story = getAthleteLoadStory({ variationPercent: 31 }, [], 7, new Date("2026-07-29T12:00:00"));
+    expect(story.headline).toBe("Ta charge est nettement plus élevée que d’habitude");
+    expect(story.summary).toContain("+31 %");
+    expect(story.convention).toContain("pas à définir un risque");
+  });
+
+  it("explique quand les deux dernières séances dominent la semaine", () => {
+    const sessions = [
+      { sessionDate: "2026-07-29", validations: [{ athleteId: 7, rpe: 6, actualDurationMinutes: 60 }] },
+      { sessionDate: "2026-07-27", validations: [{ athleteId: 7, rpe: 6, actualDurationMinutes: 50 }] },
+      { sessionDate: "2026-07-25", validations: [{ athleteId: 7, rpe: 3, actualDurationMinutes: 20 }] },
+    ];
+    const story = getAthleteLoadStory({ variationPercent: 5 }, sessions, 7, new Date("2026-07-29T12:00:00"));
+    expect(story.headline).toBe("Ta charge est stable");
+    expect(story.cause).toContain("deux dernières séances représentent");
   });
 });
 </file>
@@ -14268,6 +14485,7 @@ import { useCallback, useEffect, useState } from "react";
 import { supabase } from "../utils/supabaseClient";
 import { DEFAULT_CLUB_ACCENT, normalizeClubAccent } from "../utils/clubBranding";
 
+const TRACKED_CLUB_SELECT = "name, invite_code, invite_code_created_at, invite_code_use_count, invite_code_last_used_at, invite_code_expires_at, logo_path, cover_path, accent_color";
 const FULL_CLUB_SELECT = "name, invite_code, logo_path, cover_path, accent_color";
 const LEGACY_CLUB_SELECT = "name, invite_code";
 const SIGNED_URL_TTL_SECONDS = 60 * 60;
@@ -14280,6 +14498,7 @@ export const EMPTY_CLUB_BRAND = Object.freeze({
   logoUrl: null,
   coverUrl: null,
   accentColor: DEFAULT_CLUB_ACCENT,
+  inviteStatus: null,
 });
 
 async function resolveAssetUrl(client, path) {
@@ -14297,12 +14516,21 @@ export async function loadClubBranding(client, clubId) {
 
   let { data, error } = await client
     .from("clubs")
-    .select(FULL_CLUB_SELECT)
+    .select(TRACKED_CLUB_SELECT)
     .eq("id", clubId)
     .single();
 
-  // Compatibilité pendant le déploiement : l’interface continue à fonctionner
-  // si la migration des trois nouveaux champs n’est pas encore appliquée.
+  // Compatibilité pendant le déploiement : on garde d'abord toute l'identité
+  // visuelle si seuls les champs de suivi d'invitation ne sont pas encore là.
+  if (error) {
+    const brandingResult = await client
+      .from("clubs")
+      .select(FULL_CLUB_SELECT)
+      .eq("id", clubId)
+      .single();
+    data = brandingResult.data;
+    error = brandingResult.error;
+  }
   if (error) {
     const legacyResult = await client
       .from("clubs")
@@ -14326,6 +14554,13 @@ export async function loadClubBranding(client, clubId) {
     logoUrl,
     coverUrl,
     accentColor: normalizeClubAccent(data?.accent_color),
+    inviteStatus: data?.invite_code ? {
+      active: !data?.invite_code_expires_at || new Date(data.invite_code_expires_at) > new Date(),
+      createdAt: data?.invite_code_created_at ?? null,
+      useCount: data?.invite_code_use_count ?? 0,
+      lastUsedAt: data?.invite_code_last_used_at ?? null,
+      expiresAt: data?.invite_code_expires_at ?? null,
+    } : null,
   };
 }
 
@@ -14378,6 +14613,10 @@ describe("loadClubBranding", () => {
       data: {
         name: "AC Namur",
         invite_code: "A1B2C3D4",
+        invite_code_created_at: "2026-07-20T10:00:00Z",
+        invite_code_use_count: 3,
+        invite_code_last_used_at: "2026-07-28T10:00:00Z",
+        invite_code_expires_at: null,
         logo_path: "7/logo.webp",
         cover_path: "7/cover.webp",
         accent_color: "#378ADD",
@@ -14392,6 +14631,7 @@ describe("loadClubBranding", () => {
       logoUrl: "signed:7/logo.webp",
       coverUrl: "signed:7/cover.webp",
       accentColor: "#378ADD",
+      inviteStatus: expect.objectContaining({ active: true, useCount: 3 }),
     });
   });
 
@@ -23397,7 +23637,7 @@ vi.mock("../context/AuthContext", () => ({
 vi.mock("../utils/supabaseClient", () => ({
   supabase: {
     functions: { invoke: mocks.invoke },
-    auth: { signInWithPassword: mocks.signInWithPassword },
+    auth: { signInWithPassword: mocks.signInWithPassword, signOut: mocks.signOut },
   },
 }));
 
@@ -23439,6 +23679,18 @@ describe("LoginPage", () => {
     await waitFor(() => expect(mocks.sendPasswordReset).toHaveBeenCalledWith("coach@club.be"));
     expect(screen.getByRole("status").textContent).toContain("Email envoyé");
   });
+
+  it("vérifie l'invitation après la connexion d'un compte existant", async () => {
+    render(<LoginPage inviteCode="0IL012A3" onSignupClick={vi.fn()} />);
+    fireEvent.change(screen.getByLabelText("Adresse email"), { target: { value: "athlete@club.be" } });
+    fireEvent.change(screen.getByLabelText("Mot de passe"), { target: { value: "mot-de-passe" } });
+    fireEvent.click(screen.getByRole("button", { name: "Se connecter" }));
+
+    await waitFor(() => expect(mocks.invoke).toHaveBeenCalledWith("admin-actions", {
+      body: { action: "accept_club_invitation", inviteCode: "0IL012A3" },
+    }));
+    expect(mocks.signOut).not.toHaveBeenCalled();
+  });
 });
 
 describe("SignupPage", () => {
@@ -23459,7 +23711,7 @@ describe("SignupPage", () => {
     fireEvent.change(screen.getByLabelText("Mot de passe"), { target: { value: "AthleteOS2026!" } });
     fireEvent.click(screen.getByRole("button", { name: "Rejoindre mon club" }));
 
-    await waitFor(() => expect(mocks.invoke).toHaveBeenCalledOnce());
+    await waitFor(() => expect(mocks.invoke).toHaveBeenCalledTimes(2));
     expect(mocks.invoke.mock.calls[0][0]).toBe("signup");
     expect(mocks.invoke.mock.calls[0][1].body).toMatchObject({
       mode: "join_club",
@@ -23471,6 +23723,9 @@ describe("SignupPage", () => {
     expect(mocks.signInWithPassword).toHaveBeenCalledWith({
       email: "alice@club.be",
       password: "AthleteOS2026!",
+    });
+    expect(mocks.invoke).toHaveBeenLastCalledWith("admin-actions", {
+      body: { action: "accept_club_invitation", inviteCode: "A3F7K9P2" },
     });
   });
 });
@@ -23504,9 +23759,10 @@ import {
   AuthTrustNote,
 } from "../components/auth/AuthFormControls";
 import { translateAuthError } from "../components/auth/authFormUtils";
+import { supabase } from "../utils/supabaseClient";
 
-export default function LoginPage({ onSignupClick }) {
-  const { signIn, sendPasswordReset } = useAuth();
+export default function LoginPage({ onSignupClick, inviteCode = "" }) {
+  const { signIn, signOut, sendPasswordReset } = useAuth();
   const [mode, setMode] = useState("login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -23530,6 +23786,24 @@ export default function LoginPage({ onSignupClick }) {
       if (authError) {
         setError(translateAuthError(authError));
         setLoading(false);
+        return;
+      }
+      if (inviteCode) {
+        const { data, error: inviteError } = await supabase.functions.invoke("admin-actions", {
+          body: { action: "accept_club_invitation", inviteCode },
+        });
+        if (inviteError || !data?.success) {
+          let message = data?.error ?? "Cette invitation n’a pas pu être vérifiée.";
+          if (inviteError?.context?.json) {
+            try {
+              const body = await inviteError.context.json();
+              message = body?.error ?? message;
+            } catch { /* garde le message lisible */ }
+          }
+          await signOut();
+          setError(message);
+          setLoading(false);
+        }
       }
     } catch (authError) {
       setError(translateAuthError(authError));
@@ -23615,7 +23889,12 @@ export default function LoginPage({ onSignupClick }) {
           )}
         </form>
       ) : (
-        <form className="auth-form" onSubmit={handleSubmit} noValidate>
+      <form className="auth-form" onSubmit={handleSubmit} noValidate>
+        {inviteCode && (
+          <AuthFeedback type="info">
+            Invitation {inviteCode} détectée. Connecte-toi avec ton compte existant ; AthleteOS conservera ce parcours.
+          </AuthFeedback>
+        )}
           {error && <AuthFeedback>{error}</AuthFeedback>}
 
           <AuthField
@@ -23801,6 +24080,7 @@ import {
   AuthTrustNote,
 } from "../components/auth/AuthFormControls";
 import { translateAuthError } from "../components/auth/authFormUtils";
+import { normalizeInviteCode } from "../utils/clubBranding";
 
 const SIGNUP_MODES = Object.freeze([
   {
@@ -23820,7 +24100,7 @@ const SIGNUP_MODES = Object.freeze([
 ]);
 
 export default function SignupPage({ onBack, initialInviteCode = "" }) {
-  const normalizedInviteCode = initialInviteCode.trim().toUpperCase().slice(0, 8);
+  const normalizedInviteCode = normalizeInviteCode(initialInviteCode);
   const [mode, setMode] = useState(normalizedInviteCode ? "join_club" : "create_club");
   const [form, setForm] = useState({ name: "", email: "", password: "", clubName: "", inviteCode: normalizedInviteCode });
   const [loading, setLoading] = useState(false);
@@ -23854,7 +24134,7 @@ export default function SignupPage({ onBack, initialInviteCode = "" }) {
           email: form.email.trim(),
           password: form.password,
           clubName: form.clubName.trim(),
-          inviteCode: form.inviteCode.trim(),
+          inviteCode: normalizeInviteCode(form.inviteCode),
           company: honeypot,
           formLoadedAt: formLoadedAt.current,
         },
@@ -23867,6 +24147,22 @@ export default function SignupPage({ onBack, initialInviteCode = "" }) {
         password: form.password,
       });
       if (signInError) throw signInError;
+      if (mode === "join_club") {
+        const { data: inviteData, error: inviteError } = await supabase.functions.invoke("admin-actions", {
+          body: { action: "accept_club_invitation", inviteCode: normalizeInviteCode(form.inviteCode) },
+        });
+        if (inviteError || !inviteData?.success) {
+          let inviteMessage = inviteData?.error ?? "Cette invitation n’a pas pu être vérifiée.";
+          if (inviteError?.context?.json) {
+            try {
+              const errorBody = await inviteError.context.json();
+              inviteMessage = errorBody?.error ?? inviteMessage;
+            } catch { /* garde le message compréhensible */ }
+          }
+          await supabase.auth.signOut();
+          throw new Error(inviteMessage);
+        }
+      }
     } catch (signupError) {
       let message = translateAuthError(signupError);
       if (signupError?.context?.json) {
@@ -23962,7 +24258,7 @@ export default function SignupPage({ onBack, initialInviteCode = "" }) {
             hint="Ce code de 8 caractères est disponible auprès de ton coach."
             value={form.inviteCode}
             maxLength={8}
-            onChange={(event) => setField("inviteCode", event.target.value.toUpperCase())}
+            onChange={(event) => setField("inviteCode", normalizeInviteCode(event.target.value))}
             disabled={loading}
             required
           />
@@ -26195,11 +26491,11 @@ export function getAthleteMetricsForWeek(athleteId, weeklyCharge, currentWeek, w
 
 // Statut du questionnaire AthleteOS Wellness v1 uniquement.
 export function getWellnessStatus(wellnessScore) {
-  if (wellnessScore == null) return { label: "Données à compléter", dot: "⚪", color: "#8A9B90" };
-  if (wellnessScore >= 75) return { label: "Ressenti déclaré favorable", dot: "🟢", color: "#1D9E75" };
-  if (wellnessScore >= 50) return { label: "Ressenti déclaré intermédiaire", dot: "🟡", color: "#EF9F27" };
-  if (wellnessScore < 25) return { label: "Ressenti déclaré difficile", dot: "🟠", color: "#E24B4A" };
-  return { label: "Ressenti à discuter", dot: "🔵", color: "#378ADD" };
+  if (wellnessScore == null) return { label: "Comment te sens-tu aujourd’hui ?", dot: "⚪", color: "#8A9B90" };
+  if (wellnessScore >= 75) return { label: "Tu te sens bien aujourd’hui", dot: "🟢", color: "#1D9E75" };
+  if (wellnessScore >= 50) return { label: "Tu te sens plutôt bien", dot: "🟡", color: "#EF9F27" };
+  if (wellnessScore < 25) return { label: "Ta journée semble difficile", dot: "🟠", color: "#E24B4A" };
+  return { label: "Ton ressenti est mitigé", dot: "🔵", color: "#378ADD" };
 }
 
 export function getStatusLabel(wellnessScore) {
@@ -26320,10 +26616,16 @@ export function getClubThemeVariables(accentColor) {
   };
 }
 
+export function normalizeInviteCode(value) {
+  return typeof value === "string"
+    ? value.trim().toUpperCase().replace(/[\s-]+/gu, "").slice(0, 8)
+    : "";
+}
+
 export function buildInviteUrl(inviteCode, origin = globalThis.location?.origin) {
   if (!inviteCode || !origin) return "";
   const url = new URL("/", origin);
-  url.searchParams.set("invite", String(inviteCode).trim().toUpperCase());
+  url.searchParams.set("invite", normalizeInviteCode(String(inviteCode)));
   return url.toString();
 }
 
@@ -26378,6 +26680,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildClubSetupSteps,
   buildInviteUrl,
+  normalizeInviteCode,
   darkenHex,
   getClubSetupProgress,
   getClubThemeVariables,
@@ -26414,6 +26717,12 @@ describe("clubBranding", () => {
     });
     expect(steps.map((step) => step.complete)).toEqual([false, true, true, false, true]);
     expect(getClubSetupProgress(steps)).toBe(60);
+  });
+});
+
+describe("normalizeInviteCode", () => {
+  it("accepte les anciens caractères et retire les séparateurs de copie", () => {
+    expect(normalizeInviteCode(" 0ilO-12a3 ")).toBe("0ILO12A3");
   });
 });
 </file>
@@ -28089,7 +28398,7 @@ import MobileMoreSheet from "./components/navigation/MobileMoreSheet";
 import InviteClubModal from "./components/club/InviteClubModal";
 import ClubDemoPreview from "./components/club/ClubDemoPreview";
 import { useClubBranding } from "./hooks/useClubBranding";
-import { getClubThemeVariables } from "./utils/clubBranding";
+import { getClubThemeVariables, normalizeInviteCode } from "./utils/clubBranding";
 import {
   COACH_MOBILE_MORE_ITEMS,
   COACH_MOBILE_PRIMARY_ITEMS,
@@ -28562,7 +28871,7 @@ function CoachShell({ user, profile, clubId, signOut, club, clubLoading, refresh
 export default function App() {
   const { user, profile, clubId, loading: authLoading, signOut, passwordRecovery } = useAuth();
   const inviteCodeFromUrl = useMemo(() => (
-    new URLSearchParams(globalThis.location?.search ?? "").get("invite")?.trim().toUpperCase() ?? ""
+    normalizeInviteCode(new URLSearchParams(globalThis.location?.search ?? "").get("invite") ?? "")
   ), []);
   const [showSignup, setShowSignup] = useState(Boolean(inviteCodeFromUrl));
   const { club, loading: clubLoading, refresh: refreshClub } = useClubBranding(clubId);
@@ -28575,7 +28884,7 @@ export default function App() {
   if (!user) {
     return showSignup
       ? <SignupPage initialInviteCode={inviteCodeFromUrl} onBack={() => setShowSignup(false)} />
-      : <LoginPage onSignupClick={() => setShowSignup(true)} />;
+      : <LoginPage inviteCode={inviteCodeFromUrl} onSignupClick={() => setShowSignup(true)} />;
   }
   if (profile?.role === "athlete") return <AthleteApp clubBrand={club} themeStyle={themeStyle} />;
   if (!profile) return <AuthLoader />;
@@ -30343,6 +30652,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 // Rôle minimal par action :
 //   - update_profile        : n'importe quel compte connecté, sur SOI-MÊME uniquement. Pas audité (pas structurel).
 //   - rename_club            : head_coach uniquement.
+//   - upload_club_branding   : head_coach uniquement, stockage validé côté serveur.
 //   - update_club_branding   : head_coach uniquement.
 //   - regenerate_invite_code : head_coach uniquement.
 //   - remove_user            : head_coach uniquement.
@@ -30367,10 +30677,20 @@ function genCode() {
   return s;
 }
 
+function normalizeInviteCode(value: unknown): string {
+  return typeof value === "string" ? value.trim().toUpperCase().replace(/[\s-]+/g, "") : "";
+}
+
 const VALID_ROLES = ["head_coach", "coach", "athlete"];
-const SENSITIVE_ACTIONS = ["rename_club", "update_club_branding", "regenerate_invite_code", "remove_user", "change_role"];
+const SENSITIVE_ACTIONS = ["rename_club", "upload_club_branding", "update_club_branding", "regenerate_invite_code", "remove_user", "change_role"];
 const HEX_COLOR_PATTERN = /^#[0-9A-F]{6}$/;
 const CLUB_IMAGE_PATTERN = /\.(png|jpe?g|webp)$/i;
+const BRAND_IMAGE_TYPES: Record<string, string> = {
+  "image/png": "png",
+  "image/jpeg": "jpg",
+  "image/webp": "webp",
+};
+const MAX_BRAND_IMAGE_SIZE = 5 * 1024 * 1024;
 
 function ok(body: Record<string, unknown>) {
   return new Response(JSON.stringify({ success: true, ...body }), {
@@ -30429,6 +30749,36 @@ function optionalClubImagePath(
     );
   }
   return imagePath;
+}
+
+function decodeBrandImage(value: unknown): Uint8Array {
+  const encoded = requireString(value, "Image", { max: 7_100_000 });
+  if (!/^[A-Za-z0-9+/]+={0,2}$/.test(encoded)) throw new DeniedError("Image encodée invalide.");
+  let binary = "";
+  try { binary = atob(encoded); } catch { throw new DeniedError("Image encodée invalide."); }
+  if (!binary.length || binary.length > MAX_BRAND_IMAGE_SIZE) {
+    throw new DeniedError("L’image doit peser moins de 5 Mo.");
+  }
+  return Uint8Array.from(binary, (character) => character.charCodeAt(0));
+}
+
+async function ensureBrandingBucket(admin: ReturnType<typeof createClient>) {
+  const { data: bucket } = await admin.storage.getBucket("club-branding");
+  if (!bucket) {
+    const { error } = await admin.storage.createBucket("club-branding", {
+      public: false,
+      fileSizeLimit: MAX_BRAND_IMAGE_SIZE,
+      allowedMimeTypes: Object.keys(BRAND_IMAGE_TYPES),
+    });
+    if (error && !/already exists/i.test(error.message ?? "")) throw error;
+    return;
+  }
+  const { error } = await admin.storage.updateBucket("club-branding", {
+    public: false,
+    fileSizeLimit: MAX_BRAND_IMAGE_SIZE,
+    allowedMimeTypes: Object.keys(BRAND_IMAGE_TYPES),
+  });
+  if (error) throw error;
 }
 
 serve(async (req) => {
@@ -30518,6 +30868,35 @@ serve(async (req) => {
       return ok({});
     }
 
+    // Un compte déjà existant peut ouvrir un lien d'invitation. Avec le
+    // modèle actuel (un compte = un club), on confirme son club sans déplacer
+    // silencieusement ses données vers une autre structure.
+    if (currentAction === "accept_club_invitation") {
+      const inviteCode = normalizeInviteCode(body.inviteCode);
+      if (!/^[A-Z0-9]{8}$/.test(inviteCode)) {
+        throw new DeniedError("Le code doit contenir 8 caractères.");
+      }
+      let { data: invitedClub, error: inviteError } = await admin
+        .from("clubs")
+        .select("id, name, invite_code_expires_at")
+        .ilike("invite_code", inviteCode)
+        .maybeSingle();
+      if (inviteError?.code === "42703") {
+        const legacyResult = await admin.from("clubs").select("id, name").ilike("invite_code", inviteCode).maybeSingle();
+        invitedClub = legacyResult.data;
+        inviteError = legacyResult.error;
+      }
+      if (inviteError) throw inviteError;
+      if (!invitedClub) throw new DeniedError("Cette invitation n’est plus active. Demande un nouveau lien à ton coach.");
+      if (invitedClub.invite_code_expires_at && new Date(invitedClub.invite_code_expires_at) <= new Date()) {
+        throw new DeniedError("Cette invitation a expiré. Demande un nouveau lien à ton coach.");
+      }
+      if (Number(invitedClub.id) !== Number(caller.club_id)) {
+        throw new DeniedError(`Ton compte appartient déjà à un autre club. Aucun transfert n’a été effectué ; contacte ton coach pour conserver tes données.`);
+      }
+      return ok({ alreadyMember: true, clubName: invitedClub.name });
+    }
+
     // ── Actions réservées au head coach ─────────────────────────────────
     if (!isHeadCoach) throw new DeniedError("Action réservée au head coach.");
 
@@ -30533,6 +30912,29 @@ serve(async (req) => {
       auditPayload = { clubName };
       await logAudit("success", null);
       return ok({});
+    }
+
+    if (currentAction === "upload_club_branding") {
+      targetClubId = caller.club_id;
+      const kind = requireString(body.kind, "Type d’image", { max: 10 });
+      if (kind !== "logo" && kind !== "cover") throw new DeniedError("Type d’image invalide.");
+      const contentType = requireString(body.contentType, "Format d’image", { max: 50 }).toLowerCase();
+      const extension = BRAND_IMAGE_TYPES[contentType];
+      if (!extension) throw new DeniedError("Utilise une image PNG, JPEG ou WebP.");
+      const bytes = decodeBrandImage(body.fileBase64);
+
+      await ensureBrandingBucket(admin);
+      const path = `${caller.club_id}/${kind}-${crypto.randomUUID()}.${extension}`;
+      const { error } = await admin.storage.from("club-branding").upload(path, bytes, {
+        contentType,
+        cacheControl: "3600",
+        upsert: false,
+      });
+      if (error) throw error;
+
+      auditPayload = { kind, path, size: bytes.byteLength };
+      await logAudit("success", null);
+      return ok({ path });
     }
 
     if (currentAction === "update_club_branding") {
@@ -30552,6 +30954,11 @@ serve(async (req) => {
       if (coverPath !== undefined) updates.cover_path = coverPath;
       if (accentColor !== undefined) updates.accent_color = accentColor;
 
+      const { data: previousClub } = await admin
+        .from("clubs")
+        .select("logo_path, cover_path")
+        .eq("id", caller.club_id)
+        .single();
       const { data: updatedClub, error } = await admin
         .from("clubs")
         .update(updates)
@@ -30559,6 +30966,15 @@ serve(async (req) => {
         .select("logo_path, cover_path, accent_color")
         .single();
       if (error || !updatedClub) throw error ?? new Error("Club introuvable.");
+
+      const obsoletePaths = [
+        previousClub?.logo_path && previousClub.logo_path !== updatedClub.logo_path ? previousClub.logo_path : null,
+        previousClub?.cover_path && previousClub.cover_path !== updatedClub.cover_path ? previousClub.cover_path : null,
+      ].filter(Boolean) as string[];
+      if (obsoletePaths.length) {
+        const { error: cleanupError } = await admin.storage.from("club-branding").remove(obsoletePaths);
+        if (cleanupError) console.error("club-branding cleanup failed:", cleanupError.message);
+      }
 
       const branding = {
         logoPath: updatedClub.logo_path,
@@ -30581,7 +30997,17 @@ serve(async (req) => {
         const { data: exists } = await admin.from("clubs").select("id").eq("invite_code", code).maybeSingle();
         if (!exists) break;
       }
-      const { error } = await admin.from("clubs").update({ invite_code: code }).eq("id", caller.club_id);
+      let { error } = await admin.from("clubs").update({
+        invite_code: code,
+        invite_code_created_at: new Date().toISOString(),
+        invite_code_use_count: 0,
+        invite_code_last_used_at: null,
+        invite_code_expires_at: null,
+      }).eq("id", caller.club_id);
+      if (error?.code === "42703") {
+        const legacyUpdate = await admin.from("clubs").update({ invite_code: code }).eq("id", caller.club_id);
+        error = legacyUpdate.error;
+      }
       if (error) throw error;
 
       auditPayload = { inviteCode: code };
@@ -31003,7 +31429,9 @@ const ATTEMPT_RETENTION_HOURS = 24;
 
 const EMAIL_RE = /^[^\s@]{1,64}@[^\s@]{1,190}\.[^\s@]{2,24}$/;
 const CODE_CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // sans 0/O/1/I/L
-const CODE_RE = new RegExp(`^[${CODE_CHARS}]{${INVITE_CODE_LEN}}$`);
+// Les nouveaux codes évitent les caractères ambigus. La lecture accepte
+// aussi 0/1/I/L/O car les premiers clubs ont reçu un code issu d'un MD5.
+const CODE_RE = new RegExp(`^[A-Z0-9]{${INVITE_CODE_LEN}}$`);
 
 const DEFAULT_ALLOWED_ORIGINS = [
   "https://athleteos-by-samuelmuhadri.vercel.app",
@@ -31030,6 +31458,10 @@ function genCode(): string {
   let s = "";
   for (let i = 0; i < INVITE_CODE_LEN; i++) s += CODE_CHARS[Math.floor(Math.random() * CODE_CHARS.length)];
   return s;
+}
+
+function normalizeInviteCode(value: unknown): string {
+  return typeof value === "string" ? value.trim().toUpperCase().replace(/[\s-]+/g, "") : "";
 }
 
 function isDuplicateEmailError(err: { message?: string; code?: string; status?: number } | null): boolean {
@@ -31157,13 +31589,21 @@ serve(async (req) => {
       clubName = typeof body.clubName === "string" ? body.clubName.trim() : "";
       if (!clubName || clubName.length > MAX_CLUB_NAME_LEN) return fail(400, "Nom du club invalide.");
     } else {
-      inviteCode = typeof body.inviteCode === "string" ? body.inviteCode.trim().toUpperCase() : "";
-      if (!CODE_RE.test(inviteCode)) return fail(400, "Code d'invitation invalide.");
+      inviteCode = normalizeInviteCode(body.inviteCode);
+      if (!CODE_RE.test(inviteCode)) return fail(400, "Le code d’invitation doit contenir 8 caractères.");
 
-      const { data: club, error: clubErr } = await admin
-        .from("clubs").select("id").eq("invite_code", inviteCode).maybeSingle();
+      let { data: club, error: clubErr } = await admin
+        .from("clubs").select("id, invite_code_expires_at").ilike("invite_code", inviteCode).maybeSingle();
+      if (clubErr?.code === "42703") {
+        const legacyResult = await admin.from("clubs").select("id").ilike("invite_code", inviteCode).maybeSingle();
+        club = legacyResult.data;
+        clubErr = legacyResult.error;
+      }
       if (clubErr) return fail(500, "Erreur serveur.");
-      if (!club) return fail(400, "Code d'invitation invalide.");
+      if (!club) return fail(400, "Cette invitation n’est plus active. Demande un nouveau lien à ton coach.");
+      if (club.invite_code_expires_at && new Date(club.invite_code_expires_at) <= new Date()) {
+        return fail(400, "Cette invitation a expiré. Demande un nouveau lien à ton coach.");
+      }
     }
 
     if (mode === "create_club") {
@@ -31203,6 +31643,15 @@ serve(async (req) => {
       p_auth_uid: authData.user.id, p_name: name, p_email: emailRaw,
     });
     if (rpcErr) throw rpcErr;
+
+    if (mode === "join_club") {
+      const { error: trackingError } = await admin.rpc("mark_club_invitation_used", {
+        p_invite_code: inviteCode,
+      });
+      // Le rattachement est déjà validé et transactionnel. Un éventuel retard
+      // de migration du compteur ne doit jamais annuler le compte créé.
+      if (trackingError) console.error(`signup[${correlationId}] invitation tracking:`, trackingError.message);
+    }
 
     return new Response(JSON.stringify({ success: true, correlationId }), {
       headers: { ...corsHeaders(origin), "Content-Type": "application/json" },
@@ -35213,6 +35662,113 @@ REVOKE ALL ON FUNCTION public.create_solo_competition_result_v2(text, date, text
 GRANT EXECUTE ON FUNCTION public.add_athlete_performance(text, text, numeric, date, text, jsonb, jsonb, text) TO authenticated;
 GRANT EXECUTE ON FUNCTION public.add_competition_result_v2(integer, integer, text, text, numeric, boolean, text, text, text, jsonb) TO authenticated;
 GRANT EXECUTE ON FUNCTION public.create_solo_competition_result_v2(text, date, text, text, text, text, numeric, boolean, text, text, jsonb, text, jsonb) TO authenticated;
+
+COMMIT;
+</file>
+
+<file path="supabase/migrations/20260801090000_reliable_invites_and_branding_storage.sql">
+BEGIN;
+
+-- Réparation additive pour les environnements où l'identité visuelle a été
+-- déployée sans son bucket. Le client ne reçoit plus "Bucket not found" et
+-- les limites sont identiques à celles validées par l'Edge Function.
+ALTER TABLE public.clubs
+  ADD COLUMN IF NOT EXISTS logo_path text,
+  ADD COLUMN IF NOT EXISTS cover_path text,
+  ADD COLUMN IF NOT EXISTS accent_color text NOT NULL DEFAULT '#1D9E75',
+  ADD COLUMN IF NOT EXISTS invite_code_created_at timestamptz,
+  ADD COLUMN IF NOT EXISTS invite_code_use_count integer NOT NULL DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS invite_code_last_used_at timestamptz,
+  ADD COLUMN IF NOT EXISTS invite_code_expires_at timestamptz;
+
+UPDATE public.clubs
+SET
+  invite_code = upper(btrim(invite_code)),
+  invite_code_created_at = coalesce(invite_code_created_at, now())
+WHERE invite_code IS NOT NULL;
+
+ALTER TABLE public.clubs
+  DROP CONSTRAINT IF EXISTS clubs_invite_code_use_count_check;
+ALTER TABLE public.clubs
+  ADD CONSTRAINT clubs_invite_code_use_count_check CHECK (invite_code_use_count >= 0);
+
+DROP INDEX IF EXISTS public.clubs_invite_code_normalized_idx;
+CREATE UNIQUE INDEX clubs_invite_code_normalized_idx
+  ON public.clubs (upper(btrim(invite_code)))
+  WHERE invite_code IS NOT NULL;
+
+INSERT INTO storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+VALUES (
+  'club-branding', 'club-branding', false, 5242880,
+  ARRAY['image/png', 'image/jpeg', 'image/webp']
+)
+ON CONFLICT (id) DO UPDATE SET
+  public = EXCLUDED.public,
+  file_size_limit = EXCLUDED.file_size_limit,
+  allowed_mime_types = EXCLUDED.allowed_mime_types;
+
+DROP POLICY IF EXISTS "club members read club-branding" ON storage.objects;
+CREATE POLICY "club members read club-branding" ON storage.objects
+  FOR SELECT TO authenticated
+  USING (
+    bucket_id = 'club-branding'
+    AND (storage.foldername(name))[1] = public.get_my_club_id()::text
+  );
+
+DROP POLICY IF EXISTS "head coach upload club-branding" ON storage.objects;
+CREATE POLICY "head coach upload club-branding" ON storage.objects
+  FOR INSERT TO authenticated
+  WITH CHECK (
+    bucket_id = 'club-branding'
+    AND public.get_my_role() = 'head_coach'
+    AND (storage.foldername(name))[1] = public.get_my_club_id()::text
+  );
+
+DROP POLICY IF EXISTS "head coach update club-branding" ON storage.objects;
+CREATE POLICY "head coach update club-branding" ON storage.objects
+  FOR UPDATE TO authenticated
+  USING (
+    bucket_id = 'club-branding'
+    AND public.get_my_role() = 'head_coach'
+    AND (storage.foldername(name))[1] = public.get_my_club_id()::text
+  )
+  WITH CHECK (
+    bucket_id = 'club-branding'
+    AND public.get_my_role() = 'head_coach'
+    AND (storage.foldername(name))[1] = public.get_my_club_id()::text
+  );
+
+DROP POLICY IF EXISTS "head coach delete club-branding" ON storage.objects;
+CREATE POLICY "head coach delete club-branding" ON storage.objects
+  FOR DELETE TO authenticated
+  USING (
+    bucket_id = 'club-branding'
+    AND public.get_my_role() = 'head_coach'
+    AND (storage.foldername(name))[1] = public.get_my_club_id()::text
+  );
+
+-- Le compteur est modifié côté serveur après une inscription réussie. La
+-- comparaison accepte les anciens codes contenant 0/1/I/L/O.
+CREATE OR REPLACE FUNCTION public.mark_club_invitation_used(p_invite_code text)
+RETURNS void
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path TO 'public'
+AS $$
+BEGIN
+  UPDATE public.clubs
+  SET
+    invite_code_use_count = invite_code_use_count + 1,
+    invite_code_last_used_at = now()
+  WHERE upper(btrim(invite_code)) = upper(btrim(p_invite_code))
+    AND (invite_code_expires_at IS NULL OR invite_code_expires_at > now());
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.mark_club_invitation_used(text) FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.mark_club_invitation_used(text) FROM anon;
+REVOKE ALL ON FUNCTION public.mark_club_invitation_used(text) FROM authenticated;
+GRANT EXECUTE ON FUNCTION public.mark_club_invitation_used(text) TO service_role;
 
 COMMIT;
 </file>

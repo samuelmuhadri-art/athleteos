@@ -124,11 +124,11 @@ export function getAthleteMetricsForWeek(athleteId, weeklyCharge, currentWeek, w
 
 // Statut du questionnaire AthleteOS Wellness v1 uniquement.
 export function getWellnessStatus(wellnessScore) {
-  if (wellnessScore == null) return { label: "Données à compléter", dot: "⚪", color: "#8A9B90" };
-  if (wellnessScore >= 75) return { label: "Ressenti déclaré favorable", dot: "🟢", color: "#1D9E75" };
-  if (wellnessScore >= 50) return { label: "Ressenti déclaré intermédiaire", dot: "🟡", color: "#EF9F27" };
-  if (wellnessScore < 25) return { label: "Ressenti déclaré difficile", dot: "🟠", color: "#E24B4A" };
-  return { label: "Ressenti à discuter", dot: "🔵", color: "#378ADD" };
+  if (wellnessScore == null) return { label: "Comment te sens-tu aujourd’hui ?", dot: "⚪", color: "#8A9B90" };
+  if (wellnessScore >= 75) return { label: "Tu te sens bien aujourd’hui", dot: "🟢", color: "#1D9E75" };
+  if (wellnessScore >= 50) return { label: "Tu te sens plutôt bien", dot: "🟡", color: "#EF9F27" };
+  if (wellnessScore < 25) return { label: "Ta journée semble difficile", dot: "🟠", color: "#E24B4A" };
+  return { label: "Ton ressenti est mitigé", dot: "🔵", color: "#378ADD" };
 }
 
 export function getStatusLabel(wellnessScore) {

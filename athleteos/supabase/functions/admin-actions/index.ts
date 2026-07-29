@@ -14,6 +14,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 // Rôle minimal par action :
 //   - update_profile        : n'importe quel compte connecté, sur SOI-MÊME uniquement. Pas audité (pas structurel).
 //   - rename_club            : head_coach uniquement.
+//   - upload_club_branding   : head_coach uniquement, stockage validé côté serveur.
 //   - update_club_branding   : head_coach uniquement.
 //   - regenerate_invite_code : head_coach uniquement.
 //   - remove_user            : head_coach uniquement.
@@ -38,10 +39,20 @@ function genCode() {
   return s;
 }
 
+function normalizeInviteCode(value: unknown): string {
+  return typeof value === "string" ? value.trim().toUpperCase().replace(/[\s-]+/g, "") : "";
+}
+
 const VALID_ROLES = ["head_coach", "coach", "athlete"];
-const SENSITIVE_ACTIONS = ["rename_club", "update_club_branding", "regenerate_invite_code", "remove_user", "change_role"];
+const SENSITIVE_ACTIONS = ["rename_club", "upload_club_branding", "update_club_branding", "regenerate_invite_code", "remove_user", "change_role"];
 const HEX_COLOR_PATTERN = /^#[0-9A-F]{6}$/;
 const CLUB_IMAGE_PATTERN = /\.(png|jpe?g|webp)$/i;
+const BRAND_IMAGE_TYPES: Record<string, string> = {
+  "image/png": "png",
+  "image/jpeg": "jpg",
+  "image/webp": "webp",
+};
+const MAX_BRAND_IMAGE_SIZE = 5 * 1024 * 1024;
 
 function ok(body: Record<string, unknown>) {
   return new Response(JSON.stringify({ success: true, ...body }), {
@@ -100,6 +111,36 @@ function optionalClubImagePath(
     );
   }
   return imagePath;
+}
+
+function decodeBrandImage(value: unknown): Uint8Array {
+  const encoded = requireString(value, "Image", { max: 7_100_000 });
+  if (!/^[A-Za-z0-9+/]+={0,2}$/.test(encoded)) throw new DeniedError("Image encodée invalide.");
+  let binary = "";
+  try { binary = atob(encoded); } catch { throw new DeniedError("Image encodée invalide."); }
+  if (!binary.length || binary.length > MAX_BRAND_IMAGE_SIZE) {
+    throw new DeniedError("L’image doit peser moins de 5 Mo.");
+  }
+  return Uint8Array.from(binary, (character) => character.charCodeAt(0));
+}
+
+async function ensureBrandingBucket(admin: ReturnType<typeof createClient>) {
+  const { data: bucket } = await admin.storage.getBucket("club-branding");
+  if (!bucket) {
+    const { error } = await admin.storage.createBucket("club-branding", {
+      public: false,
+      fileSizeLimit: MAX_BRAND_IMAGE_SIZE,
+      allowedMimeTypes: Object.keys(BRAND_IMAGE_TYPES),
+    });
+    if (error && !/already exists/i.test(error.message ?? "")) throw error;
+    return;
+  }
+  const { error } = await admin.storage.updateBucket("club-branding", {
+    public: false,
+    fileSizeLimit: MAX_BRAND_IMAGE_SIZE,
+    allowedMimeTypes: Object.keys(BRAND_IMAGE_TYPES),
+  });
+  if (error) throw error;
 }
 
 serve(async (req) => {
@@ -189,6 +230,35 @@ serve(async (req) => {
       return ok({});
     }
 
+    // Un compte déjà existant peut ouvrir un lien d'invitation. Avec le
+    // modèle actuel (un compte = un club), on confirme son club sans déplacer
+    // silencieusement ses données vers une autre structure.
+    if (currentAction === "accept_club_invitation") {
+      const inviteCode = normalizeInviteCode(body.inviteCode);
+      if (!/^[A-Z0-9]{8}$/.test(inviteCode)) {
+        throw new DeniedError("Le code doit contenir 8 caractères.");
+      }
+      let { data: invitedClub, error: inviteError } = await admin
+        .from("clubs")
+        .select("id, name, invite_code_expires_at")
+        .ilike("invite_code", inviteCode)
+        .maybeSingle();
+      if (inviteError?.code === "42703") {
+        const legacyResult = await admin.from("clubs").select("id, name").ilike("invite_code", inviteCode).maybeSingle();
+        invitedClub = legacyResult.data;
+        inviteError = legacyResult.error;
+      }
+      if (inviteError) throw inviteError;
+      if (!invitedClub) throw new DeniedError("Cette invitation n’est plus active. Demande un nouveau lien à ton coach.");
+      if (invitedClub.invite_code_expires_at && new Date(invitedClub.invite_code_expires_at) <= new Date()) {
+        throw new DeniedError("Cette invitation a expiré. Demande un nouveau lien à ton coach.");
+      }
+      if (Number(invitedClub.id) !== Number(caller.club_id)) {
+        throw new DeniedError(`Ton compte appartient déjà à un autre club. Aucun transfert n’a été effectué ; contacte ton coach pour conserver tes données.`);
+      }
+      return ok({ alreadyMember: true, clubName: invitedClub.name });
+    }
+
     // ── Actions réservées au head coach ─────────────────────────────────
     if (!isHeadCoach) throw new DeniedError("Action réservée au head coach.");
 
@@ -204,6 +274,29 @@ serve(async (req) => {
       auditPayload = { clubName };
       await logAudit("success", null);
       return ok({});
+    }
+
+    if (currentAction === "upload_club_branding") {
+      targetClubId = caller.club_id;
+      const kind = requireString(body.kind, "Type d’image", { max: 10 });
+      if (kind !== "logo" && kind !== "cover") throw new DeniedError("Type d’image invalide.");
+      const contentType = requireString(body.contentType, "Format d’image", { max: 50 }).toLowerCase();
+      const extension = BRAND_IMAGE_TYPES[contentType];
+      if (!extension) throw new DeniedError("Utilise une image PNG, JPEG ou WebP.");
+      const bytes = decodeBrandImage(body.fileBase64);
+
+      await ensureBrandingBucket(admin);
+      const path = `${caller.club_id}/${kind}-${crypto.randomUUID()}.${extension}`;
+      const { error } = await admin.storage.from("club-branding").upload(path, bytes, {
+        contentType,
+        cacheControl: "3600",
+        upsert: false,
+      });
+      if (error) throw error;
+
+      auditPayload = { kind, path, size: bytes.byteLength };
+      await logAudit("success", null);
+      return ok({ path });
     }
 
     if (currentAction === "update_club_branding") {
@@ -223,6 +316,11 @@ serve(async (req) => {
       if (coverPath !== undefined) updates.cover_path = coverPath;
       if (accentColor !== undefined) updates.accent_color = accentColor;
 
+      const { data: previousClub } = await admin
+        .from("clubs")
+        .select("logo_path, cover_path")
+        .eq("id", caller.club_id)
+        .single();
       const { data: updatedClub, error } = await admin
         .from("clubs")
         .update(updates)
@@ -230,6 +328,15 @@ serve(async (req) => {
         .select("logo_path, cover_path, accent_color")
         .single();
       if (error || !updatedClub) throw error ?? new Error("Club introuvable.");
+
+      const obsoletePaths = [
+        previousClub?.logo_path && previousClub.logo_path !== updatedClub.logo_path ? previousClub.logo_path : null,
+        previousClub?.cover_path && previousClub.cover_path !== updatedClub.cover_path ? previousClub.cover_path : null,
+      ].filter(Boolean) as string[];
+      if (obsoletePaths.length) {
+        const { error: cleanupError } = await admin.storage.from("club-branding").remove(obsoletePaths);
+        if (cleanupError) console.error("club-branding cleanup failed:", cleanupError.message);
+      }
 
       const branding = {
         logoPath: updatedClub.logo_path,
@@ -252,7 +359,17 @@ serve(async (req) => {
         const { data: exists } = await admin.from("clubs").select("id").eq("invite_code", code).maybeSingle();
         if (!exists) break;
       }
-      const { error } = await admin.from("clubs").update({ invite_code: code }).eq("id", caller.club_id);
+      let { error } = await admin.from("clubs").update({
+        invite_code: code,
+        invite_code_created_at: new Date().toISOString(),
+        invite_code_use_count: 0,
+        invite_code_last_used_at: null,
+        invite_code_expires_at: null,
+      }).eq("id", caller.club_id);
+      if (error?.code === "42703") {
+        const legacyUpdate = await admin.from("clubs").update({ invite_code: code }).eq("id", caller.club_id);
+        error = legacyUpdate.error;
+      }
       if (error) throw error;
 
       auditPayload = { inviteCode: code };

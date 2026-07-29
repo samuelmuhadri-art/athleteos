@@ -70,10 +70,10 @@ const FormeDetailPanel = memo(({ metricKey, metrics, sessions, weeklyCharge, ath
                 <span className="chip chip-neutral">{reading.evidence}</span>
               </div>
               <h2 id="monitoring-detail-title" className="text-[22px] font-bold tracking-[-0.025em]" style={{ color: "var(--c-text-1)" }}>
-                {reading.label}
+                {reading.shortLabel}
               </h2>
               <p className="mt-2 max-w-xl text-[13px] leading-6" style={{ color: "var(--c-text-2)" }}>
-                Une lecture transparente de tes données, sans score caché ni décision automatique.
+                {reading.athleteMeaning}. Le détail scientifique reste disponible ci-dessous.
               </p>
             </div>
             <button type="button" aria-label="Fermer le détail" onClick={onClose} className="btn-icon flex-shrink-0">
@@ -122,7 +122,7 @@ const FormeDetailPanel = memo(({ metricKey, metrics, sessions, weeklyCharge, ath
           <article className="card mt-3 overflow-hidden">
             <div className="flex items-center gap-2 border-b px-4 py-3" style={{ borderColor: "var(--c-border)", color }}>
               <Calculator size={16} />
-              <h3 className="card-title">Calcul exact</h3>
+              <h3 className="card-title">Méthode de calcul</h3>
             </div>
             <div className="p-4">
               <code className="block rounded-xl px-3 py-3 text-[12px] leading-6" style={{ background: "var(--c-surface-2)", color: "var(--c-text-1)", whiteSpace: "normal" }}>
@@ -130,6 +130,9 @@ const FormeDetailPanel = memo(({ metricKey, metrics, sessions, weeklyCharge, ath
               </code>
               <p className="mt-3 text-[12px] leading-5" style={{ color: "var(--c-text-2)" }}>
                 <strong style={{ color: "var(--c-text-1)" }}>Limite :</strong> {reading.limits}
+              </p>
+              <p className="mt-2 text-[12px] leading-5" style={{ color: "var(--c-text-3)" }}>
+                Nom scientifique dans AthleteOS : {reading.label}.
               </p>
             </div>
           </article>
