@@ -17,10 +17,23 @@
 -- found").
 -- ============================================================
 
+INSERT INTO storage.buckets (
+  id, name, public, file_size_limit, allowed_mime_types
+)
+VALUES (
+  'session-pdfs',
+  'session-pdfs',
+  false,
+  31457280,
+  ARRAY['application/pdf']
+)
+ON CONFLICT (id) DO UPDATE SET
+  public = EXCLUDED.public,
+  file_size_limit = EXCLUDED.file_size_limit,
+  allowed_mime_types = EXCLUDED.allowed_mime_types;
+
 INSERT INTO storage.buckets (id, name, public)
-VALUES
-  ('session-pdfs', 'session-pdfs', true),
-  ('social-photos', 'social-photos', true)
+VALUES ('social-photos', 'social-photos', true)
 ON CONFLICT (id) DO NOTHING;
 
 -- ============================================================
