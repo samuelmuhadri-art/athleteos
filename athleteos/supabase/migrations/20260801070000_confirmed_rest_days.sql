@@ -58,62 +58,38 @@ WITH session_days AS (
     s.week,
     CASE
       WHEN bool_and(
-        COALESCE(sa.absent, false)
+        sa.status = 'none'
         OR (
           sa.rpe IS NOT NULL
-          AND COALESCE(
-            sa.actual_duration_minutes,
-            CASE
-              WHEN sa.duration_source = 'planned_legacy' THEN s.duration
-              ELSE NULL
-            END
-          ) IS NOT NULL
+          AND sa.actual_duration_minutes IS NOT NULL
         )
       )
-      THEN round(sum(
+      THEN sum(
         CASE
-          WHEN COALESCE(sa.absent, false) THEN 0
-          ELSE COALESCE(
-            sa.actual_duration_minutes,
-            CASE
-              WHEN sa.duration_source = 'planned_legacy' THEN s.duration
-              ELSE NULL
-            END
-          ) * sa.rpe
+          WHEN sa.status = 'none' THEN 0
+          ELSE sa.actual_duration_minutes * sa.rpe
         END
-      )::numeric, 2)
+      )::integer
       ELSE NULL
     END AS raw_load,
     bool_and(
-      COALESCE(sa.absent, false)
+      sa.status = 'none'
       OR (
         sa.rpe IS NOT NULL
-        AND COALESCE(
-          sa.actual_duration_minutes,
-          CASE
-            WHEN sa.duration_source = 'planned_legacy' THEN s.duration
-            ELSE NULL
-          END
-        ) IS NOT NULL
+        AND sa.actual_duration_minutes IS NOT NULL
       )
     ) AS is_complete,
     bool_or(
-      NOT COALESCE(sa.absent, false)
-      AND sa.actual_duration_minutes IS NULL
+      sa.status IS DISTINCT FROM 'none'
+      AND sa.rpe IS NOT NULL
       AND sa.duration_source = 'planned_legacy'
     ) AS is_estimated,
     count(*)::integer AS assigned_session_count,
     count(*) FILTER (
-      WHERE NOT COALESCE(sa.absent, false)
+      WHERE sa.status IS DISTINCT FROM 'none'
         AND (
           sa.rpe IS NULL
-          OR COALESCE(
-            sa.actual_duration_minutes,
-            CASE
-              WHEN sa.duration_source = 'planned_legacy' THEN s.duration
-              ELSE NULL
-            END
-          ) IS NULL
+          OR sa.actual_duration_minutes IS NULL
         )
     )::integer AS unknown_session_count
   FROM public.session_athletes sa

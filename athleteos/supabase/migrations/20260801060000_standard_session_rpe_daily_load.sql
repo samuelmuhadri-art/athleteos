@@ -49,23 +49,46 @@ WHERE s.id = sa.session_id
   AND sa.actual_duration_minutes IS NULL
   AND s.duration_minutes IS NOT NULL;
 
-DO $$
+-- Certaines anciennes lignes ont un RPE sans durée récupérable. Une CHECK
+-- NOT VALID bloquerait encore toute modification annexe de ces lignes (par
+-- exemple confirmer la présence). Le trigger protège donc uniquement les
+-- nouvelles écritures de charge : insertion avec RPE, changement de RPE ou
+-- changement de durée. Les historiques incomplets restent lisibles et sont
+-- classés comme données inconnues dans les vues ci-dessous.
+ALTER TABLE public.session_athletes
+  DROP CONSTRAINT IF EXISTS session_athletes_rpe_requires_duration_check;
+
+CREATE OR REPLACE FUNCTION public.enforce_session_rpe_duration_on_write()
+RETURNS trigger
+LANGUAGE plpgsql
+SET search_path TO 'public'
+AS $$
+DECLARE
+  v_load_changed boolean;
 BEGIN
-  IF NOT EXISTS (
-    SELECT 1 FROM pg_constraint
-    WHERE conrelid = 'public.session_athletes'::regclass
-      AND conname = 'session_athletes_rpe_requires_duration_check'
-  ) THEN
-    ALTER TABLE public.session_athletes
-      ADD CONSTRAINT session_athletes_rpe_requires_duration_check
-      CHECK (
-        rpe IS NULL
-        OR status = 'none'
-        OR (actual_duration_minutes IS NOT NULL AND duration_source IS NOT NULL)
-      );
+  IF TG_OP = 'INSERT' THEN
+    v_load_changed := true;
+  ELSE
+    v_load_changed := NEW.rpe IS DISTINCT FROM OLD.rpe
+      OR NEW.actual_duration_minutes IS DISTINCT FROM OLD.actual_duration_minutes
+      OR NEW.duration_source IS DISTINCT FROM OLD.duration_source;
   END IF;
+
+  IF v_load_changed
+  AND NEW.rpe IS NOT NULL
+  AND NEW.status IS DISTINCT FROM 'none'
+  AND (NEW.actual_duration_minutes IS NULL OR NEW.duration_source IS NULL)
+  THEN
+    RAISE EXCEPTION 'Une durée réelle est obligatoire avec le RPE.';
+  END IF;
+  RETURN NEW;
 END;
 $$;
+
+DROP TRIGGER IF EXISTS session_athletes_enforce_rpe_duration ON public.session_athletes;
+CREATE TRIGGER session_athletes_enforce_rpe_duration
+  BEFORE INSERT OR UPDATE ON public.session_athletes
+  FOR EACH ROW EXECUTE FUNCTION public.enforce_session_rpe_duration_on_write();
 
 UPDATE public.charge_model_versions SET is_active = false WHERE is_active;
 INSERT INTO public.charge_model_versions (

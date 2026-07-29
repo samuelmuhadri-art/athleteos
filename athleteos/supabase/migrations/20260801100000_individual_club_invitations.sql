@@ -49,14 +49,16 @@ BEGIN
     RETURN jsonb_build_object('status', 'invalid');
   END IF;
 
-  SELECT invitation, club.name
-  INTO v_invitation, v_club_name
+  SELECT invitation.*
+  INTO v_invitation
   FROM public.club_invitations invitation
-  JOIN public.clubs club ON club.id = invitation.club_id
   WHERE upper(btrim(invitation.code)) = v_code
   LIMIT 1;
 
   IF FOUND THEN
+    SELECT club.name INTO v_club_name
+    FROM public.clubs club
+    WHERE club.id = v_invitation.club_id;
     v_status := CASE
       WHEN v_invitation.status = 'revoked' THEN 'revoked'
       WHEN v_invitation.accepted_at IS NOT NULL THEN 'accepted'
