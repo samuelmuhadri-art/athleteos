@@ -45,9 +45,12 @@ jobs:
       # touchent pas la production"). studio/imgproxy/mailpit/vector/logflare/
       # edge-runtime exclus (pas nécessaires ici, démarrage plus rapide).
       # ══════════════════════════════════════════════════════════════════════
-      - uses: supabase/setup-cli@v1
+      - uses: supabase/setup-cli@v2
         with:
           version: latest
+          # Recommandé par setup-cli v2 pour résoudre `latest` sans subir
+          # la limite très basse de l'API GitHub non authentifiée.
+          github-token: ${{ github.token }}
 
       - name: Start local Supabase (applique toutes les migrations)
         shell: bash
