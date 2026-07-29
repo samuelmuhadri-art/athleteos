@@ -30,6 +30,12 @@ jobs:
       # échec arrête le job (npm run check s'arrête à la première commande en
       # erreur) — feedback rapide avant de payer le coût de Supabase local.
       - name: npm run check (lint, typecheck, tests unitaires + couverture, build)
+        env:
+          # Le premier quality gate tourne avant le démarrage de Supabase.
+          # Valeurs locales fictives requises uniquement à l'initialisation
+          # du SDK dans les tests ; aucune requête de production n'est faite.
+          VITE_SUPABASE_URL: http://127.0.0.1:54321
+          VITE_SUPABASE_ANON_KEY: unit-test-anon-key
         run: npm run check
 
       # ══════════════════════════════════════════════════════════════════════

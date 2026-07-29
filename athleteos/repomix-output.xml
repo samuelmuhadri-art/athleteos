@@ -42432,6 +42432,15 @@ export default defineConfig({
     environment: 'jsdom',
     globals: false,
     include: ['src/**/*.test.{js,jsx}'],
+    // Les tests unitaires qui importent un composant utilisant Supabase
+    // remplacent ensuite ses appels par des mocks. Le SDK exige toutefois
+    // une URL dès l'import du module. Ces valeurs sont donc volontairement
+    // locales et fictives : la suite reste autonome et ne peut jamais
+    // contacter le projet de production par accident.
+    env: {
+      VITE_SUPABASE_URL: 'http://127.0.0.1:54321',
+      VITE_SUPABASE_ANON_KEY: 'unit-test-anon-key',
+    },
     // Seuil de couverture PROGRESSIF (tâche 19) : pas un pourcentage global
     // artificiel (qui serait soit trivialement bas vu la taille de l'app,
     // soit rouge dès le premier commit) — un seuil élevé seulement sur les
