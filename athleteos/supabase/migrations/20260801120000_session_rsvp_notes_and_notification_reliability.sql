@@ -21,3 +21,24 @@ alter table public.alerts
 
 create index if not exists alerts_club_session_type_idx
   on public.alerts (club_id, session_id, type, created_at desc);
+
+-- Les compteurs et bandeaux ouverts dans l'application écoutent ces tables.
+-- L'ajout est idempotent afin de fonctionner aussi si Realtime a déjà été
+-- activé manuellement depuis le dashboard Supabase.
+do $$
+begin
+  if exists (select 1 from pg_publication where pubname = 'supabase_realtime') then
+    if not exists (
+      select 1 from pg_publication_tables
+      where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'alerts'
+    ) then
+      alter publication supabase_realtime add table public.alerts;
+    end if;
+    if not exists (
+      select 1 from pg_publication_tables
+      where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'athlete_notifications'
+    ) then
+      alter publication supabase_realtime add table public.athlete_notifications;
+    end if;
+  end if;
+end $$;
