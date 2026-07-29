@@ -26,14 +26,14 @@ async function login(page, email, password) {
 
 test("l'athlète se connecte et voit son Tableau de bord", async ({ page }) => {
   await login(page, fixtures.athlete.email, fixtures.athlete.password);
-  await expect(page.getByText("Tableau de bord")).toBeVisible({ timeout: 15000 });
+  await expect(page.getByRole("heading", { name: "Tableau de bord", exact: true })).toBeVisible({ timeout: 15000 });
 });
 
 test("l'athlète navigue vers son planning", async ({ page }) => {
   await login(page, fixtures.athlete.email, fixtures.athlete.password);
-  await expect(page.getByText("Tableau de bord")).toBeVisible({ timeout: 15000 });
-  await page.getByText("Planning", { exact: true }).click();
-  await expect(page.getByText("Mon planning")).toBeVisible({ timeout: 10000 });
+  await expect(page.getByRole("heading", { name: "Tableau de bord", exact: true })).toBeVisible({ timeout: 15000 });
+  await page.getByRole("button", { name: "Planning", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Mon planning", exact: true })).toBeVisible({ timeout: 10000 });
 });
 
 test.describe("navigation mobile athlète", () => {

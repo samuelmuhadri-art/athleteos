@@ -30,27 +30,27 @@ async function login(page, email, password) {
 
 test("le coach se connecte et voit son Dashboard", async ({ page }) => {
   await login(page, fixtures.coach.email, fixtures.coach.password);
-  await expect(page.getByText("Dashboard")).toBeVisible({ timeout: 15000 });
+  await expect(page.getByRole("heading", { name: "Dashboard", exact: true })).toBeVisible({ timeout: 15000 });
 });
 
 test("le coach navigue vers Planning", async ({ page }) => {
   await login(page, fixtures.coach.email, fixtures.coach.password);
-  await expect(page.getByText("Dashboard")).toBeVisible({ timeout: 15000 });
-  await page.getByRole("button", { name: "Planning" }).click();
+  await expect(page.getByRole("heading", { name: "Dashboard", exact: true })).toBeVisible({ timeout: 15000 });
+  await page.getByRole("button", { name: "Planning", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Planning" })).toBeVisible({ timeout: 10000 });
   await expect(page.getByRole("button", { name: "Ajouter" })).toBeVisible();
 });
 
 test("le coach navigue vers la liste des athlètes", async ({ page }) => {
   await login(page, fixtures.coach.email, fixtures.coach.password);
-  await expect(page.getByText("Dashboard")).toBeVisible({ timeout: 15000 });
-  await page.getByRole("button", { name: "Athlètes" }).click();
+  await expect(page.getByRole("heading", { name: "Dashboard", exact: true })).toBeVisible({ timeout: 15000 });
+  await page.getByRole("button", { name: "Athlètes", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Athlètes" })).toBeVisible({ timeout: 10000 });
 });
 
 test("le code d'invitation du club est affichable", async ({ page }) => {
   await login(page, fixtures.coach.email, fixtures.coach.password);
-  await expect(page.getByText("Dashboard")).toBeVisible({ timeout: 15000 });
+  await expect(page.getByRole("heading", { name: "Dashboard", exact: true })).toBeVisible({ timeout: 15000 });
   await page.getByRole("button", { name: "Inviter" }).click();
   await expect(page.getByText("Inviter un athlète")).toBeVisible();
 });
