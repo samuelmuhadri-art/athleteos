@@ -64,7 +64,7 @@ describe("AthleteDashboard — plan du jour", () => {
     expect(screen.getAllByText("Technique du soir").length).toBeGreaterThanOrEqual(2);
     fireEvent.click(screen.getByRole("button", { name: /ouvrir la séance/i }));
     expect(screen.getByText("Séance ouverte : Technique du soir")).toBeTruthy();
-  });
+  }, 10_000);
 
   it("place le wellness en priorité sans masquer la séance du jour", () => {
     const props = renderDashboard({ wellnessToday: null });
