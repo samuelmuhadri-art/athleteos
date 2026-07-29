@@ -173,7 +173,7 @@ function SessionCard({ session, athleteId, isPast = false, compact = false, onOp
 // ═══════════════════════════════════════════════════════════════════════════════
 export default function AthletePlanning({
   athlete, sessions, allAthletes, clubId, createdBy, coachUserId,
-  onRpeChange, onStatusChange, onFeelingChange, onCommentChange, onRefresh,
+  onRpeChange, onStatusChange, onFeelingChange, onCommentChange, onRsvpChange, onRefresh,
 }) {
   const today    = new Date();
   const isMobile = typeof window !== "undefined" && window.innerWidth < 768;
@@ -519,6 +519,7 @@ export default function AthletePlanning({
           onSetRpe={onRpeChange}
           onSetFeeling={onFeelingChange}
           onSetComment={onCommentChange}
+          onSetRsvp={onRsvpChange}
         />
       )}
       {showCreate && (

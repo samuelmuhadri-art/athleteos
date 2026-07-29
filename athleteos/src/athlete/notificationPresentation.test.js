@@ -16,6 +16,7 @@ describe("notification presentation", () => {
   it("associe chaque type à une destination et garde un fallback sûr", () => {
     expect(getNotificationPresentation("message")).toMatchObject({ destination: "messagerie", category: "messages" });
     expect(getNotificationPresentation("goal_achieved")).toMatchObject({ destination: "performances", celebration: true });
+    expect(getNotificationPresentation("session_day_reminder")).toMatchObject({ destination: "planning", category: "sport" });
     expect(getNotificationPresentation("type_inconnu")).toMatchObject({ destination: "dashboard", icon: "bell" });
   });
 

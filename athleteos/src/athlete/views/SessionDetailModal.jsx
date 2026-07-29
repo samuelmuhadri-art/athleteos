@@ -12,8 +12,9 @@ import { CATEGORIES } from "../shared";
 import { cat, StatusBadge, rpeColor } from "./planningShared";
 import { openSessionPdf } from "../../utils/storage";
 import { parseLocalDate } from "../../utils/helpers";
+import { RSVP_OPTIONS } from "../../domain/sessionDay";
 
-const SessionDetailModal = memo(({ session, athlete, allAthletes, onClose, onSetStatus, onSetRpe, onSetFeeling, onSetComment }) => {
+const SessionDetailModal = memo(({ session, athlete, allAthletes, onClose, onSetStatus, onSetRpe, onSetFeeling, onSetComment, onSetRsvp }) => {
   const c   = cat(session.category);
   const val = session.validations?.find(v => v.athleteId === athlete.id);
   const [comment, setComment] = useState(val?.comment ?? "");
@@ -42,6 +43,7 @@ const SessionDetailModal = memo(({ session, athlete, allAthletes, onClose, onSet
 
   const status  = val?.status ?? null;
   const hasPerf = status === "done" || status === "partial";
+  const canRespond = session.lifecycleStatus !== "completed" && session.sessionDate >= new Date().toISOString().slice(0, 10);
   const labelStyle = { fontSize: 12, fontWeight: 700, color: "var(--c-text-2)", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 12, display: "block" };
 
   const presenceOpts = [
@@ -180,8 +182,29 @@ const SessionDetailModal = memo(({ session, athlete, allAthletes, onClose, onSet
           </div>
 
           {/* ── Présence ── */}
+          {canRespond && onSetRsvp && (
+            <div className="rounded-2xl border p-4" style={{ borderColor: "rgba(91,141,239,0.25)", background: "rgba(91,141,239,0.07)" }}>
+              <label style={labelStyle}>Seras-tu présent ?</label>
+              <div className="grid gap-2">
+                {RSVP_OPTIONS.map(option => {
+                  const selected = val?.rsvpStatus === option.id;
+                  return (
+                    <button key={option.id} type="button" aria-pressed={selected}
+                      onClick={() => onSetRsvp(session.id, athlete.id, option.id)}
+                      className="min-h-11 rounded-xl border px-3 text-left text-[13px] font-semibold tap-feedback"
+                      style={{ color: selected ? "#A9CBFB" : "var(--c-text-2)", borderColor: selected ? "rgba(91,141,239,0.45)" : "var(--c-border)", background: selected ? "rgba(91,141,239,0.14)" : "var(--c-surface-2)" }}>
+                      {option.label}
+                    </button>
+                  );
+                })}
+              </div>
+              <p className="meta-text mt-2.5">Tu peux modifier ta réponse jusqu’au jour de la séance. Le coach confirmera ensuite la présence réelle.</p>
+            </div>
+          )}
+
+          {/* ── Réalisation de la séance ── */}
           <div>
-            <label style={labelStyle}>Ma présence</label>
+            <label style={labelStyle}>Après la séance</label>
             <div className="flex gap-2">
               {presenceOpts.map(opt => {
                 const sel = status === opt.id;

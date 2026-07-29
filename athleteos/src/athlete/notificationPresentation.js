@@ -26,6 +26,21 @@ const PRESENTATIONS = {
     soft: "rgba(29,158,117,0.13)", border: "rgba(77,201,160,0.24)",
     destination: "planning", actionLabel: "Voir la séance", category: "sport",
   },
+  session_updated: {
+    label: "Planning modifié", icon: "calendar", accent: "#69C5F7",
+    soft: "rgba(56,189,248,0.13)", border: "rgba(56,189,248,0.24)",
+    destination: "planning", actionLabel: "Voir les changements", category: "sport",
+  },
+  session_feedback_reminder: {
+    label: "Retour de séance", icon: "calendar", accent: "#F2C46D",
+    soft: "rgba(232,160,32,0.14)", border: "rgba(232,160,32,0.26)",
+    destination: "planning", actionLabel: "Compléter mon retour", category: "sport",
+  },
+  session_day_reminder: {
+    label: "Séance aujourd’hui", icon: "calendar", accent: "#7BD8B4",
+    soft: "rgba(29,158,117,0.13)", border: "rgba(77,201,160,0.24)",
+    destination: "planning", actionLabel: "Voir ma séance", category: "sport",
+  },
   result_added: {
     label: "Performance", icon: "trophy", accent: "#F2C46D",
     soft: "rgba(232,160,32,0.14)", border: "rgba(232,160,32,0.26)",

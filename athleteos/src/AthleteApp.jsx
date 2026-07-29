@@ -13,7 +13,7 @@ import { supabase }  from "./utils/supabaseClient";
 import { useAuth }   from "./context/AuthContext";
 import { usePushNotifications, PushToggleButton } from "./hooks/usePushNotifications";
 import { initialsFromName, toLocalDateStr, getISOWeek } from "./athlete/shared";
-import { notifyAthleteWeeklyRecap, notifyAthleteWeeklyReport } from "./utils/notifications";
+import { notifyAthleteWeeklyRecap, notifyAthleteWeeklyReport, notifyCoachSessionResponse } from "./utils/notifications";
 import { useUrlView } from "./hooks/useUrlView";
 
 import AthleteDashboard from "./athlete/views/AthleteDashboard";
@@ -146,11 +146,15 @@ export default function AthleteApp({ clubBrand, themeStyle }) {
           type:s.type, category:s.category, title:s.title, description:s.description,
           instructions:s.instructions, durationMinutes:s.duration_minutes, pdfUrl:s.pdf_url,
           createdBy:s.created_by,
+          lifecycleStatus:s.lifecycle_status ?? "planned", startedAt:s.started_at, closedAt:s.closed_at,
           athleteIds:rows.map(v=>v.athlete_id),
           validations:rows.map(v=>({
             athleteId:v.athlete_id,status:v.status,feeling:v.feeling,fatigue:v.fatigue,
             comment:v.comment,rpe:v.rpe,actualDurationMinutes:v.actual_duration_minutes,
             durationSource:v.duration_source,
+            attendanceStatus:v.attendance_status,attendanceMarkedAt:v.attendance_marked_at,
+            rsvpStatus:v.rsvp_status,rsvpUpdatedAt:v.rsvp_updated_at,
+            coachNote:v.coach_note,feedbackSubmittedAt:v.feedback_submitted_at,
           })),
         };
       }).filter(s=>s.athleteIds.includes(athleteId));
@@ -263,7 +267,7 @@ export default function AthleteApp({ clubBrand, themeStyle }) {
       ...v,rpe,actualDurationMinutes:duration,durationSource:"reported",
     }:v)}));
     await supabase.from("session_athletes").update({
-      rpe, actual_duration_minutes:duration, duration_source:"reported",
+      rpe, actual_duration_minutes:duration, duration_source:"reported", feedback_submitted_at:new Date().toISOString(),
     }).eq("session_id",sid).eq("athlete_id",aid);
   }, []);
   const confirmRestDay = useCallback(async (date = toLocalDateStr(new Date())) => {
@@ -301,6 +305,21 @@ export default function AthleteApp({ clubBrand, themeStyle }) {
     setSessions(p=>p.map(s=>s.id!==sid?s:{...s,validations:s.validations.map(v=>v.athleteId===aid?{...v,comment}:v)}));
     await supabase.from("session_athletes").update({comment}).eq("session_id",sid).eq("athlete_id",aid);
   }, []);
+  const handleRsvp = useCallback(async (sid, aid, rsvpStatus) => {
+    const updatedAt = new Date().toISOString();
+    setSessions(previous => previous.map(session => session.id !== sid ? session : {
+      ...session,
+      validations: session.validations.map(validation => validation.athleteId === aid
+        ? { ...validation, rsvpStatus, rsvpUpdatedAt: updatedAt }
+        : validation),
+    }));
+    const { error: responseError } = await supabase.from("session_athletes")
+      .update({ rsvp_status: rsvpStatus, rsvp_updated_at: updatedAt })
+      .eq("session_id", sid).eq("athlete_id", aid);
+    if (responseError) { await fetchAll(); throw responseError; }
+    const session = sessions.find(item => item.id === sid);
+    if (session) await notifyCoachSessionResponse(clubId, coachUserId, athlete, session, rsvpStatus);
+  }, [athlete, clubId, coachUserId, fetchAll, sessions]);
 
   // ── Guards ─────────────────────────────────────────────────────────────────
   if (loading) return (
@@ -510,7 +529,7 @@ export default function AthleteApp({ clubBrand, themeStyle }) {
                 onOpenInjuryReport={() => setShowInjuryReport(true)}
                 allAthletes={allAthletes}
                 onRpeChange={handleRpe} onStatusChange={handleStatus}
-                onFeelingChange={handleFeeling} onCommentChange={handleComment}
+                onFeelingChange={handleFeeling} onCommentChange={handleComment} onRsvpChange={handleRsvp}
               />
             )}
             {activeView === "planning" && (
@@ -518,7 +537,7 @@ export default function AthleteApp({ clubBrand, themeStyle }) {
                 athlete={athlete} sessions={sessions} allAthletes={allAthletes}
                 clubId={clubId} createdBy={profile?.id} coachUserId={coachUserId}
                 onRpeChange={handleRpe} onStatusChange={handleStatus}
-                onFeelingChange={handleFeeling} onCommentChange={handleComment}
+                onFeelingChange={handleFeeling} onCommentChange={handleComment} onRsvpChange={handleRsvp}
                 onRefresh={fetchAll}
               />
             )}

@@ -93,6 +93,7 @@ src/
       PerfsWidgets.jsx
       planningShared.jsx
       SessionDetailModal.jsx
+      SessionDetailModal.test.jsx
     AthleteDashboard.test.jsx
     dashboardFocus.js
     dashboardFocus.test.js
@@ -124,6 +125,9 @@ src/
     performance/
       PerformanceContextChips.jsx
       PerformanceMetadataFields.jsx
+    session/
+      CoachSessionDayPanel.jsx
+      CoachSessionDayPanel.test.jsx
     ui/
       premium/
         index.js
@@ -146,6 +150,8 @@ src/
     disciplines.test.js
     monitoringMetrics.js
     monitoringMetrics.test.js
+    sessionDay.js
+    sessionDay.test.js
     structuredPerformanceMigration.test.js
   hooks/
     PushToggleButton.test.jsx
@@ -221,6 +227,8 @@ supabase/
       index.ts
     send-push/
       index.ts
+    session-reminders/
+      index.ts
     signup/
       index.ts
     weekly-cron/
@@ -260,6 +268,7 @@ supabase/
     20260801080000_structured_performance_context.sql
     20260801090000_reliable_invites_and_branding_storage.sql
     20260801100000_individual_club_invitations.sql
+    20260801110000_session_day_and_notifications.sql
   .gitignore
   config.toml
   seed.sql
@@ -3581,7 +3590,7 @@ export default function AthleteDashboard({
   coachName, myPerformances, onNavigate, wellnessToday, onOpenWellness,
   confirmedRestDays = [], onConfirmRestDay,
   onOpenInjuryReport, allAthletes, onRpeChange, onStatusChange,
-  onFeelingChange, onCommentChange,
+  onFeelingChange, onCommentChange, onRsvpChange,
 }) {
   // Recalculé à chaque rendu pour rester juste après un changement de date.
   const today       = new Date();
@@ -4345,6 +4354,7 @@ export default function AthleteDashboard({
           onClose={() => setOpenTodaySessionId(null)}
           onSetStatus={onStatusChange} onSetRpe={onRpeChange}
           onSetFeeling={onFeelingChange} onSetComment={onCommentChange}
+          onSetRsvp={onRsvpChange}
         />
       )}
     </div>
@@ -6252,7 +6262,7 @@ function SessionCard({ session, athleteId, isPast = false, compact = false, onOp
 // ═══════════════════════════════════════════════════════════════════════════════
 export default function AthletePlanning({
   athlete, sessions, allAthletes, clubId, createdBy, coachUserId,
-  onRpeChange, onStatusChange, onFeelingChange, onCommentChange, onRefresh,
+  onRpeChange, onStatusChange, onFeelingChange, onCommentChange, onRsvpChange, onRefresh,
 }) {
   const today    = new Date();
   const isMobile = typeof window !== "undefined" && window.innerWidth < 768;
@@ -6598,6 +6608,7 @@ export default function AthletePlanning({
           onSetRpe={onRpeChange}
           onSetFeeling={onFeelingChange}
           onSetComment={onCommentChange}
+          onSetRsvp={onRsvpChange}
         />
       )}
       {showCreate && (
@@ -7558,8 +7569,9 @@ import { CATEGORIES } from "../shared";
 import { cat, StatusBadge, rpeColor } from "./planningShared";
 import { openSessionPdf } from "../../utils/storage";
 import { parseLocalDate } from "../../utils/helpers";
+import { RSVP_OPTIONS } from "../../domain/sessionDay";
 
-const SessionDetailModal = memo(({ session, athlete, allAthletes, onClose, onSetStatus, onSetRpe, onSetFeeling, onSetComment }) => {
+const SessionDetailModal = memo(({ session, athlete, allAthletes, onClose, onSetStatus, onSetRpe, onSetFeeling, onSetComment, onSetRsvp }) => {
   const c   = cat(session.category);
   const val = session.validations?.find(v => v.athleteId === athlete.id);
   const [comment, setComment] = useState(val?.comment ?? "");
@@ -7588,6 +7600,7 @@ const SessionDetailModal = memo(({ session, athlete, allAthletes, onClose, onSet
 
   const status  = val?.status ?? null;
   const hasPerf = status === "done" || status === "partial";
+  const canRespond = session.lifecycleStatus !== "completed" && session.sessionDate >= new Date().toISOString().slice(0, 10);
   const labelStyle = { fontSize: 12, fontWeight: 700, color: "var(--c-text-2)", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 12, display: "block" };
 
   const presenceOpts = [
@@ -7726,8 +7739,29 @@ const SessionDetailModal = memo(({ session, athlete, allAthletes, onClose, onSet
           </div>
 
           {/* ── Présence ── */}
+          {canRespond && onSetRsvp && (
+            <div className="rounded-2xl border p-4" style={{ borderColor: "rgba(91,141,239,0.25)", background: "rgba(91,141,239,0.07)" }}>
+              <label style={labelStyle}>Seras-tu présent ?</label>
+              <div className="grid gap-2">
+                {RSVP_OPTIONS.map(option => {
+                  const selected = val?.rsvpStatus === option.id;
+                  return (
+                    <button key={option.id} type="button" aria-pressed={selected}
+                      onClick={() => onSetRsvp(session.id, athlete.id, option.id)}
+                      className="min-h-11 rounded-xl border px-3 text-left text-[13px] font-semibold tap-feedback"
+                      style={{ color: selected ? "#A9CBFB" : "var(--c-text-2)", borderColor: selected ? "rgba(91,141,239,0.45)" : "var(--c-border)", background: selected ? "rgba(91,141,239,0.14)" : "var(--c-surface-2)" }}>
+                      {option.label}
+                    </button>
+                  );
+                })}
+              </div>
+              <p className="meta-text mt-2.5">Tu peux modifier ta réponse jusqu’au jour de la séance. Le coach confirmera ensuite la présence réelle.</p>
+            </div>
+          )}
+
+          {/* ── Réalisation de la séance ── */}
           <div>
-            <label style={labelStyle}>Ma présence</label>
+            <label style={labelStyle}>Après la séance</label>
             <div className="flex gap-2">
               {presenceOpts.map(opt => {
                 const sel = status === opt.id;
@@ -7865,6 +7899,34 @@ const SessionDetailModal = memo(({ session, athlete, allAthletes, onClose, onSet
 });
 
 export default SessionDetailModal;
+</file>
+
+<file path="src/athlete/views/SessionDetailModal.test.jsx">
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import SessionDetailModal from "./SessionDetailModal";
+
+afterEach(cleanup);
+
+describe("SessionDetailModal", () => {
+  it("sépare la réponse avant séance du retour après séance", () => {
+    const onSetRsvp = vi.fn();
+    const athlete = { id: 1, name: "Alice", avatar: "A" };
+    const session = {
+      id: 9, title: "Vitesse", category: "sprint", sessionDate: "2099-08-02", time: "18:00",
+      lifecycleStatus: "planned", durationMinutes: 60, athleteIds: [1],
+      validations: [{ athleteId: 1, status: null, rsvpStatus: null }],
+    };
+    render(<SessionDetailModal session={session} athlete={athlete} allAthletes={[athlete]}
+      onClose={vi.fn()} onSetStatus={vi.fn()} onSetRpe={vi.fn()} onSetFeeling={vi.fn()}
+      onSetComment={vi.fn()} onSetRsvp={onSetRsvp} />);
+
+    expect(screen.getByText("Seras-tu présent ?")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Je ne peux pas venir" }));
+    expect(onSetRsvp).toHaveBeenCalledWith(9, 1, "unavailable");
+    expect(screen.getByText("Après la séance")).toBeTruthy();
+  });
+});
 </file>
 
 <file path="src/athlete/AthleteDashboard.test.jsx">
@@ -8111,6 +8173,21 @@ const PRESENTATIONS = {
     soft: "rgba(29,158,117,0.13)", border: "rgba(77,201,160,0.24)",
     destination: "planning", actionLabel: "Voir la séance", category: "sport",
   },
+  session_updated: {
+    label: "Planning modifié", icon: "calendar", accent: "#69C5F7",
+    soft: "rgba(56,189,248,0.13)", border: "rgba(56,189,248,0.24)",
+    destination: "planning", actionLabel: "Voir les changements", category: "sport",
+  },
+  session_feedback_reminder: {
+    label: "Retour de séance", icon: "calendar", accent: "#F2C46D",
+    soft: "rgba(232,160,32,0.14)", border: "rgba(232,160,32,0.26)",
+    destination: "planning", actionLabel: "Compléter mon retour", category: "sport",
+  },
+  session_day_reminder: {
+    label: "Séance aujourd’hui", icon: "calendar", accent: "#7BD8B4",
+    soft: "rgba(29,158,117,0.13)", border: "rgba(77,201,160,0.24)",
+    destination: "planning", actionLabel: "Voir ma séance", category: "sport",
+  },
   result_added: {
     label: "Performance", icon: "trophy", accent: "#F2C46D",
     soft: "rgba(232,160,32,0.14)", border: "rgba(232,160,32,0.26)",
@@ -8195,6 +8272,7 @@ describe("notification presentation", () => {
   it("associe chaque type à une destination et garde un fallback sûr", () => {
     expect(getNotificationPresentation("message")).toMatchObject({ destination: "messagerie", category: "messages" });
     expect(getNotificationPresentation("goal_achieved")).toMatchObject({ destination: "performances", celebration: true });
+    expect(getNotificationPresentation("session_day_reminder")).toMatchObject({ destination: "planning", category: "sport" });
     expect(getNotificationPresentation("type_inconnu")).toMatchObject({ destination: "dashboard", icon: "bell" });
   });
 
@@ -10379,6 +10457,187 @@ export default function PerformanceMetadataFields({ discipline, metadata, setMet
     </details>
   );
 }
+</file>
+
+<file path="src/components/session/CoachSessionDayPanel.jsx">
+import { useMemo, useState } from "react";
+import { BellRing, CheckCircle2, CircleDot, ClipboardCheck, Play, RotateCcw, Users } from "lucide-react";
+import { ATTENDANCE_OPTIONS, getSessionDayMessage, getSessionDaySummary } from "../../domain/sessionDay";
+
+const TONES = {
+  success: { color: "#7BD8B4", background: "rgba(29,158,117,0.12)", border: "rgba(29,158,117,0.28)" },
+  warning: { color: "#F2C46D", background: "rgba(232,160,32,0.12)", border: "rgba(232,160,32,0.28)" },
+  danger: { color: "#F29B9A", background: "rgba(226,75,74,0.10)", border: "rgba(226,75,74,0.26)" },
+};
+
+export default function CoachSessionDayPanel({
+  session, athletes, onSetAttendance, onSetCoachNote, onSetLifecycle, onRemindFeedback,
+}) {
+  const summary = useMemo(() => getSessionDaySummary(session), [session]);
+  const [busy, setBusy] = useState(null);
+  const [feedback, setFeedback] = useState(null);
+  const lifecycle = session.lifecycleStatus ?? "planned";
+
+  const run = async (key, action, success) => {
+    if (busy) return;
+    setBusy(key); setFeedback(null);
+    try {
+      await action();
+      if (success) setFeedback({ type: "success", text: success });
+    } catch (error) {
+      setFeedback({ type: "error", text: error?.message || "La modification n’a pas pu être enregistrée." });
+    } finally { setBusy(null); }
+  };
+
+  const metrics = [
+    { label: "Convoqués", value: summary.total, Icon: Users },
+    { label: "Présents", value: summary.present + summary.late, Icon: ClipboardCheck },
+    { label: "Retours reçus", value: `${summary.feedbackComplete}/${summary.total}`, Icon: CheckCircle2 },
+    { label: "Charge totale", value: summary.totalLoad || "—", Icon: CircleDot },
+  ];
+
+  return (
+    <section className="rounded-2xl border overflow-hidden" style={{ borderColor: "rgba(77,201,160,0.25)", background: "linear-gradient(145deg, rgba(29,158,117,0.10), rgba(91,141,239,0.05))" }}>
+      <div className="p-4 border-b" style={{ borderColor: "var(--c-border)" }}>
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <p className="meta-text font-bold uppercase tracking-wide" style={{ color: "#7BD8B4" }}>Jour de séance</p>
+            <h3 className="mt-1 text-[15px] font-bold" style={{ color: "var(--c-text-1)" }}>
+              {lifecycle === "completed" ? "Séance clôturée" : lifecycle === "live" ? "Séance en cours" : "Prête à démarrer"}
+            </h3>
+            <p className="mt-1 text-[13px]" style={{ color: "var(--c-text-2)" }}>{getSessionDayMessage(summary)}</p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {lifecycle === "planned" && (
+              <button type="button" className="btn-secondary" disabled={!!busy}
+                onClick={() => run("start", () => onSetLifecycle(session.id, "live"), "Le suivi de séance est ouvert.")}>
+                <Play size={14} /> Démarrer
+              </button>
+            )}
+            {lifecycle === "live" && (
+              <button type="button" className="btn-primary" disabled={!!busy}
+                onClick={() => run("close", () => onSetLifecycle(session.id, "completed"), "Séance clôturée et rappels envoyés.")}>
+                <CheckCircle2 size={14} /> Clôturer
+              </button>
+            )}
+            {lifecycle === "completed" && (
+              <button type="button" className="btn-ghost" disabled={!!busy}
+                onClick={() => run("reopen", () => onSetLifecycle(session.id, "live"), "La séance est de nouveau ouverte.")}>
+                <RotateCcw size={14} /> Rouvrir
+              </button>
+            )}
+            {summary.feedbackMissing > 0 && (
+              <button type="button" className="btn-ghost" disabled={!!busy}
+                onClick={() => run("remind", () => onRemindFeedback(session), "Rappel envoyé aux athlètes concernés.")}>
+                <BellRing size={14} /> Rappeler ({summary.feedbackMissing})
+              </button>
+            )}
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-4">
+          {metrics.map(({ label, value, Icon }) => (
+            <div key={label} className="rounded-xl border p-3" style={{ borderColor: "var(--c-border)", background: "rgba(10,21,15,0.28)" }}>
+              <Icon size={14} style={{ color: "#7BD8B4" }} />
+              <p className="mt-2 text-[17px] font-bold" style={{ color: "var(--c-text-1)" }}>{value}</p>
+              <p className="meta-text mt-0.5">{label}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="p-4 space-y-3">
+        <div className="flex items-center justify-between gap-3">
+          <h4 className="text-[14px] font-bold" style={{ color: "var(--c-text-1)" }}>Présences réelles</h4>
+          {summary.pendingAttendance > 0 && <span className="chip-warning">{summary.pendingAttendance} à confirmer</span>}
+        </div>
+        {session.athleteIds.map((athleteId) => {
+          const athlete = athletes.find((item) => item.id === athleteId);
+          const validation = session.validations?.find((item) => item.athleteId === athleteId) ?? {};
+          return (
+            <div key={athleteId} className="rounded-xl border p-3" style={{ borderColor: "var(--c-border)", background: "var(--c-surface-2)" }}>
+              <div className="flex items-center gap-2 mb-2.5">
+                <div className="w-8 h-8 rounded-xl flex items-center justify-center text-[12px] font-bold" style={{ background: "var(--c-surface-3)", color: "var(--c-text-1)" }}>{athlete?.avatar ?? "?"}</div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-[13px] font-bold truncate" style={{ color: "var(--c-text-1)" }}>{athlete?.name ?? `Athlète #${athleteId}`}</p>
+                  {validation.rsvpStatus && <p className="meta-text">Réponse : {validation.rsvpStatus === "going" ? "présent prévu" : validation.rsvpStatus === "unavailable" ? "indisponible" : "incertain"}</p>}
+                </div>
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
+                {ATTENDANCE_OPTIONS.map((option) => {
+                  const selected = validation.attendanceStatus === option.id;
+                  const tone = TONES[option.tone];
+                  return <button key={option.id} type="button" aria-pressed={selected} disabled={!!busy}
+                    onClick={() => run(`attendance-${athleteId}`, () => onSetAttendance(session.id, athleteId, option.id))}
+                    className="min-h-10 rounded-xl border text-[12px] font-semibold tap-feedback"
+                    style={selected ? { color: tone.color, background: tone.background, borderColor: tone.border } : { color: "var(--c-text-2)", background: "transparent", borderColor: "var(--c-border)" }}>
+                    {option.label}
+                  </button>;
+                })}
+              </div>
+              <textarea defaultValue={validation.coachNote ?? ""} rows={1} maxLength={1000}
+                aria-label={`Observation coach pour ${athlete?.name ?? athleteId}`}
+                onBlur={(event) => {
+                  const note = event.target.value.trim();
+                  if (note !== (validation.coachNote ?? "")) run(`note-${athleteId}`, () => onSetCoachNote(session.id, athleteId, note));
+                }}
+                className="input-premium resize-none mt-2.5" placeholder="Observation coach facultative…" />
+            </div>
+          );
+        })}
+      </div>
+      {feedback && <p role={feedback.type === "error" ? "alert" : "status"} className="mx-4 mb-4 rounded-xl px-3 py-2 text-[13px]" style={{ color: feedback.type === "error" ? "#F29B9A" : "#7BD8B4", background: feedback.type === "error" ? "rgba(226,75,74,0.10)" : "rgba(29,158,117,0.10)" }}>{feedback.text}</p>}
+    </section>
+  );
+}
+</file>
+
+<file path="src/components/session/CoachSessionDayPanel.test.jsx">
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import CoachSessionDayPanel from "./CoachSessionDayPanel";
+
+const session = {
+  id: 12,
+  title: "Vitesse",
+  lifecycleStatus: "live",
+  athleteIds: [1, 2],
+  validations: [
+    { athleteId: 1, attendanceStatus: "present", status: "done", rpe: 8, actualDurationMinutes: 60, durationSource: "reported" },
+    { athleteId: 2, rsvpStatus: "unavailable" },
+  ],
+};
+const athletes = [
+  { id: 1, name: "Alice Martin", avatar: "AM" },
+  { id: 2, name: "Noah Dupont", avatar: "ND" },
+];
+
+afterEach(cleanup);
+
+describe("CoachSessionDayPanel", () => {
+  it("résume la séance et enregistre une présence réelle", async () => {
+    const onSetAttendance = vi.fn().mockResolvedValue(undefined);
+    render(<CoachSessionDayPanel session={session} athletes={athletes}
+      onSetAttendance={onSetAttendance} onSetCoachNote={vi.fn()} onSetLifecycle={vi.fn()} onRemindFeedback={vi.fn()} />);
+
+    expect(screen.getByText("Séance en cours")).toBeTruthy();
+    expect(screen.getByText("480")).toBeTruthy();
+    fireEvent.click(screen.getAllByRole("button", { name: "Absent" })[1]);
+    await waitFor(() => expect(onSetAttendance).toHaveBeenCalledWith(12, 2, "absent"));
+  });
+
+  it("clôture la séance et permet de rappeler les retours manquants", async () => {
+    const onSetLifecycle = vi.fn().mockResolvedValue(undefined);
+    const onRemindFeedback = vi.fn().mockResolvedValue(undefined);
+    render(<CoachSessionDayPanel session={session} athletes={athletes}
+      onSetAttendance={vi.fn()} onSetCoachNote={vi.fn()} onSetLifecycle={onSetLifecycle} onRemindFeedback={onRemindFeedback} />);
+
+    fireEvent.click(screen.getByRole("button", { name: /Clôturer/ }));
+    await waitFor(() => expect(onSetLifecycle).toHaveBeenCalledWith(12, "completed"));
+    fireEvent.click(screen.getByRole("button", { name: /Rappeler/ }));
+    await waitFor(() => expect(onRemindFeedback).toHaveBeenCalledWith(session));
+  });
+});
 </file>
 
 <file path="src/components/ui/premium/index.js">
@@ -14796,6 +15055,103 @@ describe("panneau de mesures descriptives", () => {
     const story = getAthleteLoadStory({ variationPercent: 5 }, sessions, 7, new Date("2026-07-29T12:00:00"));
     expect(story.headline).toBe("Ta charge est stable");
     expect(story.cause).toContain("deux dernières séances représentent");
+  });
+});
+</file>
+
+<file path="src/domain/sessionDay.js">
+export const ATTENDANCE_OPTIONS = Object.freeze([
+  { id: "present", label: "Présent", tone: "success" },
+  { id: "late", label: "En retard", tone: "warning" },
+  { id: "absent", label: "Absent", tone: "danger" },
+  { id: "injured", label: "Blessé", tone: "danger" },
+]);
+
+export const RSVP_OPTIONS = Object.freeze([
+  { id: "going", label: "Je serai présent" },
+  { id: "unsure", label: "Je ne sais pas encore" },
+  { id: "unavailable", label: "Je ne peux pas venir" },
+]);
+
+function inferredAttendance(validation) {
+  if (validation?.attendanceStatus) return validation.attendanceStatus;
+  if (validation?.status === "none") return "absent";
+  if (validation?.status === "done" || validation?.status === "partial") return "present";
+  return null;
+}
+
+export function hasCompleteSessionFeedback(validation) {
+  return (validation?.status === "done" || validation?.status === "partial")
+    && validation?.rpe != null
+    && validation?.durationSource === "reported"
+    && Number(validation?.actualDurationMinutes) > 0;
+}
+
+export function getSessionDaySummary(session) {
+  const validations = session?.validations ?? [];
+  const summary = {
+    total: session?.athleteIds?.length ?? validations.length,
+    present: 0, late: 0, absent: 0, injured: 0, pendingAttendance: 0,
+    feedbackComplete: 0, feedbackMissing: 0, difficult: 0,
+    totalLoad: 0, averageRpe: null,
+  };
+  const rpes = [];
+  validations.forEach((validation) => {
+    const attendance = inferredAttendance(validation);
+    if (attendance && Object.hasOwn(summary, attendance)) summary[attendance] += 1;
+    else summary.pendingAttendance += 1;
+    if (hasCompleteSessionFeedback(validation)) {
+      summary.feedbackComplete += 1;
+      rpes.push(Number(validation.rpe));
+      summary.totalLoad += Math.round(Number(validation.actualDurationMinutes) * Number(validation.rpe));
+      if (Number(validation.rpe) >= 8 || (validation.feeling != null && Number(validation.feeling) <= 2)) summary.difficult += 1;
+    } else if (attendance !== "absent" && attendance !== "injured") {
+      summary.feedbackMissing += 1;
+    }
+  });
+  summary.averageRpe = rpes.length ? Math.round((rpes.reduce((sum, value) => sum + value, 0) / rpes.length) * 10) / 10 : null;
+  return summary;
+}
+
+export function getSessionDayMessage(summary) {
+  if (!summary.total) return "Ajoute des athlètes pour préparer le suivi de cette séance.";
+  if (summary.pendingAttendance > 0) return `${summary.pendingAttendance} présence${summary.pendingAttendance > 1 ? "s" : ""} reste${summary.pendingAttendance > 1 ? "nt" : ""} à confirmer.`;
+  if (summary.feedbackMissing > 0) return `${summary.feedbackMissing} retour${summary.feedbackMissing > 1 ? "s" : ""} de séance manque${summary.feedbackMissing > 1 ? "nt" : ""} encore.`;
+  if (summary.difficult > 0) return `${summary.difficult} athlète${summary.difficult > 1 ? "s ont" : " a"} trouvé la séance nettement difficile.`;
+  return "Les présences et les retours de séance sont à jour.";
+}
+</file>
+
+<file path="src/domain/sessionDay.test.js">
+import { describe, expect, it } from "vitest";
+import { getSessionDayMessage, getSessionDaySummary, hasCompleteSessionFeedback } from "./sessionDay";
+
+describe("suivi du jour de séance", () => {
+  it("sépare présence réelle, retours manquants et charge session-RPE", () => {
+    const session = {
+      athleteIds: [1, 2, 3, 4],
+      validations: [
+        { athleteId: 1, attendanceStatus: "present", status: "done", rpe: 8, actualDurationMinutes: 60, durationSource: "reported", feeling: 2 },
+        { athleteId: 2, attendanceStatus: "late", status: "partial", rpe: 5, actualDurationMinutes: 40, durationSource: "reported", feeling: 4 },
+        { athleteId: 3, attendanceStatus: "absent", status: "none" },
+        { athleteId: 4 },
+      ],
+    };
+    expect(getSessionDaySummary(session)).toMatchObject({
+      total: 4, present: 1, late: 1, absent: 1, pendingAttendance: 1,
+      feedbackComplete: 2, feedbackMissing: 1, difficult: 1, totalLoad: 680, averageRpe: 6.5,
+    });
+  });
+
+  it("reste compatible avec les anciens statuts", () => {
+    expect(getSessionDaySummary({ athleteIds: [1, 2], validations: [{ status: "done" }, { status: "none" }] }))
+      .toMatchObject({ present: 1, absent: 1 });
+    expect(hasCompleteSessionFeedback({ status: "done", rpe: 6, actualDurationMinutes: 50, durationSource: "reported" })).toBe(true);
+  });
+
+  it("donne une lecture simple en priorité", () => {
+    expect(getSessionDayMessage({ total: 4, pendingAttendance: 2 })).toContain("2 présences");
+    expect(getSessionDayMessage({ total: 4, pendingAttendance: 0, feedbackMissing: 1 })).toContain("1 retour");
   });
 });
 </file>
@@ -22191,6 +22547,8 @@ import { initialsFromName } from "../utils/helpers.js";
 import {
   alertSessionAbsence,
   notifyAthleteNewSession,
+  notifyAthleteSessionUpdated,
+  notifyAthleteFeedbackReminder,
 } from "../utils/notifications";
 import {
   DAYS_FR, DAYS_SHORT, MONTHS_FR, CATEGORIES,
@@ -22256,6 +22614,9 @@ function Planning() {
           durationMinutes: s.duration_minutes,
           pdfUrl:          s.pdf_url,
           createdBy:       s.created_by,
+          lifecycleStatus: s.lifecycle_status ?? "planned",
+          startedAt:       s.started_at,
+          closedAt:        s.closed_at,
           createdByAthlete: s.created_by != null && !athletesRes.data.every(a => a.id !== s.created_by),
           athleteIds:  rows.map(v => v.athlete_id),
           validations: rows.map(v => ({
@@ -22264,6 +22625,12 @@ function Planning() {
             comment: v.comment, rpe: v.rpe,
             actualDurationMinutes: v.actual_duration_minutes,
             durationSource: v.duration_source,
+            attendanceStatus: v.attendance_status,
+            attendanceMarkedAt: v.attendance_marked_at,
+            rsvpStatus: v.rsvp_status,
+            rsvpUpdatedAt: v.rsvp_updated_at,
+            coachNote: v.coach_note,
+            feedbackSubmittedAt: v.feedback_submitted_at,
           })),
         };
       }));
@@ -22320,8 +22687,11 @@ function Planning() {
     const toRemove    = previousIds.filter(id => !form.athleteIds.includes(id));
     if (toAdd.length)    { const { error: e } = await supabase.from("session_athletes").insert(toAdd.map(id => ({ session_id: sessionId, athlete_id: id, status: null, feeling: null, fatigue: null, comment: null, rpe: null }))); if (e) throw e; }
     if (toRemove.length) { const { error: e } = await supabase.from("session_athletes").delete().eq("session_id", sessionId).in("athlete_id", toRemove); if (e) throw e; }
+    const retainedIds = form.athleteIds.filter(id => previousIds.includes(id));
+    if (retainedIds.length) await notifyAthleteSessionUpdated(clubId, retainedIds, { id: sessionId, title: form.title, sessionDate: form.sessionDate, time: form.time });
+    if (toAdd.length) await notifyAthleteNewSession(clubId, toAdd, { id: sessionId, title: form.title, sessionDate: form.sessionDate, day: form.day });
     await fetchAll();
-  }, [fetchAll, sessionList]);
+  }, [clubId, fetchAll, sessionList]);
 
   const deleteSession = useCallback(async (sessionId) => {
     const existing = sessionList.find(s => s.id === sessionId);
@@ -22364,6 +22734,58 @@ function Planning() {
       if (session && athlete) await alertSessionAbsence(clubId, athlete, session);
     }
   }, [fetchAll, sessionList, athletes, clubId]);
+
+  const setAttendance = useCallback(async (sessionId, athleteId, attendanceStatus) => {
+    const markedAt = new Date().toISOString();
+    setSessionList(previous => previous.map(session => session.id !== sessionId ? session : {
+      ...session,
+      validations: session.validations.map(validation => validation.athleteId === athleteId
+        ? { ...validation, attendanceStatus, attendanceMarkedAt: markedAt }
+        : validation),
+    }));
+    const updates = { attendance_status: attendanceStatus, attendance_marked_at: markedAt };
+    if (attendanceStatus === "absent" || attendanceStatus === "injured") updates.status = "none";
+    const { error: updateError } = await supabase.from("session_athletes").update(updates)
+      .eq("session_id", sessionId).eq("athlete_id", athleteId);
+    if (updateError) { await fetchAll(); throw updateError; }
+    if (attendanceStatus === "absent") {
+      const session = sessionList.find(item => item.id === sessionId);
+      const athlete = athletes.find(item => item.id === athleteId);
+      if (session && athlete) await alertSessionAbsence(clubId, athlete, session);
+    }
+  }, [athletes, clubId, fetchAll, sessionList]);
+
+  const setCoachNote = useCallback(async (sessionId, athleteId, coachNote) => {
+    const { error: updateError } = await supabase.from("session_athletes").update({ coach_note: coachNote || null })
+      .eq("session_id", sessionId).eq("athlete_id", athleteId);
+    if (updateError) throw updateError;
+    setSessionList(previous => previous.map(session => session.id !== sessionId ? session : {
+      ...session,
+      validations: session.validations.map(validation => validation.athleteId === athleteId ? { ...validation, coachNote } : validation),
+    }));
+  }, []);
+
+  const remindFeedback = useCallback(async (session) => {
+    const targetIds = session.validations.filter(validation => (
+      validation.attendanceStatus !== "absent" && validation.attendanceStatus !== "injured"
+      && (validation.rpe == null || validation.durationSource !== "reported")
+    )).map(validation => validation.athleteId);
+    await notifyAthleteFeedbackReminder(clubId, targetIds, session);
+  }, [clubId]);
+
+  const setLifecycle = useCallback(async (sessionId, lifecycleStatus) => {
+    const now = new Date().toISOString();
+    const updates = { lifecycle_status: lifecycleStatus };
+    if (lifecycleStatus === "live") { updates.started_at = now; updates.closed_at = null; }
+    if (lifecycleStatus === "completed") updates.closed_at = now;
+    const { error: updateError } = await supabase.from("sessions").update(updates).eq("id", sessionId);
+    if (updateError) throw updateError;
+    const current = sessionList.find(session => session.id === sessionId);
+    setSessionList(previous => previous.map(session => session.id === sessionId ? {
+      ...session, lifecycleStatus, startedAt: updates.started_at ?? session.startedAt, closedAt: updates.closed_at ?? null,
+    } : session));
+    if (lifecycleStatus === "completed" && current) await remindFeedback(current);
+  }, [remindFeedback, sessionList]);
 
   // ═══ Dérivés calendrier ═══════════════════════════════════════════════════
 
@@ -22970,6 +23392,10 @@ function Planning() {
           onSetStatus={setStatus}
           onEditRequest={s => { setSessionModalTarget(s); setActiveSession(null); }}
           onDeleteSession={deleteSession}
+          onSetAttendance={setAttendance}
+          onSetCoachNote={setCoachNote}
+          onSetLifecycle={setLifecycle}
+          onRemindFeedback={remindFeedback}
         />
       )}
 
@@ -23605,8 +24031,12 @@ import { memo, useState } from "react";
 import { X, Users, FileText, AlertCircle, Star, Zap } from "lucide-react";
 import { CATEGORIES, colors, sessionStatus, ValidationBadge, StatusIcon } from "./planningShared";
 import { openSessionPdf } from "../utils/storage";
+import CoachSessionDayPanel from "../components/session/CoachSessionDayPanel";
 
-const SessionModal = memo(({ session, athletes, onClose, onSetRpe, onSetStatus, onEditRequest, onDeleteSession }) => {
+const SessionModal = memo(({
+  session, athletes, onClose, onSetRpe, onSetStatus, onEditRequest, onDeleteSession,
+  onSetAttendance, onSetCoachNote, onSetLifecycle, onRemindFeedback,
+}) => {
   const [deleting,    setDeleting]    = useState(false);
   const [deleteError, setDeleteError] = useState(null);
   const [confirmDel,  setConfirmDel]  = useState(false);
@@ -23706,6 +24136,15 @@ const SessionModal = memo(({ session, athletes, onClose, onSetRpe, onSetStatus, 
         </div>
 
         <div className="flex-1 overflow-y-auto px-6 py-5 space-y-5">
+
+          <CoachSessionDayPanel
+            session={session}
+            athletes={athletes}
+            onSetAttendance={onSetAttendance}
+            onSetCoachNote={onSetCoachNote}
+            onSetLifecycle={onSetLifecycle}
+            onRemindFeedback={onRemindFeedback}
+          />
 
           {/* Feedback rapide */}
           {pendingFeedback.length > 0 && (
@@ -27633,6 +28072,55 @@ export async function notifyAthleteNewSession(clubId, athleteIds, session) {
   await sendWebPush(athleteIds, { title, body: description, url: "/", tag: `session-${session.title}` });
 }
 
+export async function notifyAthleteSessionUpdated(clubId, athleteIds, session) {
+  if (!athleteIds?.length) return;
+  const dateStr = session.sessionDate
+    ? new Date(`${String(session.sessionDate).slice(0, 10)}T00:00:00`).toLocaleDateString("fr-BE", { weekday:"long", day:"numeric", month:"long" })
+    : "prochainement";
+  const title = `Séance modifiée — ${session.title}`;
+  const description = `Le coach a mis à jour cette séance prévue ${dateStr}${session.time ? ` à ${String(session.time).slice(0, 5)}` : ""}.`;
+  const recent = new Date(Date.now() - 2 * 60_000).toISOString();
+  const { data: existing } = await supabase.from("athlete_notifications").select("athlete_id")
+    .eq("club_id", clubId).eq("type", "session_updated").eq("title", title)
+    .in("athlete_id", athleteIds).gte("created_at", recent);
+  const alreadyNotified = new Set((existing ?? []).map(row => row.athlete_id));
+  const targets = athleteIds.filter(id => !alreadyNotified.has(id));
+  if (!targets.length) return;
+  await supabase.from("athlete_notifications").insert(targets.map(athleteId => ({
+    athlete_id: athleteId, club_id: clubId, type: "session_updated", title, description, is_read: false,
+  })));
+  await sendWebPush(targets, { title, body: description, url: "/planning", tag: `session-update-${session.id ?? session.title}` });
+}
+
+export async function notifyAthleteFeedbackReminder(clubId, athleteIds, session) {
+  if (!athleteIds?.length) return;
+  const title = `Ton retour manque — ${session.title}`;
+  const description = "Indique ta présence, la durée réellement effectuée et ton effort ressenti. Cela prend moins d’une minute.";
+  const recent = new Date(Date.now() - 12 * 60 * 60_000).toISOString();
+  const { data: existing } = await supabase.from("athlete_notifications").select("athlete_id")
+    .eq("club_id", clubId).eq("type", "session_feedback_reminder").eq("title", title)
+    .in("athlete_id", athleteIds).gte("created_at", recent);
+  const alreadyNotified = new Set((existing ?? []).map(row => row.athlete_id));
+  const targets = athleteIds.filter(id => !alreadyNotified.has(id));
+  if (!targets.length) return;
+  await supabase.from("athlete_notifications").insert(targets.map(athleteId => ({
+    athlete_id: athleteId, club_id: clubId, type: "session_feedback_reminder", title, description, is_read: false,
+  })));
+  await sendWebPush(targets, { title, body: description, url: "/planning", tag: `session-feedback-${session.id ?? session.title}` });
+}
+
+export async function notifyCoachSessionResponse(clubId, coachUserId, athlete, session, response) {
+  if (!coachUserId || response === "going") return;
+  const responseLabel = response === "unavailable" ? "ne pourra pas participer" : "n’est pas encore certain de participer";
+  const title = `Réponse séance — ${athlete.name}`;
+  const description = `${athlete.name} ${responseLabel} à « ${session.title} ».`;
+  await supabase.from("alerts").insert({
+    club_id: clubId, athlete_id: athlete.id, type: "session_response", title, description,
+    severity: response === "unavailable" ? "modérée" : "info", is_read: false,
+  });
+  await sendWebPush([], { title, body: description, url: "/planning", tag: `session-response-${session.id}` }, [coachUserId]);
+}
+
 export async function notifyAthleteResult(clubId, athleteId, discipline, result, compName) {
   const title       = `🏆 Résultat saisi — ${discipline}`;
   const description = `Ton résultat en ${discipline} lors de "${compName}" : ${result}.`;
@@ -29361,7 +29849,7 @@ import { supabase }  from "./utils/supabaseClient";
 import { useAuth }   from "./context/AuthContext";
 import { usePushNotifications, PushToggleButton } from "./hooks/usePushNotifications";
 import { initialsFromName, toLocalDateStr, getISOWeek } from "./athlete/shared";
-import { notifyAthleteWeeklyRecap, notifyAthleteWeeklyReport } from "./utils/notifications";
+import { notifyAthleteWeeklyRecap, notifyAthleteWeeklyReport, notifyCoachSessionResponse } from "./utils/notifications";
 import { useUrlView } from "./hooks/useUrlView";
 
 import AthleteDashboard from "./athlete/views/AthleteDashboard";
@@ -29494,11 +29982,15 @@ export default function AthleteApp({ clubBrand, themeStyle }) {
           type:s.type, category:s.category, title:s.title, description:s.description,
           instructions:s.instructions, durationMinutes:s.duration_minutes, pdfUrl:s.pdf_url,
           createdBy:s.created_by,
+          lifecycleStatus:s.lifecycle_status ?? "planned", startedAt:s.started_at, closedAt:s.closed_at,
           athleteIds:rows.map(v=>v.athlete_id),
           validations:rows.map(v=>({
             athleteId:v.athlete_id,status:v.status,feeling:v.feeling,fatigue:v.fatigue,
             comment:v.comment,rpe:v.rpe,actualDurationMinutes:v.actual_duration_minutes,
             durationSource:v.duration_source,
+            attendanceStatus:v.attendance_status,attendanceMarkedAt:v.attendance_marked_at,
+            rsvpStatus:v.rsvp_status,rsvpUpdatedAt:v.rsvp_updated_at,
+            coachNote:v.coach_note,feedbackSubmittedAt:v.feedback_submitted_at,
           })),
         };
       }).filter(s=>s.athleteIds.includes(athleteId));
@@ -29611,7 +30103,7 @@ export default function AthleteApp({ clubBrand, themeStyle }) {
       ...v,rpe,actualDurationMinutes:duration,durationSource:"reported",
     }:v)}));
     await supabase.from("session_athletes").update({
-      rpe, actual_duration_minutes:duration, duration_source:"reported",
+      rpe, actual_duration_minutes:duration, duration_source:"reported", feedback_submitted_at:new Date().toISOString(),
     }).eq("session_id",sid).eq("athlete_id",aid);
   }, []);
   const confirmRestDay = useCallback(async (date = toLocalDateStr(new Date())) => {
@@ -29649,6 +30141,21 @@ export default function AthleteApp({ clubBrand, themeStyle }) {
     setSessions(p=>p.map(s=>s.id!==sid?s:{...s,validations:s.validations.map(v=>v.athleteId===aid?{...v,comment}:v)}));
     await supabase.from("session_athletes").update({comment}).eq("session_id",sid).eq("athlete_id",aid);
   }, []);
+  const handleRsvp = useCallback(async (sid, aid, rsvpStatus) => {
+    const updatedAt = new Date().toISOString();
+    setSessions(previous => previous.map(session => session.id !== sid ? session : {
+      ...session,
+      validations: session.validations.map(validation => validation.athleteId === aid
+        ? { ...validation, rsvpStatus, rsvpUpdatedAt: updatedAt }
+        : validation),
+    }));
+    const { error: responseError } = await supabase.from("session_athletes")
+      .update({ rsvp_status: rsvpStatus, rsvp_updated_at: updatedAt })
+      .eq("session_id", sid).eq("athlete_id", aid);
+    if (responseError) { await fetchAll(); throw responseError; }
+    const session = sessions.find(item => item.id === sid);
+    if (session) await notifyCoachSessionResponse(clubId, coachUserId, athlete, session, rsvpStatus);
+  }, [athlete, clubId, coachUserId, fetchAll, sessions]);
 
   // ── Guards ─────────────────────────────────────────────────────────────────
   if (loading) return (
@@ -29858,7 +30365,7 @@ export default function AthleteApp({ clubBrand, themeStyle }) {
                 onOpenInjuryReport={() => setShowInjuryReport(true)}
                 allAthletes={allAthletes}
                 onRpeChange={handleRpe} onStatusChange={handleStatus}
-                onFeelingChange={handleFeeling} onCommentChange={handleComment}
+                onFeelingChange={handleFeeling} onCommentChange={handleComment} onRsvpChange={handleRsvp}
               />
             )}
             {activeView === "planning" && (
@@ -29866,7 +30373,7 @@ export default function AthleteApp({ clubBrand, themeStyle }) {
                 athlete={athlete} sessions={sessions} allAthletes={allAthletes}
                 clubId={clubId} createdBy={profile?.id} coachUserId={coachUserId}
                 onRpeChange={handleRpe} onStatusChange={handleStatus}
-                onFeelingChange={handleFeeling} onCommentChange={handleComment}
+                onFeelingChange={handleFeeling} onCommentChange={handleComment} onRsvpChange={handleRsvp}
                 onRefresh={fetchAll}
               />
             )}
@@ -31966,6 +32473,66 @@ serve(async (req) => {
     console.error("send-push error:", err instanceof Error ? err.message : err);
     return json(500, origin, { error: "Erreur serveur." });
   }
+});
+</file>
+
+<file path="supabase/functions/session-reminders/index.ts">
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+
+function localDateInBelgium(now = new Date()): string {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Europe/Brussels", year: "numeric", month: "2-digit", day: "2-digit",
+  }).format(now);
+}
+
+serve(async (req) => {
+  const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+  const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+  if ((req.headers.get("Authorization") ?? "") !== `Bearer ${serviceKey}`) {
+    return new Response(JSON.stringify({ error: "unauthorized" }), { status: 401 });
+  }
+  let dryRun = false;
+  try { dryRun = !!(await req.json())?.dry_run; } catch { /* corps facultatif */ }
+
+  const admin = createClient(supabaseUrl, serviceKey);
+  const today = localDateInBelgium();
+  const log: string[] = [];
+  const { data: sessions, error } = await admin.from("sessions")
+    .select("id, club_id, title, time, lifecycle_status, session_athletes(athlete_id)")
+    .eq("session_date", today)
+    .in("lifecycle_status", ["planned", "live"]);
+  if (error) return new Response(JSON.stringify({ error: error.message }), { status: 500 });
+
+  for (const session of sessions ?? []) {
+    const athleteIds = (session.session_athletes ?? []).map((row: { athlete_id: number }) => row.athlete_id);
+    if (!athleteIds.length) continue;
+    const { data: existing } = await admin.from("athlete_notifications").select("athlete_id")
+      .eq("session_id", session.id).eq("type", "session_day_reminder").in("athlete_id", athleteIds);
+    const sent = new Set((existing ?? []).map((row: { athlete_id: number }) => row.athlete_id));
+    const targets = athleteIds.filter((id: number) => !sent.has(id));
+    if (!targets.length) continue;
+    const time = session.time ? String(session.time).slice(0, 5) : null;
+    const title = `Séance aujourd’hui — ${session.title}`;
+    const description = time ? `Ta séance commence à ${time}. Pense à confirmer ta présence.` : "Ta séance est prévue aujourd’hui. Pense à confirmer ta présence.";
+    log.push(`session=${session.id} athletes=[${targets}]`);
+    if (dryRun) continue;
+    const { error: insertError } = await admin.from("athlete_notifications").insert(targets.map((athleteId: number) => ({
+      athlete_id: athleteId, club_id: session.club_id, session_id: session.id,
+      type: "session_day_reminder", title, description, is_read: false,
+    })));
+    if (insertError) { log.push(`insert-error=${insertError.message}`); continue; }
+    const pushResponse = await fetch(`${supabaseUrl}/functions/v1/send-push`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${serviceKey}` },
+      body: JSON.stringify({ athleteIds: targets, userIds: [], title, body: description, url: "/planning", tag: `session-day-${session.id}` }),
+    });
+    if (!pushResponse.ok) log.push(`push-error=${pushResponse.status}`);
+  }
+
+  return new Response(JSON.stringify({ ok: true, dryRun, date: today, log }, null, 2), {
+    headers: { "Content-Type": "application/json" },
+  });
 });
 </file>
 
@@ -36527,6 +37094,200 @@ $$;
 
 REVOKE ALL ON FUNCTION public.inspect_club_invitation(text) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION public.inspect_club_invitation(text) TO anon, authenticated;
+
+COMMIT;
+</file>
+
+<file path="supabase/migrations/20260801110000_session_day_and_notifications.sql">
+BEGIN;
+
+ALTER TABLE public.sessions
+  ADD COLUMN IF NOT EXISTS lifecycle_status text NOT NULL DEFAULT 'planned',
+  ADD COLUMN IF NOT EXISTS started_at timestamptz,
+  ADD COLUMN IF NOT EXISTS closed_at timestamptz,
+  ADD COLUMN IF NOT EXISTS closed_by integer REFERENCES public.users(id) ON DELETE SET NULL;
+
+ALTER TABLE public.session_athletes
+  ADD COLUMN IF NOT EXISTS attendance_status text,
+  ADD COLUMN IF NOT EXISTS attendance_marked_at timestamptz,
+  ADD COLUMN IF NOT EXISTS rsvp_status text,
+  ADD COLUMN IF NOT EXISTS rsvp_updated_at timestamptz,
+  ADD COLUMN IF NOT EXISTS coach_note text,
+  ADD COLUMN IF NOT EXISTS feedback_submitted_at timestamptz;
+
+ALTER TABLE public.athlete_notifications
+  ADD COLUMN IF NOT EXISTS session_id integer REFERENCES public.sessions(id) ON DELETE CASCADE;
+
+DO $$ BEGIN
+  ALTER TABLE public.sessions ADD CONSTRAINT sessions_lifecycle_status_check
+    CHECK (lifecycle_status IN ('planned','live','completed'));
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN
+  ALTER TABLE public.session_athletes ADD CONSTRAINT session_athletes_attendance_status_check
+    CHECK (attendance_status IS NULL OR attendance_status IN ('present','late','absent','injured'));
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN
+  ALTER TABLE public.session_athletes ADD CONSTRAINT session_athletes_rsvp_status_check
+    CHECK (rsvp_status IS NULL OR rsvp_status IN ('going','unsure','unavailable'));
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN
+  ALTER TABLE public.session_athletes ADD CONSTRAINT session_athletes_coach_note_length_check
+    CHECK (coach_note IS NULL OR char_length(coach_note) <= 1000);
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+UPDATE public.session_athletes
+SET attendance_status = CASE
+  WHEN status = 'none' THEN 'absent'
+  WHEN status IN ('done','partial') THEN 'present'
+  ELSE NULL
+END
+WHERE attendance_status IS NULL AND status IS NOT NULL;
+
+CREATE INDEX IF NOT EXISTS sessions_club_lifecycle_date_idx
+  ON public.sessions (club_id, lifecycle_status, session_date);
+CREATE INDEX IF NOT EXISTS session_athletes_pending_feedback_idx
+  ON public.session_athletes (session_id, athlete_id)
+  WHERE rpe IS NULL AND status IN ('done','partial');
+CREATE INDEX IF NOT EXISTS athlete_notifications_session_idx
+  ON public.athlete_notifications (session_id, athlete_id, type)
+  WHERE session_id IS NOT NULL;
+
+CREATE OR REPLACE FUNCTION public.protect_session_day_coach_fields()
+RETURNS trigger
+LANGUAGE plpgsql
+SET search_path TO 'public'
+AS $$
+BEGIN
+  IF auth.role() = 'authenticated' AND public.get_my_role() = 'athlete' THEN
+    IF NEW.session_id IS DISTINCT FROM OLD.session_id
+      OR NEW.athlete_id IS DISTINCT FROM OLD.athlete_id
+      OR NEW.attendance_status IS DISTINCT FROM OLD.attendance_status
+      OR NEW.attendance_marked_at IS DISTINCT FROM OLD.attendance_marked_at
+      OR NEW.coach_note IS DISTINCT FROM OLD.coach_note THEN
+      RAISE EXCEPTION 'Les présences réelles et observations sont réservées au staff.';
+    END IF;
+  END IF;
+  IF NEW.rpe IS NOT NULL
+    AND NEW.actual_duration_minutes IS NOT NULL
+    AND NEW.duration_source = 'reported'
+    AND (OLD.rpe IS DISTINCT FROM NEW.rpe OR OLD.actual_duration_minutes IS DISTINCT FROM NEW.actual_duration_minutes) THEN
+    NEW.feedback_submitted_at := now();
+  END IF;
+  RETURN NEW;
+END;
+$$;
+DROP TRIGGER IF EXISTS session_day_protect_coach_fields ON public.session_athletes;
+CREATE TRIGGER session_day_protect_coach_fields
+  BEFORE UPDATE ON public.session_athletes
+  FOR EACH ROW EXECUTE FUNCTION public.protect_session_day_coach_fields();
+
+CREATE OR REPLACE FUNCTION public.protect_session_lifecycle_fields()
+RETURNS trigger
+LANGUAGE plpgsql
+SET search_path TO 'public'
+AS $$
+BEGIN
+  IF auth.role() = 'authenticated' AND public.get_my_role() = 'athlete'
+    AND (NEW.lifecycle_status IS DISTINCT FROM OLD.lifecycle_status
+      OR NEW.started_at IS DISTINCT FROM OLD.started_at
+      OR NEW.closed_at IS DISTINCT FROM OLD.closed_at
+      OR NEW.closed_by IS DISTINCT FROM OLD.closed_by) THEN
+    RAISE EXCEPTION 'Le démarrage et la clôture sont réservés au staff.';
+  END IF;
+  RETURN NEW;
+END;
+$$;
+DROP TRIGGER IF EXISTS session_day_protect_lifecycle ON public.sessions;
+CREATE TRIGGER session_day_protect_lifecycle
+  BEFORE UPDATE ON public.sessions
+  FOR EACH ROW EXECUTE FUNCTION public.protect_session_lifecycle_fields();
+
+DROP POLICY IF EXISTS "sessions_club" ON public.sessions;
+DROP POLICY IF EXISTS "sessions_club_read" ON public.sessions;
+DROP POLICY IF EXISTS "sessions_coach_manage" ON public.sessions;
+DROP POLICY IF EXISTS "sessions_athlete_create" ON public.sessions;
+DROP POLICY IF EXISTS "sessions_athlete_update_own" ON public.sessions;
+DROP POLICY IF EXISTS "sessions_athlete_delete_own" ON public.sessions;
+CREATE POLICY "sessions_club_read" ON public.sessions
+  FOR SELECT TO authenticated USING (club_id = public.get_my_club_id());
+CREATE POLICY "sessions_coach_manage" ON public.sessions
+  FOR ALL TO authenticated
+  USING (club_id = public.get_my_club_id() AND public.get_my_role() IN ('head_coach','coach'))
+  WITH CHECK (club_id = public.get_my_club_id() AND public.get_my_role() IN ('head_coach','coach'));
+CREATE POLICY "sessions_athlete_create" ON public.sessions
+  FOR INSERT TO authenticated
+  WITH CHECK (club_id = public.get_my_club_id() AND created_by = public.get_my_user_id() AND public.get_my_role() = 'athlete');
+CREATE POLICY "sessions_athlete_update_own" ON public.sessions
+  FOR UPDATE TO authenticated
+  USING (club_id = public.get_my_club_id() AND created_by = public.get_my_user_id() AND public.get_my_role() = 'athlete')
+  WITH CHECK (club_id = public.get_my_club_id() AND created_by = public.get_my_user_id() AND public.get_my_role() = 'athlete');
+CREATE POLICY "sessions_athlete_delete_own" ON public.sessions
+  FOR DELETE TO authenticated
+  USING (club_id = public.get_my_club_id() AND created_by = public.get_my_user_id() AND public.get_my_role() = 'athlete');
+
+-- Les anciennes policies donnaient à tout membre du club le droit de modifier
+-- les réponses des autres athlètes. On conserve toutes les fonctions légitimes
+-- en séparant lecture, gestion coach et réponse personnelle.
+DROP POLICY IF EXISTS "session_athletes_club" ON public.session_athletes;
+DROP POLICY IF EXISTS "session_athletes_club_read" ON public.session_athletes;
+DROP POLICY IF EXISTS "session_athletes_coach_manage" ON public.session_athletes;
+DROP POLICY IF EXISTS "session_athletes_athlete_respond" ON public.session_athletes;
+DROP POLICY IF EXISTS "session_athletes_athlete_link_created_session" ON public.session_athletes;
+CREATE POLICY "session_athletes_club_read" ON public.session_athletes
+  FOR SELECT TO authenticated
+  USING (EXISTS (
+    SELECT 1 FROM public.sessions s
+    WHERE s.id = session_athletes.session_id AND s.club_id = public.get_my_club_id()
+  ));
+CREATE POLICY "session_athletes_coach_manage" ON public.session_athletes
+  FOR ALL TO authenticated
+  USING (
+    public.get_my_role() IN ('head_coach','coach')
+    AND EXISTS (SELECT 1 FROM public.sessions s WHERE s.id = session_athletes.session_id AND s.club_id = public.get_my_club_id())
+  )
+  WITH CHECK (
+    public.get_my_role() IN ('head_coach','coach')
+    AND EXISTS (SELECT 1 FROM public.sessions s WHERE s.id = session_athletes.session_id AND s.club_id = public.get_my_club_id())
+  );
+CREATE POLICY "session_athletes_athlete_respond" ON public.session_athletes
+  FOR UPDATE TO authenticated
+  USING (athlete_id = public.get_my_athlete_id())
+  WITH CHECK (athlete_id = public.get_my_athlete_id());
+CREATE POLICY "session_athletes_athlete_link_created_session" ON public.session_athletes
+  FOR INSERT TO authenticated
+  WITH CHECK (
+    public.get_my_role() = 'athlete'
+    AND EXISTS (
+      SELECT 1 FROM public.sessions s
+      JOIN public.athletes a ON a.id = session_athletes.athlete_id
+      WHERE s.id = session_athletes.session_id
+        AND s.created_by = public.get_my_user_id()
+        AND s.club_id = public.get_my_club_id()
+        AND a.club_id = s.club_id
+    )
+  );
+
+CREATE EXTENSION IF NOT EXISTS pg_cron;
+CREATE EXTENSION IF NOT EXISTS pg_net;
+SELECT cron.unschedule('daily-session-reminders')
+WHERE EXISTS (SELECT 1 FROM cron.job WHERE jobname = 'daily-session-reminders');
+SELECT cron.schedule(
+  'daily-session-reminders',
+  '30 5 * * *',
+  $job$
+  SELECT net.http_post(
+    url := 'https://kuqafsmkwajeipzolbky.supabase.co/functions/v1/session-reminders',
+    headers := jsonb_build_object(
+      'Content-Type', 'application/json',
+      'Authorization', 'Bearer ' || (
+        SELECT decrypted_secret FROM vault.decrypted_secrets
+        WHERE name = 'weekly_cron_service_role_key'
+      )
+    ),
+    body := '{}'::jsonb
+  );
+  $job$
+);
 
 COMMIT;
 </file>

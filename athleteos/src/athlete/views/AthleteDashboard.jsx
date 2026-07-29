@@ -331,7 +331,7 @@ export default function AthleteDashboard({
   coachName, myPerformances, onNavigate, wellnessToday, onOpenWellness,
   confirmedRestDays = [], onConfirmRestDay,
   onOpenInjuryReport, allAthletes, onRpeChange, onStatusChange,
-  onFeelingChange, onCommentChange,
+  onFeelingChange, onCommentChange, onRsvpChange,
 }) {
   // Recalculé à chaque rendu pour rester juste après un changement de date.
   const today       = new Date();
@@ -1095,6 +1095,7 @@ export default function AthleteDashboard({
           onClose={() => setOpenTodaySessionId(null)}
           onSetStatus={onStatusChange} onSetRpe={onRpeChange}
           onSetFeeling={onFeelingChange} onSetComment={onCommentChange}
+          onSetRsvp={onRsvpChange}
         />
       )}
     </div>

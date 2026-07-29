@@ -20,6 +20,8 @@ import { initialsFromName } from "../utils/helpers.js";
 import {
   alertSessionAbsence,
   notifyAthleteNewSession,
+  notifyAthleteSessionUpdated,
+  notifyAthleteFeedbackReminder,
 } from "../utils/notifications";
 import {
   DAYS_FR, DAYS_SHORT, MONTHS_FR, CATEGORIES,
@@ -85,6 +87,9 @@ function Planning() {
           durationMinutes: s.duration_minutes,
           pdfUrl:          s.pdf_url,
           createdBy:       s.created_by,
+          lifecycleStatus: s.lifecycle_status ?? "planned",
+          startedAt:       s.started_at,
+          closedAt:        s.closed_at,
           createdByAthlete: s.created_by != null && !athletesRes.data.every(a => a.id !== s.created_by),
           athleteIds:  rows.map(v => v.athlete_id),
           validations: rows.map(v => ({
@@ -93,6 +98,12 @@ function Planning() {
             comment: v.comment, rpe: v.rpe,
             actualDurationMinutes: v.actual_duration_minutes,
             durationSource: v.duration_source,
+            attendanceStatus: v.attendance_status,
+            attendanceMarkedAt: v.attendance_marked_at,
+            rsvpStatus: v.rsvp_status,
+            rsvpUpdatedAt: v.rsvp_updated_at,
+            coachNote: v.coach_note,
+            feedbackSubmittedAt: v.feedback_submitted_at,
           })),
         };
       }));
@@ -149,8 +160,11 @@ function Planning() {
     const toRemove    = previousIds.filter(id => !form.athleteIds.includes(id));
     if (toAdd.length)    { const { error: e } = await supabase.from("session_athletes").insert(toAdd.map(id => ({ session_id: sessionId, athlete_id: id, status: null, feeling: null, fatigue: null, comment: null, rpe: null }))); if (e) throw e; }
     if (toRemove.length) { const { error: e } = await supabase.from("session_athletes").delete().eq("session_id", sessionId).in("athlete_id", toRemove); if (e) throw e; }
+    const retainedIds = form.athleteIds.filter(id => previousIds.includes(id));
+    if (retainedIds.length) await notifyAthleteSessionUpdated(clubId, retainedIds, { id: sessionId, title: form.title, sessionDate: form.sessionDate, time: form.time });
+    if (toAdd.length) await notifyAthleteNewSession(clubId, toAdd, { id: sessionId, title: form.title, sessionDate: form.sessionDate, day: form.day });
     await fetchAll();
-  }, [fetchAll, sessionList]);
+  }, [clubId, fetchAll, sessionList]);
 
   const deleteSession = useCallback(async (sessionId) => {
     const existing = sessionList.find(s => s.id === sessionId);
@@ -193,6 +207,58 @@ function Planning() {
       if (session && athlete) await alertSessionAbsence(clubId, athlete, session);
     }
   }, [fetchAll, sessionList, athletes, clubId]);
+
+  const setAttendance = useCallback(async (sessionId, athleteId, attendanceStatus) => {
+    const markedAt = new Date().toISOString();
+    setSessionList(previous => previous.map(session => session.id !== sessionId ? session : {
+      ...session,
+      validations: session.validations.map(validation => validation.athleteId === athleteId
+        ? { ...validation, attendanceStatus, attendanceMarkedAt: markedAt }
+        : validation),
+    }));
+    const updates = { attendance_status: attendanceStatus, attendance_marked_at: markedAt };
+    if (attendanceStatus === "absent" || attendanceStatus === "injured") updates.status = "none";
+    const { error: updateError } = await supabase.from("session_athletes").update(updates)
+      .eq("session_id", sessionId).eq("athlete_id", athleteId);
+    if (updateError) { await fetchAll(); throw updateError; }
+    if (attendanceStatus === "absent") {
+      const session = sessionList.find(item => item.id === sessionId);
+      const athlete = athletes.find(item => item.id === athleteId);
+      if (session && athlete) await alertSessionAbsence(clubId, athlete, session);
+    }
+  }, [athletes, clubId, fetchAll, sessionList]);
+
+  const setCoachNote = useCallback(async (sessionId, athleteId, coachNote) => {
+    const { error: updateError } = await supabase.from("session_athletes").update({ coach_note: coachNote || null })
+      .eq("session_id", sessionId).eq("athlete_id", athleteId);
+    if (updateError) throw updateError;
+    setSessionList(previous => previous.map(session => session.id !== sessionId ? session : {
+      ...session,
+      validations: session.validations.map(validation => validation.athleteId === athleteId ? { ...validation, coachNote } : validation),
+    }));
+  }, []);
+
+  const remindFeedback = useCallback(async (session) => {
+    const targetIds = session.validations.filter(validation => (
+      validation.attendanceStatus !== "absent" && validation.attendanceStatus !== "injured"
+      && (validation.rpe == null || validation.durationSource !== "reported")
+    )).map(validation => validation.athleteId);
+    await notifyAthleteFeedbackReminder(clubId, targetIds, session);
+  }, [clubId]);
+
+  const setLifecycle = useCallback(async (sessionId, lifecycleStatus) => {
+    const now = new Date().toISOString();
+    const updates = { lifecycle_status: lifecycleStatus };
+    if (lifecycleStatus === "live") { updates.started_at = now; updates.closed_at = null; }
+    if (lifecycleStatus === "completed") updates.closed_at = now;
+    const { error: updateError } = await supabase.from("sessions").update(updates).eq("id", sessionId);
+    if (updateError) throw updateError;
+    const current = sessionList.find(session => session.id === sessionId);
+    setSessionList(previous => previous.map(session => session.id === sessionId ? {
+      ...session, lifecycleStatus, startedAt: updates.started_at ?? session.startedAt, closedAt: updates.closed_at ?? null,
+    } : session));
+    if (lifecycleStatus === "completed" && current) await remindFeedback(current);
+  }, [remindFeedback, sessionList]);
 
   // ═══ Dérivés calendrier ═══════════════════════════════════════════════════
 
@@ -799,6 +865,10 @@ function Planning() {
           onSetStatus={setStatus}
           onEditRequest={s => { setSessionModalTarget(s); setActiveSession(null); }}
           onDeleteSession={deleteSession}
+          onSetAttendance={setAttendance}
+          onSetCoachNote={setCoachNote}
+          onSetLifecycle={setLifecycle}
+          onRemindFeedback={remindFeedback}
         />
       )}
 

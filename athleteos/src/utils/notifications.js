@@ -155,6 +155,55 @@ export async function notifyAthleteNewSession(clubId, athleteIds, session) {
   await sendWebPush(athleteIds, { title, body: description, url: "/", tag: `session-${session.title}` });
 }
 
+export async function notifyAthleteSessionUpdated(clubId, athleteIds, session) {
+  if (!athleteIds?.length) return;
+  const dateStr = session.sessionDate
+    ? new Date(`${String(session.sessionDate).slice(0, 10)}T00:00:00`).toLocaleDateString("fr-BE", { weekday:"long", day:"numeric", month:"long" })
+    : "prochainement";
+  const title = `Séance modifiée — ${session.title}`;
+  const description = `Le coach a mis à jour cette séance prévue ${dateStr}${session.time ? ` à ${String(session.time).slice(0, 5)}` : ""}.`;
+  const recent = new Date(Date.now() - 2 * 60_000).toISOString();
+  const { data: existing } = await supabase.from("athlete_notifications").select("athlete_id")
+    .eq("club_id", clubId).eq("type", "session_updated").eq("title", title)
+    .in("athlete_id", athleteIds).gte("created_at", recent);
+  const alreadyNotified = new Set((existing ?? []).map(row => row.athlete_id));
+  const targets = athleteIds.filter(id => !alreadyNotified.has(id));
+  if (!targets.length) return;
+  await supabase.from("athlete_notifications").insert(targets.map(athleteId => ({
+    athlete_id: athleteId, club_id: clubId, type: "session_updated", title, description, is_read: false,
+  })));
+  await sendWebPush(targets, { title, body: description, url: "/planning", tag: `session-update-${session.id ?? session.title}` });
+}
+
+export async function notifyAthleteFeedbackReminder(clubId, athleteIds, session) {
+  if (!athleteIds?.length) return;
+  const title = `Ton retour manque — ${session.title}`;
+  const description = "Indique ta présence, la durée réellement effectuée et ton effort ressenti. Cela prend moins d’une minute.";
+  const recent = new Date(Date.now() - 12 * 60 * 60_000).toISOString();
+  const { data: existing } = await supabase.from("athlete_notifications").select("athlete_id")
+    .eq("club_id", clubId).eq("type", "session_feedback_reminder").eq("title", title)
+    .in("athlete_id", athleteIds).gte("created_at", recent);
+  const alreadyNotified = new Set((existing ?? []).map(row => row.athlete_id));
+  const targets = athleteIds.filter(id => !alreadyNotified.has(id));
+  if (!targets.length) return;
+  await supabase.from("athlete_notifications").insert(targets.map(athleteId => ({
+    athlete_id: athleteId, club_id: clubId, type: "session_feedback_reminder", title, description, is_read: false,
+  })));
+  await sendWebPush(targets, { title, body: description, url: "/planning", tag: `session-feedback-${session.id ?? session.title}` });
+}
+
+export async function notifyCoachSessionResponse(clubId, coachUserId, athlete, session, response) {
+  if (!coachUserId || response === "going") return;
+  const responseLabel = response === "unavailable" ? "ne pourra pas participer" : "n’est pas encore certain de participer";
+  const title = `Réponse séance — ${athlete.name}`;
+  const description = `${athlete.name} ${responseLabel} à « ${session.title} ».`;
+  await supabase.from("alerts").insert({
+    club_id: clubId, athlete_id: athlete.id, type: "session_response", title, description,
+    severity: response === "unavailable" ? "modérée" : "info", is_read: false,
+  });
+  await sendWebPush([], { title, body: description, url: "/planning", tag: `session-response-${session.id}` }, [coachUserId]);
+}
+
 export async function notifyAthleteResult(clubId, athleteId, discipline, result, compName) {
   const title       = `🏆 Résultat saisi — ${discipline}`;
   const description = `Ton résultat en ${discipline} lors de "${compName}" : ${result}.`;

@@ -7,8 +7,12 @@ import { memo, useState } from "react";
 import { X, Users, FileText, AlertCircle, Star, Zap } from "lucide-react";
 import { CATEGORIES, colors, sessionStatus, ValidationBadge, StatusIcon } from "./planningShared";
 import { openSessionPdf } from "../utils/storage";
+import CoachSessionDayPanel from "../components/session/CoachSessionDayPanel";
 
-const SessionModal = memo(({ session, athletes, onClose, onSetRpe, onSetStatus, onEditRequest, onDeleteSession }) => {
+const SessionModal = memo(({
+  session, athletes, onClose, onSetRpe, onSetStatus, onEditRequest, onDeleteSession,
+  onSetAttendance, onSetCoachNote, onSetLifecycle, onRemindFeedback,
+}) => {
   const [deleting,    setDeleting]    = useState(false);
   const [deleteError, setDeleteError] = useState(null);
   const [confirmDel,  setConfirmDel]  = useState(false);
@@ -108,6 +112,15 @@ const SessionModal = memo(({ session, athletes, onClose, onSetRpe, onSetStatus, 
         </div>
 
         <div className="flex-1 overflow-y-auto px-6 py-5 space-y-5">
+
+          <CoachSessionDayPanel
+            session={session}
+            athletes={athletes}
+            onSetAttendance={onSetAttendance}
+            onSetCoachNote={onSetCoachNote}
+            onSetLifecycle={onSetLifecycle}
+            onRemindFeedback={onRemindFeedback}
+          />
 
           {/* Feedback rapide */}
           {pendingFeedback.length > 0 && (
