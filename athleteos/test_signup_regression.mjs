@@ -89,7 +89,15 @@ function baseBody(overrides) {
 async function callSignup(body) {
   const res = await fetch(FUNCTION_URL, {
     method: "POST",
-    headers: { "Content-Type": "application/json", apikey: ANON_KEY },
+    // Reproduit `supabase.functions.invoke()` utilisé par SignupPage : même
+    // un visiteur non connecté envoie la clé anon comme JWT de plateforme.
+    // Sans ce header, la passerelle rejette l'appel avant la fonction et le
+    // test ne vérifie jamais la logique d'inscription.
+    headers: {
+      "Content-Type": "application/json",
+      apikey: ANON_KEY,
+      Authorization: `Bearer ${ANON_KEY}`,
+    },
     body: JSON.stringify(body),
   });
   let json = null;

@@ -42,8 +42,9 @@ jobs:
       # À partir d'ici : instance Supabase locale et jetable (Docker, fournie
       # par le runner) — rejoue TOUTES les migrations dans l'ordre, à partir
       # d'une base vide. Ne touche jamais la production (tâche 7, DoD "ne
-      # touchent pas la production"). studio/imgproxy/mailpit/vector/logflare/
-      # edge-runtime exclus (pas nécessaires ici, démarrage plus rapide).
+      # touchent pas la production"). studio/imgproxy/mailpit/vector/logflare
+      # sont exclus. L'Edge Runtime reste actif car les suites signup,
+      # send-push et admin-actions testent les vraies fonctions locales.
       # ══════════════════════════════════════════════════════════════════════
       - uses: supabase/setup-cli@v2
         with:
@@ -59,7 +60,7 @@ jobs:
           # une annotation GitHub. Les annotations restent lisibles même quand
           # l'accès au journal brut du job est restreint.
           set +e
-          supabase start -x studio,imgproxy,mailpit,vector,logflare,edge-runtime --debug 2>&1 \
+          supabase start -x studio,imgproxy,mailpit,vector,logflare --debug 2>&1 \
             | tee "$RUNNER_TEMP/supabase-start.log"
           start_status=${PIPESTATUS[0]}
           set -e
@@ -92,6 +93,7 @@ jobs:
           supabase status -o env | sed 's/"//g' | grep -E '^[A-Z_]+=' >> "$GITHUB_ENV"
           echo "VITE_SUPABASE_URL=$(supabase status -o env | sed 's/"//g' | grep '^API_URL=' | cut -d= -f2-)" >> "$GITHUB_ENV"
           echo "VITE_SUPABASE_ANON_KEY=$(supabase status -o env | sed 's/"//g' | grep '^ANON_KEY=' | cut -d= -f2-)" >> "$GITHUB_ENV"
+          echo "SUPABASE_SERVICE_ROLE_KEY=$(supabase status -o env | sed 's/"//g' | grep '^SERVICE_ROLE_KEY=' | cut -d= -f2-)" >> "$GITHUB_ENV"
 
       # ── Suite RLS : lancée deux fois de suite (tâche 7, vérification
       #    obligatoire) — la suite crée/nettoie ses propres fixtures à
