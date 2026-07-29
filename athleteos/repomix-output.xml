@@ -38543,8 +38543,12 @@ inspector_port = 8083
 # The Deno major version to use.
 deno_version = 2
 
-# [edge_runtime.secrets]
-# secret_key = "env(SECRET_VALUE)"
+[edge_runtime.secrets]
+# Injectées par le runner pour les fonctions locales. En production, ces
+# valeurs restent gérées dans les secrets du projet Supabase.
+VAPID_PUBLIC_KEY = "env(VAPID_PUBLIC_KEY)"
+VAPID_PRIVATE_KEY = "env(VAPID_PRIVATE_KEY)"
+SIGNUP_TEST_MODE = "env(SIGNUP_TEST_MODE)"
 
 [analytics]
 enabled = true
