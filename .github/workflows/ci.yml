@@ -95,9 +95,9 @@ jobs:
       #    chaque exécution, un deuxième passage identique confirme qu'elle
       #    est déterministe et ne laisse rien traîner en base. ────────────
       - name: RLS regression suite (1/2)
-        run: node test_rls_regression.mjs
+        run: bash ../.github/scripts/run-with-diagnostics.sh rls-1 node test_rls_regression.mjs
       - name: RLS regression suite (2/2 — déterminisme)
-        run: node test_rls_regression.mjs
+        run: bash ../.github/scripts/run-with-diagnostics.sh rls-2 node test_rls_regression.mjs
 
       # ── Reste de la suite d'intégration (tâches 3, 2, 4, 16, 18, 14, 8, 12) —
       #    jamais câblée en CI jusqu'ici (nécessitait des secrets pointant
@@ -105,15 +105,19 @@ jobs:
       #    l'instance locale jetable ci-dessus, sans risque. ──────────────
       - name: Reste de la suite d'intégration (contre Supabase local)
         run: |
-          node test_signup_regression.mjs
-          node test_send_push_regression.mjs
-          node test_admin_actions.mjs
-          node test_import_club_athletes.mjs
-          node test_charge_model_parity.mjs
-          node test_axis_model_parity.mjs
-          node test_competition_transactions.mjs
-          node test_private_storage.mjs
-          node test_performance_normalization.mjs
+          for test_file in \
+            test_signup_regression.mjs \
+            test_send_push_regression.mjs \
+            test_admin_actions.mjs \
+            test_import_club_athletes.mjs \
+            test_charge_model_parity.mjs \
+            test_axis_model_parity.mjs \
+            test_competition_transactions.mjs \
+            test_private_storage.mjs \
+            test_performance_normalization.mjs
+          do
+            bash ../.github/scripts/run-with-diagnostics.sh "$test_file" node "$test_file"
+          done
 
       # ── E2E (Playwright) : rebuild avec les identifiants Supabase LOCAUX
       #    (le 1er build, dans npm run check, utilisait des identifiants
@@ -129,7 +133,7 @@ jobs:
       - name: E2E (parcours coach/athlète critiques)
         env:
           E2E_WITH_AUTH: "1"
-        run: npm run test:e2e
+        run: bash ../.github/scripts/run-with-diagnostics.sh e2e npm run test:e2e
 
       - name: Stop local Supabase
         if: always()
