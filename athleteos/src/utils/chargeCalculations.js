@@ -110,9 +110,6 @@ export function getAthleteMetricsForWeek(athleteId, weeklyCharge, currentWeek, w
 
   // Règle de programmation du club, pas estimation physiologique.
   const recovery = estimateRecovery(sessions, athleteId, recentWellness);
-  const readiness = wellnessScore;
-  const fatigue = wellnessScore == null ? null : 100 - wellnessScore;
-
   return {
     acute, chronic, acwr, acwrStatus, acwrExperimental: true, observedDays,
     ewmaHistory,
@@ -120,26 +117,25 @@ export function getAthleteMetricsForWeek(athleteId, weeklyCharge, currentWeek, w
     monotony, strain, monotonyStatus,
     wellnessScore,
     recovery,
-    fatigue,
-    forme: null,
-    readiness,
-    recuperation: null,
-    risque: null,
+    experimental_readiness_v0: null,
     hasDailyLoadData: dailyLoads.length > 0,
   };
 }
 
-// ─── getStatusLabel (inchangé) ────────────────────────────────────────────────
-export function getStatusLabel(readiness, fatigue, acwr) {
-  void acwr;
-  if (readiness == null) return { label: "Données à compléter", dot: "⚪", color: "#8A9B90" };
-  if (readiness >= 75) return { label: "Ressenti favorable", dot: "🟢", color: "#1D9E75" };
-  if (readiness >= 50) return { label: "Ressenti intermédiaire", dot: "🟡", color: "#EF9F27" };
-  if (fatigue != null && fatigue >= 75) return { label: "Ressenti difficile", dot: "🟠", color: "#E24B4A" };
+// Statut du questionnaire AthleteOS Wellness v1 uniquement.
+export function getWellnessStatus(wellnessScore) {
+  if (wellnessScore == null) return { label: "Données à compléter", dot: "⚪", color: "#8A9B90" };
+  if (wellnessScore >= 75) return { label: "Ressenti déclaré favorable", dot: "🟢", color: "#1D9E75" };
+  if (wellnessScore >= 50) return { label: "Ressenti déclaré intermédiaire", dot: "🟡", color: "#EF9F27" };
+  if (wellnessScore < 25) return { label: "Ressenti déclaré difficile", dot: "🟠", color: "#E24B4A" };
   return { label: "Ressenti à discuter", dot: "🔵", color: "#378ADD" };
 }
+
+export function getStatusLabel(wellnessScore) {
+  return getWellnessStatus(wellnessScore);
+}
 // ─── computeChargeChartData ───────────────────────────────────────────────────
-// Prépare les données du graphique charge vs forme sur les 12 dernières semaines.
+// Prépare les charges hebdomadaires observées sur les 12 dernières semaines.
 export function computeChargeChartData(athleteId, weeklyCharge) {
   const myCharge = weeklyCharge
     .filter(w => w.athleteId === athleteId)
@@ -148,7 +144,7 @@ export function computeChargeChartData(athleteId, weeklyCharge) {
 
   if (!myCharge.length) return [];
 
-  return myCharge.map((week) => ({ label: `S${week.week}`, rawLoad: week.rawLoad, forme: null, fatigue: null }));
+  return myCharge.map((week) => ({ label: `S${week.week}`, rawLoad: week.rawLoad }));
 }
 
 // ─── generateContextAnalysis ──────────────────────────────────────────────────

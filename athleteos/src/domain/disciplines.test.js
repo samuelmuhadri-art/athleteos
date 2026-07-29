@@ -9,9 +9,10 @@
 import { describe, it, expect } from "vitest";
 import {
   DISCIPLINES, validateRegistry, resolveDisciplineId, getDiscipline,
-  getDisciplineType, getDisciplineHib, getDisciplineUnit, getDisciplineMeasurementType,
+  getDisciplineType, getDisciplineHib, getDisciplineUnit,
   getDisciplineDecimals, getDisciplineInputFormat, getDisciplineColor, getDisciplineSubEvents,
-  getAllDisciplineIds, MEASUREMENT_TYPE, INPUT_FORMAT,
+  getAllDisciplineIds, MEASUREMENT_TYPE, INPUT_FORMAT, PERFORMANCE_DIRECTION,
+  createPerformanceMetadata, normalizePerformanceMetadata, validatePerformanceMetadata,
 } from "./disciplines.js";
 import { getDiscHib, getDiscType } from "../athlete/shared.js";
 import { discColor, COMBINE_EVENTS } from "../athlete/views/perfsShared.js";
@@ -32,7 +33,7 @@ describe("couverture par famille de disciplines", () => {
   it("1500m (demi-fond) : chrono min:s, plus petit = mieux", () => {
     const d = getDiscipline("1500m");
     expect(d.measurementType).toBe(MEASUREMENT_TYPE.TIME);
-    expect(d.unit).toBe("min:s");
+    expect(d.unit).toBe("s");
     expect(d.higherIsBetter).toBe(false);
   });
 
@@ -101,8 +102,8 @@ describe("discipline inconnue / personnalisée — jamais de crash", () => {
         subEvents: getDisciplineSubEvents(name),
       };
       expect(fallback.type).not.toBeNull();
-      expect(fallback.hib).not.toBeNull();
-      expect(fallback.unit).not.toBeNull();
+      expect(fallback.hib).toBeNull();
+      expect(fallback.unit).toBeNull();
       expect(fallback.color).not.toBeNull();
       expect(fallback.subEvents).toBeNull();
     }).not.toThrow();
@@ -110,6 +111,37 @@ describe("discipline inconnue / personnalisée — jamais de crash", () => {
 
   it("resolveDisciplineId renvoie le texte tel quel (trim uniquement)", () => {
     expect(resolveDisciplineId("  Épreuve Maison Inventée  ")).toBe("Épreuve Maison Inventée");
+  });
+
+  it("ne suppose jamais qu'une valeur décimale libre est un chrono", () => {
+    const metadata = createPerformanceMetadata("Test club");
+    expect(metadata.measurement_type).toBe(MEASUREMENT_TYPE.UNKNOWN);
+    expect(metadata.performance_direction).toBe(PERFORMANCE_DIRECTION.UNKNOWN);
+    expect(validatePerformanceMetadata("Test club", metadata)).toHaveLength(3);
+  });
+
+  it("accepte une épreuve libre lorsque unité et sens sont explicites", () => {
+    const metadata = normalizePerformanceMetadata("Test club", {
+      unit: "m", measurement_type: "distance", performance_direction: "higher",
+    });
+    expect(validatePerformanceMetadata("Test club", metadata)).toEqual([]);
+  });
+});
+
+describe("métadonnées techniques structurées", () => {
+  it("décrit le vent et le chronométrage du 100m", () => {
+    const discipline = getDiscipline("100m");
+    expect(discipline.windMeasurement).toBe("required_for_official_review");
+    expect(discipline.timingMethods).toContain("fully_automatic");
+  });
+
+  it("demande le poids d'engin pour les lancers et la hauteur pour les haies", () => {
+    expect(getDiscipline("Poids").requiresImplementWeight).toBe(true);
+    expect(getDiscipline("110m haies").requiresHurdleHeight).toBe(true);
+  });
+
+  it("versionne séparément les tables des combinées", () => {
+    expect(getDiscipline("Décathlon").scoringTableVersion).toBe("IAAF_COMBINED_EVENTS_2012");
   });
 });
 

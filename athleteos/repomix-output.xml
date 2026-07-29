@@ -119,6 +119,9 @@ src/
       MobileBottomNav.jsx
       MobileMoreSheet.jsx
       MobileNavigation.test.jsx
+    performance/
+      PerformanceContextChips.jsx
+      PerformanceMetadataFields.jsx
     ui/
       premium/
         index.js
@@ -139,6 +142,9 @@ src/
   domain/
     disciplines.js
     disciplines.test.js
+    monitoringMetrics.js
+    monitoringMetrics.test.js
+    structuredPerformanceMigration.test.js
   hooks/
     PushToggleButton.test.jsx
     useClubBranding.js
@@ -249,6 +255,7 @@ supabase/
     20260801050000_claim_imported_athlete_on_signup.sql
     20260801060000_standard_session_rpe_daily_load.sql
     20260801070000_confirmed_rest_days.sql
+    20260801080000_structured_performance_context.sql
   .gitignore
   config.toml
   seed.sql
@@ -1020,390 +1027,211 @@ self.addEventListener("notificationclick", (event) => {
 </file>
 
 <file path="src/athlete/components/FormeDetailPanel.jsx">
-// ============================================================
-// AthleteOS — src/athlete/components/FormeDetailPanel.jsx
-// ★ DARK MODE — fix mobile (z-index + portal sur body)
-// ============================================================
-
-import { useMemo, memo } from "react";
+import { memo, useEffect, useMemo } from "react";
 import { createPortal } from "react-dom";
-import { X, Zap } from "lucide-react";
-import { getISOWeek, METRIC_SCIENCE, EVIDENCE_LEVELS } from "../shared";
+import { Activity, AlertCircle, BookOpen, Calculator, CheckCircle2, Database, X } from "lucide-react";
+import { getMonitoringReading } from "../../domain/monitoringMetrics.js";
+import { getISOWeek } from "../shared";
+
+const LOAD_KEYS = new Set(["load7", "load28", "ewmaAcute", "ewmaChronic", "variation", "monotony", "acwrExperimental"]);
 
 const FormeDetailPanel = memo(({ metricKey, metrics, sessions, weeklyCharge, athlete, onClose }) => {
-  const science     = METRIC_SCIENCE[metricKey];
-  const value       = metrics[metricKey] ?? 0;
-  const color       = science.color(value);
+  const reading = getMonitoringReading(metricKey, metrics);
   const currentWeek = getISOWeek(new Date());
 
-  const threshold = science.thresholds.find(t => value >= t.min && value <= t.max)
-    ?? science.thresholds[science.thresholds.length - 1];
+  useEffect(() => {
+    const closeOnEscape = (event) => { if (event.key === "Escape") onClose(); };
+    window.addEventListener("keydown", closeOnEscape);
+    return () => window.removeEventListener("keydown", closeOnEscape);
+  }, [onClose]);
 
-  const weekSessions = useMemo(() => {
-    return sessions
-      .filter(s => s.week === currentWeek || s.week === currentWeek - 1)
-      .filter(s => s.athleteIds?.includes(athlete.id))
-      .map(s => {
-        const val = s.validations?.find(v => v.athleteId === athlete.id);
-        return { ...s, validation: val };
-      })
-      .filter(s => s.validation?.rpe != null)
-      .sort((a, b) => b.week - a.week || new Date(b.sessionDate ?? 0) - new Date(a.sessionDate ?? 0));
-  }, [sessions, athlete.id, currentWeek]);
+  const recentSessions = useMemo(() => (sessions ?? [])
+    .filter((session) => session.athleteIds?.includes(athlete.id))
+    .map((session) => ({
+      ...session,
+      validation: session.validations?.find((item) => item.athleteId === athlete.id),
+    }))
+    .filter((session) => session.validation?.rpe != null)
+    .sort((a, b) => String(b.sessionDate ?? "").localeCompare(String(a.sessionDate ?? "")))
+    .slice(0, 6), [athlete.id, sessions]);
 
-  const recentCharge = useMemo(() => {
-    return weeklyCharge
-      .filter(w => w.athleteId === athlete.id && w.week >= currentWeek - 3 && w.week <= currentWeek)
-      .sort((a, b) => a.week - b.week)
-      .map(w => ({
-        week:  w.week,
-        label: `S${w.week}`,
-        load:  w.rawLoad,
-        color: w.rawLoad > 500 ? "#E05252" : w.rawLoad > 350 ? "#E8A020" : "#1D9E75",
-      }));
-  }, [weeklyCharge, athlete.id, currentWeek]);
+  const recentWeeks = useMemo(() => (weeklyCharge ?? [])
+    .filter((week) => week.athleteId === athlete.id)
+    .sort((a, b) => a.week - b.week)
+    .slice(-4), [athlete.id, weeklyCharge]);
 
-  const maxLoad = Math.max(...recentCharge.map(w => w.load), 1);
+  if (!reading) return null;
+  const color = reading.color;
 
   return createPortal(
     <div
-      style={{
-        position: "fixed", inset: 0, zIndex: 9999,
-        display: "flex", alignItems: "flex-end", justifyContent: "center",
-        background: "rgba(0,0,0,0.72)",
-        backdropFilter: "blur(10px)",
-        WebkitBackdropFilter: "blur(10px)",
-      }}
-      onClick={e => e.target === e.currentTarget && onClose()}
+      className="fixed inset-0 z-[100] flex items-end justify-center modal-backdrop"
+      style={{ background: "rgba(2,7,12,0.76)", backdropFilter: "blur(12px)" }}
+      onClick={(event) => event.target === event.currentTarget && onClose()}
     >
-      <div style={{
-        background: "var(--c-surface)",
-        borderRadius: "20px 20px 0 0",
-        border: "1px solid var(--c-border)",
-        borderBottom: "none",
-        width: "100%",
-        maxWidth: 560,
-        maxHeight: "92dvh",
-        display: "flex",
-        flexDirection: "column",
-        overflow: "hidden",
-        boxShadow: "0 -8px 40px rgba(0,0,0,0.50)",
-        animation: "sheet-up 0.32s cubic-bezier(0.16,1,0.3,1) both",
-      }}>
-
-        {/* Poignée */}
-        <div style={{ display: "flex", justifyContent: "center", paddingTop: 10, paddingBottom: 4, flexShrink: 0 }}>
-          <div style={{ width: 32, height: 3, borderRadius: 99, background: "var(--c-border-strong)" }} />
+      <section
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="monitoring-detail-title"
+        className="w-full max-w-2xl overflow-hidden rounded-t-3xl border"
+        style={{
+          maxHeight: "92dvh",
+          background: "linear-gradient(180deg, var(--c-surface) 0%, var(--c-bg) 100%)",
+          borderColor: "var(--c-border-strong)",
+          boxShadow: "0 -24px 80px rgba(0,0,0,0.52)",
+          animation: "sheet-up 0.32s cubic-bezier(0.16,1,0.3,1) both",
+        }}
+      >
+        <div className="flex justify-center pt-3 pb-1">
+          <div className="h-1 w-10 rounded-full" style={{ background: "var(--c-border-strong)" }} />
         </div>
 
-        {/* Header coloré */}
-        <div style={{
-          padding: "16px 20px 16px",
-          display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12,
-          background: `linear-gradient(135deg, ${color}12, ${color}05)`,
-          borderBottom: `1px solid ${color}20`,
-          flexShrink: 0,
-        }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-            {/* Icône */}
-            <div style={{
-              width: 52, height: 52, borderRadius: 14,
-              background: `${color}14`, border: `1px solid ${color}20`,
-              display: "flex", alignItems: "center", justifyContent: "center",
-              flexShrink: 0, fontSize: 24,
-            }}>
-              {science.icon}
-            </div>
-            <div>
-              <p style={{ fontSize: 9, fontWeight: 500, letterSpacing: "0.09em", textTransform: "uppercase", color: color, marginBottom: 3 }}>
-                État de forme
-              </p>
-              <h2 style={{ fontSize: 18, fontWeight: 600, color: "var(--c-text-1)", letterSpacing: "-0.02em", lineHeight: 1.2 }}>
-                {science.label}
+        <header className="relative overflow-hidden px-5 pb-5 pt-3 sm:px-6">
+          <div className="absolute inset-0 pointer-events-none" aria-hidden="true" style={{
+            background: `radial-gradient(circle at 12% 20%, ${color}24 0%, transparent 42%), linear-gradient(135deg, ${color}0D, transparent 60%)`,
+          }} />
+          <div className="relative flex items-start justify-between gap-4">
+            <div className="min-w-0">
+              <div className="mb-3 flex flex-wrap items-center gap-2">
+                <span className="chip" style={{ background: `${color}18`, borderColor: `${color}32`, color }}>
+                  {reading.kind}
+                </span>
+                <span className="chip chip-neutral">{reading.evidence}</span>
+              </div>
+              <h2 id="monitoring-detail-title" className="text-[22px] font-bold tracking-[-0.025em]" style={{ color: "var(--c-text-1)" }}>
+                {reading.label}
               </h2>
-              {science.evidenceLevel && EVIDENCE_LEVELS[science.evidenceLevel] && (
-                <span className={`chip ${EVIDENCE_LEVELS[science.evidenceLevel].chip}`} style={{ marginTop: 5, display: "inline-flex" }}>
-                  {EVIDENCE_LEVELS[science.evidenceLevel].label}
-                </span>
-              )}
-              <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 5 }}>
-                <span style={{ fontSize: 28, fontWeight: 700, color, fontVariantNumeric: "tabular-nums", letterSpacing: "-0.03em", lineHeight: 1 }}>
-                  {value}
-                </span>
-                <div>
-                  <p style={{ fontSize: 9.5, color: "var(--c-text-3)" }}>{science.unit}</p>
-                  <span style={{
-                    fontSize: 9.5, fontWeight: 500, padding: "1px 7px", borderRadius: 4,
-                    background: `${threshold.color}14`, color: threshold.color,
-                    display: "inline-block", marginTop: 2,
-                  }}>
-                    {threshold.label}
-                  </span>
+              <p className="mt-2 max-w-xl text-[13px] leading-6" style={{ color: "var(--c-text-2)" }}>
+                Une lecture transparente de tes données, sans score caché ni décision automatique.
+              </p>
+            </div>
+            <button type="button" aria-label="Fermer le détail" onClick={onClose} className="btn-icon flex-shrink-0">
+              <X size={18} />
+            </button>
+          </div>
+
+          <div className="relative mt-5 flex items-end justify-between gap-4 rounded-2xl border px-4 py-4" style={{ background: `${color}0B`, borderColor: `${color}25` }}>
+            <div>
+              <p className="meta-text uppercase tracking-[0.08em]">Valeur actuelle</p>
+              <div className="mt-1 flex items-end gap-2">
+                <strong className="text-[34px] leading-none tracking-[-0.04em]" style={{ color, fontVariantNumeric: "tabular-nums" }}>
+                  {reading.displayValue}
+                </strong>
+                {reading.unit && <span className="pb-1 text-[13px] font-semibold" style={{ color: "var(--c-text-2)" }}>{reading.unit}</span>}
+              </div>
+            </div>
+            <div className="flex items-center gap-2 rounded-xl px-3 py-2 text-[12px] font-semibold" style={{
+              background: reading.available ? "rgba(29,158,117,0.12)" : "rgba(239,159,39,0.12)",
+              color: reading.available ? "#7BD8B4" : "#F6C76B",
+            }}>
+              {reading.available ? <CheckCircle2 size={15} /> : <AlertCircle size={15} />}
+              {reading.available ? "Donnée disponible" : "À compléter"}
+            </div>
+          </div>
+        </header>
+
+        <div className="overflow-y-auto px-5 pb-8 sm:px-6" style={{ maxHeight: "calc(92dvh - 245px)" }}>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <article className="card p-4">
+              <div className="mb-2 flex items-center gap-2" style={{ color }}><Activity size={16} /><h3 className="card-title">Lecture actuelle</h3></div>
+              <p className="secondary-text leading-6">{reading.interpretation}</p>
+              {reading.missingReason && (
+                <div className="mt-3 rounded-xl border px-3 py-2.5 text-[12px] leading-5" style={{ background: "rgba(239,159,39,0.08)", borderColor: "rgba(239,159,39,0.22)", color: "#F6C76B" }}>
+                  Pourquoi « — » : {reading.missingReason}
                 </div>
-              </div>
-            </div>
-          </div>
-          <button onClick={onClose}
-            style={{ padding: 8, borderRadius: 10, background: "var(--c-surface-2)", border: "none", cursor: "pointer", color: "var(--c-text-3)", flexShrink: 0 }}>
-            <X size={16} />
-          </button>
-        </div>
-
-        {/* Corps scrollable */}
-        <div style={{ flex: 1, overflowY: "auto", padding: "16px 20px", display: "flex", flexDirection: "column", gap: 14 }}>
-
-          {/* Jauge */}
-          <div>
-            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 9, color: "var(--c-text-3)", marginBottom: 6 }}>
-              <span>{science.inverted ? "Optimal" : "Faible"}</span>
-              <span style={{ color, fontWeight: 500 }}>Optimal : {science.optimal}</span>
-              <span>{science.inverted ? "Critique" : "Optimal"}</span>
-            </div>
-            <div style={{ position: "relative", height: 8, borderRadius: 99, background: "var(--c-surface-2)", overflow: "hidden" }}>
-              <div style={{
-                height: "100%", borderRadius: 99,
-                width: `${value}%`,
-                background: `linear-gradient(90deg, ${color}60, ${color})`,
-                transition: "width 0.7s cubic-bezier(0.16,1,0.3,1)",
-              }} />
-              <div style={{
-                position: "absolute", top: 0, height: "100%", width: 1.5,
-                background: "rgba(255,255,255,0.20)",
-                left: science.inverted ? "30%" : "75%",
-              }} />
-            </div>
-            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 8.5, color: "var(--c-text-4)", marginTop: 4 }}>
-              <span>0</span><span>25</span><span>50</span><span>75</span><span>100</span>
-            </div>
-          </div>
-
-          {/* Conseil */}
-          <div style={{
-            borderRadius: 12, padding: "12px 14px",
-            background: `${threshold.color}10`,
-            border: `1px solid ${threshold.color}20`,
-          }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 7 }}>
-              <div style={{ width: 22, height: 22, borderRadius: 7, background: threshold.color, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                <Zap size={11} color="white" />
-              </div>
-              <p style={{ fontSize: 9.5, fontWeight: 500, letterSpacing: "0.08em", textTransform: "uppercase", color: threshold.color }}>
-                Conseil du jour
-              </p>
-            </div>
-            <p style={{ fontSize: 12.5, color: "var(--c-text-2)", lineHeight: 1.55, fontWeight: 400 }}>
-              {threshold.advice}
-            </p>
-          </div>
-
-          {/* Estimation détaillée (tâche 17) — plage + confiance + facteurs,
-              uniquement pour la récupération : jamais un chiffre exact,
-              toujours visible pourquoi l'estimation bouge. */}
-          {metricKey === "recuperation" && metrics.recovery && (
-            <div className="card" style={{ padding: "12px 14px" }}>
-              <p style={{ fontSize: 9.5, fontWeight: 500, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--c-text-3)", marginBottom: 8 }}>
-                Estimation détaillée
-              </p>
-              {metrics.recovery.status === "insufficient_data" ? (
-                <p style={{ fontSize: 12.5, color: "var(--c-text-2)", lineHeight: 1.55 }}>
-                  Pas assez de séances récentes pour estimer une plage de récupération.
-                </p>
-              ) : (
-                <>
-                  <div style={{ display: "flex", alignItems: "baseline", gap: 6, marginBottom: 4 }}>
-                    <span style={{ fontSize: 20, fontWeight: 700, color: "var(--c-text-1)", fontVariantNumeric: "tabular-nums" }}>
-                      {metrics.recovery.rangeHoursMin}–{metrics.recovery.rangeHoursMax}h
-                    </span>
-                    <span style={{ fontSize: 11, color: "var(--c-text-3)" }}>restantes (estimation)</span>
-                  </div>
-                  <p style={{ fontSize: 10.5, color: "var(--c-text-3)", marginBottom: 10 }}>
-                    Confiance : <strong style={{ color: "var(--c-text-2)" }}>{metrics.recovery.confidence}</strong> ({metrics.recovery.confidenceScore}/100) — baisse quand le wellness ou l'historique récent manquent.
-                  </p>
-                  {metrics.recovery.factors.length > 0 && (
-                    <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
-                      {metrics.recovery.factors.map((f, i) => (
-                        <div key={i} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11.5, color: "var(--c-text-2)" }}>
-                          <span style={{ color: f.direction === "increase" ? "#E24B4A" : "#1D9E75", fontWeight: 700 }}>
-                            {f.direction === "increase" ? "▲" : "▼"}
-                          </span>
-                          {f.label}
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </>
               )}
+            </article>
+
+            <article className="card p-4">
+              <div className="mb-2 flex items-center gap-2" style={{ color }}><BookOpen size={16} /><h3 className="card-title">Ce que cette ligne indique</h3></div>
+              <p className="secondary-text leading-6">{reading.meaning}</p>
+            </article>
+          </div>
+
+          <article className="card mt-3 overflow-hidden">
+            <div className="flex items-center gap-2 border-b px-4 py-3" style={{ borderColor: "var(--c-border)", color }}>
+              <Calculator size={16} />
+              <h3 className="card-title">Calcul exact</h3>
             </div>
+            <div className="p-4">
+              <code className="block rounded-xl px-3 py-3 text-[12px] leading-6" style={{ background: "var(--c-surface-2)", color: "var(--c-text-1)", whiteSpace: "normal" }}>
+                {reading.formula}
+              </code>
+              <p className="mt-3 text-[12px] leading-5" style={{ color: "var(--c-text-2)" }}>
+                <strong style={{ color: "var(--c-text-1)" }}>Limite :</strong> {reading.limits}
+              </p>
+            </div>
+          </article>
+
+          {metricKey === "spacing" && metrics.recovery?.factors?.length > 0 && (
+            <article className="card mt-3 p-4">
+              <div className="mb-3 flex items-center gap-2" style={{ color }}><Database size={16} /><h3 className="card-title">Paramètre appliqué</h3></div>
+              {metrics.recovery.factors.map((factor, index) => (
+                <p key={index} className="secondary-text rounded-xl px-3 py-2" style={{ background: "var(--c-surface-2)" }}>{factor.label}</p>
+              ))}
+            </article>
           )}
 
-          {/* Ce que ça mesure */}
-          <div className="card" style={{ padding: "12px 14px" }}>
-            <p style={{ fontSize: 9.5, fontWeight: 500, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--c-text-3)", marginBottom: 6 }}>
-              Ce que mesure ce score
-            </p>
-            <p style={{ fontSize: 12.5, color: "var(--c-text-2)", lineHeight: 1.55 }}>{science.what}</p>
-          </div>
-
-          {/* Formule */}
-          <div style={{ borderRadius: 12, overflow: "hidden", border: "1px solid var(--c-border)" }}>
-            <div style={{ padding: "9px 14px", background: "var(--c-surface-2)", borderBottom: "1px solid var(--c-border)" }}>
-              <p style={{ fontSize: 9.5, fontWeight: 500, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--c-text-3)" }}>
-                Formule de calcul
-              </p>
-            </div>
-            <div style={{ padding: "10px 14px", background: "var(--c-surface)" }}>
-              <p style={{
-                fontSize: 12, color: "var(--c-text-2)", lineHeight: 1.6,
-                fontFamily: "monospace", background: "var(--c-surface-2)",
-                borderRadius: 8, padding: "8px 12px",
-              }}>
-                {science.formula}
-              </p>
-            </div>
-          </div>
-
-          {/* Séances */}
-          {weekSessions.length > 0 && (
-            <div className="card" style={{ overflow: "hidden" }}>
-              <div style={{ padding: "10px 14px", borderBottom: "1px solid var(--c-border)" }}>
-                <p style={{ fontSize: 12.5, fontWeight: 500, color: "var(--c-text-1)" }}>Séances ayant contribué</p>
-                <p style={{ fontSize: 10.5, color: "var(--c-text-3)", marginTop: 1 }}>2 dernières semaines · RPE validé</p>
+          {LOAD_KEYS.has(metricKey) && recentSessions.length > 0 && (
+            <article className="card mt-3 overflow-hidden">
+              <div className="flex items-center justify-between border-b px-4 py-3" style={{ borderColor: "var(--c-border)" }}>
+                <div className="flex items-center gap-2" style={{ color }}><Database size={16} /><h3 className="card-title">Séances contributrices récentes</h3></div>
+                <span className="meta-text">S{currentWeek}</span>
               </div>
               <div>
-                {weekSessions.slice(0, 6).map((s, idx) => {
-                  const rpe    = s.validation?.rpe ?? 0;
-                  const actualDuration = s.validation?.actualDurationMinutes;
-                  const load = Number.isFinite(Number(actualDuration)) ? Number(actualDuration) * rpe : null;
-                  const rpeCol = rpe <= 3 ? "#1D9E75" : rpe <= 6 ? "#E8A020" : "#E05252";
+                {recentSessions.map((session, index) => {
+                  const duration = session.validation?.actualDurationMinutes;
+                  const rpe = session.validation?.rpe;
+                  const load = Number.isFinite(Number(duration)) && Number.isFinite(Number(rpe)) ? Math.round(Number(duration) * Number(rpe)) : null;
                   return (
-                    <div key={s.id} style={{
-                      padding: "10px 14px", display: "flex", alignItems: "center", gap: 10,
-                      borderTop: idx > 0 ? "1px solid var(--c-border)" : "none",
-                    }}>
-                      <div style={{
-                        width: 32, height: 32, borderRadius: 9, flexShrink: 0,
-                        background: rpeCol + "18", border: `1px solid ${rpeCol}30`,
-                        display: "flex", alignItems: "center", justifyContent: "center",
-                        fontSize: 12, fontWeight: 600, color: rpeCol,
-                        fontVariantNumeric: "tabular-nums",
-                      }}>
-                        {rpe}
+                    <div key={session.id} className="flex items-center gap-3 px-4 py-3" style={{ borderTop: index ? "1px solid var(--c-border)" : "none" }}>
+                      <div className="flex h-9 w-9 items-center justify-center rounded-xl text-[12px] font-bold" style={{ background: `${color}14`, color }}>{rpe}</div>
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-[13px] font-semibold" style={{ color: "var(--c-text-1)" }}>{session.title}</p>
+                        <p className="meta-text mt-0.5">{session.sessionDate ?? `S${session.week}`} · {duration == null ? "durée réelle inconnue" : `${duration} min réelles`} · RPE {rpe}</p>
                       </div>
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <p style={{ fontSize: 12, fontWeight: 500, color: "var(--c-text-1)" }} className="truncate">{s.title}</p>
-                        <p style={{ fontSize: 12, color: "var(--c-text-2)" }}>{s.day} · S{s.week} · {actualDuration != null ? `${actualDuration} min réelles` : "durée réelle inconnue"}</p>
-                      </div>
-                      <div style={{ textAlign: "right", flexShrink: 0 }}>
-                        <p style={{ fontSize: 13, fontWeight: 600, color: rpeCol, fontVariantNumeric: "tabular-nums" }}>{load ?? "—"}</p>
-                        <p style={{ fontSize: 12, color: "var(--c-text-2)" }}>charge</p>
+                      <div className="text-right">
+                        <p className="text-[14px] font-bold" style={{ color }}>{load ?? "—"}</p>
+                        <p className="meta-text">charge</p>
                       </div>
                     </div>
                   );
                 })}
               </div>
-            </div>
+            </article>
           )}
 
-          {/* Charge hebdo */}
-          {recentCharge.length > 0 && (
-            <div className="card" style={{ padding: "12px 14px" }}>
-              <p style={{ fontSize: 12.5, fontWeight: 500, color: "var(--c-text-1)", marginBottom: 2 }}>Charge hebdomadaire</p>
-              <p style={{ fontSize: 10.5, color: "var(--c-text-3)", marginBottom: 12 }}>
-                4 dernières semaines · méthode session-RPE
-              </p>
-              <div style={{ display: "flex", alignItems: "flex-end", gap: 6, height: 80 }}>
-                {recentCharge.map((w, i) => {
-                  const pct       = (w.load / maxLoad) * 100;
-                  const isCurrent = w.week === currentWeek;
+          {LOAD_KEYS.has(metricKey) && recentWeeks.length > 0 && (
+            <article className="card mt-3 p-4">
+              <div className="mb-4 flex items-center justify-between">
+                <h3 className="card-title">Qualité des quatre dernières semaines</h3>
+                <span className="meta-text">0 confirmé ≠ inconnu</span>
+              </div>
+              <div className="grid grid-cols-4 gap-2">
+                {recentWeeks.map((week) => {
+                  const complete = (week.unknownDays ?? 0) === 0 && (week.knownDays ?? 0) > 0;
                   return (
-                    <div key={i} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 4, height: "100%" }}>
-                      <div style={{ flex: 1, width: "100%", display: "flex", alignItems: "flex-end" }}>
-                        <div style={{
-                          width: "100%", height: `${Math.max(pct, 5)}%`,
-                          borderRadius: "4px 4px 2px 2px",
-                          background: isCurrent ? w.color + "55" : "rgba(255,255,255,0.05)",
-                          borderTop: `2px solid ${w.color}${isCurrent ? "CC" : "40"}`,
-                          transition: "height 0.6s cubic-bezier(0.16,1,0.3,1)",
-                        }} />
-                      </div>
-                      <p style={{ fontSize: 8, color: isCurrent ? "var(--c-text-2)" : "var(--c-text-4)", fontWeight: isCurrent ? 500 : 400 }}>
-                        {w.label}
-                      </p>
-                      <p style={{ fontSize: 8.5, fontWeight: 600, color: w.color, fontVariantNumeric: "tabular-nums" }}>
-                        {w.load}
-                      </p>
+                    <div key={week.week} className="rounded-xl border px-2 py-3 text-center" style={{ background: "var(--c-surface-2)", borderColor: complete ? "rgba(29,158,117,0.24)" : "rgba(239,159,39,0.22)" }}>
+                      <p className="text-[12px] font-bold" style={{ color: complete ? "#7BD8B4" : "#F6C76B" }}>S{week.week}</p>
+                      <p className="meta-text mt-1">{week.knownDays ?? 0} connus</p>
                     </div>
                   );
                 })}
               </div>
-              <p style={{ fontSize: 9.5, color: "var(--c-text-4)", marginTop: 10 }}>
-                Charge = durée (min) × RPE · Foster et al. (2001)
-              </p>
-            </div>
+            </article>
           )}
 
-          {/* Sources */}
-          <div style={{ borderRadius: 12, overflow: "hidden", border: "1px solid var(--c-border)" }}>
-            <div style={{ padding: "9px 14px", background: "var(--c-surface-2)", borderBottom: "1px solid var(--c-border)" }}>
-              <p style={{ fontSize: 9.5, fontWeight: 500, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--c-text-3)" }}>
-                Sources scientifiques
-              </p>
-            </div>
-            <div>
-              {science.sources.map((src, i) => (
-                <div key={i} style={{ padding: "10px 14px", borderTop: i > 0 ? "1px solid var(--c-border)" : "none" }}>
-                  <p style={{ fontSize: 11.5, fontWeight: 500, color: "var(--c-text-1)" }}>{src.ref}</p>
-                  <p style={{ fontSize: 10.5, color: "var(--c-text-3)", marginTop: 2, fontStyle: "italic" }}>{src.detail}</p>
-                </div>
-              ))}
-              {science.evidenceLevel === "convention" && (
-                <div style={{ padding: "9px 14px", background: "rgba(232,160,32,0.07)", borderTop: "1px solid var(--c-border)" }}>
-                  <p style={{ fontSize: 10.5, color: "#E8A020", lineHeight: 1.5 }}>
-                    Les coefficients de pondération sont des conventions de coaching AthleteOS, pas des standards publiés.
-                  </p>
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Grille d'interprétation */}
-          <div style={{ display: "flex", flexDirection: "column", gap: 6, paddingBottom: 8 }}>
-            <p style={{ fontSize: 9.5, fontWeight: 500, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--c-text-3)", marginBottom: 2 }}>
-              Grille d'interprétation
+          <article className="mt-3 rounded-2xl border p-4" style={{ background: "rgba(91,141,239,0.06)", borderColor: "rgba(91,141,239,0.18)" }}>
+            <div className="mb-2 flex items-center gap-2 text-[#A9CBFB]"><BookOpen size={16} /><h3 className="card-title">Références et statut</h3></div>
+            {reading.sources.map((source) => <p key={source} className="text-[12px] leading-6" style={{ color: "var(--c-text-2)" }}>{source}</p>)}
+            <p className="mt-2 text-[12px] leading-5" style={{ color: "var(--c-text-3)" }}>
+              AthleteOS affiche cette mesure pour documenter le suivi. La décision d'entraînement reste contextualisée avec l'athlète et le coach.
             </p>
-            {science.thresholds.map((t, i) => {
-              const isActive = value >= t.min && value <= t.max;
-              return (
-                <div key={i} style={{
-                  borderRadius: 10, padding: "10px 12px",
-                  display: "flex", alignItems: "center", gap: 10,
-                  background: isActive ? `${t.color}10` : "var(--c-surface-2)",
-                  border: `${isActive ? 1.5 : 1}px solid ${isActive ? t.color + "30" : "var(--c-border)"}`,
-                }}>
-                  <div style={{ width: 8, height: 8, borderRadius: "50%", background: t.color, flexShrink: 0 }} />
-                  <div style={{ flex: 1 }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 3 }}>
-                      <p style={{ fontSize: 12, fontWeight: 500, color: t.color }}>{t.label}</p>
-                      <span style={{ fontSize: 9.5, color: "var(--c-text-3)" }}>{t.min}–{t.max}</span>
-                      {isActive && (
-                        <span style={{
-                          fontSize: 9, fontWeight: 600, padding: "1px 6px", borderRadius: 4,
-                          background: t.color, color: "white",
-                        }}>
-                          Tu es ici
-                        </span>
-                      )}
-                    </div>
-                    <p style={{ fontSize: 11.5, color: "var(--c-text-2)", lineHeight: 1.5 }}>{t.advice}</p>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
+          </article>
         </div>
-      </div>
+      </section>
     </div>,
-    document.body
+    document.body,
   );
 });
 
@@ -2128,8 +1956,9 @@ export default WellnessModal;
 import { createPortal } from "react-dom";
 import { Plus, X } from "lucide-react";
 import { COMBINE_EVENTS } from "./perfsShared";
+import PerformanceMetadataFields from "../../components/performance/PerformanceMetadataFields.jsx";
 
-export default function AddCompModal({ compForm, setCompForm, onClose, onSubmit, saving }) {
+export default function AddCompModal({ compForm, setCompForm, onClose, onSubmit, saving, error }) {
   const labelStyle = { display: "block", fontSize: 12, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", color: "var(--c-text-2)", marginBottom: 8 };
   return createPortal(
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4 modal-backdrop"
@@ -2203,6 +2032,16 @@ export default function AddCompModal({ compForm, setCompForm, onClose, onSubmit,
               </select>
             </div>
           </div>
+          <PerformanceMetadataFields
+            discipline={compForm.event}
+            metadata={compForm.metadata}
+            setMetadata={(updater) => setCompForm((current) => ({
+              ...current,
+              metadata: typeof updater === "function" ? updater(current.metadata) : updater,
+            }))}
+            idPrefix="comp-meta"
+          />
+          {error && <p role="alert" className="rounded-xl border px-3 py-2.5 text-[13px]" style={{ color: "var(--color-danger)", borderColor: "rgba(226,75,74,0.28)", background: "rgba(226,75,74,0.08)" }}>{error}</p>}
         </div>
         <div style={{ padding: "12px 20px", borderTop: "1px solid var(--c-border)", display: "flex", gap: 10 }}>
           <button type="button" onClick={onClose} className="btn-secondary">Annuler</button>
@@ -2325,8 +2164,9 @@ export default function AddGoalModal({ disciplines, goalForm, setGoalForm, onClo
 import { createPortal } from "react-dom";
 import { Plus, TrendingUp, X } from "lucide-react";
 import { COMBINE_EVENTS, discColor } from "./perfsShared";
+import PerformanceMetadataFields from "../../components/performance/PerformanceMetadataFields.jsx";
 
-export default function AddPerfModal({ disciplines, perfForm, setPerfForm, onClose, onSubmit, saving }) {
+export default function AddPerfModal({ disciplines, perfForm, setPerfForm, onClose, onSubmit, saving, error }) {
   const labelStyle = { display: "block", fontSize: 12, fontWeight: 700, color: "var(--c-text-2)", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 8 };
   // Portal sur document.body — AthletePerfs.jsx est rendu à l'intérieur du
   // <main> scrollable d'AthleteApp.jsx ; sans portal ce position:fixed dérive
@@ -2422,6 +2262,17 @@ export default function AddPerfModal({ disciplines, perfForm, setPerfForm, onClo
               value={perfForm.context}
               onChange={e => setPerfForm(f => ({ ...f, context: e.target.value }))} />
           </div>
+
+          <PerformanceMetadataFields
+            discipline={perfForm.discipline}
+            metadata={perfForm.metadata}
+            setMetadata={(updater) => setPerfForm((current) => ({
+              ...current,
+              metadata: typeof updater === "function" ? updater(current.metadata) : updater,
+            }))}
+            idPrefix="perf-meta"
+          />
+          {error && <p role="alert" className="rounded-xl border px-3 py-2.5 text-[13px]" style={{ color: "var(--color-danger)", borderColor: "rgba(226,75,74,0.28)", background: "rgba(226,75,74,0.08)" }}>{error}</p>}
         </div>
 
         <div className="px-6 py-4 flex items-center justify-between gap-3 flex-shrink-0" style={{ borderTop: "1px solid var(--c-border)" }}>
@@ -3405,14 +3256,16 @@ import {
   Star, Clock,
 } from "lucide-react";
 import {
-  getAthleteMetricsForWeek, getStatusLabel,
+  getAthleteMetricsForWeek, getWellnessStatus,
 } from "../../utils/chargeCalculations";
 import { getAthleteAxisProfile } from "../../utils/loadAxes";
 import {
-  getISOWeek, dimColor, colorsFor, parsePerf, isSameDay, parseLocalDate, toLocalDateStr,
+  getISOWeek, colorsFor, parsePerf, isSameDay, parseLocalDate, toLocalDateStr,
   initialsFromName, getDiscHib, DISC_TYPE_COLORS, WELLNESS_QUESTIONS, EVIDENCE_LEVELS,
 } from "../shared";
 import AxisRadarCard from "../../components/ui/AxisRadarCard";
+import FormeDetailPanel from "../components/FormeDetailPanel";
+import { getMonitoringOverview, getMonitoringReading } from "../../domain/monitoringMetrics.js";
 import { SessionDetailModal } from "./AthletePlanning";
 import { openSessionPdf } from "../../utils/storage";
 import { getTodayFocus } from "../dashboardFocus";
@@ -3515,7 +3368,7 @@ const BadgeItem = memo(({ badge }) => (
 // Ring héro readiness — se remplit de 0 à sa valeur au montage, façon
 // Whoop/Oura : c'est ce petit détail (l'anneau qui "arrive" plutôt que
 // d'apparaître déjà rempli) qui donne l'effet waouh à la première ouverture.
-const ReadinessRing = memo(({ value, color, size = 128 }) => {
+const WellnessRing = memo(({ value, color, size = 128 }) => {
   const [animated, setAnimated] = useState(0);
   const [displayValue, setDisplayValue] = useState(0);
   useEffect(() => {
@@ -3724,12 +3577,17 @@ export default function AthleteDashboard({
   const today       = new Date();
   const currentWeek = getISOWeek(today);
   const [openTodaySessionId, setOpenTodaySessionId] = useState(null);
+  const [activeMetric, setActiveMetric] = useState(null);
 
   const metrics = useMemo(() =>
     getAthleteMetricsForWeek(athlete.id, weeklyCharge, currentWeek, wellnessToday ? [wellnessToday] : [], sessions),
   [athlete.id, weeklyCharge, currentWeek, wellnessToday, sessions]);
 
-  const status = getStatusLabel(metrics.readiness, metrics.fatigue, metrics.acwr);
+  const monitoringOverview = useMemo(() => getMonitoringOverview(metrics), [metrics]);
+  const secondaryMonitoring = useMemo(() => ["variation", "monotony", "spacing", "acwrExperimental"]
+    .map((key) => getMonitoringReading(key, metrics)), [metrics]);
+
+  const status = getWellnessStatus(metrics.wellnessScore);
 
   const nextComp = competitions
     .filter(c => c.athleteIds.includes(athlete.id) && new Date(c.date) >= today)
@@ -3827,7 +3685,7 @@ export default function AthleteDashboard({
       {/* Le premier écran répond à deux questions distinctes :
           "comment je vais ?" à gauche, "que dois-je faire ?" à droite. */}
       <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1.5fr)_minmax(300px,0.8fr)] gap-4 md:gap-5 items-stretch">
-        <section className="rounded-2xl overflow-hidden select-none border" aria-labelledby="readiness-title"
+        <section className="rounded-2xl overflow-hidden select-none border" aria-labelledby="wellness-title"
           style={{ position: "relative", background: "linear-gradient(160deg, var(--c-surface) 0%, var(--c-surface-2) 55%, var(--c-bg) 100%)", borderColor: "var(--c-border)" }}>
           {/* Grille décorative — très subtile */}
           <div className="absolute pointer-events-none" aria-hidden="true" style={{
@@ -3852,7 +3710,7 @@ export default function AthleteDashboard({
                 <p className="meta-text" style={{ fontWeight: 600, letterSpacing: "0.07em", textTransform: "uppercase", marginBottom: "var(--space-1)" }}>
                   État du jour · S{currentWeek}
                 </p>
-                <p id="readiness-title" className="section-title">{status.label}</p>
+                <p id="wellness-title" className="section-title">{status.label}</p>
                 <p className="meta-text" style={{ marginTop: "var(--space-1)" }}>
                   {athlete.mainDiscipline ?? "Athlète"}{athlete.group ? ` · ${athlete.group}` : ""}
                 </p>
@@ -3869,10 +3727,10 @@ export default function AthleteDashboard({
             </div>
           </div>
 
-          {/* Ring héro — readiness, LE chiffre qui compte le plus, avec le
-              reste (fatigue/ACWR/streak) en soutien à côté */}
+          {/* Le questionnaire reste visible, mais n'est jamais présenté comme
+              une readiness physiologique ou une autorisation de s'entraîner. */}
           <div style={{ display: "flex", alignItems: "center", gap: 18, flexWrap: "wrap" }}>
-            <ReadinessRing value={metrics.wellnessScore ?? 0} color={statusColor} />
+            <WellnessRing value={metrics.wellnessScore ?? 0} color={statusColor} />
 
             <div style={{ flex: 1, minWidth: 190 }}>
               <p style={{ fontSize: "var(--text-body)", color: "var(--c-text-2)", lineHeight: "var(--leading-body)", marginBottom: "var(--space-4)" }}>
@@ -3884,11 +3742,14 @@ export default function AthleteDashboard({
                   { key: "load28", label: "Charge 28j", value: metrics.load28 ?? "—", unit: "", pct: metrics.load28 ? 100 : 0, danger: false },
                   { key: "streak",  label: "Streak",   value: streak,                  unit: " sem", pct: Math.min(100,streak*10), danger: false },
                 ].map(s => {
-                  const col = s.key === "streak" ? dimColor("streak", Number(s.value)) : "#5B8DEF";
+                  const col = s.key === "streak" ? "#1D9E75" : "#5B8DEF";
                   return (
-                    <div key={s.key} className={s.danger ? "pulse-danger-card" : undefined} style={{
+                    <button type="button" key={s.key}
+                      onClick={() => s.key !== "streak" && setActiveMetric(s.key)}
+                      aria-label={s.key === "streak" ? `Série de ${s.value} semaines` : `Voir l'explication de ${s.label}`}
+                      className={s.danger ? "pulse-danger-card" : "tap-feedback"} style={{
                       background: "rgba(255,255,255,0.03)", border: "0.5px solid rgba(255,255,255,0.055)",
-                      borderRadius: 10, padding: "10px 8px", textAlign: "center",
+                      borderRadius: 10, padding: "10px 8px", textAlign: "center", cursor: s.key === "streak" ? "default" : "pointer",
                     }}>
                       <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "center", gap: 2, marginBottom: 4 }}>
                         <span style={{ fontSize: 17, fontWeight: 600, color: col, fontVariantNumeric: "tabular-nums", letterSpacing: "-0.03em", lineHeight: 1 }}>
@@ -3902,12 +3763,12 @@ export default function AthleteDashboard({
                       <div style={{ height: 1.5, background: "rgba(255,255,255,0.05)", borderRadius: 99, marginTop: 6, overflow: "hidden" }}>
                         <div style={{ height: "100%", width: `${Math.max(3,s.pct)}%`, background: col, borderRadius: 99, opacity: 0.65, transition: "width 0.8s cubic-bezier(0.16,1,0.3,1)" }} />
                       </div>
-                    </div>
+                    </button>
                   );
                 })}
               </div>
             </div>
-            </div>
+          </div>
           </div>
         </section>
 
@@ -4091,54 +3952,47 @@ export default function AthleteDashboard({
           />
 
           {/* ── État de forme ───────────────────────────────────────────────── */}
-          {hasCharge && (
-            <div className="card p-4">
+          <div className="card p-4">
               <div className="flex items-center justify-between mb-1">
-                <p className="card-title">État de forme</p>
-                <span className="meta-text">Ouvrir pour le détail</span>
+                <p className="card-title">Mesures & signaux du jour</p>
+                <span className="chip chip-neutral">Aucun score caché</span>
               </div>
-              <p className="card-subtitle mb-4">Basé sur ta charge réelle</p>
+              <p className="card-subtitle mb-4">Ouvre chaque ligne pour voir le calcul, les données utilisées et ses limites.</p>
               <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                 {[
-                  { key: "readiness", label: "Bien-être déclaré", value: metrics.wellnessScore, color: "#1D9E75" },
-                  { key: "forme", label: "Charge sur 7 jours", value: metrics.load7, color: "#4B7BDB" },
-                  { key: "fatigue", label: "Charge sur 28 jours", value: metrics.load28, color: "#14B8A6" },
-                  { key: "recuperation", label: "EWMA courte", value: metrics.acute == null ? null : Math.round(metrics.acute), color: "#A855F7" },
-                  { key: "risque", label: "EWMA longue", value: metrics.chronic == null ? null : Math.round(metrics.chronic), color: "#EC4899" },
+                  ...monitoringOverview,
+                  ...secondaryMonitoring,
                 ].map(s => {
-                  const val = s.value;
+                  const val = s.displayValue;
                   const col = s.color;
-                  const thresh = null;
                   return (
-                    <div key={s.key}
+                    <button type="button" key={s.key}
+                      onClick={() => setActiveMetric(s.key)}
+                      aria-label={`Expliquer ${s.label}`}
                       className="tap-feedback"
-                      style={{ background: "var(--c-surface-2)", borderRadius: 10, padding: "10px 12px", textAlign: "left", border: "none", transition: "background 0.15s ease", width: "100%" }}>
+                      style={{ background: "var(--c-surface-2)", borderRadius: 10, padding: "11px 12px", textAlign: "left", border: "1px solid var(--c-border)", transition: "background 0.15s ease", width: "100%" }}>
                       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: 7 }}>
                         <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
-                          <span style={{ fontSize: 12.5, fontWeight: 400, color: "var(--c-text-1)" }}>{s.label}</span>
-                          {thresh && (
-                            <span style={{ fontSize: "var(--text-meta)", fontWeight: 600, padding: "2px 7px", borderRadius: 6, background: thresh.color + "10", color: thresh.color }}>
-                              {thresh.label}
-                            </span>
-                          )}
+                          <span style={{ fontSize: 12.5, fontWeight: 500, color: "var(--c-text-1)" }}>{s.shortLabel}</span>
+                          <span className="meta-text">{s.kind}</span>
                         </div>
                         <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
-                          <span style={{ fontSize: 14, fontWeight: 600, color: col, fontVariantNumeric: "tabular-nums", letterSpacing: "-0.02em" }}>{val}</span>
+                          <span style={{ fontSize: 14, fontWeight: 600, color: col, fontVariantNumeric: "tabular-nums", letterSpacing: "-0.02em" }}>{val}{s.unit ? ` ${s.unit}` : ""}</span>
+                          <ChevronRight size={14} style={{ color: "var(--c-text-3)" }} />
                         </div>
                       </div>
                       {/* Barre 3px */}
                       <div style={{ height: 3, background: "rgba(255,255,255,0.07)", borderRadius: 99, overflow: "hidden" }}>
-                        <div style={{ height: "100%", width: `${val}%`, background: col, borderRadius: 99, transition: "width 0.8s cubic-bezier(0.16,1,0.3,1)" }} />
+                        <div style={{ height: "100%", width: s.available ? "100%" : "28%", background: col, opacity: s.available ? 0.72 : 0.28, borderRadius: 99, transition: "width 0.8s cubic-bezier(0.16,1,0.3,1)" }} />
                       </div>
-                    </div>
+                    </button>
                   );
                 })}
               </div>
               <p className="meta-text" style={{ marginTop: "var(--space-3)", textAlign: "center" }}>
-                ACWR : Gabbett (2016) · Récup. : Hasegawa (2024) · Banister (1975)
+                Mesures descriptives · aucune zone optimale · aucune estimation individuelle du risque
               </p>
-            </div>
-          )}
+          </div>
 
           {/* ── Séances cette semaine ───────────────────────────────────────── */}
           <div className="card overflow-hidden">
@@ -4424,6 +4278,17 @@ export default function AthleteDashboard({
           )}
         </div>
       </div>
+
+      {activeMetric && (
+        <FormeDetailPanel
+          metricKey={activeMetric}
+          metrics={metrics}
+          sessions={sessions}
+          weeklyCharge={weeklyCharge}
+          athlete={athlete}
+          onClose={() => setActiveMetric(null)}
+        />
+      )}
 
       {openedTodaySession && (
         <SessionDetailModal
@@ -5221,8 +5086,11 @@ import {
   ScatterChart, Scatter, ZAxis, ReferenceArea, ReferenceLine,
 } from "recharts";
 import { supabase } from "../../utils/supabaseClient";
-import { getDiscHib, parsePerf, toLocalDateStr, getISOWeek, isBetterOrEqual, pctOfReference } from "../shared";
-import { resolveDisciplineId, getDisciplineUnit } from "../../domain/disciplines.js";
+import { getDiscHib, isBetterOrEqual, parsePerf, toLocalDateStr, getISOWeek, pctOfReference } from "../shared";
+import {
+  createPerformanceMetadata, normalizePerformanceMetadata, resolveDisciplineId,
+  validatePerformanceMetadata,
+} from "../../domain/disciplines.js";
 import { notifyGoalAchieved, postClubCelebration, dispatchOutboxNotifications } from "../../utils/notifications";
 import { getAthleteMetricsForWeek } from "../../utils/chargeCalculations";
 import { parseLocalDate } from "../../utils/helpers";
@@ -5233,6 +5101,7 @@ import AddPerfModal from "./AddPerfModal";
 import AddGoalModal from "./AddGoalModal";
 import AddCompModal from "./AddCompModal";
 import { SegmentedTabs } from "../../components/ui/premium";
+import PerformanceContextChips from "../../components/performance/PerformanceContextChips.jsx";
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // COMPOSANT PRINCIPAL
@@ -5249,13 +5118,14 @@ export default function AthletePerfs({ athlete, competitions, myPerformances, my
   const [showAddComp,  setShowAddComp]  = useState(false);
   const [savingComp,   setSavingComp]   = useState(false);
   const [showConfetti, setShowConfetti] = useState(false);
+  const [performanceError, setPerformanceError] = useState("");
   const [compForm,     setCompForm]     = useState({
     name: "", date: toLocalDateStr(new Date()),
-    location: "", type: "Régionale", event: "", result: "", context: "", breakdown: {},
+    location: "", type: "Régionale", event: "", result: "", context: "", breakdown: {}, metadata: createPerformanceMetadata(""),
   });
 
   const [perfForm, setPerfForm] = useState({
-    discipline: "", value: "", performance_date: toLocalDateStr(today), context: "", breakdown: {},
+    discipline: "", value: "", performance_date: toLocalDateStr(today), context: "", breakdown: {}, metadata: createPerformanceMetadata(""),
   });
   const [goalForm, setGoalForm] = useState({
     discipline: "", target_value: "", deadline: "", notes: "",
@@ -5380,61 +5250,10 @@ export default function AthletePerfs({ athlete, competitions, myPerformances, my
   const activeGoals   = localGoals.filter(g => !g.achieved);
   const achievedGoals = localGoals.filter(g =>  g.achieved);
 
-  // ── Détection + mise à jour automatique du record (PR/SB) ────────────────
-  // Partagée entre "Saisir une performance" ET "Ajouter une compétition" —
-  // avant ce fix, seule la 1ère mettait le record à jour ; un résultat de
-  // compétition qui battait le PR ne le faisait jamais remonter.
-  const maybeUpdateRecord = async (disc, resultStr, dateStr) => {
-    const newVal = parsePerf(resultStr);
-    if (newVal.value == null) return false;
-    const curRec = athlete.records?.[disc];
-    const curPR  = curRec ? parsePerf(curRec.pr) : null;
-    const curSB  = curRec ? parsePerf(curRec.sb) : null;
-    const isThisYear = dateStr.slice(0, 4) === new Date().getFullYear().toString();
-
-    const isPR = !curPR?.value || isBetterOrEqual(newVal.value, curPR.value, disc);
-    const isSB = isThisYear && (!curSB?.value || isBetterOrEqual(newVal.value, curSB.value, disc));
-    if (!isPR && !isSB) return false;
-
-    // Tâche 14 : records a maintenant une contrainte UNIQUE(athlete_id,
-    // discipline) et des colonnes numériques pr_value/sb_value (comparées
-    // par les RPC de compétition, migration 20260730010000) — il faut les
-    // maintenir à jour ici aussi, sinon une saisie manuelle "démode"
-    // silencieusement la valeur numérique sans toucher au texte, et la
-    // prochaine comparaison de record en compétition se ferait contre une
-    // valeur obsolète.
-    const { data: existingRow } = await supabase.from("records").select("id")
-      .eq("athlete_id", athlete.id).eq("discipline", disc).maybeSingle();
-    const patch = {
-      // Tâche 12 : unité + discipline résolue tenues à jour à chaque écriture.
-      unit: getDisciplineUnit(disc), discipline_id: disc,
-      ...(isPR ? { pr: resultStr, pr_value: newVal.value, pr_date: dateStr } : {}),
-      ...(isSB ? { sb: resultStr, sb_value: newVal.value } : {}),
-      ...(!curPR?.value ? { pr: resultStr, pr_value: newVal.value, pr_date: dateStr, sb: resultStr, sb_value: newVal.value } : {}),
-    };
-    if (existingRow) {
-      await supabase.from("records").update(patch).eq("id", existingRow.id);
-    } else {
-      await supabase.from("records").insert({ athlete_id: athlete.id, discipline: disc, ...patch });
-    }
-    if (athlete.records) {
-      athlete.records[disc] = {
-        ...curRec,
-        ...(isPR ? { pr: resultStr, prDate: dateStr } : {}),
-        ...(isSB ? { sb: resultStr } : {}),
-      };
-    }
-    if (isPR) {
-      postClubCelebration(clubId, athlete.id, "record",
-        `${athlete.name.split(" ")[0]} a battu son record en ${disc} : ${resultStr} !`).catch(console.warn);
-      setShowConfetti(true);
-    }
-    return isPR;
-  };
-
   // ── Handlers ───────────────────────────────────────────────────────────
   const handleAddPerf = async () => {
     if (!perfForm.discipline.trim() || !perfForm.value.trim()) return;
+    setPerformanceError("");
     setSavingPerf(true);
     try {
       // Tâche 9 : normalise un alias saisi librement ("100 m" -> "100m")
@@ -5453,28 +5272,37 @@ export default function AthletePerfs({ athlete, competitions, myPerformances, my
       // (on ne bloque pas la saisie manuelle d'un athlète) mais marquée pour
       // ne pas fausser silencieusement un tri/calcul ultérieur.
       const normalizedValue = parsePerf(perfForm.value).value;
+      if (normalizedValue == null) throw new Error("Le résultat doit contenir une valeur numérique valide.");
+      const metadata = normalizePerformanceMetadata(disc, perfForm.metadata);
+      const metadataIssues = validatePerformanceMetadata(disc, metadata);
+      if (metadataIssues.length) throw new Error(metadataIssues[0]);
 
-      const { data, error } = await supabase
-        .from("athlete_performances")
-        .insert({
-          athlete_id:       athlete.id,
-          club_id:          clubId,
-          discipline:       disc,
-          discipline_type:  disc,
-          value:            perfForm.value,
-          performance_date: perfForm.performance_date,
-          context:          perfForm.context || null,
-          breakdown:        cleanBreakdown && Object.keys(cleanBreakdown).length ? cleanBreakdown : null,
-          normalized_value: normalizedValue,
-          unit:             getDisciplineUnit(disc),
-          discipline_id:    disc,
-          quality_flags:    normalizedValue == null ? ["unparsable"] : [],
-        })
-        .select().single();
+      const { data, error } = await supabase.rpc("add_athlete_performance", {
+        p_discipline: disc,
+        p_value: perfForm.value.trim(),
+        p_result_value: normalizedValue,
+        p_performance_date: perfForm.performance_date,
+        p_context: perfForm.context || null,
+        p_breakdown: cleanBreakdown && Object.keys(cleanBreakdown).length ? cleanBreakdown : null,
+        p_metadata: metadata,
+        p_idempotency_key: crypto.randomUUID(),
+      });
       if (error) throw error;
-      setLocalPerfs(prev => [...prev, data]);
-
-      await maybeUpdateRecord(disc, perfForm.value, perfForm.performance_date);
+      setLocalPerfs(prev => [...prev, {
+        id: data?.performanceId, athlete_id: athlete.id, club_id: clubId,
+        discipline: disc, discipline_type: disc, value: perfForm.value,
+        performance_date: perfForm.performance_date, context: perfForm.context || null,
+        breakdown: cleanBreakdown, normalized_value: normalizedValue, ...metadata,
+      }]);
+      if (data?.isNewRecord) {
+        setShowConfetti(true);
+        postClubCelebration(
+          clubId,
+          athlete.id,
+          "record",
+          `${athlete.name.split(" ")[0]} a battu son record en ${disc} : ${perfForm.value} !`,
+        ).catch(console.warn);
+      }
 
       // Bascule l'onglet Évolution sur la discipline qu'on vient de saisir —
       // sinon elle reste affichée sur l'ancienne sélection et la nouvelle
@@ -5482,10 +5310,12 @@ export default function AthletePerfs({ athlete, competitions, myPerformances, my
       // qu'elle est bien enregistrée, juste pas sélectionnée.
       setSelectedDisc(disc);
 
-      setPerfForm({ discipline: disc, value: "", performance_date: toLocalDateStr(today), context: "", breakdown: {} });
+      setPerfForm({ discipline: disc, value: "", performance_date: toLocalDateStr(today), context: "", breakdown: {}, metadata: createPerformanceMetadata(disc) });
       setShowAddPerf(false);
+      onRefresh?.();
     } catch (e) {
       console.error("Erreur ajout perf:", e);
+      setPerformanceError(e.message ?? "Impossible d'enregistrer la performance.");
     } finally {
       setSavingPerf(false);
     }
@@ -5551,6 +5381,7 @@ export default function AthletePerfs({ athlete, competitions, myPerformances, my
   // contre deux soumissions concurrentes qui battraient le même record.
   const handleAddComp = async () => {
     if (!compForm.name.trim() || !compForm.date || !compForm.event.trim() || !compForm.result.trim()) return;
+    setPerformanceError("");
     setSavingComp(true);
     try {
       // Tâche 9 : normalise un alias saisi librement avant d'écrire en base.
@@ -5559,20 +5390,26 @@ export default function AthletePerfs({ athlete, competitions, myPerformances, my
       const cleanBreakdown = isCombine
         ? Object.fromEntries(Object.entries(compForm.breakdown).filter(([, v]) => v?.trim()))
         : null;
+      const normalizedValue = parsePerf(compForm.result).value;
+      if (normalizedValue == null) throw new Error("Le résultat doit contenir une valeur numérique valide.");
+      const metadata = normalizePerformanceMetadata(event, compForm.metadata);
+      const metadataIssues = validatePerformanceMetadata(event, metadata);
+      if (metadataIssues.length) throw new Error(metadataIssues[0]);
 
-      const { data, error } = await supabase.rpc("create_solo_competition_result", {
+      const { data, error } = await supabase.rpc("create_solo_competition_result_v2", {
         p_name:             compForm.name.trim(),
         p_date:             compForm.date,
         p_location:         compForm.location || null,
         p_type:             compForm.type,
         p_event:            event,
         p_result:           compForm.result,
-        p_result_value:     parsePerf(compForm.result).value,
-        p_higher_is_better: getDiscHib(event),
+        p_result_value:     normalizedValue,
+        p_higher_is_better: metadata.performance_direction === "higher",
         p_context:          compForm.context || null,
         p_idempotency_key:  crypto.randomUUID(),
         p_breakdown:        cleanBreakdown && Object.keys(cleanBreakdown).length ? cleanBreakdown : null,
-        p_unit:             getDisciplineUnit(event),
+        p_unit:             metadata.unit,
+        p_metadata:         metadata,
       });
       if (error) throw error;
 
@@ -5585,6 +5422,7 @@ export default function AthletePerfs({ athlete, competitions, myPerformances, my
           discipline: event, discipline_type: event, value: compForm.result,
           performance_date: compForm.date, context: compForm.name.trim(),
           breakdown: cleanBreakdown && Object.keys(cleanBreakdown).length ? cleanBreakdown : null,
+          normalized_value: normalizedValue, ...metadata,
         }]);
       }
       if (data?.isNewRecord) setShowConfetti(true);
@@ -5596,11 +5434,12 @@ export default function AthletePerfs({ athlete, competitions, myPerformances, my
       // sélection et semble vide alors qu'elle est bien enregistrée.
       setSelectedDisc(event);
 
-      setCompForm({ name: "", date: toLocalDateStr(new Date()), location: "", type: "Régionale", event: "", result: "", context: "", breakdown: {} });
+      setCompForm({ name: "", date: toLocalDateStr(new Date()), location: "", type: "Régionale", event: "", result: "", context: "", breakdown: {}, metadata: createPerformanceMetadata("") });
       setShowAddComp(false);
       onRefresh?.();
     } catch (e) {
       console.error("Erreur ajout compétition:", e);
+      setPerformanceError(e.message ?? "Impossible d'enregistrer la compétition.");
     } finally {
       setSavingComp(false);
     }
@@ -5631,7 +5470,7 @@ export default function AthletePerfs({ athlete, competitions, myPerformances, my
               Lis ta progression, comprends tes tendances et transforme chaque mesure en repère.
             </p>
           </div>
-          <button type="button" onClick={() => setShowAddPerf(true)} className="btn-primary" style={{ flexShrink: 0 }}>
+          <button type="button" onClick={() => { setPerformanceError(""); setShowAddPerf(true); }} className="btn-primary" style={{ flexShrink: 0 }}>
             <Plus size={16} aria-hidden="true" /> Saisir une performance
           </button>
         </div>
@@ -5797,7 +5636,7 @@ export default function AthletePerfs({ athlete, competitions, myPerformances, my
                   Indice de niveau · {chartData.length} mesure{chartData.length !== 1 ? "s" : ""}
                 </p>
               </div>
-              <button type="button" onClick={() => setShowAddPerf(true)} className="btn-ghost" style={{ minHeight: 44, color: "#7BD8B4" }}>
+              <button type="button" onClick={() => { setPerformanceError(""); setShowAddPerf(true); }} className="btn-ghost" style={{ minHeight: 44, color: "#7BD8B4" }}>
                 <Plus size={14} aria-hidden="true" /> Ajouter
               </button>
             </div>
@@ -5810,7 +5649,7 @@ export default function AthletePerfs({ athlete, competitions, myPerformances, my
                 <p style={{ fontSize: 13, color: "var(--c-text-2)", textAlign: "center" }}>
                   Minimum 2 mesures pour afficher le graphique
                 </p>
-                <button type="button" onClick={() => setShowAddPerf(true)} className="btn-ghost" style={{ minHeight: 44, color: "#7BD8B4" }}>
+                <button type="button" onClick={() => { setPerformanceError(""); setShowAddPerf(true); }} className="btn-ghost" style={{ minHeight: 44, color: "#7BD8B4" }}>
                   + Saisir une performance
                 </button>
               </div>
@@ -5941,6 +5780,7 @@ export default function AthletePerfs({ athlete, competitions, myPerformances, my
                     <div style={{ minWidth: 0 }}>
                       <p style={{ fontSize: 17, fontWeight: 700, color: selectedDisc ? discColor(selectedDisc) : "#7BD8B4", fontVariantNumeric: "tabular-nums" }}>{p.value}</p>
                       {p.context && <p style={{ fontSize: 13, color: "var(--c-text-2)", fontStyle: "italic", marginTop: 3 }} className="truncate">{p.context}</p>}
+                      <PerformanceContextChips performance={p} />
                       {p.breakdown && Object.keys(p.breakdown).length > 0 && (
                         <div style={{ display: "flex", flexWrap: "wrap", gap: "4px 10px", marginTop: 6, maxWidth: 320 }}>
                           {Object.entries(p.breakdown).map(([ev, val]) => (
@@ -6093,7 +5933,7 @@ export default function AthletePerfs({ athlete, competitions, myPerformances, my
               <h2 className="section-title">Compétitions</h2>
               <p style={{ fontSize: 13, color: "var(--c-text-2)", marginTop: 4 }}>Le contexte et le résultat de chaque rendez-vous.</p>
             </div>
-            <button type="button" onClick={() => setShowAddComp(true)} className="btn-primary">
+            <button type="button" onClick={() => { setPerformanceError(""); setShowAddComp(true); }} className="btn-primary">
               <Plus size={16} aria-hidden="true" /> Ajouter
             </button>
           </div>
@@ -6156,6 +5996,7 @@ export default function AthletePerfs({ athlete, competitions, myPerformances, my
           onClose={() => setShowAddPerf(false)}
           onSubmit={handleAddPerf}
           saving={savingPerf}
+          error={performanceError}
         />
       )}
       {showAddGoal && (
@@ -6176,6 +6017,7 @@ export default function AthletePerfs({ athlete, competitions, myPerformances, my
           onClose={() => setShowAddComp(false)}
           onSubmit={handleAddComp}
           saving={savingComp}
+          error={performanceError}
         />
       )}
 
@@ -7327,7 +7169,9 @@ export const discColor = (disc) => getDisciplineColor(disc);
 // objectif au-delà de 100 dans le graphique d'évolution.
 export function performanceIndex(currentValue, referenceValue, discipline) {
   if (currentValue == null || referenceValue == null || currentValue === 0 || referenceValue === 0) return null;
-  const ratio = getDisciplineHib(discipline)
+  const higherIsBetter = getDisciplineHib(discipline);
+  if (higherIsBetter == null) return null;
+  const ratio = higherIsBetter
     ? currentValue / referenceValue
     : referenceValue / currentValue;
   return Math.round(ratio * 1000) / 10;
@@ -8405,82 +8249,81 @@ export const EVIDENCE_LEVELS = {
 //   - coach_decision : la lecture et la décision finale reviennent
 //                       toujours au coach, jamais à un seuil automatique
 export const METRIC_TAXONOMY = {
-  readiness:    "estimation",
-  forme:        "estimation",
-  fatigue:      "estimation",
-  recuperation: "estimation",
-  risque:       "signal",
-  acwr:         "estimation",
   wellness:     "measured",
+  ewmaLong:     "estimation",
+  ewmaShort:    "estimation",
+  spacing:      "coach_decision",
+  dataQuality:  "measured",
+  acwrExperimental: "estimation",
 };
 
 export const METRIC_SCIENCE = {
-  readiness: {
+  wellness: {
     label: "Bien-être déclaré", icon: "⚡", evidenceLevel: "convention",
     color: (v) => v >= 75 ? "#1D9E75" : v >= 50 ? "#EF9F27" : "#E24B4A",
-    unit: "/100", optimal: "≥ 75",
+    unit: "/100", legacyDisplayHint: "aucune zone optimale",
     formula: "AthleteOS Wellness Questionnaire v1 : cinq réponses 1–5 normalisées sur 0–100.",
     what: "Ce score résume le ressenti déclaré du jour. Cet instrument interne n'est pas le Hooper Index et ses propriétés psychométriques restent à valider.",
     sources: [
       { ref: "Gabbett (2016)", detail: "Training-injury prevention paradox — BJSM" },
       { ref: "Halson (2014)",  detail: "Monitoring training load — Sports Med" },
     ],
-    thresholds: [
+    legacyThresholdsDoNotUse: [
       { min: 75, max: 100, label: "Ressenti favorable", color: "#1D9E75", advice: "Retour déclaré favorable, à mettre en contexte avec le coach." },
       { min: 55, max: 74, label: "Ressenti intermédiaire", color: "#EF9F27", advice: "Retour déclaré intermédiaire, sans prescription automatique." },
       { min: 0, max: 54, label: "Ressenti difficile", color: "#E24B4A", advice: "Prends contact avec ton coach pour expliquer le contexte." },
     ],
   },
-  forme: {
+  ewmaLong: {
     label: "EWMA longue", icon: "📈", evidenceLevel: "statistical",
     color: (v) => v >= 75 ? "#1D9E75" : v >= 50 ? "#EF9F27" : "#E24B4A",
-    unit: "/100", optimal: "≥ 65",
+    unit: "u", legacyDisplayHint: "aucune zone optimale",
     formula: "EWMA quotidienne, λ = 2/(28+1), calculée uniquement sur des jours connus.",
     what: "L'EWMA longue lisse la charge interne observée. Elle ne mesure pas directement la forme ni l'adaptation physiologique.",
     sources: [
       { ref: "Banister et al. (1975)", detail: "Modèle Fitness-Fatigue — Research Quarterly" },
       { ref: "Morton et al. (1990)",   detail: "Modelling human performance — EJP" },
     ],
-    thresholds: [
+    legacyThresholdsDoNotUse: [
       { min: 75, max: 100, label: "Excellente", color: "#1D9E75", advice: "Condition physique au-dessus de ta normale. Idéal pour compétitions ou blocs intenses." },
       { min: 50, max: 74,  label: "Correcte",   color: "#EF9F27", advice: "En progression. Continue la régularité, évite les coupures." },
       { min: 0,  max: 49,  label: "Faible",     color: "#E24B4A", advice: "Augmente progressivement le volume. La régularité prime sur l'intensité." },
     ],
   },
-  fatigue: {
+  ewmaShort: {
     label: "EWMA courte", icon: "🔋", inverted: true, evidenceLevel: "statistical",
     color: (v) => v > 70 ? "#E24B4A" : v > 45 ? "#EF9F27" : "#1D9E75",
-    unit: "/100", optimal: "≤ 45",
+    unit: "u", legacyDisplayHint: "aucune zone optimale",
     formula: "EWMA quotidienne, λ = 2/(7+1), calculée uniquement sur des jours connus.",
     what: "L'EWMA courte lisse la charge interne récente. Elle ne mesure pas directement la fatigue physiologique.",
     sources: [
       { ref: "Banister et al. (1975)", detail: "Modèle Fitness-Fatigue — Research Quarterly" },
       { ref: "Meeusen et al. (2013)",  detail: "Overreaching/overtraining — MSSE" },
     ],
-    thresholds: [
+    legacyThresholdsDoNotUse: [
       { min: 0,  max: 45,  label: "Normale",  color: "#1D9E75", advice: "Pas de signe de suraccumulation. Tu peux maintenir ou augmenter la charge." },
       { min: 46, max: 70,  label: "Modérée",  color: "#EF9F27", advice: "Attention aux séances très intenses consécutives. Planifie une journée légère." },
       { min: 71, max: 100, label: "Élevée",   color: "#E24B4A", advice: "Réduction de charge recommandée." },
     ],
   },
-  recuperation: {
+  spacing: {
     label: "Règle d'espacement", icon: "🌙", evidenceLevel: "convention",
     color: (v) => v >= 70 ? "#1D9E75" : v >= 45 ? "#EF9F27" : "#E24B4A",
-    unit: "/100", optimal: "≥ 70",
+    unit: "h", legacyDisplayHint: "règle configurable",
     formula: "Fenêtre configurable du club calculée depuis l'heure réelle de fin de la dernière séance.",
     what: "Cette fenêtre aide à programmer l'espacement entre séances. Elle n'est pas une estimation physiologique et ne signifie jamais qu'un athlète est complètement récupéré.",
     sources: [
       { ref: "Hasegawa et al. (2024)", detail: "Recovery monitoring — IJSPP" },
       { ref: "Kellmann et al. (2018)", detail: "Recovery and Stress in Sport — Routledge" },
     ],
-    thresholds: [
+    legacyThresholdsDoNotUse: [
       { min: 70, max: 100, label: "Fenêtre terminée", color: "#1D9E75", advice: "La règle d'espacement est terminée ; cela ne prouve pas une récupération complète." },
       { min: 45, max: 69, label: "Transition", color: "#EF9F27", advice: "La fenêtre configurée arrive à son terme." },
       { min: 0, max: 44, label: "Fenêtre active", color: "#E24B4A", advice: "La règle d'espacement configurée est encore active." },
     ],
   },
-  risque: {
-    // "Signal de charge", pas "Risque blessure" : ce score combine des
+  dataQuality: {
+    // Ancienne clé conservée uniquement dans cet objet de compatibilité.
     // variables associées statistiquement à la blessure dans la littérature
     // (ACWR, monotonie, fatigue), mais ce n'est ni une probabilité de
     // blessure validée, ni un diagnostic — la relation charge/blessure est
@@ -8489,7 +8332,7 @@ export const METRIC_SCIENCE = {
     // biomécanique, génétique...). Un score bas ne garantit rien non plus.
     label: "Qualité des données", icon: "⚠️", inverted: true, evidenceLevel: "convention",
     color: (v) => v > 60 ? "#E24B4A" : v > 30 ? "#EF9F27" : "#1D9E75",
-    unit: "/100", optimal: "≤ 30",
+    unit: "/28", legacyDisplayHint: "complétude uniquement",
     formula: "Complétude des durées réelles, RPE et jours quotidiens connus.",
     what: "Indique si les calculs descriptifs reposent sur assez de données quotidiennes. Ce n'est ni un risque de blessure, ni un diagnostic.",
     sources: [
@@ -8497,7 +8340,7 @@ export const METRIC_SCIENCE = {
       { ref: "Hulin et al. (2016)", detail: "Spikes in acute workload — BJSM" },
       { ref: "Foster (1998)",       detail: "Monotony of training — J Strength Cond" },
     ],
-    thresholds: [
+    legacyThresholdsDoNotUse: [
       { min: 0, max: 30, label: "Incomplète", color: "#E24B4A", advice: "Plusieurs données quotidiennes manquent." },
       { min: 31, max: 60, label: "Partielle", color: "#EF9F27", advice: "Certaines fenêtres restent indisponibles." },
       { min: 61, max: 100, label: "Bonne", color: "#1D9E75", advice: "Les données nécessaires sont majoritairement présentes." },
@@ -8508,22 +8351,19 @@ export const METRIC_SCIENCE = {
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 export function dimColor(metric, val) {
   switch (metric) {
-    case "readiness": case "recuperation": case "forme":
-      if (val >= 75) return "#1D9E75"; if (val >= 50) return "#EF9F27"; return "#E24B4A";
-    case "fatigue":
-      if (val > 70) return "#E24B4A"; if (val > 45) return "#EF9F27"; return "rgba(239,159,39,0.45)";
-    case "risque":
-      if (val > 60) return "#E24B4A"; if (val > 30) return "#EF9F27"; return "#1D9E75";
-    case "acwr":
-      if (val > 1.5) return "#E24B4A"; if (val > 1.3) return "#EF9F27"; return "#378ADD";
-    case "streak": return val >= 3 ? "#378ADD" : "rgba(55,138,221,0.45)";
     case "wellness": return "#A78BFA";
+    case "ewmaLong": return "#EC4899";
+    case "ewmaShort": return "#A855F7";
+    case "spacing": return "#38BDF8";
+    case "dataQuality": return "#94A3B8";
+    case "acwrExperimental": return "#8B5CF6";
+    case "streak": return val >= 3 ? "#378ADD" : "rgba(55,138,221,0.45)";
     default: return "#94A3B8";
   }
 }
 
-export function acwrColor(v) {
-  if (v > 1.5) return "#E24B4A"; if (v > 1.3) return "#EF9F27"; return "#378ADD";
+export function acwrColor() {
+  return "#8B5CF6";
 }
 
 export function isSameDay(a, b) {
@@ -8581,13 +8421,17 @@ export function getDiscHib(discName) {
 export function isBetterOrEqual(a, b, discipline) {
   if (a == null) return false;
   if (b == null) return true;
-  return getDiscHib(discipline) ? a >= b : a <= b;
+  const higherIsBetter = getDiscHib(discipline);
+  if (higherIsBetter == null) return false;
+  return higherIsBetter ? a >= b : a <= b;
 }
 
 // Comparateur numérique pour .sort() — trie du meilleur au moins bon.
 // Ex: values.sort((a, b) => compareValues(a, b, "100m"))
 export function compareValues(a, b, discipline) {
-  return getDiscHib(discipline) ? b - a : a - b;
+  const higherIsBetter = getDiscHib(discipline);
+  if (higherIsBetter == null) return 0;
+  return higherIsBetter ? b - a : a - b;
 }
 
 // % d'accomplissement d'une valeur "current" par rapport à une "reference"
@@ -8600,6 +8444,7 @@ export function compareValues(a, b, discipline) {
 export function pctOfReference(currentValue, referenceValue, discipline) {
   if (currentValue == null || referenceValue == null || referenceValue === 0) return null;
   const hib = getDiscHib(discipline);
+  if (hib == null) return null;
   const ratio = hib ? currentValue / referenceValue : referenceValue / currentValue;
   return Math.min(100, Math.round(ratio * 1000) / 10);
 }
@@ -8692,6 +8537,12 @@ describe("compareValues — tri correct pour un classement", () => {
   it("Longueur : trié du plus loin au moins loin", () => {
     const sorted = [6.2, 7.1, 6.8].sort((a, b) => compareValues(a, b, "Longueur"));
     expect(sorted).toEqual([7.1, 6.8, 6.2]);
+  });
+
+  it("ne classe pas une épreuve libre dont le sens est inconnu", () => {
+    expect(compareValues(7.45, 7.2, "Épreuve libre")).toBe(0);
+    expect(isBetterOrEqual(7.45, 7.2, "Épreuve libre")).toBe(false);
+    expect(pctOfReference(7.45, 7.2, "Épreuve libre")).toBeNull();
   });
 });
 
@@ -9952,6 +9803,171 @@ describe("MobileMoreSheet", () => {
     expect(onClose).toHaveBeenCalledOnce();
   });
 });
+</file>
+
+<file path="src/components/performance/PerformanceContextChips.jsx">
+import { BadgeCheck, Building2, Clock3, Gauge } from "lucide-react";
+
+const VENUE_LABELS = { indoor: "Indoor", outdoor: "Plein air", road: "Route" };
+const TIMING_LABELS = { fully_automatic: "Chrono FAT", hand: "Chrono manuel", transponder: "Transpondeur" };
+
+export default function PerformanceContextChips({ performance }) {
+  const chips = [];
+  if (VENUE_LABELS[performance?.venue_type]) chips.push({ key: "venue", label: VENUE_LABELS[performance.venue_type], Icon: Building2 });
+  if (TIMING_LABELS[performance?.timing_method]) chips.push({ key: "timing", label: TIMING_LABELS[performance.timing_method], Icon: Clock3 });
+  if (performance?.wind_mps != null) chips.push({ key: "wind", label: `Vent ${Number(performance.wind_mps) > 0 ? "+" : ""}${performance.wind_mps} m/s`, Icon: Gauge });
+  if (performance?.implement_weight_kg != null) chips.push({ key: "implement", label: `Engin ${performance.implement_weight_kg} kg`, Icon: Gauge });
+  if (performance?.hurdle_height_m != null) chips.push({ key: "hurdles", label: `Haies ${performance.hurdle_height_m} m`, Icon: Gauge });
+  if (performance?.official_status === "official") chips.push({ key: "official", label: "Déclaré officiel", Icon: BadgeCheck, accent: true });
+  if (!chips.length) return null;
+
+  return (
+    <div className="mt-2 flex flex-wrap gap-1.5" aria-label="Contexte technique de la performance">
+      {chips.map(({ key, label, Icon, accent }) => (
+        <span key={key} className="inline-flex items-center gap-1 rounded-lg border px-2 py-1 text-[11px] font-semibold" style={{
+          color: accent ? "#7BD8B4" : "var(--c-text-2)",
+          borderColor: accent ? "rgba(29,158,117,0.25)" : "var(--c-border)",
+          background: accent ? "rgba(29,158,117,0.09)" : "var(--c-surface-2)",
+        }}>
+          <Icon size={11} /> {label}
+        </span>
+      ))}
+    </div>
+  );
+}
+</file>
+
+<file path="src/components/performance/PerformanceMetadataFields.jsx">
+import { useMemo } from "react";
+import { BadgeCheck, ChevronDown, Database } from "lucide-react";
+import {
+  MEASUREMENT_TYPE,
+  OFFICIAL_STATUS,
+  PERFORMANCE_DIRECTION,
+  TIMING_METHOD,
+  VENUE_TYPE,
+  createPerformanceMetadata,
+  getDiscipline,
+} from "../../domain/disciplines.js";
+
+const LABEL_STYLE = {
+  display: "block", fontSize: 12, fontWeight: 700, color: "var(--c-text-2)",
+  textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 7,
+};
+
+const SELECT_OPTIONS = {
+  venue_type: [
+    [VENUE_TYPE.UNKNOWN, "Non précisé"], [VENUE_TYPE.OUTDOOR, "Plein air"],
+    [VENUE_TYPE.INDOOR, "Indoor"], [VENUE_TYPE.ROAD, "Route"],
+  ],
+  official_status: [
+    [OFFICIAL_STATUS.UNKNOWN, "À vérifier"], [OFFICIAL_STATUS.OFFICIAL, "Déclaré officiel"],
+    [OFFICIAL_STATUS.UNOFFICIAL, "Non officiel / entraînement"],
+  ],
+  timing_method: [
+    [TIMING_METHOD.UNKNOWN, "Non précisé"], [TIMING_METHOD.FULLY_AUTOMATIC, "Électrique (FAT)"],
+    [TIMING_METHOD.HAND, "Manuel"], [TIMING_METHOD.TRANSPONDER, "Transpondeur"],
+  ],
+};
+
+export default function PerformanceMetadataFields({ discipline, metadata, setMetadata, idPrefix = "performance" }) {
+  const definition = getDiscipline(discipline);
+
+  const effectiveMetadata = useMemo(
+    () => ({ ...createPerformanceMetadata(discipline), ...(metadata ?? {}) }),
+    [discipline, metadata],
+  );
+
+  const summary = useMemo(() => {
+    if (!definition) return "Épreuve personnalisée · unité et sens requis";
+    const direction = definition.higherIsBetter ? "plus haut = meilleur" : "plus bas = meilleur";
+    return `${definition.unit} · ${direction} · précision ${definition.decimals} déc.`;
+  }, [definition]);
+
+  const set = (key, value) => setMetadata((current = {}) => ({ ...current, [key]: value }));
+  const select = (key, label) => (
+    <div>
+      <label htmlFor={`${idPrefix}-${key}`} style={LABEL_STYLE}>{label}</label>
+      <select id={`${idPrefix}-${key}`} className="input-premium" value={effectiveMetadata[key] ?? "unknown"} onChange={(event) => set(key, event.target.value)}>
+        {SELECT_OPTIONS[key].map(([value, text]) => <option key={value} value={value}>{text}</option>)}
+      </select>
+    </div>
+  );
+
+  return (
+    <details className="rounded-2xl border" style={{ background: "var(--c-surface-2)", borderColor: "var(--c-border)" }}>
+      <summary className="flex min-h-12 cursor-pointer list-none items-center justify-between gap-3 px-4 py-3">
+        <span className="flex min-w-0 items-center gap-2">
+          <Database size={15} style={{ color: "var(--c-accent)" }} />
+          <span className="min-w-0">
+            <span className="block text-[13px] font-semibold" style={{ color: "var(--c-text-1)" }}>Contexte technique</span>
+            <span className="block truncate text-[12px]" style={{ color: "var(--c-text-2)" }}>{summary}</span>
+          </span>
+        </span>
+        <ChevronDown size={16} style={{ color: "var(--c-text-3)" }} />
+      </summary>
+
+      <div className="grid gap-3 border-t px-4 pb-4 pt-4 sm:grid-cols-2" style={{ borderColor: "var(--c-border)" }}>
+        {!definition && (
+          <>
+            <div>
+              <label htmlFor={`${idPrefix}-unit`} style={LABEL_STYLE}>Unité *</label>
+              <input id={`${idPrefix}-unit`} className="input-premium" placeholder="s, m, kg, pts…" value={effectiveMetadata.unit ?? ""} onChange={(event) => set("unit", event.target.value)} />
+            </div>
+            <div>
+              <label htmlFor={`${idPrefix}-direction`} style={LABEL_STYLE}>Sens de performance *</label>
+              <select id={`${idPrefix}-direction`} className="input-premium" value={effectiveMetadata.performance_direction ?? PERFORMANCE_DIRECTION.UNKNOWN} onChange={(event) => set("performance_direction", event.target.value)}>
+                <option value={PERFORMANCE_DIRECTION.UNKNOWN}>À préciser</option>
+                <option value={PERFORMANCE_DIRECTION.LOWER}>Plus bas = meilleur</option>
+                <option value={PERFORMANCE_DIRECTION.HIGHER}>Plus haut = meilleur</option>
+              </select>
+            </div>
+            <div>
+              <label htmlFor={`${idPrefix}-measurement`} style={LABEL_STYLE}>Type de mesure *</label>
+              <select id={`${idPrefix}-measurement`} className="input-premium" value={effectiveMetadata.measurement_type ?? MEASUREMENT_TYPE.UNKNOWN} onChange={(event) => set("measurement_type", event.target.value)}>
+                <option value={MEASUREMENT_TYPE.UNKNOWN}>À préciser</option>
+                <option value={MEASUREMENT_TYPE.TIME}>Temps</option>
+                <option value={MEASUREMENT_TYPE.DISTANCE}>Distance / hauteur</option>
+                <option value={MEASUREMENT_TYPE.POINTS}>Points</option>
+              </select>
+            </div>
+          </>
+        )}
+
+        {select("venue_type", "Environnement")}
+        {select("official_status", "Validité déclarée")}
+        {definition?.measurementType === MEASUREMENT_TYPE.TIME && select("timing_method", "Chronométrage")}
+
+        {definition?.windMeasurement === "required_for_official_review" && (
+          <div>
+            <label htmlFor={`${idPrefix}-wind`} style={LABEL_STYLE}>Vent (m/s)</label>
+            <input id={`${idPrefix}-wind`} type="number" step="0.1" className="input-premium" placeholder="Ex : +1.2" value={effectiveMetadata.wind_mps ?? ""} onChange={(event) => set("wind_mps", event.target.value)} />
+          </div>
+        )}
+        {definition?.requiresImplementWeight && (
+          <div>
+            <label htmlFor={`${idPrefix}-implement`} style={LABEL_STYLE}>Poids de l'engin (kg)</label>
+            <input id={`${idPrefix}-implement`} type="number" min="0" step="0.001" className="input-premium" placeholder="Ex : 7.260" value={effectiveMetadata.implement_weight_kg ?? ""} onChange={(event) => set("implement_weight_kg", event.target.value)} />
+          </div>
+        )}
+        {definition?.requiresHurdleHeight && (
+          <div>
+            <label htmlFor={`${idPrefix}-hurdles`} style={LABEL_STYLE}>Hauteur des haies (m)</label>
+            <input id={`${idPrefix}-hurdles`} type="number" min="0" step="0.001" className="input-premium" placeholder="Ex : 1.067" value={effectiveMetadata.hurdle_height_m ?? ""} onChange={(event) => set("hurdle_height_m", event.target.value)} />
+          </div>
+        )}
+
+        <div className="sm:col-span-2 flex items-start gap-2 rounded-xl px-3 py-2.5" style={{ background: "rgba(29,158,117,0.08)", color: "var(--c-text-2)" }}>
+          <BadgeCheck size={15} className="mt-0.5 shrink-0" style={{ color: "#7BD8B4" }} />
+          <p className="text-[12px] leading-5">
+            Le statut « déclaré officiel » mémorise ton information ; AthleteOS ne certifie pas automatiquement la conformité aux règles de compétition.
+            {effectiveMetadata.scoring_table_version ? ` Référence de tables : ${effectiveMetadata.scoring_table_version}.` : ""}
+          </p>
+        </div>
+      </div>
+    </details>
+  );
+}
 </file>
 
 <file path="src/components/ui/premium/index.js">
@@ -13387,14 +13403,12 @@ export const sessionTypeColors = {
 };
 
 // ─────────────────────────────────────────────
-// STATUTS DE FORME (seuils pour badges UI)
+// LIBELLÉS DE SUIVI DESCRIPTIFS (compatibilité de l'export historique)
 // ─────────────────────────────────────────────
 export const statusThresholds = {
-  optimal:    { readinessMin: 75, fatigueMax: 45, label: "Optimal",        color: "#1D9E75" },
-  modere:     { readinessMin: 55, fatigueMax: 65, label: "Modéré",         color: "#EF9F27" },
-  fatigue:    { readinessMin: 40, fatigueMax: 80, label: "Fatigue élevée", color: "#EF9F27" },
-  surcharge:  { readinessMin: 0,  fatigueMax: 100, label: "Surcharge",     color: "#E24B4A" },
-  recuperation: { label: "Récupération",                                   color: "#378ADD" },
+  wellnessRecorded: { label: "Questionnaire complété", color: "#1D9E75" },
+  dataIncomplete:   { label: "Données à compléter",    color: "#EF9F27" },
+  spacingRule:      { label: "Règle d'espacement",     color: "#378ADD" },
 };
 </file>
 
@@ -13432,6 +13446,20 @@ export const MEASUREMENT_TYPE = {
   TIME: "time",
   DISTANCE: "distance",
   POINTS: "points",
+  UNKNOWN: "unknown",
+};
+
+export const PERFORMANCE_DIRECTION = { LOWER: "lower", HIGHER: "higher", UNKNOWN: "unknown" };
+export const VENUE_TYPE = { INDOOR: "indoor", OUTDOOR: "outdoor", ROAD: "road", UNKNOWN: "unknown" };
+export const TIMING_METHOD = {
+  FULLY_AUTOMATIC: "fully_automatic", HAND: "hand", TRANSPONDER: "transponder",
+  UNKNOWN: "unknown", NOT_APPLICABLE: "not_applicable",
+};
+export const OFFICIAL_STATUS = { OFFICIAL: "official", UNOFFICIAL: "unofficial", UNKNOWN: "unknown" };
+export const PERFORMANCE_METADATA_VERSION = "athleteos-performance-v1";
+export const SCORING_TABLE_VERSIONS = {
+  GENERAL: "WA_SCORING_TABLES_2025",
+  COMBINED: "IAAF_COMBINED_EVENTS_2012",
 };
 
 // Détermine le format de SAISIE/PARSING attendu (voir parsePerf dans
@@ -13450,18 +13478,27 @@ export const INPUT_FORMAT = {
 const TIME_SHORT = {
   type: null, measurementType: MEASUREMENT_TYPE.TIME, unit: "s",
   higherIsBetter: false, decimals: 2, inputFormat: INPUT_FORMAT.SECONDS,
+  environments: [VENUE_TYPE.INDOOR, VENUE_TYPE.OUTDOOR],
+  timingMethods: [TIMING_METHOD.FULLY_AUTOMATIC, TIMING_METHOD.HAND],
 };
 const TIME_LONG = {
-  type: null, measurementType: MEASUREMENT_TYPE.TIME, unit: "min:s",
-  higherIsBetter: false, decimals: 0, inputFormat: INPUT_FORMAT.MINUTES,
+  type: null, measurementType: MEASUREMENT_TYPE.TIME, unit: "s",
+  higherIsBetter: false, decimals: 2, inputFormat: INPUT_FORMAT.MINUTES,
+  environments: [VENUE_TYPE.INDOOR, VENUE_TYPE.OUTDOOR],
+  timingMethods: [TIMING_METHOD.FULLY_AUTOMATIC, TIMING_METHOD.HAND],
 };
 const DISTANCE = {
   type: null, measurementType: MEASUREMENT_TYPE.DISTANCE, unit: "m",
   higherIsBetter: true, decimals: 2, inputFormat: INPUT_FORMAT.METERS,
+  environments: [VENUE_TYPE.INDOOR, VENUE_TYPE.OUTDOOR],
+  timingMethods: [TIMING_METHOD.NOT_APPLICABLE],
 };
 const POINTS = {
   type: "combine", measurementType: MEASUREMENT_TYPE.POINTS, unit: "pts",
   higherIsBetter: true, decimals: 0, inputFormat: INPUT_FORMAT.POINTS,
+  environments: [VENUE_TYPE.INDOOR, VENUE_TYPE.OUTDOOR],
+  timingMethods: [TIMING_METHOD.NOT_APPLICABLE],
+  scoringTableVersion: SCORING_TABLE_VERSIONS.COMBINED,
 };
 
 // Ordre officiel des épreuves d'une combinée (jour 1 puis jour 2) —
@@ -13492,6 +13529,23 @@ export const DISCIPLINES = {
   "Heptathlon":  { label: "Heptathlon",  ...POINTS,     color: "#CA8A04", aliases: [], subEvents: HEPTATHLON_EVENTS },
 };
 
+// Contexte technique nécessaire à l'interprétation d'un résultat. Ces
+// champs décrivent les conditions ; ils ne valident jamais seuls une perf.
+const WIND_EVENTS = new Set(["100m", "200m", "60m haies", "100m haies", "110m haies", "Longueur", "Triple saut"]);
+const HURDLE_EVENTS = new Set(["60m haies", "100m haies", "110m haies", "400m haies"]);
+const THROW_EVENTS = new Set(["Poids", "Disque", "Javelot", "Marteau"]);
+
+for (const [id, discipline] of Object.entries(DISCIPLINES)) {
+  discipline.performanceDirection = discipline.higherIsBetter
+    ? PERFORMANCE_DIRECTION.HIGHER
+    : PERFORMANCE_DIRECTION.LOWER;
+  discipline.windMeasurement = WIND_EVENTS.has(id) ? "required_for_official_review" : "not_applicable";
+  discipline.requiresHurdleHeight = HURDLE_EVENTS.has(id);
+  discipline.requiresImplementWeight = THROW_EVENTS.has(id);
+  discipline.scoringTableVersion ??= SCORING_TABLE_VERSIONS.GENERAL;
+  discipline.catalogVersion = PERFORMANCE_METADATA_VERSION;
+}
+
 export const DISCIPLINE_TYPE_COLORS = {
   sprint:    { bg: "#DBEAFE", border: "#3B82F6", text: "#1D4ED8", dot: "#3B82F6" },
   endurance: { bg: "#E0F2FE", border: "#0284C7", text: "#0C4A6E", dot: "#0284C7" },
@@ -13509,8 +13563,13 @@ const DEFAULT_DISCIPLINE_COLOR = "#1D9E75";
 // getDiscHib -> false), pour ne rien changer au jugement porté sur les
 // disciplines déjà utilisées en pratique par les clubs.
 const UNKNOWN_DISCIPLINE_DEFAULTS = {
-  type: "sprint", measurementType: MEASUREMENT_TYPE.TIME, unit: "s",
-  higherIsBetter: false, decimals: 2, inputFormat: INPUT_FORMAT.SECONDS,
+  type: "custom", measurementType: MEASUREMENT_TYPE.UNKNOWN, unit: null,
+  higherIsBetter: null, performanceDirection: PERFORMANCE_DIRECTION.UNKNOWN,
+  decimals: 2, inputFormat: INPUT_FORMAT.METERS,
+  environments: [VENUE_TYPE.UNKNOWN], timingMethods: [TIMING_METHOD.UNKNOWN],
+  windMeasurement: "unknown", requiresHurdleHeight: false,
+  requiresImplementWeight: false, scoringTableVersion: null,
+  catalogVersion: PERFORMANCE_METADATA_VERSION,
 };
 
 function normalizeKey(s) {
@@ -13562,6 +13621,10 @@ export function getDisciplineHib(rawText) {
   return getDiscipline(rawText)?.higherIsBetter ?? UNKNOWN_DISCIPLINE_DEFAULTS.higherIsBetter;
 }
 
+export function getDisciplineDirection(rawText) {
+  return getDiscipline(rawText)?.performanceDirection ?? UNKNOWN_DISCIPLINE_DEFAULTS.performanceDirection;
+}
+
 export function getDisciplineUnit(rawText) {
   return getDiscipline(rawText)?.unit ?? UNKNOWN_DISCIPLINE_DEFAULTS.unit;
 }
@@ -13593,13 +13656,72 @@ export function getAllDisciplineIds() {
   return Object.keys(DISCIPLINES);
 }
 
+export function createPerformanceMetadata(rawText, overrides = {}) {
+  const discipline = getDiscipline(rawText) ?? UNKNOWN_DISCIPLINE_DEFAULTS;
+  return {
+    measurement_type: discipline.measurementType,
+    performance_direction: discipline.performanceDirection,
+    unit: discipline.unit,
+    venue_type: VENUE_TYPE.UNKNOWN,
+    wind_mps: null,
+    timing_method: discipline.measurementType === MEASUREMENT_TYPE.TIME
+      ? TIMING_METHOD.UNKNOWN
+      : TIMING_METHOD.NOT_APPLICABLE,
+    implement_weight_kg: null,
+    hurdle_height_m: null,
+    official_status: OFFICIAL_STATUS.UNKNOWN,
+    scoring_table_version: discipline.scoringTableVersion,
+    metadata_version: PERFORMANCE_METADATA_VERSION,
+    ...overrides,
+  };
+}
+
+export function normalizePerformanceMetadata(rawText, metadata = {}) {
+  const discipline = getDiscipline(rawText);
+  const defaults = createPerformanceMetadata(rawText);
+  const merged = { ...defaults, ...metadata };
+  if (discipline) {
+    merged.measurement_type = defaults.measurement_type;
+    merged.performance_direction = defaults.performance_direction;
+    merged.unit = defaults.unit;
+    merged.scoring_table_version = defaults.scoring_table_version;
+    merged.metadata_version = defaults.metadata_version;
+  }
+  const numberOrNull = (value) => value === "" || value == null ? null : Number(value);
+  return {
+    ...merged,
+    wind_mps: numberOrNull(merged.wind_mps),
+    implement_weight_kg: numberOrNull(merged.implement_weight_kg),
+    hurdle_height_m: numberOrNull(merged.hurdle_height_m),
+  };
+}
+
+export function validatePerformanceMetadata(rawText, metadata = {}) {
+  const discipline = getDiscipline(rawText);
+  const normalized = normalizePerformanceMetadata(rawText, metadata);
+  const issues = [];
+  if (!discipline && ![PERFORMANCE_DIRECTION.HIGHER, PERFORMANCE_DIRECTION.LOWER].includes(normalized.performance_direction)) {
+    issues.push("Indique si une valeur plus haute ou plus basse est meilleure.");
+  }
+  if (!discipline && ![MEASUREMENT_TYPE.TIME, MEASUREMENT_TYPE.DISTANCE, MEASUREMENT_TYPE.POINTS].includes(normalized.measurement_type)) {
+    issues.push("Indique le type de mesure de cette épreuve personnalisée.");
+  }
+  if (!discipline && !normalized.unit?.trim()) issues.push("Indique l'unité de cette épreuve personnalisée.");
+  if (!Object.values(VENUE_TYPE).includes(normalized.venue_type)) issues.push("Environnement invalide.");
+  if (!Object.values(OFFICIAL_STATUS).includes(normalized.official_status)) issues.push("Statut officiel invalide.");
+  if (normalized.wind_mps != null && !Number.isFinite(normalized.wind_mps)) issues.push("Vent invalide.");
+  if (normalized.implement_weight_kg != null && !(normalized.implement_weight_kg > 0)) issues.push("Poids de l'engin invalide.");
+  if (normalized.hurdle_height_m != null && !(normalized.hurdle_height_m > 0)) issues.push("Hauteur des haies invalide.");
+  return issues;
+}
+
 // { "Décathlon": [...], "Heptathlon": [...] } — forme objet pratique pour
 // un lookup direct `COMBINE_EVENTS[disc]` (compat perfsShared.js).
 export const COMBINE_EVENTS = Object.fromEntries(
   Object.entries(DISCIPLINES).filter(([, d]) => d.subEvents).map(([id, d]) => [id, d.subEvents])
 );
 
-const REQUIRED_FIELDS = ["label", "type", "measurementType", "unit", "higherIsBetter", "decimals", "inputFormat", "color"];
+const REQUIRED_FIELDS = ["label", "type", "measurementType", "unit", "higherIsBetter", "performanceDirection", "decimals", "inputFormat", "color", "environments", "timingMethods", "windMeasurement", "requiresImplementWeight", "requiresHurdleHeight", "scoringTableVersion", "catalogVersion"];
 
 // Auto-vérification du registre — utilisée par test_discipline_registry.mjs,
 // mais exportée (pas juste un script ponctuel) pour pouvoir être rappelée
@@ -13639,9 +13761,10 @@ export function validateRegistry() {
 import { describe, it, expect } from "vitest";
 import {
   DISCIPLINES, validateRegistry, resolveDisciplineId, getDiscipline,
-  getDisciplineType, getDisciplineHib, getDisciplineUnit, getDisciplineMeasurementType,
+  getDisciplineType, getDisciplineHib, getDisciplineUnit,
   getDisciplineDecimals, getDisciplineInputFormat, getDisciplineColor, getDisciplineSubEvents,
-  getAllDisciplineIds, MEASUREMENT_TYPE, INPUT_FORMAT,
+  getAllDisciplineIds, MEASUREMENT_TYPE, INPUT_FORMAT, PERFORMANCE_DIRECTION,
+  createPerformanceMetadata, normalizePerformanceMetadata, validatePerformanceMetadata,
 } from "./disciplines.js";
 import { getDiscHib, getDiscType } from "../athlete/shared.js";
 import { discColor, COMBINE_EVENTS } from "../athlete/views/perfsShared.js";
@@ -13662,7 +13785,7 @@ describe("couverture par famille de disciplines", () => {
   it("1500m (demi-fond) : chrono min:s, plus petit = mieux", () => {
     const d = getDiscipline("1500m");
     expect(d.measurementType).toBe(MEASUREMENT_TYPE.TIME);
-    expect(d.unit).toBe("min:s");
+    expect(d.unit).toBe("s");
     expect(d.higherIsBetter).toBe(false);
   });
 
@@ -13731,8 +13854,8 @@ describe("discipline inconnue / personnalisée — jamais de crash", () => {
         subEvents: getDisciplineSubEvents(name),
       };
       expect(fallback.type).not.toBeNull();
-      expect(fallback.hib).not.toBeNull();
-      expect(fallback.unit).not.toBeNull();
+      expect(fallback.hib).toBeNull();
+      expect(fallback.unit).toBeNull();
       expect(fallback.color).not.toBeNull();
       expect(fallback.subEvents).toBeNull();
     }).not.toThrow();
@@ -13740,6 +13863,37 @@ describe("discipline inconnue / personnalisée — jamais de crash", () => {
 
   it("resolveDisciplineId renvoie le texte tel quel (trim uniquement)", () => {
     expect(resolveDisciplineId("  Épreuve Maison Inventée  ")).toBe("Épreuve Maison Inventée");
+  });
+
+  it("ne suppose jamais qu'une valeur décimale libre est un chrono", () => {
+    const metadata = createPerformanceMetadata("Test club");
+    expect(metadata.measurement_type).toBe(MEASUREMENT_TYPE.UNKNOWN);
+    expect(metadata.performance_direction).toBe(PERFORMANCE_DIRECTION.UNKNOWN);
+    expect(validatePerformanceMetadata("Test club", metadata)).toHaveLength(3);
+  });
+
+  it("accepte une épreuve libre lorsque unité et sens sont explicites", () => {
+    const metadata = normalizePerformanceMetadata("Test club", {
+      unit: "m", measurement_type: "distance", performance_direction: "higher",
+    });
+    expect(validatePerformanceMetadata("Test club", metadata)).toEqual([]);
+  });
+});
+
+describe("métadonnées techniques structurées", () => {
+  it("décrit le vent et le chronométrage du 100m", () => {
+    const discipline = getDiscipline("100m");
+    expect(discipline.windMeasurement).toBe("required_for_official_review");
+    expect(discipline.timingMethods).toContain("fully_automatic");
+  });
+
+  it("demande le poids d'engin pour les lancers et la hauteur pour les haies", () => {
+    expect(getDiscipline("Poids").requiresImplementWeight).toBe(true);
+    expect(getDiscipline("110m haies").requiresHurdleHeight).toBe(true);
+  });
+
+  it("versionne séparément les tables des combinées", () => {
+    expect(getDiscipline("Décathlon").scoringTableVersion).toBe("IAAF_COMBINED_EVENTS_2012");
   });
 });
 
@@ -13781,6 +13935,296 @@ describe("compat — les façades existantes délèguent au même registre (pas 
 
   it("perfsShared.js COMBINE_EVENTS === registre", () => {
     expect(COMBINE_EVENTS["Décathlon"]).toEqual(getDisciplineSubEvents("Décathlon"));
+  });
+});
+</file>
+
+<file path="src/domain/monitoringMetrics.js">
+// Mesures de suivi descriptives affichées dans AthleteOS.
+// Aucune de ces lignes n'est une probabilité de blessure, une mesure directe
+// de fitness/fatigue physiologique ou une autorisation automatique de s'entraîner.
+
+export const MONITORING_METRICS = {
+  wellness: {
+    label: "Bien-être déclaré",
+    shortLabel: "Bien-être",
+    color: "#1D9E75",
+    kind: "Questionnaire interne",
+    evidence: "Convention AthleteOS",
+    formula: "Moyenne des 5 réponses du questionnaire AthleteOS v1, normalisée de 0 à 100.",
+    meaning: "Résume le sommeil, l'énergie, les courbatures, l'humeur et le stress déclarés aujourd'hui.",
+    limits: "Ce score subjectif n'est ni un diagnostic, ni une mesure validée de readiness ou de récupération.",
+    sources: ["AthleteOS Wellness Questionnaire v1 · instrument interne à valider"],
+  },
+  load7: {
+    label: "Charge observée · 7 jours",
+    shortLabel: "Charge 7 j",
+    color: "#4B7BDB",
+    kind: "Mesure de charge interne",
+    evidence: "Méthode publiée",
+    formula: "Somme sur 7 jours de chaque charge session-RPE : durée réelle (min) × RPE CR10.",
+    meaning: "Quantifie la charge interne déclarée sur les sept derniers jours civils connus.",
+    limits: "La valeur ne compare pas deux sports et ne prédit ni adaptation, ni fatigue, ni blessure.",
+    sources: ["Foster et al. (2001) · session-RPE"],
+  },
+  load28: {
+    label: "Charge observée · 28 jours",
+    shortLabel: "Charge 28 j",
+    color: "#14B8A6",
+    kind: "Mesure de charge interne",
+    evidence: "Méthode publiée",
+    formula: "Somme des charges session-RPE sur 28 jours civils continus et connus.",
+    meaning: "Décrit le volume de charge interne observé pendant les quatre dernières semaines.",
+    limits: "Ce total n'est pas une mesure de fitness et ne doit pas être normalisé contre un maximum historique.",
+    sources: ["Foster et al. (2001) · session-RPE"],
+  },
+  ewmaAcute: {
+    label: "EWMA courte · 7 jours",
+    shortLabel: "EWMA courte",
+    color: "#A855F7",
+    kind: "Lissage statistique",
+    evidence: "Méthode statistique",
+    formula: "EWMA quotidienne avec λ = 2 / (7 + 1), remise à zéro après une donnée inconnue.",
+    meaning: "Donne davantage de poids aux charges quotidiennes récentes afin de décrire leur dynamique.",
+    limits: "Le terme « courte » décrit la fenêtre mathématique ; cette valeur ne mesure pas directement la fatigue.",
+    sources: ["Murray et al. (2017) · application EWMA aux charges sportives"],
+  },
+  ewmaChronic: {
+    label: "EWMA longue · 28 jours",
+    shortLabel: "EWMA longue",
+    color: "#EC4899",
+    kind: "Lissage statistique",
+    evidence: "Méthode statistique",
+    formula: "EWMA quotidienne avec λ = 2 / (28 + 1), remise à zéro après une donnée inconnue.",
+    meaning: "Lisse plus lentement la charge quotidienne observée pour fournir un repère historique descriptif.",
+    limits: "Cette moyenne lissée ne représente pas la forme, la fitness ou l'adaptation physiologique.",
+    sources: ["Murray et al. (2017) · application EWMA aux charges sportives"],
+  },
+  variation: {
+    label: "Variation du profil habituel",
+    shortLabel: "Variation",
+    color: "#F59E0B",
+    kind: "Comparaison descriptive",
+    evidence: "Calcul transparent",
+    formula: "Moyenne quotidienne des 7 derniers jours comparée à celle des 21 jours précédents.",
+    meaning: "Montre si la charge quotidienne récente est plus haute, similaire ou plus basse que l'historique proche.",
+    limits: "Aucun pourcentage n'est une zone optimale ou un seuil automatique de danger.",
+    sources: ["Convention descriptive AthleteOS · fenêtres 7 et 21 jours"],
+  },
+  monotony: {
+    label: "Monotonie · 7 jours",
+    shortLabel: "Monotonie",
+    color: "#F97316",
+    kind: "Mesure descriptive",
+    evidence: "Méthode publiée",
+    formula: "Moyenne des 7 charges quotidiennes ÷ écart-type de ces mêmes 7 jours.",
+    meaning: "Décrit la variabilité des charges quotidiennes d'une semaine complète.",
+    limits: "Si les sept valeurs sont identiques, l'écart-type est nul et AthleteOS affiche « indéfinie » au lieu d'inventer 0.",
+    sources: ["Foster (1998) · training monotony"],
+  },
+  spacing: {
+    label: "Règle d'espacement",
+    shortLabel: "Espacement",
+    color: "#38BDF8",
+    kind: "Règle de programmation",
+    evidence: "Configuration du club",
+    formula: "Fenêtre configurable calculée depuis l'heure réelle de fin de la dernière séance validée.",
+    meaning: "Aide le coach à espacer deux séances ciblant une contrainte similaire.",
+    limits: "Ce compteur n'est pas une estimation physiologique et ne signifie jamais « complètement récupéré ».",
+    sources: ["Règle de programmation AthleteOS · configurable par catégorie"],
+  },
+  dataQuality: {
+    label: "Qualité de l'historique",
+    shortLabel: "Données connues",
+    color: "#94A3B8",
+    kind: "Contrôle de complétude",
+    evidence: "Contrôle technique",
+    formula: "Nombre de jours quotidiens consécutifs connus ; repos confirmé = 0, absence d'information = null.",
+    meaning: "Indique si les fenêtres de 7 et 28 jours reposent sur un historique suffisamment complet.",
+    limits: "La complétude mesure la qualité des données, pas la qualité de l'entraînement ni l'état de l'athlète.",
+    sources: ["Convention de qualité des données AthleteOS"],
+  },
+  acwrExperimental: {
+    label: "ACWR EWMA expérimental",
+    shortLabel: "ACWR expérimental",
+    color: "#8B5CF6",
+    kind: "Métrique de recherche",
+    evidence: "Usage controversé",
+    formula: "EWMA courte ÷ EWMA longue, uniquement après 28 jours quotidiens consécutifs connus.",
+    meaning: "Expose le ratio à titre de recherche et de transparence méthodologique.",
+    limits: "Aucune zone optimale, aucun risque individuel et aucune consigne d'entraînement ne sont déduits de ce ratio.",
+    sources: ["Impellizzeri et al. (2020) · limites conceptuelles de l'ACWR"],
+  },
+};
+
+function formatNumber(value) {
+  return Number.isInteger(value) ? String(value) : Number(value).toFixed(2).replace(/\.00$/u, "");
+}
+
+export function getMonitoringReading(key, metrics = {}) {
+  const definition = MONITORING_METRICS[key];
+  if (!definition) return null;
+
+  let value = null;
+  let displayValue = "—";
+  let unit = "";
+  let interpretation = "Donnée indisponible.";
+  let missingReason = "L'historique quotidien n'est pas encore assez complet.";
+
+  if (key === "wellness") {
+    value = metrics.wellnessScore;
+    unit = "/100";
+    if (value != null) {
+      displayValue = formatNumber(value);
+      interpretation = `Questionnaire complété : ${displayValue}/100. Lis surtout le détail des cinq réponses.`;
+    } else missingReason = "Le questionnaire AthleteOS du jour n'a pas encore été complété.";
+  } else if (key === "load7" || key === "load28") {
+    value = metrics[key];
+    unit = "u";
+    if (value != null) {
+      displayValue = formatNumber(value);
+      interpretation = `${displayValue} unités de charge session-RPE observées sur ${key === "load7" ? 7 : 28} jours.`;
+    } else missingReason = `La fenêtre de ${key === "load7" ? 7 : 28} jours contient au moins un jour inconnu.`;
+  } else if (key === "ewmaAcute" || key === "ewmaChronic") {
+    value = key === "ewmaAcute" ? metrics.acute : metrics.chronic;
+    unit = "u";
+    if (value != null) {
+      displayValue = formatNumber(value);
+      interpretation = `${displayValue} unités dans la moyenne exponentielle ${key === "ewmaAcute" ? "courte" : "longue"}.`;
+    } else missingReason = "Aucune séquence quotidienne connue ne permet encore le lissage.";
+  } else if (key === "variation") {
+    value = metrics.variationPercent;
+    unit = "%";
+    if (value != null) {
+      displayValue = `${value > 0 ? "+" : ""}${formatNumber(value)}`;
+      const direction = value > 0 ? "plus élevée" : value < 0 ? "plus basse" : "similaire";
+      interpretation = `La moyenne quotidienne récente est ${direction} que celle des 21 jours précédents (${displayValue}%).`;
+    } else missingReason = "La comparaison demande 28 jours connus et une moyenne habituelle supérieure à zéro.";
+  } else if (key === "monotony") {
+    value = metrics.monotony;
+    if (metrics.monotonyStatus === "undefined_zero_variance") {
+      displayValue = "Indéfinie";
+      interpretation = "Les sept charges quotidiennes sont identiques : l'écart-type est nul.";
+      missingReason = null;
+    } else if (value != null) {
+      displayValue = formatNumber(value);
+      interpretation = `Monotonie descriptive calculée sur les sept jours connus : ${displayValue}.`;
+    } else missingReason = "Sept charges quotidiennes connues sont nécessaires.";
+  } else if (key === "spacing") {
+    const recovery = metrics.recovery;
+    if (recovery?.status === "window_elapsed") {
+      displayValue = "Terminée";
+      interpretation = "La fenêtre d'espacement configurée est terminée ; cela ne prouve pas une récupération complète.";
+      missingReason = null;
+    } else if (recovery?.rangeHoursMin != null && recovery?.rangeHoursMax != null) {
+      displayValue = `${recovery.rangeHoursMin}–${recovery.rangeHoursMax}`;
+      unit = "h";
+      interpretation = `Il reste ${displayValue} h dans la fenêtre de programmation configurée.`;
+      missingReason = null;
+    } else missingReason = "Aucune séance récente avec date, heure et statut validé n'est disponible.";
+  } else if (key === "dataQuality") {
+    value = Math.min(metrics.observedDays ?? 0, 28);
+    displayValue = `${value}/28`;
+    interpretation = metrics.known28
+      ? "Les fenêtres de 7 et 28 jours sont complètes."
+      : metrics.known7
+        ? "La fenêtre de 7 jours est complète ; celle de 28 jours reste partielle."
+        : "Au moins un jour récent reste inconnu ; confirme les repos et complète les durées/RPE.";
+    missingReason = null;
+  } else if (key === "acwrExperimental") {
+    value = metrics.acwr;
+    if (value != null) {
+      displayValue = Number(value).toFixed(2);
+      interpretation = `Ratio expérimental observé : ${displayValue}. Aucune catégorie de risque n'est appliquée.`;
+    } else missingReason = "Le ratio reste masqué tant que 28 jours consécutifs ne sont pas connus ou que l'EWMA longue vaut zéro.";
+  }
+
+  return {
+    key,
+    ...definition,
+    value,
+    displayValue,
+    unit,
+    available: missingReason == null || value != null,
+    interpretation,
+    missingReason,
+  };
+}
+
+export function getMonitoringOverview(metrics = {}) {
+  return ["wellness", "load7", "load28", "ewmaAcute", "ewmaChronic", "dataQuality"]
+    .map((key) => getMonitoringReading(key, metrics));
+}
+</file>
+
+<file path="src/domain/monitoringMetrics.test.js">
+import { describe, expect, it } from "vitest";
+import { getMonitoringOverview, getMonitoringReading } from "./monitoringMetrics.js";
+
+describe("panneau de mesures descriptives", () => {
+  it("n'invente aucune valeur quand l'historique est incomplet", () => {
+    const reading = getMonitoringReading("load7", { load7: null });
+    expect(reading.displayValue).toBe("—");
+    expect(reading.available).toBe(false);
+    expect(reading.missingReason).toContain("jour inconnu");
+  });
+
+  it("explique explicitement une monotonie indéfinie", () => {
+    const reading = getMonitoringReading("monotony", { monotony: null, monotonyStatus: "undefined_zero_variance" });
+    expect(reading.displayValue).toBe("Indéfinie");
+    expect(reading.interpretation).toContain("écart-type est nul");
+  });
+
+  it("présente l'ACWR uniquement comme expérimental", () => {
+    const reading = getMonitoringReading("acwrExperimental", { acwr: 1.42 });
+    expect(reading.kind).toBe("Métrique de recherche");
+    expect(reading.limits).toContain("Aucune zone optimale");
+  });
+
+  it("fournit six lignes principales sans readiness, forme, fatigue ou risque", () => {
+    const overview = getMonitoringOverview({});
+    expect(overview).toHaveLength(6);
+    expect(overview.map((item) => item.key)).toEqual([
+      "wellness", "load7", "load28", "ewmaAcute", "ewmaChronic", "dataQuality",
+    ]);
+  });
+});
+</file>
+
+<file path="src/domain/structuredPerformanceMigration.test.js">
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
+import { describe, expect, it } from "vitest";
+
+const sql = readFileSync(resolve(process.cwd(), "supabase/migrations/20260801080000_structured_performance_context.sql"), "utf8");
+
+describe("migration des performances structurées", () => {
+  it("stocke toutes les dimensions techniques demandées", () => {
+    for (const column of [
+      "measurement_type", "performance_direction", "venue_type", "wind_mps",
+      "timing_method", "implement_weight_kg", "hurdle_height_m",
+      "official_status", "scoring_table_version", "metadata_version",
+    ]) expect(sql).toContain(column);
+  });
+
+  it("dérive PR/SB dans la même transaction avec verrouillage", () => {
+    const rpc = sql.slice(sql.indexOf("CREATE OR REPLACE FUNCTION public.add_athlete_performance"), sql.indexOf("CREATE OR REPLACE FUNCTION public.add_competition_result_v2"));
+    expect(rpc).toContain("INSERT INTO public.athlete_performances");
+    expect(rpc).toContain("INSERT INTO public.records");
+    expect(rpc).toContain("ON CONFLICT (athlete_id, discipline) DO NOTHING");
+    expect(rpc).toContain("FOR UPDATE");
+  });
+
+  it("garde les anciens RPC et ajoute des versions v2", () => {
+    expect(sql).toContain("public.add_competition_result_v2");
+    expect(sql).toContain("public.create_solo_competition_result_v2");
+    expect(sql).not.toMatch(/DROP\s+FUNCTION\s+public\.(add_competition_result|create_solo_competition_result)/iu);
+  });
+
+  it("revérifie l'accès avant les mises à jour SECURITY DEFINER", () => {
+    expect(sql).toContain("u.role IN ('head_coach', 'coach')");
+    expect(sql).toContain("RAISE EXCEPTION 'Résultat inaccessible.'");
+    expect(sql).toContain("RAISE EXCEPTION 'Performance inaccessible.'");
   });
 });
 </file>
@@ -14535,9 +14979,11 @@ import { memo, useState } from "react";
 import { createPortal } from "react-dom";
 import { Plus, X } from "lucide-react";
 import { inputCls, labelCls } from "./athleteListShared";
+import PerformanceMetadataFields from "../components/performance/PerformanceMetadataFields.jsx";
+import { createPerformanceMetadata } from "../domain/disciplines.js";
 
 const AddRecordModal = memo(({ athleteName, onClose, onAdd }) => {
-  const [form, setForm]     = useState({ discipline: "", sb: "", pr: "", prDate: "" });
+  const [form, setForm]     = useState({ discipline: "", sb: "", pr: "", prDate: "", metadata: createPerformanceMetadata("") });
   const [saving, setSaving] = useState(false);
   const [err, setErr]       = useState(null);
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
@@ -14588,6 +15034,15 @@ const AddRecordModal = memo(({ athleteName, onClose, onAdd }) => {
             <label className={labelCls} style={{ color: "var(--c-text-3)" }}>Date du record perso</label>
             <input type="date" className={inputCls} value={form.prDate} onChange={e => set("prDate", e.target.value)} />
           </div>
+          <PerformanceMetadataFields
+            discipline={form.discipline}
+            metadata={form.metadata}
+            setMetadata={(updater) => setForm((current) => ({
+              ...current,
+              metadata: typeof updater === "function" ? updater(current.metadata) : updater,
+            }))}
+            idPrefix="record-meta"
+          />
         </div>
         <div className="px-6 py-4 flex items-center justify-between gap-3 flex-shrink-0" style={{ borderTop: "1px solid var(--c-border)" }}>
           <button onClick={onClose} disabled={saving} className="btn-secondary">Annuler</button>
@@ -14613,10 +15068,13 @@ export default AddRecordModal;
 
 import { memo, useState } from "react";
 import { Plus } from "lucide-react";
+import PerformanceMetadataFields from "../components/performance/PerformanceMetadataFields.jsx";
+import { createPerformanceMetadata } from "../domain/disciplines.js";
 
 const AddResultInline = memo(({ athlete, competitionId, defaultEvent, onAdd }) => {
   const [open,   setOpen]   = useState(false);
-  const [form,   setForm]   = useState({ event: defaultEvent || "", result: "", context: "" });
+  const emptyForm = () => ({ event: defaultEvent || "", result: "", context: "", metadata: createPerformanceMetadata(defaultEvent || "") });
+  const [form,   setForm]   = useState(emptyForm);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState(null);
 
@@ -14630,7 +15088,7 @@ const AddResultInline = memo(({ athlete, competitionId, defaultEvent, onAdd }) =
     try {
       await onAdd(competitionId, athlete.id, form);
       setOpen(false);
-      setForm({ event: defaultEvent || "", result: "", context: "" });
+      setForm(emptyForm());
     } catch (error) {
       setSaveError(error.message ?? "Impossible d'enregistrer ce résultat");
     } finally {
@@ -14675,6 +15133,15 @@ const AddResultInline = memo(({ athlete, competitionId, defaultEvent, onAdd }) =
         placeholder="Contexte (optionnel)"
         value={form.context}
         onChange={(e) => set("context", e.target.value)}
+      />
+      <PerformanceMetadataFields
+        discipline={form.event}
+        metadata={form.metadata}
+        setMetadata={(updater) => setForm((current) => ({
+          ...current,
+          metadata: typeof updater === "function" ? updater(current.metadata) : updater,
+        }))}
+        idPrefix={`result-meta-${athlete.id}`}
       />
       {saveError && <p role="alert" className="text-[12px] text-[var(--color-danger)]">{saveError}</p>}
       <div className="flex items-center gap-2 pt-0.5">
@@ -15446,14 +15913,13 @@ export default memo(Alerts);
 
 import { memo, useMemo } from "react";
 import { ChevronRight, HeartPulse } from "lucide-react";
-import { getAthleteMetricsForWeek, getStatusLabel } from "../utils/chargeCalculations";
+import { getAthleteMetricsForWeek, getWellnessStatus } from "../utils/chargeCalculations";
 import { getISOWeek } from "../utils/helpers.js";
 import { scoreColor } from "./athleteListShared";
 
 const AthleteCard = memo(({ athlete, weeklyCharge, onClick }) => {
   const metrics        = useMemo(() => getAthleteMetricsForWeek(athlete.id, weeklyCharge, getISOWeek(new Date())), [athlete.id, weeklyCharge]);
-  const { readiness, fatigue, acwr } = metrics;
-  const status         = getStatusLabel(readiness, fatigue, acwr);
+  const status         = getWellnessStatus(metrics.wellnessScore);
   const activeInjuries = athlete.injuries?.filter(i => i.status !== "résolu") ?? [];
   const hasCharge      = weeklyCharge.some(w => w.athleteId === athlete.id);
 
@@ -15540,7 +16006,9 @@ import LoadingState  from "../components/ui/LoadingState";
 import ErrorState    from "../components/ui/ErrorState";
 import { initialsFromName } from "../utils/helpers.js";
 import { parsePerf } from "../athlete/shared.js";
-import { resolveDisciplineId, getDisciplineUnit } from "../domain/disciplines.js";
+import {
+  normalizePerformanceMetadata, resolveDisciplineId, validatePerformanceMetadata,
+} from "../domain/disciplines.js";
 import { getAthleteCsvImportError } from "../utils/athleteCsv.js";
 import AthleteProfile from "./AthleteProfile";
 import AthleteCard from "./AthleteCard";
@@ -15608,7 +16076,7 @@ function AthleteList() {
       setAthletes((athletesRes.data ?? []).map(a => {
         const pd = a.profile_data ?? {};
         const recs = {};
-        (recordsRes.data ?? []).filter(r => r.athlete_id === a.id).forEach(r => { recs[r.discipline] = { sb: r.sb, pr: r.pr, prDate: r.pr_date }; });
+        (recordsRes.data ?? []).filter(r => r.athlete_id === a.id).forEach(r => { recs[r.discipline] = { ...r, sb: r.sb, pr: r.pr, prDate: r.pr_date }; });
         return {
           id: a.id, name: a.name, age: a.age, avatar: pd.avatar ?? initialsFromName(a.name),
           mainDiscipline: a.main_discipline, secondaryDisciplines: pd.secondary_disciplines ?? [],
@@ -15657,10 +16125,19 @@ function AthleteList() {
     // athlète, le font depuis la tâche 9), donc "100 m" et "100m" pouvaient
     // ne jamais se rejoindre malgré la discipline canonique identique.
     const discipline = resolveDisciplineId(form.discipline);
+    const metadata = normalizePerformanceMetadata(discipline, form.metadata);
+    const metadataIssues = validatePerformanceMetadata(discipline, metadata);
+    if (metadataIssues.length) throw new Error(metadataIssues[0]);
+    const sbValue = parsePerf(form.sb).value;
+    const prValue = parsePerf(form.pr).value;
+    if (sbValue == null || prValue == null) throw new Error("Le SB et le PR doivent contenir une valeur numérique valide.");
     const patch = {
-      sb: form.sb, sb_value: parsePerf(form.sb).value,
-      pr: form.pr, pr_value: parsePerf(form.pr).value, pr_date: form.prDate || null,
-      unit: getDisciplineUnit(discipline), discipline_id: discipline,
+      sb: form.sb, sb_value: sbValue,
+      pr: form.pr, pr_value: prValue, pr_date: form.prDate || null,
+      unit: metadata.unit, discipline_id: discipline,
+      measurement_type: metadata.measurement_type,
+      performance_direction: metadata.performance_direction,
+      metadata_version: metadata.metadata_version,
     };
     const { data: existing } = await supabase.from("records").select("id")
       .eq("athlete_id", athleteId).eq("discipline", discipline).maybeSingle();
@@ -15982,7 +16459,7 @@ describe("intégration de l'import CSV dans AthleteList", () => {
 // ============================================================
 
 import { Trophy, Activity, Dumbbell, HeartPulse, User, Star } from "lucide-react";
-import { getStatusLabel } from "../utils/chargeCalculations";
+import { getWellnessStatus } from "../utils/chargeCalculations";
 
 export const TABS = [
   { id: "performances",  label: "Performances",      icon: Trophy     },
@@ -16013,8 +16490,8 @@ export function acwrColor(v) { return v > 1.3 ? "#E24B4A" : v < 0.8 ? "#378ADD" 
 
 // ─── Composants UI partagés ───────────────────────────────────────────────────
 
-export function StatusBadge({ readiness, fatigue, acwr }) {
-  const s = getStatusLabel(readiness, fatigue, acwr);
+export function StatusBadge({ wellnessScore }) {
+  const s = getWellnessStatus(wellnessScore);
   return (
     <span
       className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[12px] font-bold shadow-sm"
@@ -16116,7 +16593,6 @@ const AthleteProfile = memo(({ athlete, weeklyCharge, sessions, competitions, on
   const [deleteError,   setDeleteError]   = useState(null);
 
   const metrics        = useMemo(() => getAthleteMetricsForWeek(athlete.id, weeklyCharge, getISOWeek(new Date())), [athlete.id, weeklyCharge]);
-  const { readiness, fatigue, acwr } = metrics;
   const activeInjuries = athlete.injuries?.filter(i => i.status !== "résolu") ?? [];
 
   const handleDelete = async () => {
@@ -16166,7 +16642,7 @@ const AthleteProfile = memo(({ athlete, weeklyCharge, sessions, competitions, on
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-3 flex-wrap mb-1">
               <h2 className="text-[24px] font-bold text-white tracking-tight">{athlete.name}</h2>
-              <StatusBadge readiness={readiness} fatigue={fatigue} acwr={acwr} />
+              <StatusBadge wellnessScore={metrics.wellnessScore} />
               {activeInjuries.length > 0 && (
                 <span className="flex items-center gap-1 text-[12px] font-bold px-2.5 py-1 rounded-full text-white" style={{ background: "rgba(239,159,39,0.3)", border: "1px solid rgba(239,159,39,0.4)" }}>
                   <HeartPulse size={11} /> {activeInjuries.length} blessure{activeInjuries.length > 1 ? "s" : ""}
@@ -16502,8 +16978,8 @@ export const TabCharge = memo(({ athlete, metrics, weeklyCharge, competitions, s
       {/* Graphique charge */}
       {chartData.length > 0 && (
         <div className="card p-5">
-          <h3 className="card-title mb-1">Charge vs Forme — 12 semaines</h3>
-          <p className="card-subtitle mb-4">Charge brute · Forme · Fatigue</p>
+          <h3 className="card-title mb-1">Charge observée — 12 semaines</h3>
+          <p className="card-subtitle mb-4">Durée réelle × RPE CR10 · aucune estimation de forme ou de fatigue</p>
           <ResponsiveContainer width="100%" height={220}>
             <AreaChart data={chartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
               <defs>
@@ -16511,18 +16987,12 @@ export const TabCharge = memo(({ athlete, metrics, weeklyCharge, competitions, s
                   <stop offset="5%" stopColor="#378ADD" stopOpacity={0.2} />
                   <stop offset="95%" stopColor="#378ADD" stopOpacity={0} />
                 </linearGradient>
-                <linearGradient id="gradForme2" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#1D9E75" stopOpacity={0.15} />
-                  <stop offset="95%" stopColor="#1D9E75" stopOpacity={0} />
-                </linearGradient>
               </defs>
               <CartesianGrid strokeDasharray="3 3" stroke="var(--c-border)" />
               <XAxis dataKey="label" tick={{ fontSize:12, fill:"var(--c-text-3)" }} axisLine={false} tickLine={false} />
               <YAxis tick={{ fontSize:12, fill:"var(--c-text-3)" }} axisLine={false} tickLine={false} width={45} />
               <Tooltip content={<ChartTooltip />} />
               <Area dataKey="rawLoad" name="Charge brute" stroke="#378ADD" fill="url(#gradCharge2)" strokeWidth={2} />
-              <Area dataKey="forme"   name="Forme"        stroke="#1D9E75" fill="url(#gradForme2)"  strokeWidth={2} />
-              <Line dataKey="fatigue" name="Fatigue"      stroke="#E24B4A" strokeWidth={1.5} dot={false} strokeDasharray="4 2" />
             </AreaChart>
           </ResponsiveContainer>
         </div>
@@ -17155,7 +17625,7 @@ function ChargeView() {
     const load7Values  = allMetrics.map(item => item.metrics.load7).filter(Number.isFinite);
     const avgLoad7     = load7Values.length ? Math.round(load7Values.reduce((sum, value) => sum + value, 0) / load7Values.length) : null;
     const topLoader    = [...allMetrics].sort((a, b) => b.rawLoad - a.rawLoad)[0];
-    const critFatigue  = allMetrics.filter((m) => m.metrics.fatigue > 75).length;
+    const critFatigue  = allMetrics.filter((m) => m.metrics.wellnessScore != null && m.metrics.wellnessScore < 25).length;
     const avgLoadPrev  = athletes.length
       ? Math.round(athletes.reduce((s, a) => s + getRawLoad(weeklyCharge, a.id, CURRENT_WEEK - 1), 0) / athletes.length)
       : 0;
@@ -17163,7 +17633,7 @@ function ChargeView() {
   }, [allMetrics, athletes, weeklyCharge, CURRENT_WEEK]);
 
   const acwrSeries       = useMemo(() => computeGroupACWRSeries(athletes, weeklyCharge), [athletes, weeklyCharge]);
-  const fatigueAlerts    = useMemo(() => allMetrics.filter((m) => m.metrics.fatigue > 75), [allMetrics]);
+  const fatigueAlerts    = useMemo(() => allMetrics.filter((m) => m.metrics.wellnessScore != null && m.metrics.wellnessScore < 25), [allMetrics]);
   const sortedByLoad     = useMemo(() => [...allMetrics].sort((a, b) => b.rawLoad - a.rawLoad), [allMetrics]);
   const maxLoad          = sortedByLoad[0]?.rawLoad ?? 1;
 
@@ -17186,14 +17656,14 @@ function ChargeView() {
   );
 
   // ═══ Render ═══════════════════════════════════════════════════════════════
-  if (loading) return <LoadingState message="Chargement charge & fatigue…" />;
+  if (loading) return <LoadingState message="Chargement du suivi de charge…" />;
   if (error)   return <ErrorState  message={error} onRetry={fetchAll} />;
 
   return (
     <div className="page-container py-4 md:py-6 max-w-7xl mx-auto space-y-5 md:space-y-6 animate-slide-up">
 
       <div>
-        <h2 className="page-title">Charge & Fatigue</h2>
+        <h2 className="page-title">Charge & suivi</h2>
         <p className="secondary-text mt-1">
           Semaine {CURRENT_WEEK} · Analyse dynamique du groupe · {athletes.length} athlète{athletes.length !== 1 ? "s" : ""}
         </p>
@@ -17277,7 +17747,7 @@ function ChargeView() {
                         <p className="meta-text">7 jours</p>
                       </div>
                       <div className="w-16 text-right flex-shrink-0">
-                        <p className="text-[12px] font-bold" style={{ color: metrics.fatigue > 70 ? "#E24B4A" : metrics.fatigue > 45 ? "#EF9F27" : "#1D9E75" }}>
+                        <p className="text-[12px] font-bold" style={{ color: "#14B8A6" }}>
                           {metrics.load28 ?? "—"}
                         </p>
                         <p className="meta-text">28 jours</p>
@@ -17531,7 +18001,9 @@ import ErrorState                   from "../components/ui/ErrorState";
 import { dispatchOutboxNotifications } from "../utils/notifications";
 import { initialsFromName } from "../utils/helpers.js";
 import { TYPE_CONFIG, daysUntil } from "./competitionsShared";
-import { resolveDisciplineId, getDisciplineHib, getDisciplineUnit } from "../domain/disciplines.js";
+import {
+  normalizePerformanceMetadata, resolveDisciplineId, validatePerformanceMetadata,
+} from "../domain/disciplines.js";
 import { parsePerf } from "../athlete/shared.js";
 import CompCard from "./CompCard";
 import CompModal from "./CompModal";
@@ -17635,6 +18107,7 @@ function Competitions() {
         const results = compResultsRes.data
           .filter((r) => r.competition_id === c.id)
           .map((r) => ({
+            ...r,
             athleteId: r.athlete_id,
             event:     r.event,
             result:    r.result,
@@ -17702,16 +18175,22 @@ function Competitions() {
     // Tâche 9 : normalise un alias saisi librement ("100 m" -> "100m") vers
     // l'identifiant canonique du registre avant d'écrire en base.
     const event = resolveDisciplineId(form.event);
-    const { data, error } = await supabase.rpc("add_competition_result", {
+    const resultValue = parsePerf(form.result).value;
+    if (resultValue == null) throw new Error("Le résultat doit contenir une valeur numérique valide.");
+    const metadata = normalizePerformanceMetadata(event, form.metadata);
+    const metadataIssues = validatePerformanceMetadata(event, metadata);
+    if (metadataIssues.length) throw new Error(metadataIssues[0]);
+    const { data, error } = await supabase.rpc("add_competition_result_v2", {
       p_competition_id:   competitionId,
       p_athlete_id:       athleteId,
       p_event:            event,
       p_result:           form.result,
-      p_result_value:     parsePerf(form.result).value,
-      p_higher_is_better: getDisciplineHib(event),
+      p_result_value:     resultValue,
+      p_higher_is_better: metadata.performance_direction === "higher",
       p_context:          form.context || null,
       p_idempotency_key:  crypto.randomUUID(),
-      p_unit:             getDisciplineUnit(event),
+      p_unit:             metadata.unit,
+      p_metadata:         metadata,
     });
     if (error) throw error;
 
@@ -18062,6 +18541,7 @@ import { getAthleteMetricsForWeek } from "../utils/chargeCalculations";
 import { getTypeConfig, daysUntil, formatDate, dateToWeek, athleteColor, generateResultAnalysis } from "./competitionsShared";
 import { parsePerf } from "../athlete/shared.js";
 import AddResultInline from "./AddResultInline";
+import PerformanceContextChips from "../components/performance/PerformanceContextChips.jsx";
 
 const CompModal = memo(({ competition, athletes, weeklyCharge, records, onClose, onAddResult }) => {
   if (!competition) return null;
@@ -18270,6 +18750,7 @@ const CompModal = memo(({ competition, athletes, weeklyCharge, records, onClose,
                             Note du coach : {result.context}
                           </p>
                         )}
+                        <PerformanceContextChips performance={result} />
                       </div>
                     </div>
                   );
@@ -18540,7 +19021,7 @@ import LoadingState                  from "../components/ui/LoadingState";
 import ErrorState                    from "../components/ui/ErrorState";
 import {
   getAthleteMetricsForWeek,
-  getStatusLabel,
+  getWellnessStatus,
 } from "../utils/chargeCalculations";
 import { checkUpcomingCompetitions, checkAndAlertACWR, notifyAthleteCompetitionReminder, checkWeeklyRecap, checkWeeklyReports } from "../utils/notifications";
 import { buildCoachFeed } from "../utils/coachFeed";
@@ -18558,27 +19039,6 @@ function toLocalDateStr(d) {
 
 // Système sémantique : couleur = dimension mesurée, pas le statut.
 // Vert → forme/récup | Bleu → charge/ACWR | Ambre → fatigue/alerte | Rouge → danger
-function dimColor(metric, val) {
-  switch (metric) {
-    case "readiness":
-    case "recuperation":
-    case "forme":
-      if (val >= 75) return "#1D9E75";
-      if (val >= 50) return "#EF9F27";
-      return "#E24B4A";
-    case "fatigue":
-      if (val > 70) return "#E24B4A";
-      if (val > 45) return "#EF9F27";
-      return "rgba(239,159,39,0.45)";
-    case "acwr":
-      if (val > 1.5) return "#E24B4A";
-      if (val > 1.3) return "#EF9F27";
-      return "#378ADD";
-    default:
-      return "#94A3B8";
-  }
-}
-
 function getGreeting() {
   const h = new Date().getHours();
   if (h < 12) return "Bonjour";
@@ -18681,16 +19141,16 @@ function AthleteStatusCard({ athlete, weeklyCharge, currentWeek, injuries, sessi
     () => getAthleteMetricsForWeek(athlete.id, weeklyCharge, currentWeek),
     [athlete.id, weeklyCharge, currentWeek]
   );
-  const status    = getStatusLabel(metrics.readiness, metrics.fatigue, metrics.acwr);
+  const status    = getWellnessStatus(metrics.wellnessScore);
   const activeInj = (injuries ?? []).filter(i => i.athleteId === athlete.id && i.status !== "résolu");
   const weekSess  = sessions.filter(s => s.week === currentWeek && s.athleteIds?.includes(athlete.id));
   const doneCount = weekSess.filter(s => s.validations?.find(v => v.athleteId === athlete.id && v.status === "done")).length;
   const hasCharge = weeklyCharge.some(w => w.athleteId === athlete.id);
   const isAtRisk  = false;
 
-  const readColor = dimColor("readiness", metrics.readiness);
+  const readColor = metrics.wellnessScore == null ? "#94A3B8" : metrics.wellnessScore >= 75 ? "#1D9E75" : metrics.wellnessScore >= 50 ? "#EF9F27" : "#E24B4A";
   const acwrCol   = "#378ADD";
-  const fatCol    = dimColor("fatigue", metrics.fatigue);
+  const fatCol    = "#14B8A6";
 
   const sparkData = useMemo(() =>
     weeklyCharge.filter(w => w.athleteId === athlete.id).sort((a, b) => a.week - b.week).slice(-6).map(w => ({ v: w.rawLoad })),
@@ -23743,10 +24203,25 @@ export type Database = {
           created_at: string | null
           discipline: string
           discipline_type: string
+          discipline_id: string | null
           id: number
+          hurdle_height_m: number | null
+          implement_weight_kg: number | null
+          measurement_type: string | null
+          metadata_version: string
+          normalized_value: number | null
+          official_status: string
           performance_date: string
+          performance_direction: string | null
+          quality_flags: string[]
+          scoring_table_version: string | null
           source: string | null
+          source_external_id: string | null
+          timing_method: string
+          unit: string | null
           value: string
+          venue_type: string
+          wind_mps: number | null
         }
         Insert: {
           athlete_id: number
@@ -23757,10 +24232,25 @@ export type Database = {
           created_at?: string | null
           discipline: string
           discipline_type: string
+          discipline_id?: string | null
           id?: number
+          hurdle_height_m?: number | null
+          implement_weight_kg?: number | null
+          measurement_type?: string | null
+          metadata_version?: string
+          normalized_value?: number | null
+          official_status?: string
           performance_date: string
+          performance_direction?: string | null
+          quality_flags?: string[]
+          scoring_table_version?: string | null
           source?: string | null
+          source_external_id?: string | null
+          timing_method?: string
+          unit?: string | null
           value: string
+          venue_type?: string
+          wind_mps?: number | null
         }
         Update: {
           athlete_id?: number
@@ -23771,10 +24261,25 @@ export type Database = {
           created_at?: string | null
           discipline?: string
           discipline_type?: string
+          discipline_id?: string | null
           id?: number
+          hurdle_height_m?: number | null
+          implement_weight_kg?: number | null
+          measurement_type?: string | null
+          metadata_version?: string
+          normalized_value?: number | null
+          official_status?: string
           performance_date?: string
+          performance_direction?: string | null
+          quality_flags?: string[]
+          scoring_table_version?: string | null
           source?: string | null
+          source_external_id?: string | null
+          timing_method?: string
+          unit?: string | null
           value?: string
+          venue_type?: string
+          wind_mps?: number | null
         }
         Relationships: [
           {
@@ -24024,24 +24529,72 @@ export type Database = {
           competition_id: number | null
           context: string | null
           event: string | null
+          discipline_id: string | null
+          hurdle_height_m: number | null
           id: number
+          implement_weight_kg: number | null
+          measurement_type: string | null
+          metadata_version: string
+          official_status: string
+          performance_direction: string | null
+          quality_flags: string[]
           result: string | null
+          result_value: number | null
+          scoring_table_version: string | null
+          source: string | null
+          source_external_id: string | null
+          timing_method: string
+          unit: string | null
+          venue_type: string
+          wind_mps: number | null
         }
         Insert: {
           athlete_id?: number | null
           competition_id?: number | null
           context?: string | null
           event?: string | null
+          discipline_id?: string | null
+          hurdle_height_m?: number | null
           id?: number
+          implement_weight_kg?: number | null
+          measurement_type?: string | null
+          metadata_version?: string
+          official_status?: string
+          performance_direction?: string | null
+          quality_flags?: string[]
           result?: string | null
+          result_value?: number | null
+          scoring_table_version?: string | null
+          source?: string | null
+          source_external_id?: string | null
+          timing_method?: string
+          unit?: string | null
+          venue_type?: string
+          wind_mps?: number | null
         }
         Update: {
           athlete_id?: number | null
           competition_id?: number | null
           context?: string | null
           event?: string | null
+          discipline_id?: string | null
+          hurdle_height_m?: number | null
           id?: number
+          implement_weight_kg?: number | null
+          measurement_type?: string | null
+          metadata_version?: string
+          official_status?: string
+          performance_direction?: string | null
+          quality_flags?: string[]
           result?: string | null
+          result_value?: number | null
+          scoring_table_version?: string | null
+          source?: string | null
+          source_external_id?: string | null
+          timing_method?: string
+          unit?: string | null
+          venue_type?: string
+          wind_mps?: number | null
         }
         Relationships: [
           {
@@ -24255,26 +24808,47 @@ export type Database = {
         Row: {
           athlete_id: number | null
           discipline: string | null
+          discipline_id: string | null
           id: number
+          measurement_type: string | null
+          metadata_version: string
+          performance_direction: string | null
           pr: string | null
           pr_date: string | null
+          pr_value: number | null
           sb: string | null
+          sb_value: number | null
+          unit: string | null
         }
         Insert: {
           athlete_id?: number | null
           discipline?: string | null
+          discipline_id?: string | null
           id?: number
+          measurement_type?: string | null
+          metadata_version?: string
+          performance_direction?: string | null
           pr?: string | null
           pr_date?: string | null
+          pr_value?: number | null
           sb?: string | null
+          sb_value?: number | null
+          unit?: string | null
         }
         Update: {
           athlete_id?: number | null
           discipline?: string | null
+          discipline_id?: string | null
           id?: number
+          measurement_type?: string | null
+          metadata_version?: string
+          performance_direction?: string | null
           pr?: string | null
           pr_date?: string | null
+          pr_value?: number | null
           sb?: string | null
+          sb_value?: number | null
+          unit?: string | null
         }
         Relationships: [
           {
@@ -24680,6 +25254,52 @@ export type Database = {
       }
     }
     Functions: {
+      add_athlete_performance: {
+        Args: {
+          p_breakdown?: Json | null
+          p_context?: string | null
+          p_discipline: string
+          p_idempotency_key?: string | null
+          p_metadata?: Json
+          p_performance_date: string
+          p_result_value: number
+          p_value: string
+        }
+        Returns: Json
+      }
+      add_competition_result_v2: {
+        Args: {
+          p_athlete_id: number
+          p_competition_id: number
+          p_context?: string | null
+          p_event: string
+          p_higher_is_better: boolean
+          p_idempotency_key?: string | null
+          p_metadata?: Json
+          p_result: string
+          p_result_value: number
+          p_unit?: string | null
+        }
+        Returns: Json
+      }
+      create_solo_competition_result_v2: {
+        Args: {
+          p_breakdown?: Json | null
+          p_context?: string | null
+          p_date: string
+          p_event: string
+          p_higher_is_better: boolean
+          p_idempotency_key?: string | null
+          p_location: string | null
+          p_metadata?: Json
+          p_name: string
+          p_result: string
+          p_result_value: number
+          p_type: string
+          p_unit?: string | null
+        }
+        Returns: Json
+      }
       create_coach_alert: {
         Args: {
           p_athlete_id: number
@@ -25561,9 +26181,6 @@ export function getAthleteMetricsForWeek(athleteId, weeklyCharge, currentWeek, w
 
   // Règle de programmation du club, pas estimation physiologique.
   const recovery = estimateRecovery(sessions, athleteId, recentWellness);
-  const readiness = wellnessScore;
-  const fatigue = wellnessScore == null ? null : 100 - wellnessScore;
-
   return {
     acute, chronic, acwr, acwrStatus, acwrExperimental: true, observedDays,
     ewmaHistory,
@@ -25571,26 +26188,25 @@ export function getAthleteMetricsForWeek(athleteId, weeklyCharge, currentWeek, w
     monotony, strain, monotonyStatus,
     wellnessScore,
     recovery,
-    fatigue,
-    forme: null,
-    readiness,
-    recuperation: null,
-    risque: null,
+    experimental_readiness_v0: null,
     hasDailyLoadData: dailyLoads.length > 0,
   };
 }
 
-// ─── getStatusLabel (inchangé) ────────────────────────────────────────────────
-export function getStatusLabel(readiness, fatigue, acwr) {
-  void acwr;
-  if (readiness == null) return { label: "Données à compléter", dot: "⚪", color: "#8A9B90" };
-  if (readiness >= 75) return { label: "Ressenti favorable", dot: "🟢", color: "#1D9E75" };
-  if (readiness >= 50) return { label: "Ressenti intermédiaire", dot: "🟡", color: "#EF9F27" };
-  if (fatigue != null && fatigue >= 75) return { label: "Ressenti difficile", dot: "🟠", color: "#E24B4A" };
+// Statut du questionnaire AthleteOS Wellness v1 uniquement.
+export function getWellnessStatus(wellnessScore) {
+  if (wellnessScore == null) return { label: "Données à compléter", dot: "⚪", color: "#8A9B90" };
+  if (wellnessScore >= 75) return { label: "Ressenti déclaré favorable", dot: "🟢", color: "#1D9E75" };
+  if (wellnessScore >= 50) return { label: "Ressenti déclaré intermédiaire", dot: "🟡", color: "#EF9F27" };
+  if (wellnessScore < 25) return { label: "Ressenti déclaré difficile", dot: "🟠", color: "#E24B4A" };
   return { label: "Ressenti à discuter", dot: "🔵", color: "#378ADD" };
 }
+
+export function getStatusLabel(wellnessScore) {
+  return getWellnessStatus(wellnessScore);
+}
 // ─── computeChargeChartData ───────────────────────────────────────────────────
-// Prépare les données du graphique charge vs forme sur les 12 dernières semaines.
+// Prépare les charges hebdomadaires observées sur les 12 dernières semaines.
 export function computeChargeChartData(athleteId, weeklyCharge) {
   const myCharge = weeklyCharge
     .filter(w => w.athleteId === athleteId)
@@ -25599,7 +26215,7 @@ export function computeChargeChartData(athleteId, weeklyCharge) {
 
   if (!myCharge.length) return [];
 
-  return myCharge.map((week) => ({ label: `S${week.week}`, rawLoad: week.rawLoad, forme: null, fatigue: null }));
+  return myCharge.map((week) => ({ label: `S${week.week}`, rawLoad: week.rawLoad }));
 }
 
 // ─── generateContextAnalysis ──────────────────────────────────────────────────
@@ -25847,17 +26463,17 @@ export function buildCoachFeed({ athletes, weeklyCharge, sessions, injuries, com
         });
       }
 
-      if (metrics.fatigue > 75) {
+      if (metrics.wellnessScore != null && metrics.wellnessScore < 25) {
         items.push({
           id: `fatigue-${athlete.id}`, priority: "warning", icon: "zap", color: "#EF9F27",
           sentence: `${name} signale un bien-être faible dans le questionnaire AthleteOS — prends contact pour comprendre le contexte.`,
         });
       }
 
-      if (metrics.readiness >= 85) {
+      if (metrics.wellnessScore >= 85) {
         items.push({
           id: `top-${athlete.id}`, priority: "positive", icon: "trending", color: "#1D9E75",
-          sentence: `${name} signale un bien-être élevé aujourd'hui (${metrics.readiness}/100).`,
+          sentence: `${name} signale un bien-être élevé aujourd'hui (${metrics.wellnessScore}/100).`,
         });
       }
     }
@@ -27497,7 +28113,7 @@ const NAV_ITEMS = [
   { id: "planning",     label: "Planning",         icon: CalendarDays    },
   { id: "athletes",     label: "Athlètes",         icon: Users           },
   { id: "performances", label: "Performances",     icon: TrendingUp      },
-  { id: "charge",       label: "Charge & Fatigue", icon: Activity        },
+  { id: "charge",       label: "Charge & Suivi",   icon: Activity        },
   { id: "rapports",     label: "Rapports",         icon: FileText        },
   { id: "competitions", label: "Compétitions",     icon: Trophy          },
   { id: "alerts",       label: "Alertes",          icon: Bell            },
@@ -28106,7 +28722,7 @@ export default function AthleteApp({ clubBrand, themeStyle }) {
 
       const pd   = a.profile_data ?? {};
       const recs = {};
-      (recordsRes.data??[]).forEach(r=>{ recs[r.discipline]={sb:r.sb,pr:r.pr,prDate:r.pr_date}; });
+      (recordsRes.data??[]).forEach(r=>{ recs[r.discipline]={...r,sb:r.sb,pr:r.pr,prDate:r.pr_date}; });
 
       setAthlete({
         id:a.id, name:a.name, age:a.age,
@@ -28140,7 +28756,7 @@ export default function AthleteApp({ clubBrand, themeStyle }) {
         id:c.id, name:c.name, date:c.date, location:c.location, type:c.type,
         athleteIds:(c.competition_athletes??[]).map(x=>x.athlete_id),
         plannedEvents:Object.fromEntries((c.competition_athletes??[]).map(x=>[x.athlete_id,x.planned_event])),
-        results:(c.competition_results??[]).map(r=>({athleteId:r.athlete_id,event:r.event,result:r.result,context:r.context})),
+        results:(c.competition_results??[]).map(r=>({...r,athleteId:r.athlete_id,event:r.event,result:r.result,context:r.context})),
       })).filter(c=>c.athleteIds.includes(athleteId));
 
       const charge = (weeklyChargeRes.data??[]).map(c=>({
@@ -34323,6 +34939,280 @@ WHERE rest.state = 'rest_confirmed'
   );
 
 GRANT SELECT ON public.daily_training_load TO authenticated;
+
+COMMIT;
+</file>
+
+<file path="supabase/migrations/20260801080000_structured_performance_context.sql">
+BEGIN;
+
+-- AthleteOS Performance Metadata v1. Ces colonnes sont additives : les
+-- anciennes lignes restent lisibles et sont marquées "unknown" lorsqu'une
+-- condition de compétition ne peut pas être reconstruite honnêtement.
+ALTER TABLE public.athlete_performances
+  ADD COLUMN measurement_type text,
+  ADD COLUMN performance_direction text,
+  ADD COLUMN venue_type text NOT NULL DEFAULT 'unknown',
+  ADD COLUMN wind_mps numeric,
+  ADD COLUMN timing_method text NOT NULL DEFAULT 'unknown',
+  ADD COLUMN implement_weight_kg numeric,
+  ADD COLUMN hurdle_height_m numeric,
+  ADD COLUMN official_status text NOT NULL DEFAULT 'unknown',
+  ADD COLUMN scoring_table_version text,
+  ADD COLUMN metadata_version text NOT NULL DEFAULT 'athleteos-performance-v1';
+
+ALTER TABLE public.competition_results
+  ADD COLUMN measurement_type text,
+  ADD COLUMN performance_direction text,
+  ADD COLUMN venue_type text NOT NULL DEFAULT 'unknown',
+  ADD COLUMN wind_mps numeric,
+  ADD COLUMN timing_method text NOT NULL DEFAULT 'unknown',
+  ADD COLUMN implement_weight_kg numeric,
+  ADD COLUMN hurdle_height_m numeric,
+  ADD COLUMN official_status text NOT NULL DEFAULT 'unknown',
+  ADD COLUMN scoring_table_version text,
+  ADD COLUMN metadata_version text NOT NULL DEFAULT 'athleteos-performance-v1';
+
+ALTER TABLE public.records
+  ADD COLUMN measurement_type text,
+  ADD COLUMN performance_direction text,
+  ADD COLUMN metadata_version text NOT NULL DEFAULT 'athleteos-performance-v1';
+
+-- Le catalogue officiel utilise s/m/pts, mais une épreuve club explicite
+-- peut avoir une autre unité courte. On interdit seulement le vide et les
+-- chaînes déraisonnablement longues au lieu de la réinterpréter en chrono.
+ALTER TABLE public.athlete_performances DROP CONSTRAINT athlete_performances_unit_check;
+ALTER TABLE public.competition_results DROP CONSTRAINT competition_results_unit_check;
+ALTER TABLE public.records DROP CONSTRAINT records_unit_check;
+ALTER TABLE public.athlete_performances ADD CONSTRAINT athlete_performances_unit_check CHECK (unit IS NULL OR char_length(btrim(unit)) BETWEEN 1 AND 16);
+ALTER TABLE public.competition_results ADD CONSTRAINT competition_results_unit_check CHECK (unit IS NULL OR char_length(btrim(unit)) BETWEEN 1 AND 16);
+ALTER TABLE public.records ADD CONSTRAINT records_unit_check CHECK (unit IS NULL OR char_length(btrim(unit)) BETWEEN 1 AND 16);
+
+ALTER TABLE public.athlete_performances
+  ADD CONSTRAINT athlete_performances_measurement_type_check CHECK (measurement_type IS NULL OR measurement_type IN ('time', 'distance', 'points', 'unknown')),
+  ADD CONSTRAINT athlete_performances_direction_check CHECK (performance_direction IS NULL OR performance_direction IN ('lower', 'higher', 'unknown')),
+  ADD CONSTRAINT athlete_performances_venue_check CHECK (venue_type IN ('indoor', 'outdoor', 'road', 'unknown')),
+  ADD CONSTRAINT athlete_performances_timing_check CHECK (timing_method IN ('fully_automatic', 'hand', 'transponder', 'unknown', 'not_applicable')),
+  ADD CONSTRAINT athlete_performances_official_check CHECK (official_status IN ('official', 'unofficial', 'unknown')),
+  ADD CONSTRAINT athlete_performances_wind_check CHECK (wind_mps IS NULL OR wind_mps BETWEEN -20 AND 20),
+  ADD CONSTRAINT athlete_performances_implement_check CHECK (implement_weight_kg IS NULL OR implement_weight_kg > 0),
+  ADD CONSTRAINT athlete_performances_hurdle_check CHECK (hurdle_height_m IS NULL OR hurdle_height_m > 0);
+
+ALTER TABLE public.competition_results
+  ADD CONSTRAINT competition_results_measurement_type_check CHECK (measurement_type IS NULL OR measurement_type IN ('time', 'distance', 'points', 'unknown')),
+  ADD CONSTRAINT competition_results_direction_check CHECK (performance_direction IS NULL OR performance_direction IN ('lower', 'higher', 'unknown')),
+  ADD CONSTRAINT competition_results_venue_check CHECK (venue_type IN ('indoor', 'outdoor', 'road', 'unknown')),
+  ADD CONSTRAINT competition_results_timing_check CHECK (timing_method IN ('fully_automatic', 'hand', 'transponder', 'unknown', 'not_applicable')),
+  ADD CONSTRAINT competition_results_official_check CHECK (official_status IN ('official', 'unofficial', 'unknown')),
+  ADD CONSTRAINT competition_results_wind_check CHECK (wind_mps IS NULL OR wind_mps BETWEEN -20 AND 20),
+  ADD CONSTRAINT competition_results_implement_check CHECK (implement_weight_kg IS NULL OR implement_weight_kg > 0),
+  ADD CONSTRAINT competition_results_hurdle_check CHECK (hurdle_height_m IS NULL OR hurdle_height_m > 0);
+
+ALTER TABLE public.records
+  ADD CONSTRAINT records_measurement_type_check CHECK (measurement_type IS NULL OR measurement_type IN ('time', 'distance', 'points', 'unknown')),
+  ADD CONSTRAINT records_direction_check CHECK (performance_direction IS NULL OR performance_direction IN ('lower', 'higher', 'unknown'));
+
+-- Backfill prudent fondé sur l'unité déjà normalisée. Aucune unité absente
+-- n'est inventée et aucune ancienne valeur libre n'est supposée être un temps.
+UPDATE public.athlete_performances SET
+  measurement_type = CASE WHEN unit = 's' THEN 'time' WHEN unit = 'm' THEN 'distance' WHEN unit = 'pts' THEN 'points' ELSE 'unknown' END,
+  performance_direction = CASE WHEN unit = 's' THEN 'lower' WHEN unit IN ('m', 'pts') THEN 'higher' ELSE 'unknown' END,
+  timing_method = CASE WHEN unit = 's' THEN 'unknown' ELSE 'not_applicable' END;
+
+UPDATE public.competition_results SET
+  measurement_type = CASE WHEN unit = 's' THEN 'time' WHEN unit = 'm' THEN 'distance' WHEN unit = 'pts' THEN 'points' ELSE 'unknown' END,
+  performance_direction = CASE WHEN unit = 's' THEN 'lower' WHEN unit IN ('m', 'pts') THEN 'higher' ELSE 'unknown' END,
+  timing_method = CASE WHEN unit = 's' THEN 'unknown' ELSE 'not_applicable' END;
+
+UPDATE public.records SET
+  measurement_type = CASE WHEN unit = 's' THEN 'time' WHEN unit = 'm' THEN 'distance' WHEN unit = 'pts' THEN 'points' ELSE 'unknown' END,
+  performance_direction = CASE WHEN unit = 's' THEN 'lower' WHEN unit IN ('m', 'pts') THEN 'higher' ELSE 'unknown' END;
+
+CREATE OR REPLACE FUNCTION public.add_athlete_performance(
+  p_discipline text,
+  p_value text,
+  p_result_value numeric,
+  p_performance_date date,
+  p_context text DEFAULT NULL,
+  p_breakdown jsonb DEFAULT NULL,
+  p_metadata jsonb DEFAULT '{}'::jsonb,
+  p_idempotency_key text DEFAULT NULL
+) RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path TO 'public'
+AS $$
+DECLARE
+  v_user_id integer;
+  v_club_id integer;
+  v_athlete_id integer;
+  v_cached jsonb;
+  v_performance_id bigint;
+  v_record_id integer;
+  v_existing_pr numeric;
+  v_existing_sb numeric;
+  v_is_pr boolean := false;
+  v_is_sb boolean := false;
+  v_this_year boolean;
+  v_direction text := coalesce(nullif(p_metadata->>'performance_direction', ''), 'unknown');
+  v_unit text := nullif(p_metadata->>'unit', '');
+  v_measurement text := coalesce(nullif(p_metadata->>'measurement_type', ''), 'unknown');
+  v_result jsonb;
+BEGIN
+  SELECT id, club_id INTO v_user_id, v_club_id FROM public.users
+  WHERE lower(trim(auth_uid)) = lower(trim(auth.uid()::text)) LIMIT 1;
+  IF v_user_id IS NULL THEN RAISE EXCEPTION 'Profil introuvable.'; END IF;
+  SELECT id INTO v_athlete_id FROM public.athletes WHERE user_id = v_user_id AND club_id = v_club_id LIMIT 1;
+  IF v_athlete_id IS NULL THEN RAISE EXCEPTION 'Profil athlète introuvable.'; END IF;
+
+  IF p_idempotency_key IS NOT NULL THEN
+    SELECT result INTO v_cached FROM public.rpc_idempotency
+    WHERE fn_name = 'add_athlete_performance' AND idempotency_key = p_idempotency_key AND actor_user_id = v_user_id;
+    IF v_cached IS NOT NULL THEN RETURN v_cached; END IF;
+  END IF;
+
+  IF nullif(btrim(p_discipline), '') IS NULL THEN RAISE EXCEPTION 'Discipline manquante.'; END IF;
+  IF nullif(btrim(p_value), '') IS NULL OR p_result_value IS NULL THEN RAISE EXCEPTION 'Résultat non interprétable.'; END IF;
+  IF p_performance_date IS NULL THEN RAISE EXCEPTION 'Date manquante.'; END IF;
+  IF v_direction NOT IN ('lower', 'higher') THEN RAISE EXCEPTION 'Sens de performance à préciser.'; END IF;
+  IF v_measurement NOT IN ('time', 'distance', 'points') THEN RAISE EXCEPTION 'Type de mesure à préciser.'; END IF;
+  IF v_unit IS NULL THEN RAISE EXCEPTION 'Unité de performance à préciser.'; END IF;
+
+  INSERT INTO public.athlete_performances (
+    athlete_id, club_id, discipline, discipline_type, value, performance_date,
+    context, breakdown, normalized_value, unit, discipline_id, quality_flags,
+    measurement_type, performance_direction, venue_type, wind_mps, timing_method,
+    implement_weight_kg, hurdle_height_m, official_status, scoring_table_version, metadata_version
+  ) VALUES (
+    v_athlete_id, v_club_id, p_discipline, p_discipline, p_value, p_performance_date,
+    nullif(p_context, ''), p_breakdown, p_result_value, v_unit, p_discipline, '{}',
+    v_measurement, v_direction, coalesce(p_metadata->>'venue_type', 'unknown'),
+    nullif(p_metadata->>'wind_mps', '')::numeric, coalesce(p_metadata->>'timing_method', 'unknown'),
+    nullif(p_metadata->>'implement_weight_kg', '')::numeric, nullif(p_metadata->>'hurdle_height_m', '')::numeric,
+    coalesce(p_metadata->>'official_status', 'unknown'), nullif(p_metadata->>'scoring_table_version', ''),
+    coalesce(p_metadata->>'metadata_version', 'athleteos-performance-v1')
+  ) RETURNING id INTO v_performance_id;
+
+  v_this_year := date_part('year', p_performance_date) = date_part('year', now());
+  INSERT INTO public.records (athlete_id, discipline, pr, pr_value, pr_date, sb, sb_value, unit, discipline_id, measurement_type, performance_direction)
+  VALUES (v_athlete_id, p_discipline, p_value, p_result_value, p_performance_date,
+    CASE WHEN v_this_year THEN p_value END, CASE WHEN v_this_year THEN p_result_value END,
+    v_unit, p_discipline, v_measurement, v_direction)
+  ON CONFLICT (athlete_id, discipline) DO NOTHING RETURNING id INTO v_record_id;
+
+  IF v_record_id IS NOT NULL THEN
+    v_is_pr := true;
+    v_is_sb := v_this_year;
+  ELSE
+    SELECT id, pr_value, sb_value INTO v_record_id, v_existing_pr, v_existing_sb
+    FROM public.records WHERE athlete_id = v_athlete_id AND discipline = p_discipline FOR UPDATE;
+    v_is_pr := v_existing_pr IS NULL OR (v_direction = 'higher' AND p_result_value > v_existing_pr) OR (v_direction = 'lower' AND p_result_value < v_existing_pr);
+    v_is_sb := v_this_year AND (v_existing_sb IS NULL OR (v_direction = 'higher' AND p_result_value > v_existing_sb) OR (v_direction = 'lower' AND p_result_value < v_existing_sb));
+    UPDATE public.records SET
+      pr = CASE WHEN v_is_pr THEN p_value ELSE pr END,
+      pr_value = CASE WHEN v_is_pr THEN p_result_value ELSE pr_value END,
+      pr_date = CASE WHEN v_is_pr THEN p_performance_date ELSE pr_date END,
+      sb = CASE WHEN v_is_sb THEN p_value ELSE sb END,
+      sb_value = CASE WHEN v_is_sb THEN p_result_value ELSE sb_value END,
+      unit = v_unit, discipline_id = p_discipline,
+      measurement_type = v_measurement, performance_direction = v_direction
+    WHERE id = v_record_id;
+  END IF;
+
+  v_result := jsonb_build_object('performanceId', v_performance_id, 'recordId', v_record_id, 'isNewRecord', v_is_pr, 'isNewSeasonBest', v_is_sb);
+  IF p_idempotency_key IS NOT NULL THEN
+    INSERT INTO public.rpc_idempotency (fn_name, idempotency_key, actor_user_id, result)
+    VALUES ('add_athlete_performance', p_idempotency_key, v_user_id, v_result)
+    ON CONFLICT (fn_name, idempotency_key) DO NOTHING;
+  END IF;
+  RETURN v_result;
+END;
+$$;
+
+-- V2 enveloppe les RPC de compétition existantes : même transaction, aucun
+-- retrait de compatibilité, et contexte structuré ajouté après leur écriture.
+CREATE OR REPLACE FUNCTION public.add_competition_result_v2(
+  p_competition_id integer, p_athlete_id integer, p_event text, p_result text,
+  p_result_value numeric, p_higher_is_better boolean, p_context text DEFAULT NULL,
+  p_idempotency_key text DEFAULT NULL, p_unit text DEFAULT NULL,
+  p_metadata jsonb DEFAULT '{}'::jsonb
+) RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path TO 'public' AS $$
+DECLARE v_result jsonb;
+BEGIN
+  IF coalesce(p_metadata->>'measurement_type', 'unknown') NOT IN ('time', 'distance', 'points')
+    OR coalesce(p_metadata->>'performance_direction', 'unknown') NOT IN ('lower', 'higher')
+    OR nullif(coalesce(p_unit, p_metadata->>'unit'), '') IS NULL
+  THEN RAISE EXCEPTION 'Métadonnées de performance incomplètes.'; END IF;
+  IF (p_metadata->>'performance_direction' = 'higher') IS DISTINCT FROM p_higher_is_better
+  THEN RAISE EXCEPTION 'Sens de comparaison incohérent.'; END IF;
+  v_result := public.add_competition_result(p_competition_id, p_athlete_id, p_event, p_result, p_result_value, p_higher_is_better, p_context, p_idempotency_key, p_unit);
+  IF NOT EXISTS (
+    SELECT 1 FROM public.competition_results cr
+    JOIN public.competitions c ON c.id = cr.competition_id
+    JOIN public.users u ON u.club_id = c.club_id
+    WHERE cr.id = (v_result->>'resultId')::integer
+      AND lower(trim(u.auth_uid)) = lower(trim(auth.uid()::text))
+      AND u.role IN ('head_coach', 'coach')
+  ) THEN RAISE EXCEPTION 'Résultat inaccessible.'; END IF;
+  UPDATE public.competition_results SET
+    measurement_type = p_metadata->>'measurement_type', performance_direction = p_metadata->>'performance_direction',
+    venue_type = coalesce(p_metadata->>'venue_type', 'unknown'), wind_mps = nullif(p_metadata->>'wind_mps', '')::numeric,
+    timing_method = coalesce(p_metadata->>'timing_method', 'unknown'), implement_weight_kg = nullif(p_metadata->>'implement_weight_kg', '')::numeric,
+    hurdle_height_m = nullif(p_metadata->>'hurdle_height_m', '')::numeric, official_status = coalesce(p_metadata->>'official_status', 'unknown'),
+    scoring_table_version = nullif(p_metadata->>'scoring_table_version', ''), metadata_version = coalesce(p_metadata->>'metadata_version', 'athleteos-performance-v1')
+  WHERE id = (v_result->>'resultId')::integer;
+  UPDATE public.records SET measurement_type = p_metadata->>'measurement_type', performance_direction = p_metadata->>'performance_direction'
+  WHERE id = (v_result->>'recordId')::integer;
+  RETURN v_result;
+END; $$;
+
+CREATE OR REPLACE FUNCTION public.create_solo_competition_result_v2(
+  p_name text, p_date date, p_location text, p_type text, p_event text, p_result text,
+  p_result_value numeric, p_higher_is_better boolean, p_context text DEFAULT NULL,
+  p_idempotency_key text DEFAULT NULL, p_breakdown jsonb DEFAULT NULL, p_unit text DEFAULT NULL,
+  p_metadata jsonb DEFAULT '{}'::jsonb
+) RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path TO 'public' AS $$
+DECLARE v_result jsonb;
+BEGIN
+  IF coalesce(p_metadata->>'measurement_type', 'unknown') NOT IN ('time', 'distance', 'points')
+    OR coalesce(p_metadata->>'performance_direction', 'unknown') NOT IN ('lower', 'higher')
+    OR nullif(coalesce(p_unit, p_metadata->>'unit'), '') IS NULL
+  THEN RAISE EXCEPTION 'Métadonnées de performance incomplètes.'; END IF;
+  IF (p_metadata->>'performance_direction' = 'higher') IS DISTINCT FROM p_higher_is_better
+  THEN RAISE EXCEPTION 'Sens de comparaison incohérent.'; END IF;
+  v_result := public.create_solo_competition_result(p_name, p_date, p_location, p_type, p_event, p_result, p_result_value, p_higher_is_better, p_context, p_idempotency_key, p_breakdown, p_unit);
+  IF NOT EXISTS (
+    SELECT 1 FROM public.athlete_performances ap
+    JOIN public.athletes a ON a.id = ap.athlete_id
+    JOIN public.users u ON u.id = a.user_id
+    WHERE ap.id = (v_result->>'performanceId')::bigint
+      AND lower(trim(u.auth_uid)) = lower(trim(auth.uid()::text))
+  ) THEN RAISE EXCEPTION 'Performance inaccessible.'; END IF;
+  UPDATE public.competition_results SET
+    measurement_type = p_metadata->>'measurement_type', performance_direction = p_metadata->>'performance_direction',
+    venue_type = coalesce(p_metadata->>'venue_type', 'unknown'), wind_mps = nullif(p_metadata->>'wind_mps', '')::numeric,
+    timing_method = coalesce(p_metadata->>'timing_method', 'unknown'), implement_weight_kg = nullif(p_metadata->>'implement_weight_kg', '')::numeric,
+    hurdle_height_m = nullif(p_metadata->>'hurdle_height_m', '')::numeric, official_status = coalesce(p_metadata->>'official_status', 'unknown'),
+    scoring_table_version = nullif(p_metadata->>'scoring_table_version', ''), metadata_version = coalesce(p_metadata->>'metadata_version', 'athleteos-performance-v1')
+  WHERE id = (v_result->>'resultId')::integer;
+  UPDATE public.athlete_performances SET
+    measurement_type = p_metadata->>'measurement_type', performance_direction = p_metadata->>'performance_direction',
+    venue_type = coalesce(p_metadata->>'venue_type', 'unknown'), wind_mps = nullif(p_metadata->>'wind_mps', '')::numeric,
+    timing_method = coalesce(p_metadata->>'timing_method', 'unknown'), implement_weight_kg = nullif(p_metadata->>'implement_weight_kg', '')::numeric,
+    hurdle_height_m = nullif(p_metadata->>'hurdle_height_m', '')::numeric, official_status = coalesce(p_metadata->>'official_status', 'unknown'),
+    scoring_table_version = nullif(p_metadata->>'scoring_table_version', ''), metadata_version = coalesce(p_metadata->>'metadata_version', 'athleteos-performance-v1')
+  WHERE id = (v_result->>'performanceId')::bigint;
+  UPDATE public.records SET measurement_type = p_metadata->>'measurement_type', performance_direction = p_metadata->>'performance_direction'
+  WHERE id = (v_result->>'recordId')::integer;
+  RETURN v_result;
+END; $$;
+
+REVOKE ALL ON FUNCTION public.add_athlete_performance(text, text, numeric, date, text, jsonb, jsonb, text) FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.add_competition_result_v2(integer, integer, text, text, numeric, boolean, text, text, text, jsonb) FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.create_solo_competition_result_v2(text, date, text, text, text, text, numeric, boolean, text, text, jsonb, text, jsonb) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.add_athlete_performance(text, text, numeric, date, text, jsonb, jsonb, text) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.add_competition_result_v2(integer, integer, text, text, numeric, boolean, text, text, text, jsonb) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.create_solo_competition_result_v2(text, date, text, text, text, text, numeric, boolean, text, text, jsonb, text, jsonb) TO authenticated;
 
 COMMIT;
 </file>

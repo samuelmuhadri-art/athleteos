@@ -31,6 +31,20 @@ export const MEASUREMENT_TYPE = {
   TIME: "time",
   DISTANCE: "distance",
   POINTS: "points",
+  UNKNOWN: "unknown",
+};
+
+export const PERFORMANCE_DIRECTION = { LOWER: "lower", HIGHER: "higher", UNKNOWN: "unknown" };
+export const VENUE_TYPE = { INDOOR: "indoor", OUTDOOR: "outdoor", ROAD: "road", UNKNOWN: "unknown" };
+export const TIMING_METHOD = {
+  FULLY_AUTOMATIC: "fully_automatic", HAND: "hand", TRANSPONDER: "transponder",
+  UNKNOWN: "unknown", NOT_APPLICABLE: "not_applicable",
+};
+export const OFFICIAL_STATUS = { OFFICIAL: "official", UNOFFICIAL: "unofficial", UNKNOWN: "unknown" };
+export const PERFORMANCE_METADATA_VERSION = "athleteos-performance-v1";
+export const SCORING_TABLE_VERSIONS = {
+  GENERAL: "WA_SCORING_TABLES_2025",
+  COMBINED: "IAAF_COMBINED_EVENTS_2012",
 };
 
 // Détermine le format de SAISIE/PARSING attendu (voir parsePerf dans
@@ -49,18 +63,27 @@ export const INPUT_FORMAT = {
 const TIME_SHORT = {
   type: null, measurementType: MEASUREMENT_TYPE.TIME, unit: "s",
   higherIsBetter: false, decimals: 2, inputFormat: INPUT_FORMAT.SECONDS,
+  environments: [VENUE_TYPE.INDOOR, VENUE_TYPE.OUTDOOR],
+  timingMethods: [TIMING_METHOD.FULLY_AUTOMATIC, TIMING_METHOD.HAND],
 };
 const TIME_LONG = {
-  type: null, measurementType: MEASUREMENT_TYPE.TIME, unit: "min:s",
-  higherIsBetter: false, decimals: 0, inputFormat: INPUT_FORMAT.MINUTES,
+  type: null, measurementType: MEASUREMENT_TYPE.TIME, unit: "s",
+  higherIsBetter: false, decimals: 2, inputFormat: INPUT_FORMAT.MINUTES,
+  environments: [VENUE_TYPE.INDOOR, VENUE_TYPE.OUTDOOR],
+  timingMethods: [TIMING_METHOD.FULLY_AUTOMATIC, TIMING_METHOD.HAND],
 };
 const DISTANCE = {
   type: null, measurementType: MEASUREMENT_TYPE.DISTANCE, unit: "m",
   higherIsBetter: true, decimals: 2, inputFormat: INPUT_FORMAT.METERS,
+  environments: [VENUE_TYPE.INDOOR, VENUE_TYPE.OUTDOOR],
+  timingMethods: [TIMING_METHOD.NOT_APPLICABLE],
 };
 const POINTS = {
   type: "combine", measurementType: MEASUREMENT_TYPE.POINTS, unit: "pts",
   higherIsBetter: true, decimals: 0, inputFormat: INPUT_FORMAT.POINTS,
+  environments: [VENUE_TYPE.INDOOR, VENUE_TYPE.OUTDOOR],
+  timingMethods: [TIMING_METHOD.NOT_APPLICABLE],
+  scoringTableVersion: SCORING_TABLE_VERSIONS.COMBINED,
 };
 
 // Ordre officiel des épreuves d'une combinée (jour 1 puis jour 2) —
@@ -91,6 +114,23 @@ export const DISCIPLINES = {
   "Heptathlon":  { label: "Heptathlon",  ...POINTS,     color: "#CA8A04", aliases: [], subEvents: HEPTATHLON_EVENTS },
 };
 
+// Contexte technique nécessaire à l'interprétation d'un résultat. Ces
+// champs décrivent les conditions ; ils ne valident jamais seuls une perf.
+const WIND_EVENTS = new Set(["100m", "200m", "60m haies", "100m haies", "110m haies", "Longueur", "Triple saut"]);
+const HURDLE_EVENTS = new Set(["60m haies", "100m haies", "110m haies", "400m haies"]);
+const THROW_EVENTS = new Set(["Poids", "Disque", "Javelot", "Marteau"]);
+
+for (const [id, discipline] of Object.entries(DISCIPLINES)) {
+  discipline.performanceDirection = discipline.higherIsBetter
+    ? PERFORMANCE_DIRECTION.HIGHER
+    : PERFORMANCE_DIRECTION.LOWER;
+  discipline.windMeasurement = WIND_EVENTS.has(id) ? "required_for_official_review" : "not_applicable";
+  discipline.requiresHurdleHeight = HURDLE_EVENTS.has(id);
+  discipline.requiresImplementWeight = THROW_EVENTS.has(id);
+  discipline.scoringTableVersion ??= SCORING_TABLE_VERSIONS.GENERAL;
+  discipline.catalogVersion = PERFORMANCE_METADATA_VERSION;
+}
+
 export const DISCIPLINE_TYPE_COLORS = {
   sprint:    { bg: "#DBEAFE", border: "#3B82F6", text: "#1D4ED8", dot: "#3B82F6" },
   endurance: { bg: "#E0F2FE", border: "#0284C7", text: "#0C4A6E", dot: "#0284C7" },
@@ -108,8 +148,13 @@ const DEFAULT_DISCIPLINE_COLOR = "#1D9E75";
 // getDiscHib -> false), pour ne rien changer au jugement porté sur les
 // disciplines déjà utilisées en pratique par les clubs.
 const UNKNOWN_DISCIPLINE_DEFAULTS = {
-  type: "sprint", measurementType: MEASUREMENT_TYPE.TIME, unit: "s",
-  higherIsBetter: false, decimals: 2, inputFormat: INPUT_FORMAT.SECONDS,
+  type: "custom", measurementType: MEASUREMENT_TYPE.UNKNOWN, unit: null,
+  higherIsBetter: null, performanceDirection: PERFORMANCE_DIRECTION.UNKNOWN,
+  decimals: 2, inputFormat: INPUT_FORMAT.METERS,
+  environments: [VENUE_TYPE.UNKNOWN], timingMethods: [TIMING_METHOD.UNKNOWN],
+  windMeasurement: "unknown", requiresHurdleHeight: false,
+  requiresImplementWeight: false, scoringTableVersion: null,
+  catalogVersion: PERFORMANCE_METADATA_VERSION,
 };
 
 function normalizeKey(s) {
@@ -161,6 +206,10 @@ export function getDisciplineHib(rawText) {
   return getDiscipline(rawText)?.higherIsBetter ?? UNKNOWN_DISCIPLINE_DEFAULTS.higherIsBetter;
 }
 
+export function getDisciplineDirection(rawText) {
+  return getDiscipline(rawText)?.performanceDirection ?? UNKNOWN_DISCIPLINE_DEFAULTS.performanceDirection;
+}
+
 export function getDisciplineUnit(rawText) {
   return getDiscipline(rawText)?.unit ?? UNKNOWN_DISCIPLINE_DEFAULTS.unit;
 }
@@ -192,13 +241,72 @@ export function getAllDisciplineIds() {
   return Object.keys(DISCIPLINES);
 }
 
+export function createPerformanceMetadata(rawText, overrides = {}) {
+  const discipline = getDiscipline(rawText) ?? UNKNOWN_DISCIPLINE_DEFAULTS;
+  return {
+    measurement_type: discipline.measurementType,
+    performance_direction: discipline.performanceDirection,
+    unit: discipline.unit,
+    venue_type: VENUE_TYPE.UNKNOWN,
+    wind_mps: null,
+    timing_method: discipline.measurementType === MEASUREMENT_TYPE.TIME
+      ? TIMING_METHOD.UNKNOWN
+      : TIMING_METHOD.NOT_APPLICABLE,
+    implement_weight_kg: null,
+    hurdle_height_m: null,
+    official_status: OFFICIAL_STATUS.UNKNOWN,
+    scoring_table_version: discipline.scoringTableVersion,
+    metadata_version: PERFORMANCE_METADATA_VERSION,
+    ...overrides,
+  };
+}
+
+export function normalizePerformanceMetadata(rawText, metadata = {}) {
+  const discipline = getDiscipline(rawText);
+  const defaults = createPerformanceMetadata(rawText);
+  const merged = { ...defaults, ...metadata };
+  if (discipline) {
+    merged.measurement_type = defaults.measurement_type;
+    merged.performance_direction = defaults.performance_direction;
+    merged.unit = defaults.unit;
+    merged.scoring_table_version = defaults.scoring_table_version;
+    merged.metadata_version = defaults.metadata_version;
+  }
+  const numberOrNull = (value) => value === "" || value == null ? null : Number(value);
+  return {
+    ...merged,
+    wind_mps: numberOrNull(merged.wind_mps),
+    implement_weight_kg: numberOrNull(merged.implement_weight_kg),
+    hurdle_height_m: numberOrNull(merged.hurdle_height_m),
+  };
+}
+
+export function validatePerformanceMetadata(rawText, metadata = {}) {
+  const discipline = getDiscipline(rawText);
+  const normalized = normalizePerformanceMetadata(rawText, metadata);
+  const issues = [];
+  if (!discipline && ![PERFORMANCE_DIRECTION.HIGHER, PERFORMANCE_DIRECTION.LOWER].includes(normalized.performance_direction)) {
+    issues.push("Indique si une valeur plus haute ou plus basse est meilleure.");
+  }
+  if (!discipline && ![MEASUREMENT_TYPE.TIME, MEASUREMENT_TYPE.DISTANCE, MEASUREMENT_TYPE.POINTS].includes(normalized.measurement_type)) {
+    issues.push("Indique le type de mesure de cette épreuve personnalisée.");
+  }
+  if (!discipline && !normalized.unit?.trim()) issues.push("Indique l'unité de cette épreuve personnalisée.");
+  if (!Object.values(VENUE_TYPE).includes(normalized.venue_type)) issues.push("Environnement invalide.");
+  if (!Object.values(OFFICIAL_STATUS).includes(normalized.official_status)) issues.push("Statut officiel invalide.");
+  if (normalized.wind_mps != null && !Number.isFinite(normalized.wind_mps)) issues.push("Vent invalide.");
+  if (normalized.implement_weight_kg != null && !(normalized.implement_weight_kg > 0)) issues.push("Poids de l'engin invalide.");
+  if (normalized.hurdle_height_m != null && !(normalized.hurdle_height_m > 0)) issues.push("Hauteur des haies invalide.");
+  return issues;
+}
+
 // { "Décathlon": [...], "Heptathlon": [...] } — forme objet pratique pour
 // un lookup direct `COMBINE_EVENTS[disc]` (compat perfsShared.js).
 export const COMBINE_EVENTS = Object.fromEntries(
   Object.entries(DISCIPLINES).filter(([, d]) => d.subEvents).map(([id, d]) => [id, d.subEvents])
 );
 
-const REQUIRED_FIELDS = ["label", "type", "measurementType", "unit", "higherIsBetter", "decimals", "inputFormat", "color"];
+const REQUIRED_FIELDS = ["label", "type", "measurementType", "unit", "higherIsBetter", "performanceDirection", "decimals", "inputFormat", "color", "environments", "timingMethods", "windMeasurement", "requiresImplementWeight", "requiresHurdleHeight", "scoringTableVersion", "catalogVersion"];
 
 // Auto-vérification du registre — utilisée par test_discipline_registry.mjs,
 // mais exportée (pas juste un script ponctuel) pour pouvoir être rappelée

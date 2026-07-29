@@ -78,82 +78,81 @@ export const EVIDENCE_LEVELS = {
 //   - coach_decision : la lecture et la décision finale reviennent
 //                       toujours au coach, jamais à un seuil automatique
 export const METRIC_TAXONOMY = {
-  readiness:    "estimation",
-  forme:        "estimation",
-  fatigue:      "estimation",
-  recuperation: "estimation",
-  risque:       "signal",
-  acwr:         "estimation",
   wellness:     "measured",
+  ewmaLong:     "estimation",
+  ewmaShort:    "estimation",
+  spacing:      "coach_decision",
+  dataQuality:  "measured",
+  acwrExperimental: "estimation",
 };
 
 export const METRIC_SCIENCE = {
-  readiness: {
+  wellness: {
     label: "Bien-être déclaré", icon: "⚡", evidenceLevel: "convention",
     color: (v) => v >= 75 ? "#1D9E75" : v >= 50 ? "#EF9F27" : "#E24B4A",
-    unit: "/100", optimal: "≥ 75",
+    unit: "/100", legacyDisplayHint: "aucune zone optimale",
     formula: "AthleteOS Wellness Questionnaire v1 : cinq réponses 1–5 normalisées sur 0–100.",
     what: "Ce score résume le ressenti déclaré du jour. Cet instrument interne n'est pas le Hooper Index et ses propriétés psychométriques restent à valider.",
     sources: [
       { ref: "Gabbett (2016)", detail: "Training-injury prevention paradox — BJSM" },
       { ref: "Halson (2014)",  detail: "Monitoring training load — Sports Med" },
     ],
-    thresholds: [
+    legacyThresholdsDoNotUse: [
       { min: 75, max: 100, label: "Ressenti favorable", color: "#1D9E75", advice: "Retour déclaré favorable, à mettre en contexte avec le coach." },
       { min: 55, max: 74, label: "Ressenti intermédiaire", color: "#EF9F27", advice: "Retour déclaré intermédiaire, sans prescription automatique." },
       { min: 0, max: 54, label: "Ressenti difficile", color: "#E24B4A", advice: "Prends contact avec ton coach pour expliquer le contexte." },
     ],
   },
-  forme: {
+  ewmaLong: {
     label: "EWMA longue", icon: "📈", evidenceLevel: "statistical",
     color: (v) => v >= 75 ? "#1D9E75" : v >= 50 ? "#EF9F27" : "#E24B4A",
-    unit: "/100", optimal: "≥ 65",
+    unit: "u", legacyDisplayHint: "aucune zone optimale",
     formula: "EWMA quotidienne, λ = 2/(28+1), calculée uniquement sur des jours connus.",
     what: "L'EWMA longue lisse la charge interne observée. Elle ne mesure pas directement la forme ni l'adaptation physiologique.",
     sources: [
       { ref: "Banister et al. (1975)", detail: "Modèle Fitness-Fatigue — Research Quarterly" },
       { ref: "Morton et al. (1990)",   detail: "Modelling human performance — EJP" },
     ],
-    thresholds: [
+    legacyThresholdsDoNotUse: [
       { min: 75, max: 100, label: "Excellente", color: "#1D9E75", advice: "Condition physique au-dessus de ta normale. Idéal pour compétitions ou blocs intenses." },
       { min: 50, max: 74,  label: "Correcte",   color: "#EF9F27", advice: "En progression. Continue la régularité, évite les coupures." },
       { min: 0,  max: 49,  label: "Faible",     color: "#E24B4A", advice: "Augmente progressivement le volume. La régularité prime sur l'intensité." },
     ],
   },
-  fatigue: {
+  ewmaShort: {
     label: "EWMA courte", icon: "🔋", inverted: true, evidenceLevel: "statistical",
     color: (v) => v > 70 ? "#E24B4A" : v > 45 ? "#EF9F27" : "#1D9E75",
-    unit: "/100", optimal: "≤ 45",
+    unit: "u", legacyDisplayHint: "aucune zone optimale",
     formula: "EWMA quotidienne, λ = 2/(7+1), calculée uniquement sur des jours connus.",
     what: "L'EWMA courte lisse la charge interne récente. Elle ne mesure pas directement la fatigue physiologique.",
     sources: [
       { ref: "Banister et al. (1975)", detail: "Modèle Fitness-Fatigue — Research Quarterly" },
       { ref: "Meeusen et al. (2013)",  detail: "Overreaching/overtraining — MSSE" },
     ],
-    thresholds: [
+    legacyThresholdsDoNotUse: [
       { min: 0,  max: 45,  label: "Normale",  color: "#1D9E75", advice: "Pas de signe de suraccumulation. Tu peux maintenir ou augmenter la charge." },
       { min: 46, max: 70,  label: "Modérée",  color: "#EF9F27", advice: "Attention aux séances très intenses consécutives. Planifie une journée légère." },
       { min: 71, max: 100, label: "Élevée",   color: "#E24B4A", advice: "Réduction de charge recommandée." },
     ],
   },
-  recuperation: {
+  spacing: {
     label: "Règle d'espacement", icon: "🌙", evidenceLevel: "convention",
     color: (v) => v >= 70 ? "#1D9E75" : v >= 45 ? "#EF9F27" : "#E24B4A",
-    unit: "/100", optimal: "≥ 70",
+    unit: "h", legacyDisplayHint: "règle configurable",
     formula: "Fenêtre configurable du club calculée depuis l'heure réelle de fin de la dernière séance.",
     what: "Cette fenêtre aide à programmer l'espacement entre séances. Elle n'est pas une estimation physiologique et ne signifie jamais qu'un athlète est complètement récupéré.",
     sources: [
       { ref: "Hasegawa et al. (2024)", detail: "Recovery monitoring — IJSPP" },
       { ref: "Kellmann et al. (2018)", detail: "Recovery and Stress in Sport — Routledge" },
     ],
-    thresholds: [
+    legacyThresholdsDoNotUse: [
       { min: 70, max: 100, label: "Fenêtre terminée", color: "#1D9E75", advice: "La règle d'espacement est terminée ; cela ne prouve pas une récupération complète." },
       { min: 45, max: 69, label: "Transition", color: "#EF9F27", advice: "La fenêtre configurée arrive à son terme." },
       { min: 0, max: 44, label: "Fenêtre active", color: "#E24B4A", advice: "La règle d'espacement configurée est encore active." },
     ],
   },
-  risque: {
-    // "Signal de charge", pas "Risque blessure" : ce score combine des
+  dataQuality: {
+    // Ancienne clé conservée uniquement dans cet objet de compatibilité.
     // variables associées statistiquement à la blessure dans la littérature
     // (ACWR, monotonie, fatigue), mais ce n'est ni une probabilité de
     // blessure validée, ni un diagnostic — la relation charge/blessure est
@@ -162,7 +161,7 @@ export const METRIC_SCIENCE = {
     // biomécanique, génétique...). Un score bas ne garantit rien non plus.
     label: "Qualité des données", icon: "⚠️", inverted: true, evidenceLevel: "convention",
     color: (v) => v > 60 ? "#E24B4A" : v > 30 ? "#EF9F27" : "#1D9E75",
-    unit: "/100", optimal: "≤ 30",
+    unit: "/28", legacyDisplayHint: "complétude uniquement",
     formula: "Complétude des durées réelles, RPE et jours quotidiens connus.",
     what: "Indique si les calculs descriptifs reposent sur assez de données quotidiennes. Ce n'est ni un risque de blessure, ni un diagnostic.",
     sources: [
@@ -170,7 +169,7 @@ export const METRIC_SCIENCE = {
       { ref: "Hulin et al. (2016)", detail: "Spikes in acute workload — BJSM" },
       { ref: "Foster (1998)",       detail: "Monotony of training — J Strength Cond" },
     ],
-    thresholds: [
+    legacyThresholdsDoNotUse: [
       { min: 0, max: 30, label: "Incomplète", color: "#E24B4A", advice: "Plusieurs données quotidiennes manquent." },
       { min: 31, max: 60, label: "Partielle", color: "#EF9F27", advice: "Certaines fenêtres restent indisponibles." },
       { min: 61, max: 100, label: "Bonne", color: "#1D9E75", advice: "Les données nécessaires sont majoritairement présentes." },
@@ -181,22 +180,19 @@ export const METRIC_SCIENCE = {
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 export function dimColor(metric, val) {
   switch (metric) {
-    case "readiness": case "recuperation": case "forme":
-      if (val >= 75) return "#1D9E75"; if (val >= 50) return "#EF9F27"; return "#E24B4A";
-    case "fatigue":
-      if (val > 70) return "#E24B4A"; if (val > 45) return "#EF9F27"; return "rgba(239,159,39,0.45)";
-    case "risque":
-      if (val > 60) return "#E24B4A"; if (val > 30) return "#EF9F27"; return "#1D9E75";
-    case "acwr":
-      if (val > 1.5) return "#E24B4A"; if (val > 1.3) return "#EF9F27"; return "#378ADD";
-    case "streak": return val >= 3 ? "#378ADD" : "rgba(55,138,221,0.45)";
     case "wellness": return "#A78BFA";
+    case "ewmaLong": return "#EC4899";
+    case "ewmaShort": return "#A855F7";
+    case "spacing": return "#38BDF8";
+    case "dataQuality": return "#94A3B8";
+    case "acwrExperimental": return "#8B5CF6";
+    case "streak": return val >= 3 ? "#378ADD" : "rgba(55,138,221,0.45)";
     default: return "#94A3B8";
   }
 }
 
-export function acwrColor(v) {
-  if (v > 1.5) return "#E24B4A"; if (v > 1.3) return "#EF9F27"; return "#378ADD";
+export function acwrColor() {
+  return "#8B5CF6";
 }
 
 export function isSameDay(a, b) {
@@ -254,13 +250,17 @@ export function getDiscHib(discName) {
 export function isBetterOrEqual(a, b, discipline) {
   if (a == null) return false;
   if (b == null) return true;
-  return getDiscHib(discipline) ? a >= b : a <= b;
+  const higherIsBetter = getDiscHib(discipline);
+  if (higherIsBetter == null) return false;
+  return higherIsBetter ? a >= b : a <= b;
 }
 
 // Comparateur numérique pour .sort() — trie du meilleur au moins bon.
 // Ex: values.sort((a, b) => compareValues(a, b, "100m"))
 export function compareValues(a, b, discipline) {
-  return getDiscHib(discipline) ? b - a : a - b;
+  const higherIsBetter = getDiscHib(discipline);
+  if (higherIsBetter == null) return 0;
+  return higherIsBetter ? b - a : a - b;
 }
 
 // % d'accomplissement d'une valeur "current" par rapport à une "reference"
@@ -273,6 +273,7 @@ export function compareValues(a, b, discipline) {
 export function pctOfReference(currentValue, referenceValue, discipline) {
   if (currentValue == null || referenceValue == null || referenceValue === 0) return null;
   const hib = getDiscHib(discipline);
+  if (hib == null) return null;
   const ratio = hib ? currentValue / referenceValue : referenceValue / currentValue;
   return Math.min(100, Math.round(ratio * 1000) / 10);
 }

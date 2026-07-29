@@ -125,7 +125,7 @@ export default function AthleteApp({ clubBrand, themeStyle }) {
 
       const pd   = a.profile_data ?? {};
       const recs = {};
-      (recordsRes.data??[]).forEach(r=>{ recs[r.discipline]={sb:r.sb,pr:r.pr,prDate:r.pr_date}; });
+      (recordsRes.data??[]).forEach(r=>{ recs[r.discipline]={...r,sb:r.sb,pr:r.pr,prDate:r.pr_date}; });
 
       setAthlete({
         id:a.id, name:a.name, age:a.age,
@@ -159,7 +159,7 @@ export default function AthleteApp({ clubBrand, themeStyle }) {
         id:c.id, name:c.name, date:c.date, location:c.location, type:c.type,
         athleteIds:(c.competition_athletes??[]).map(x=>x.athlete_id),
         plannedEvents:Object.fromEntries((c.competition_athletes??[]).map(x=>[x.athlete_id,x.planned_event])),
-        results:(c.competition_results??[]).map(r=>({athleteId:r.athlete_id,event:r.event,result:r.result,context:r.context})),
+        results:(c.competition_results??[]).map(r=>({...r,athleteId:r.athlete_id,event:r.event,result:r.result,context:r.context})),
       })).filter(c=>c.athleteIds.includes(athleteId));
 
       const charge = (weeklyChargeRes.data??[]).map(c=>({

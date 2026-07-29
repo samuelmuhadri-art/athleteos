@@ -18,7 +18,6 @@ const AthleteProfile = memo(({ athlete, weeklyCharge, sessions, competitions, on
   const [deleteError,   setDeleteError]   = useState(null);
 
   const metrics        = useMemo(() => getAthleteMetricsForWeek(athlete.id, weeklyCharge, getISOWeek(new Date())), [athlete.id, weeklyCharge]);
-  const { readiness, fatigue, acwr } = metrics;
   const activeInjuries = athlete.injuries?.filter(i => i.status !== "résolu") ?? [];
 
   const handleDelete = async () => {
@@ -68,7 +67,7 @@ const AthleteProfile = memo(({ athlete, weeklyCharge, sessions, competitions, on
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-3 flex-wrap mb-1">
               <h2 className="text-[24px] font-bold text-white tracking-tight">{athlete.name}</h2>
-              <StatusBadge readiness={readiness} fatigue={fatigue} acwr={acwr} />
+              <StatusBadge wellnessScore={metrics.wellnessScore} />
               {activeInjuries.length > 0 && (
                 <span className="flex items-center gap-1 text-[12px] font-bold px-2.5 py-1 rounded-full text-white" style={{ background: "rgba(239,159,39,0.3)", border: "1px solid rgba(239,159,39,0.4)" }}>
                   <HeartPulse size={11} /> {activeInjuries.length} blessure{activeInjuries.length > 1 ? "s" : ""}

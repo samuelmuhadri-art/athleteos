@@ -16,14 +16,16 @@ import {
   Star, Clock,
 } from "lucide-react";
 import {
-  getAthleteMetricsForWeek, getStatusLabel,
+  getAthleteMetricsForWeek, getWellnessStatus,
 } from "../../utils/chargeCalculations";
 import { getAthleteAxisProfile } from "../../utils/loadAxes";
 import {
-  getISOWeek, dimColor, colorsFor, parsePerf, isSameDay, parseLocalDate, toLocalDateStr,
+  getISOWeek, colorsFor, parsePerf, isSameDay, parseLocalDate, toLocalDateStr,
   initialsFromName, getDiscHib, DISC_TYPE_COLORS, WELLNESS_QUESTIONS, EVIDENCE_LEVELS,
 } from "../shared";
 import AxisRadarCard from "../../components/ui/AxisRadarCard";
+import FormeDetailPanel from "../components/FormeDetailPanel";
+import { getMonitoringOverview, getMonitoringReading } from "../../domain/monitoringMetrics.js";
 import { SessionDetailModal } from "./AthletePlanning";
 import { openSessionPdf } from "../../utils/storage";
 import { getTodayFocus } from "../dashboardFocus";
@@ -126,7 +128,7 @@ const BadgeItem = memo(({ badge }) => (
 // Ring héro readiness — se remplit de 0 à sa valeur au montage, façon
 // Whoop/Oura : c'est ce petit détail (l'anneau qui "arrive" plutôt que
 // d'apparaître déjà rempli) qui donne l'effet waouh à la première ouverture.
-const ReadinessRing = memo(({ value, color, size = 128 }) => {
+const WellnessRing = memo(({ value, color, size = 128 }) => {
   const [animated, setAnimated] = useState(0);
   const [displayValue, setDisplayValue] = useState(0);
   useEffect(() => {
@@ -335,12 +337,17 @@ export default function AthleteDashboard({
   const today       = new Date();
   const currentWeek = getISOWeek(today);
   const [openTodaySessionId, setOpenTodaySessionId] = useState(null);
+  const [activeMetric, setActiveMetric] = useState(null);
 
   const metrics = useMemo(() =>
     getAthleteMetricsForWeek(athlete.id, weeklyCharge, currentWeek, wellnessToday ? [wellnessToday] : [], sessions),
   [athlete.id, weeklyCharge, currentWeek, wellnessToday, sessions]);
 
-  const status = getStatusLabel(metrics.readiness, metrics.fatigue, metrics.acwr);
+  const monitoringOverview = useMemo(() => getMonitoringOverview(metrics), [metrics]);
+  const secondaryMonitoring = useMemo(() => ["variation", "monotony", "spacing", "acwrExperimental"]
+    .map((key) => getMonitoringReading(key, metrics)), [metrics]);
+
+  const status = getWellnessStatus(metrics.wellnessScore);
 
   const nextComp = competitions
     .filter(c => c.athleteIds.includes(athlete.id) && new Date(c.date) >= today)
@@ -438,7 +445,7 @@ export default function AthleteDashboard({
       {/* Le premier écran répond à deux questions distinctes :
           "comment je vais ?" à gauche, "que dois-je faire ?" à droite. */}
       <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1.5fr)_minmax(300px,0.8fr)] gap-4 md:gap-5 items-stretch">
-        <section className="rounded-2xl overflow-hidden select-none border" aria-labelledby="readiness-title"
+        <section className="rounded-2xl overflow-hidden select-none border" aria-labelledby="wellness-title"
           style={{ position: "relative", background: "linear-gradient(160deg, var(--c-surface) 0%, var(--c-surface-2) 55%, var(--c-bg) 100%)", borderColor: "var(--c-border)" }}>
           {/* Grille décorative — très subtile */}
           <div className="absolute pointer-events-none" aria-hidden="true" style={{
@@ -463,7 +470,7 @@ export default function AthleteDashboard({
                 <p className="meta-text" style={{ fontWeight: 600, letterSpacing: "0.07em", textTransform: "uppercase", marginBottom: "var(--space-1)" }}>
                   État du jour · S{currentWeek}
                 </p>
-                <p id="readiness-title" className="section-title">{status.label}</p>
+                <p id="wellness-title" className="section-title">{status.label}</p>
                 <p className="meta-text" style={{ marginTop: "var(--space-1)" }}>
                   {athlete.mainDiscipline ?? "Athlète"}{athlete.group ? ` · ${athlete.group}` : ""}
                 </p>
@@ -480,10 +487,10 @@ export default function AthleteDashboard({
             </div>
           </div>
 
-          {/* Ring héro — readiness, LE chiffre qui compte le plus, avec le
-              reste (fatigue/ACWR/streak) en soutien à côté */}
+          {/* Le questionnaire reste visible, mais n'est jamais présenté comme
+              une readiness physiologique ou une autorisation de s'entraîner. */}
           <div style={{ display: "flex", alignItems: "center", gap: 18, flexWrap: "wrap" }}>
-            <ReadinessRing value={metrics.wellnessScore ?? 0} color={statusColor} />
+            <WellnessRing value={metrics.wellnessScore ?? 0} color={statusColor} />
 
             <div style={{ flex: 1, minWidth: 190 }}>
               <p style={{ fontSize: "var(--text-body)", color: "var(--c-text-2)", lineHeight: "var(--leading-body)", marginBottom: "var(--space-4)" }}>
@@ -495,11 +502,14 @@ export default function AthleteDashboard({
                   { key: "load28", label: "Charge 28j", value: metrics.load28 ?? "—", unit: "", pct: metrics.load28 ? 100 : 0, danger: false },
                   { key: "streak",  label: "Streak",   value: streak,                  unit: " sem", pct: Math.min(100,streak*10), danger: false },
                 ].map(s => {
-                  const col = s.key === "streak" ? dimColor("streak", Number(s.value)) : "#5B8DEF";
+                  const col = s.key === "streak" ? "#1D9E75" : "#5B8DEF";
                   return (
-                    <div key={s.key} className={s.danger ? "pulse-danger-card" : undefined} style={{
+                    <button type="button" key={s.key}
+                      onClick={() => s.key !== "streak" && setActiveMetric(s.key)}
+                      aria-label={s.key === "streak" ? `Série de ${s.value} semaines` : `Voir l'explication de ${s.label}`}
+                      className={s.danger ? "pulse-danger-card" : "tap-feedback"} style={{
                       background: "rgba(255,255,255,0.03)", border: "0.5px solid rgba(255,255,255,0.055)",
-                      borderRadius: 10, padding: "10px 8px", textAlign: "center",
+                      borderRadius: 10, padding: "10px 8px", textAlign: "center", cursor: s.key === "streak" ? "default" : "pointer",
                     }}>
                       <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "center", gap: 2, marginBottom: 4 }}>
                         <span style={{ fontSize: 17, fontWeight: 600, color: col, fontVariantNumeric: "tabular-nums", letterSpacing: "-0.03em", lineHeight: 1 }}>
@@ -513,12 +523,12 @@ export default function AthleteDashboard({
                       <div style={{ height: 1.5, background: "rgba(255,255,255,0.05)", borderRadius: 99, marginTop: 6, overflow: "hidden" }}>
                         <div style={{ height: "100%", width: `${Math.max(3,s.pct)}%`, background: col, borderRadius: 99, opacity: 0.65, transition: "width 0.8s cubic-bezier(0.16,1,0.3,1)" }} />
                       </div>
-                    </div>
+                    </button>
                   );
                 })}
               </div>
             </div>
-            </div>
+          </div>
           </div>
         </section>
 
@@ -702,54 +712,47 @@ export default function AthleteDashboard({
           />
 
           {/* ── État de forme ───────────────────────────────────────────────── */}
-          {hasCharge && (
-            <div className="card p-4">
+          <div className="card p-4">
               <div className="flex items-center justify-between mb-1">
-                <p className="card-title">État de forme</p>
-                <span className="meta-text">Ouvrir pour le détail</span>
+                <p className="card-title">Mesures & signaux du jour</p>
+                <span className="chip chip-neutral">Aucun score caché</span>
               </div>
-              <p className="card-subtitle mb-4">Basé sur ta charge réelle</p>
+              <p className="card-subtitle mb-4">Ouvre chaque ligne pour voir le calcul, les données utilisées et ses limites.</p>
               <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                 {[
-                  { key: "readiness", label: "Bien-être déclaré", value: metrics.wellnessScore, color: "#1D9E75" },
-                  { key: "forme", label: "Charge sur 7 jours", value: metrics.load7, color: "#4B7BDB" },
-                  { key: "fatigue", label: "Charge sur 28 jours", value: metrics.load28, color: "#14B8A6" },
-                  { key: "recuperation", label: "EWMA courte", value: metrics.acute == null ? null : Math.round(metrics.acute), color: "#A855F7" },
-                  { key: "risque", label: "EWMA longue", value: metrics.chronic == null ? null : Math.round(metrics.chronic), color: "#EC4899" },
+                  ...monitoringOverview,
+                  ...secondaryMonitoring,
                 ].map(s => {
-                  const val = s.value;
+                  const val = s.displayValue;
                   const col = s.color;
-                  const thresh = null;
                   return (
-                    <div key={s.key}
+                    <button type="button" key={s.key}
+                      onClick={() => setActiveMetric(s.key)}
+                      aria-label={`Expliquer ${s.label}`}
                       className="tap-feedback"
-                      style={{ background: "var(--c-surface-2)", borderRadius: 10, padding: "10px 12px", textAlign: "left", border: "none", transition: "background 0.15s ease", width: "100%" }}>
+                      style={{ background: "var(--c-surface-2)", borderRadius: 10, padding: "11px 12px", textAlign: "left", border: "1px solid var(--c-border)", transition: "background 0.15s ease", width: "100%" }}>
                       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: 7 }}>
                         <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
-                          <span style={{ fontSize: 12.5, fontWeight: 400, color: "var(--c-text-1)" }}>{s.label}</span>
-                          {thresh && (
-                            <span style={{ fontSize: "var(--text-meta)", fontWeight: 600, padding: "2px 7px", borderRadius: 6, background: thresh.color + "10", color: thresh.color }}>
-                              {thresh.label}
-                            </span>
-                          )}
+                          <span style={{ fontSize: 12.5, fontWeight: 500, color: "var(--c-text-1)" }}>{s.shortLabel}</span>
+                          <span className="meta-text">{s.kind}</span>
                         </div>
                         <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
-                          <span style={{ fontSize: 14, fontWeight: 600, color: col, fontVariantNumeric: "tabular-nums", letterSpacing: "-0.02em" }}>{val}</span>
+                          <span style={{ fontSize: 14, fontWeight: 600, color: col, fontVariantNumeric: "tabular-nums", letterSpacing: "-0.02em" }}>{val}{s.unit ? ` ${s.unit}` : ""}</span>
+                          <ChevronRight size={14} style={{ color: "var(--c-text-3)" }} />
                         </div>
                       </div>
                       {/* Barre 3px */}
                       <div style={{ height: 3, background: "rgba(255,255,255,0.07)", borderRadius: 99, overflow: "hidden" }}>
-                        <div style={{ height: "100%", width: `${val}%`, background: col, borderRadius: 99, transition: "width 0.8s cubic-bezier(0.16,1,0.3,1)" }} />
+                        <div style={{ height: "100%", width: s.available ? "100%" : "28%", background: col, opacity: s.available ? 0.72 : 0.28, borderRadius: 99, transition: "width 0.8s cubic-bezier(0.16,1,0.3,1)" }} />
                       </div>
-                    </div>
+                    </button>
                   );
                 })}
               </div>
               <p className="meta-text" style={{ marginTop: "var(--space-3)", textAlign: "center" }}>
-                ACWR : Gabbett (2016) · Récup. : Hasegawa (2024) · Banister (1975)
+                Mesures descriptives · aucune zone optimale · aucune estimation individuelle du risque
               </p>
-            </div>
-          )}
+          </div>
 
           {/* ── Séances cette semaine ───────────────────────────────────────── */}
           <div className="card overflow-hidden">
@@ -1035,6 +1038,17 @@ export default function AthleteDashboard({
           )}
         </div>
       </div>
+
+      {activeMetric && (
+        <FormeDetailPanel
+          metricKey={activeMetric}
+          metrics={metrics}
+          sessions={sessions}
+          weeklyCharge={weeklyCharge}
+          athlete={athlete}
+          onClose={() => setActiveMetric(null)}
+        />
+      )}
 
       {openedTodaySession && (
         <SessionDetailModal

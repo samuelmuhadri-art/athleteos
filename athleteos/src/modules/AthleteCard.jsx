@@ -5,14 +5,13 @@
 
 import { memo, useMemo } from "react";
 import { ChevronRight, HeartPulse } from "lucide-react";
-import { getAthleteMetricsForWeek, getStatusLabel } from "../utils/chargeCalculations";
+import { getAthleteMetricsForWeek, getWellnessStatus } from "../utils/chargeCalculations";
 import { getISOWeek } from "../utils/helpers.js";
 import { scoreColor } from "./athleteListShared";
 
 const AthleteCard = memo(({ athlete, weeklyCharge, onClick }) => {
   const metrics        = useMemo(() => getAthleteMetricsForWeek(athlete.id, weeklyCharge, getISOWeek(new Date())), [athlete.id, weeklyCharge]);
-  const { readiness, fatigue, acwr } = metrics;
-  const status         = getStatusLabel(readiness, fatigue, acwr);
+  const status         = getWellnessStatus(metrics.wellnessScore);
   const activeInjuries = athlete.injuries?.filter(i => i.status !== "résolu") ?? [];
   const hasCharge      = weeklyCharge.some(w => w.athleteId === athlete.id);
 

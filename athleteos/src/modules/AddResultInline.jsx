@@ -6,10 +6,13 @@
 
 import { memo, useState } from "react";
 import { Plus } from "lucide-react";
+import PerformanceMetadataFields from "../components/performance/PerformanceMetadataFields.jsx";
+import { createPerformanceMetadata } from "../domain/disciplines.js";
 
 const AddResultInline = memo(({ athlete, competitionId, defaultEvent, onAdd }) => {
   const [open,   setOpen]   = useState(false);
-  const [form,   setForm]   = useState({ event: defaultEvent || "", result: "", context: "" });
+  const emptyForm = () => ({ event: defaultEvent || "", result: "", context: "", metadata: createPerformanceMetadata(defaultEvent || "") });
+  const [form,   setForm]   = useState(emptyForm);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState(null);
 
@@ -23,7 +26,7 @@ const AddResultInline = memo(({ athlete, competitionId, defaultEvent, onAdd }) =
     try {
       await onAdd(competitionId, athlete.id, form);
       setOpen(false);
-      setForm({ event: defaultEvent || "", result: "", context: "" });
+      setForm(emptyForm());
     } catch (error) {
       setSaveError(error.message ?? "Impossible d'enregistrer ce résultat");
     } finally {
@@ -68,6 +71,15 @@ const AddResultInline = memo(({ athlete, competitionId, defaultEvent, onAdd }) =
         placeholder="Contexte (optionnel)"
         value={form.context}
         onChange={(e) => set("context", e.target.value)}
+      />
+      <PerformanceMetadataFields
+        discipline={form.event}
+        metadata={form.metadata}
+        setMetadata={(updater) => setForm((current) => ({
+          ...current,
+          metadata: typeof updater === "function" ? updater(current.metadata) : updater,
+        }))}
+        idPrefix={`result-meta-${athlete.id}`}
       />
       {saveError && <p role="alert" className="text-[12px] text-[var(--color-danger)]">{saveError}</p>}
       <div className="flex items-center gap-2 pt-0.5">

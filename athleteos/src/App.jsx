@@ -50,7 +50,7 @@ const NAV_ITEMS = [
   { id: "planning",     label: "Planning",         icon: CalendarDays    },
   { id: "athletes",     label: "Athlètes",         icon: Users           },
   { id: "performances", label: "Performances",     icon: TrendingUp      },
-  { id: "charge",       label: "Charge & Fatigue", icon: Activity        },
+  { id: "charge",       label: "Charge & Suivi",   icon: Activity        },
   { id: "rapports",     label: "Rapports",         icon: FileText        },
   { id: "competitions", label: "Compétitions",     icon: Trophy          },
   { id: "alerts",       label: "Alertes",          icon: Bell            },

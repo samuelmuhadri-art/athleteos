@@ -19,8 +19,11 @@ import {
   ScatterChart, Scatter, ZAxis, ReferenceArea, ReferenceLine,
 } from "recharts";
 import { supabase } from "../../utils/supabaseClient";
-import { getDiscHib, parsePerf, toLocalDateStr, getISOWeek, isBetterOrEqual, pctOfReference } from "../shared";
-import { resolveDisciplineId, getDisciplineUnit } from "../../domain/disciplines.js";
+import { getDiscHib, isBetterOrEqual, parsePerf, toLocalDateStr, getISOWeek, pctOfReference } from "../shared";
+import {
+  createPerformanceMetadata, normalizePerformanceMetadata, resolveDisciplineId,
+  validatePerformanceMetadata,
+} from "../../domain/disciplines.js";
 import { notifyGoalAchieved, postClubCelebration, dispatchOutboxNotifications } from "../../utils/notifications";
 import { getAthleteMetricsForWeek } from "../../utils/chargeCalculations";
 import { parseLocalDate } from "../../utils/helpers";
@@ -31,6 +34,7 @@ import AddPerfModal from "./AddPerfModal";
 import AddGoalModal from "./AddGoalModal";
 import AddCompModal from "./AddCompModal";
 import { SegmentedTabs } from "../../components/ui/premium";
+import PerformanceContextChips from "../../components/performance/PerformanceContextChips.jsx";
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // COMPOSANT PRINCIPAL
@@ -47,13 +51,14 @@ export default function AthletePerfs({ athlete, competitions, myPerformances, my
   const [showAddComp,  setShowAddComp]  = useState(false);
   const [savingComp,   setSavingComp]   = useState(false);
   const [showConfetti, setShowConfetti] = useState(false);
+  const [performanceError, setPerformanceError] = useState("");
   const [compForm,     setCompForm]     = useState({
     name: "", date: toLocalDateStr(new Date()),
-    location: "", type: "Régionale", event: "", result: "", context: "", breakdown: {},
+    location: "", type: "Régionale", event: "", result: "", context: "", breakdown: {}, metadata: createPerformanceMetadata(""),
   });
 
   const [perfForm, setPerfForm] = useState({
-    discipline: "", value: "", performance_date: toLocalDateStr(today), context: "", breakdown: {},
+    discipline: "", value: "", performance_date: toLocalDateStr(today), context: "", breakdown: {}, metadata: createPerformanceMetadata(""),
   });
   const [goalForm, setGoalForm] = useState({
     discipline: "", target_value: "", deadline: "", notes: "",
@@ -178,61 +183,10 @@ export default function AthletePerfs({ athlete, competitions, myPerformances, my
   const activeGoals   = localGoals.filter(g => !g.achieved);
   const achievedGoals = localGoals.filter(g =>  g.achieved);
 
-  // ── Détection + mise à jour automatique du record (PR/SB) ────────────────
-  // Partagée entre "Saisir une performance" ET "Ajouter une compétition" —
-  // avant ce fix, seule la 1ère mettait le record à jour ; un résultat de
-  // compétition qui battait le PR ne le faisait jamais remonter.
-  const maybeUpdateRecord = async (disc, resultStr, dateStr) => {
-    const newVal = parsePerf(resultStr);
-    if (newVal.value == null) return false;
-    const curRec = athlete.records?.[disc];
-    const curPR  = curRec ? parsePerf(curRec.pr) : null;
-    const curSB  = curRec ? parsePerf(curRec.sb) : null;
-    const isThisYear = dateStr.slice(0, 4) === new Date().getFullYear().toString();
-
-    const isPR = !curPR?.value || isBetterOrEqual(newVal.value, curPR.value, disc);
-    const isSB = isThisYear && (!curSB?.value || isBetterOrEqual(newVal.value, curSB.value, disc));
-    if (!isPR && !isSB) return false;
-
-    // Tâche 14 : records a maintenant une contrainte UNIQUE(athlete_id,
-    // discipline) et des colonnes numériques pr_value/sb_value (comparées
-    // par les RPC de compétition, migration 20260730010000) — il faut les
-    // maintenir à jour ici aussi, sinon une saisie manuelle "démode"
-    // silencieusement la valeur numérique sans toucher au texte, et la
-    // prochaine comparaison de record en compétition se ferait contre une
-    // valeur obsolète.
-    const { data: existingRow } = await supabase.from("records").select("id")
-      .eq("athlete_id", athlete.id).eq("discipline", disc).maybeSingle();
-    const patch = {
-      // Tâche 12 : unité + discipline résolue tenues à jour à chaque écriture.
-      unit: getDisciplineUnit(disc), discipline_id: disc,
-      ...(isPR ? { pr: resultStr, pr_value: newVal.value, pr_date: dateStr } : {}),
-      ...(isSB ? { sb: resultStr, sb_value: newVal.value } : {}),
-      ...(!curPR?.value ? { pr: resultStr, pr_value: newVal.value, pr_date: dateStr, sb: resultStr, sb_value: newVal.value } : {}),
-    };
-    if (existingRow) {
-      await supabase.from("records").update(patch).eq("id", existingRow.id);
-    } else {
-      await supabase.from("records").insert({ athlete_id: athlete.id, discipline: disc, ...patch });
-    }
-    if (athlete.records) {
-      athlete.records[disc] = {
-        ...curRec,
-        ...(isPR ? { pr: resultStr, prDate: dateStr } : {}),
-        ...(isSB ? { sb: resultStr } : {}),
-      };
-    }
-    if (isPR) {
-      postClubCelebration(clubId, athlete.id, "record",
-        `${athlete.name.split(" ")[0]} a battu son record en ${disc} : ${resultStr} !`).catch(console.warn);
-      setShowConfetti(true);
-    }
-    return isPR;
-  };
-
   // ── Handlers ───────────────────────────────────────────────────────────
   const handleAddPerf = async () => {
     if (!perfForm.discipline.trim() || !perfForm.value.trim()) return;
+    setPerformanceError("");
     setSavingPerf(true);
     try {
       // Tâche 9 : normalise un alias saisi librement ("100 m" -> "100m")
@@ -251,28 +205,37 @@ export default function AthletePerfs({ athlete, competitions, myPerformances, my
       // (on ne bloque pas la saisie manuelle d'un athlète) mais marquée pour
       // ne pas fausser silencieusement un tri/calcul ultérieur.
       const normalizedValue = parsePerf(perfForm.value).value;
+      if (normalizedValue == null) throw new Error("Le résultat doit contenir une valeur numérique valide.");
+      const metadata = normalizePerformanceMetadata(disc, perfForm.metadata);
+      const metadataIssues = validatePerformanceMetadata(disc, metadata);
+      if (metadataIssues.length) throw new Error(metadataIssues[0]);
 
-      const { data, error } = await supabase
-        .from("athlete_performances")
-        .insert({
-          athlete_id:       athlete.id,
-          club_id:          clubId,
-          discipline:       disc,
-          discipline_type:  disc,
-          value:            perfForm.value,
-          performance_date: perfForm.performance_date,
-          context:          perfForm.context || null,
-          breakdown:        cleanBreakdown && Object.keys(cleanBreakdown).length ? cleanBreakdown : null,
-          normalized_value: normalizedValue,
-          unit:             getDisciplineUnit(disc),
-          discipline_id:    disc,
-          quality_flags:    normalizedValue == null ? ["unparsable"] : [],
-        })
-        .select().single();
+      const { data, error } = await supabase.rpc("add_athlete_performance", {
+        p_discipline: disc,
+        p_value: perfForm.value.trim(),
+        p_result_value: normalizedValue,
+        p_performance_date: perfForm.performance_date,
+        p_context: perfForm.context || null,
+        p_breakdown: cleanBreakdown && Object.keys(cleanBreakdown).length ? cleanBreakdown : null,
+        p_metadata: metadata,
+        p_idempotency_key: crypto.randomUUID(),
+      });
       if (error) throw error;
-      setLocalPerfs(prev => [...prev, data]);
-
-      await maybeUpdateRecord(disc, perfForm.value, perfForm.performance_date);
+      setLocalPerfs(prev => [...prev, {
+        id: data?.performanceId, athlete_id: athlete.id, club_id: clubId,
+        discipline: disc, discipline_type: disc, value: perfForm.value,
+        performance_date: perfForm.performance_date, context: perfForm.context || null,
+        breakdown: cleanBreakdown, normalized_value: normalizedValue, ...metadata,
+      }]);
+      if (data?.isNewRecord) {
+        setShowConfetti(true);
+        postClubCelebration(
+          clubId,
+          athlete.id,
+          "record",
+          `${athlete.name.split(" ")[0]} a battu son record en ${disc} : ${perfForm.value} !`,
+        ).catch(console.warn);
+      }
 
       // Bascule l'onglet Évolution sur la discipline qu'on vient de saisir —
       // sinon elle reste affichée sur l'ancienne sélection et la nouvelle
@@ -280,10 +243,12 @@ export default function AthletePerfs({ athlete, competitions, myPerformances, my
       // qu'elle est bien enregistrée, juste pas sélectionnée.
       setSelectedDisc(disc);
 
-      setPerfForm({ discipline: disc, value: "", performance_date: toLocalDateStr(today), context: "", breakdown: {} });
+      setPerfForm({ discipline: disc, value: "", performance_date: toLocalDateStr(today), context: "", breakdown: {}, metadata: createPerformanceMetadata(disc) });
       setShowAddPerf(false);
+      onRefresh?.();
     } catch (e) {
       console.error("Erreur ajout perf:", e);
+      setPerformanceError(e.message ?? "Impossible d'enregistrer la performance.");
     } finally {
       setSavingPerf(false);
     }
@@ -349,6 +314,7 @@ export default function AthletePerfs({ athlete, competitions, myPerformances, my
   // contre deux soumissions concurrentes qui battraient le même record.
   const handleAddComp = async () => {
     if (!compForm.name.trim() || !compForm.date || !compForm.event.trim() || !compForm.result.trim()) return;
+    setPerformanceError("");
     setSavingComp(true);
     try {
       // Tâche 9 : normalise un alias saisi librement avant d'écrire en base.
@@ -357,20 +323,26 @@ export default function AthletePerfs({ athlete, competitions, myPerformances, my
       const cleanBreakdown = isCombine
         ? Object.fromEntries(Object.entries(compForm.breakdown).filter(([, v]) => v?.trim()))
         : null;
+      const normalizedValue = parsePerf(compForm.result).value;
+      if (normalizedValue == null) throw new Error("Le résultat doit contenir une valeur numérique valide.");
+      const metadata = normalizePerformanceMetadata(event, compForm.metadata);
+      const metadataIssues = validatePerformanceMetadata(event, metadata);
+      if (metadataIssues.length) throw new Error(metadataIssues[0]);
 
-      const { data, error } = await supabase.rpc("create_solo_competition_result", {
+      const { data, error } = await supabase.rpc("create_solo_competition_result_v2", {
         p_name:             compForm.name.trim(),
         p_date:             compForm.date,
         p_location:         compForm.location || null,
         p_type:             compForm.type,
         p_event:            event,
         p_result:           compForm.result,
-        p_result_value:     parsePerf(compForm.result).value,
-        p_higher_is_better: getDiscHib(event),
+        p_result_value:     normalizedValue,
+        p_higher_is_better: metadata.performance_direction === "higher",
         p_context:          compForm.context || null,
         p_idempotency_key:  crypto.randomUUID(),
         p_breakdown:        cleanBreakdown && Object.keys(cleanBreakdown).length ? cleanBreakdown : null,
-        p_unit:             getDisciplineUnit(event),
+        p_unit:             metadata.unit,
+        p_metadata:         metadata,
       });
       if (error) throw error;
 
@@ -383,6 +355,7 @@ export default function AthletePerfs({ athlete, competitions, myPerformances, my
           discipline: event, discipline_type: event, value: compForm.result,
           performance_date: compForm.date, context: compForm.name.trim(),
           breakdown: cleanBreakdown && Object.keys(cleanBreakdown).length ? cleanBreakdown : null,
+          normalized_value: normalizedValue, ...metadata,
         }]);
       }
       if (data?.isNewRecord) setShowConfetti(true);
@@ -394,11 +367,12 @@ export default function AthletePerfs({ athlete, competitions, myPerformances, my
       // sélection et semble vide alors qu'elle est bien enregistrée.
       setSelectedDisc(event);
 
-      setCompForm({ name: "", date: toLocalDateStr(new Date()), location: "", type: "Régionale", event: "", result: "", context: "", breakdown: {} });
+      setCompForm({ name: "", date: toLocalDateStr(new Date()), location: "", type: "Régionale", event: "", result: "", context: "", breakdown: {}, metadata: createPerformanceMetadata("") });
       setShowAddComp(false);
       onRefresh?.();
     } catch (e) {
       console.error("Erreur ajout compétition:", e);
+      setPerformanceError(e.message ?? "Impossible d'enregistrer la compétition.");
     } finally {
       setSavingComp(false);
     }
@@ -429,7 +403,7 @@ export default function AthletePerfs({ athlete, competitions, myPerformances, my
               Lis ta progression, comprends tes tendances et transforme chaque mesure en repère.
             </p>
           </div>
-          <button type="button" onClick={() => setShowAddPerf(true)} className="btn-primary" style={{ flexShrink: 0 }}>
+          <button type="button" onClick={() => { setPerformanceError(""); setShowAddPerf(true); }} className="btn-primary" style={{ flexShrink: 0 }}>
             <Plus size={16} aria-hidden="true" /> Saisir une performance
           </button>
         </div>
@@ -595,7 +569,7 @@ export default function AthletePerfs({ athlete, competitions, myPerformances, my
                   Indice de niveau · {chartData.length} mesure{chartData.length !== 1 ? "s" : ""}
                 </p>
               </div>
-              <button type="button" onClick={() => setShowAddPerf(true)} className="btn-ghost" style={{ minHeight: 44, color: "#7BD8B4" }}>
+              <button type="button" onClick={() => { setPerformanceError(""); setShowAddPerf(true); }} className="btn-ghost" style={{ minHeight: 44, color: "#7BD8B4" }}>
                 <Plus size={14} aria-hidden="true" /> Ajouter
               </button>
             </div>
@@ -608,7 +582,7 @@ export default function AthletePerfs({ athlete, competitions, myPerformances, my
                 <p style={{ fontSize: 13, color: "var(--c-text-2)", textAlign: "center" }}>
                   Minimum 2 mesures pour afficher le graphique
                 </p>
-                <button type="button" onClick={() => setShowAddPerf(true)} className="btn-ghost" style={{ minHeight: 44, color: "#7BD8B4" }}>
+                <button type="button" onClick={() => { setPerformanceError(""); setShowAddPerf(true); }} className="btn-ghost" style={{ minHeight: 44, color: "#7BD8B4" }}>
                   + Saisir une performance
                 </button>
               </div>
@@ -739,6 +713,7 @@ export default function AthletePerfs({ athlete, competitions, myPerformances, my
                     <div style={{ minWidth: 0 }}>
                       <p style={{ fontSize: 17, fontWeight: 700, color: selectedDisc ? discColor(selectedDisc) : "#7BD8B4", fontVariantNumeric: "tabular-nums" }}>{p.value}</p>
                       {p.context && <p style={{ fontSize: 13, color: "var(--c-text-2)", fontStyle: "italic", marginTop: 3 }} className="truncate">{p.context}</p>}
+                      <PerformanceContextChips performance={p} />
                       {p.breakdown && Object.keys(p.breakdown).length > 0 && (
                         <div style={{ display: "flex", flexWrap: "wrap", gap: "4px 10px", marginTop: 6, maxWidth: 320 }}>
                           {Object.entries(p.breakdown).map(([ev, val]) => (
@@ -891,7 +866,7 @@ export default function AthletePerfs({ athlete, competitions, myPerformances, my
               <h2 className="section-title">Compétitions</h2>
               <p style={{ fontSize: 13, color: "var(--c-text-2)", marginTop: 4 }}>Le contexte et le résultat de chaque rendez-vous.</p>
             </div>
-            <button type="button" onClick={() => setShowAddComp(true)} className="btn-primary">
+            <button type="button" onClick={() => { setPerformanceError(""); setShowAddComp(true); }} className="btn-primary">
               <Plus size={16} aria-hidden="true" /> Ajouter
             </button>
           </div>
@@ -954,6 +929,7 @@ export default function AthletePerfs({ athlete, competitions, myPerformances, my
           onClose={() => setShowAddPerf(false)}
           onSubmit={handleAddPerf}
           saving={savingPerf}
+          error={performanceError}
         />
       )}
       {showAddGoal && (
@@ -974,6 +950,7 @@ export default function AthletePerfs({ athlete, competitions, myPerformances, my
           onClose={() => setShowAddComp(false)}
           onSubmit={handleAddComp}
           saving={savingComp}
+          error={performanceError}
         />
       )}
 

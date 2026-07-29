@@ -28,7 +28,7 @@ import LoadingState                  from "../components/ui/LoadingState";
 import ErrorState                    from "../components/ui/ErrorState";
 import {
   getAthleteMetricsForWeek,
-  getStatusLabel,
+  getWellnessStatus,
 } from "../utils/chargeCalculations";
 import { checkUpcomingCompetitions, checkAndAlertACWR, notifyAthleteCompetitionReminder, checkWeeklyRecap, checkWeeklyReports } from "../utils/notifications";
 import { buildCoachFeed } from "../utils/coachFeed";
@@ -46,27 +46,6 @@ function toLocalDateStr(d) {
 
 // Système sémantique : couleur = dimension mesurée, pas le statut.
 // Vert → forme/récup | Bleu → charge/ACWR | Ambre → fatigue/alerte | Rouge → danger
-function dimColor(metric, val) {
-  switch (metric) {
-    case "readiness":
-    case "recuperation":
-    case "forme":
-      if (val >= 75) return "#1D9E75";
-      if (val >= 50) return "#EF9F27";
-      return "#E24B4A";
-    case "fatigue":
-      if (val > 70) return "#E24B4A";
-      if (val > 45) return "#EF9F27";
-      return "rgba(239,159,39,0.45)";
-    case "acwr":
-      if (val > 1.5) return "#E24B4A";
-      if (val > 1.3) return "#EF9F27";
-      return "#378ADD";
-    default:
-      return "#94A3B8";
-  }
-}
-
 function getGreeting() {
   const h = new Date().getHours();
   if (h < 12) return "Bonjour";
@@ -169,16 +148,16 @@ function AthleteStatusCard({ athlete, weeklyCharge, currentWeek, injuries, sessi
     () => getAthleteMetricsForWeek(athlete.id, weeklyCharge, currentWeek),
     [athlete.id, weeklyCharge, currentWeek]
   );
-  const status    = getStatusLabel(metrics.readiness, metrics.fatigue, metrics.acwr);
+  const status    = getWellnessStatus(metrics.wellnessScore);
   const activeInj = (injuries ?? []).filter(i => i.athleteId === athlete.id && i.status !== "résolu");
   const weekSess  = sessions.filter(s => s.week === currentWeek && s.athleteIds?.includes(athlete.id));
   const doneCount = weekSess.filter(s => s.validations?.find(v => v.athleteId === athlete.id && v.status === "done")).length;
   const hasCharge = weeklyCharge.some(w => w.athleteId === athlete.id);
   const isAtRisk  = false;
 
-  const readColor = dimColor("readiness", metrics.readiness);
+  const readColor = metrics.wellnessScore == null ? "#94A3B8" : metrics.wellnessScore >= 75 ? "#1D9E75" : metrics.wellnessScore >= 50 ? "#EF9F27" : "#E24B4A";
   const acwrCol   = "#378ADD";
-  const fatCol    = dimColor("fatigue", metrics.fatigue);
+  const fatCol    = "#14B8A6";
 
   const sparkData = useMemo(() =>
     weeklyCharge.filter(w => w.athleteId === athlete.id).sort((a, b) => a.week - b.week).slice(-6).map(w => ({ v: w.rawLoad })),

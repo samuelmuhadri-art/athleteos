@@ -6,8 +6,9 @@
 import { createPortal } from "react-dom";
 import { Plus, TrendingUp, X } from "lucide-react";
 import { COMBINE_EVENTS, discColor } from "./perfsShared";
+import PerformanceMetadataFields from "../../components/performance/PerformanceMetadataFields.jsx";
 
-export default function AddPerfModal({ disciplines, perfForm, setPerfForm, onClose, onSubmit, saving }) {
+export default function AddPerfModal({ disciplines, perfForm, setPerfForm, onClose, onSubmit, saving, error }) {
   const labelStyle = { display: "block", fontSize: 12, fontWeight: 700, color: "var(--c-text-2)", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 8 };
   // Portal sur document.body — AthletePerfs.jsx est rendu à l'intérieur du
   // <main> scrollable d'AthleteApp.jsx ; sans portal ce position:fixed dérive
@@ -103,6 +104,17 @@ export default function AddPerfModal({ disciplines, perfForm, setPerfForm, onClo
               value={perfForm.context}
               onChange={e => setPerfForm(f => ({ ...f, context: e.target.value }))} />
           </div>
+
+          <PerformanceMetadataFields
+            discipline={perfForm.discipline}
+            metadata={perfForm.metadata}
+            setMetadata={(updater) => setPerfForm((current) => ({
+              ...current,
+              metadata: typeof updater === "function" ? updater(current.metadata) : updater,
+            }))}
+            idPrefix="perf-meta"
+          />
+          {error && <p role="alert" className="rounded-xl border px-3 py-2.5 text-[13px]" style={{ color: "var(--color-danger)", borderColor: "rgba(226,75,74,0.28)", background: "rgba(226,75,74,0.08)" }}>{error}</p>}
         </div>
 
         <div className="px-6 py-4 flex items-center justify-between gap-3 flex-shrink-0" style={{ borderTop: "1px solid var(--c-border)" }}>

@@ -7,8 +7,9 @@
 import { createPortal } from "react-dom";
 import { Plus, X } from "lucide-react";
 import { COMBINE_EVENTS } from "./perfsShared";
+import PerformanceMetadataFields from "../../components/performance/PerformanceMetadataFields.jsx";
 
-export default function AddCompModal({ compForm, setCompForm, onClose, onSubmit, saving }) {
+export default function AddCompModal({ compForm, setCompForm, onClose, onSubmit, saving, error }) {
   const labelStyle = { display: "block", fontSize: 12, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", color: "var(--c-text-2)", marginBottom: 8 };
   return createPortal(
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4 modal-backdrop"
@@ -82,6 +83,16 @@ export default function AddCompModal({ compForm, setCompForm, onClose, onSubmit,
               </select>
             </div>
           </div>
+          <PerformanceMetadataFields
+            discipline={compForm.event}
+            metadata={compForm.metadata}
+            setMetadata={(updater) => setCompForm((current) => ({
+              ...current,
+              metadata: typeof updater === "function" ? updater(current.metadata) : updater,
+            }))}
+            idPrefix="comp-meta"
+          />
+          {error && <p role="alert" className="rounded-xl border px-3 py-2.5 text-[13px]" style={{ color: "var(--color-danger)", borderColor: "rgba(226,75,74,0.28)", background: "rgba(226,75,74,0.08)" }}>{error}</p>}
         </div>
         <div style={{ padding: "12px 20px", borderTop: "1px solid var(--c-border)", display: "flex", gap: 10 }}>
           <button type="button" onClick={onClose} className="btn-secondary">Annuler</button>

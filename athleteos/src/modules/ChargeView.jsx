@@ -312,7 +312,7 @@ function ChargeView() {
     const load7Values  = allMetrics.map(item => item.metrics.load7).filter(Number.isFinite);
     const avgLoad7     = load7Values.length ? Math.round(load7Values.reduce((sum, value) => sum + value, 0) / load7Values.length) : null;
     const topLoader    = [...allMetrics].sort((a, b) => b.rawLoad - a.rawLoad)[0];
-    const critFatigue  = allMetrics.filter((m) => m.metrics.fatigue > 75).length;
+    const critFatigue  = allMetrics.filter((m) => m.metrics.wellnessScore != null && m.metrics.wellnessScore < 25).length;
     const avgLoadPrev  = athletes.length
       ? Math.round(athletes.reduce((s, a) => s + getRawLoad(weeklyCharge, a.id, CURRENT_WEEK - 1), 0) / athletes.length)
       : 0;
@@ -320,7 +320,7 @@ function ChargeView() {
   }, [allMetrics, athletes, weeklyCharge, CURRENT_WEEK]);
 
   const acwrSeries       = useMemo(() => computeGroupACWRSeries(athletes, weeklyCharge), [athletes, weeklyCharge]);
-  const fatigueAlerts    = useMemo(() => allMetrics.filter((m) => m.metrics.fatigue > 75), [allMetrics]);
+  const fatigueAlerts    = useMemo(() => allMetrics.filter((m) => m.metrics.wellnessScore != null && m.metrics.wellnessScore < 25), [allMetrics]);
   const sortedByLoad     = useMemo(() => [...allMetrics].sort((a, b) => b.rawLoad - a.rawLoad), [allMetrics]);
   const maxLoad          = sortedByLoad[0]?.rawLoad ?? 1;
 
@@ -343,14 +343,14 @@ function ChargeView() {
   );
 
   // ═══ Render ═══════════════════════════════════════════════════════════════
-  if (loading) return <LoadingState message="Chargement charge & fatigue…" />;
+  if (loading) return <LoadingState message="Chargement du suivi de charge…" />;
   if (error)   return <ErrorState  message={error} onRetry={fetchAll} />;
 
   return (
     <div className="page-container py-4 md:py-6 max-w-7xl mx-auto space-y-5 md:space-y-6 animate-slide-up">
 
       <div>
-        <h2 className="page-title">Charge & Fatigue</h2>
+        <h2 className="page-title">Charge & suivi</h2>
         <p className="secondary-text mt-1">
           Semaine {CURRENT_WEEK} · Analyse dynamique du groupe · {athletes.length} athlète{athletes.length !== 1 ? "s" : ""}
         </p>
@@ -434,7 +434,7 @@ function ChargeView() {
                         <p className="meta-text">7 jours</p>
                       </div>
                       <div className="w-16 text-right flex-shrink-0">
-                        <p className="text-[12px] font-bold" style={{ color: metrics.fatigue > 70 ? "#E24B4A" : metrics.fatigue > 45 ? "#EF9F27" : "#1D9E75" }}>
+                        <p className="text-[12px] font-bold" style={{ color: "#14B8A6" }}>
                           {metrics.load28 ?? "—"}
                         </p>
                         <p className="meta-text">28 jours</p>

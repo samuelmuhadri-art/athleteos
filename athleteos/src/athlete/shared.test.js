@@ -85,6 +85,12 @@ describe("compareValues — tri correct pour un classement", () => {
     const sorted = [6.2, 7.1, 6.8].sort((a, b) => compareValues(a, b, "Longueur"));
     expect(sorted).toEqual([7.1, 6.8, 6.2]);
   });
+
+  it("ne classe pas une épreuve libre dont le sens est inconnu", () => {
+    expect(compareValues(7.45, 7.2, "Épreuve libre")).toBe(0);
+    expect(isBetterOrEqual(7.45, 7.2, "Épreuve libre")).toBe(false);
+    expect(pctOfReference(7.45, 7.2, "Épreuve libre")).toBeNull();
+  });
 });
 
 describe("pctOfReference — % du PR, sens correct par discipline", () => {

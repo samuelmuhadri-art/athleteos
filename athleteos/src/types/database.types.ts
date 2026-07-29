@@ -177,10 +177,25 @@ export type Database = {
           created_at: string | null
           discipline: string
           discipline_type: string
+          discipline_id: string | null
           id: number
+          hurdle_height_m: number | null
+          implement_weight_kg: number | null
+          measurement_type: string | null
+          metadata_version: string
+          normalized_value: number | null
+          official_status: string
           performance_date: string
+          performance_direction: string | null
+          quality_flags: string[]
+          scoring_table_version: string | null
           source: string | null
+          source_external_id: string | null
+          timing_method: string
+          unit: string | null
           value: string
+          venue_type: string
+          wind_mps: number | null
         }
         Insert: {
           athlete_id: number
@@ -191,10 +206,25 @@ export type Database = {
           created_at?: string | null
           discipline: string
           discipline_type: string
+          discipline_id?: string | null
           id?: number
+          hurdle_height_m?: number | null
+          implement_weight_kg?: number | null
+          measurement_type?: string | null
+          metadata_version?: string
+          normalized_value?: number | null
+          official_status?: string
           performance_date: string
+          performance_direction?: string | null
+          quality_flags?: string[]
+          scoring_table_version?: string | null
           source?: string | null
+          source_external_id?: string | null
+          timing_method?: string
+          unit?: string | null
           value: string
+          venue_type?: string
+          wind_mps?: number | null
         }
         Update: {
           athlete_id?: number
@@ -205,10 +235,25 @@ export type Database = {
           created_at?: string | null
           discipline?: string
           discipline_type?: string
+          discipline_id?: string | null
           id?: number
+          hurdle_height_m?: number | null
+          implement_weight_kg?: number | null
+          measurement_type?: string | null
+          metadata_version?: string
+          normalized_value?: number | null
+          official_status?: string
           performance_date?: string
+          performance_direction?: string | null
+          quality_flags?: string[]
+          scoring_table_version?: string | null
           source?: string | null
+          source_external_id?: string | null
+          timing_method?: string
+          unit?: string | null
           value?: string
+          venue_type?: string
+          wind_mps?: number | null
         }
         Relationships: [
           {
@@ -458,24 +503,72 @@ export type Database = {
           competition_id: number | null
           context: string | null
           event: string | null
+          discipline_id: string | null
+          hurdle_height_m: number | null
           id: number
+          implement_weight_kg: number | null
+          measurement_type: string | null
+          metadata_version: string
+          official_status: string
+          performance_direction: string | null
+          quality_flags: string[]
           result: string | null
+          result_value: number | null
+          scoring_table_version: string | null
+          source: string | null
+          source_external_id: string | null
+          timing_method: string
+          unit: string | null
+          venue_type: string
+          wind_mps: number | null
         }
         Insert: {
           athlete_id?: number | null
           competition_id?: number | null
           context?: string | null
           event?: string | null
+          discipline_id?: string | null
+          hurdle_height_m?: number | null
           id?: number
+          implement_weight_kg?: number | null
+          measurement_type?: string | null
+          metadata_version?: string
+          official_status?: string
+          performance_direction?: string | null
+          quality_flags?: string[]
           result?: string | null
+          result_value?: number | null
+          scoring_table_version?: string | null
+          source?: string | null
+          source_external_id?: string | null
+          timing_method?: string
+          unit?: string | null
+          venue_type?: string
+          wind_mps?: number | null
         }
         Update: {
           athlete_id?: number | null
           competition_id?: number | null
           context?: string | null
           event?: string | null
+          discipline_id?: string | null
+          hurdle_height_m?: number | null
           id?: number
+          implement_weight_kg?: number | null
+          measurement_type?: string | null
+          metadata_version?: string
+          official_status?: string
+          performance_direction?: string | null
+          quality_flags?: string[]
           result?: string | null
+          result_value?: number | null
+          scoring_table_version?: string | null
+          source?: string | null
+          source_external_id?: string | null
+          timing_method?: string
+          unit?: string | null
+          venue_type?: string
+          wind_mps?: number | null
         }
         Relationships: [
           {
@@ -689,26 +782,47 @@ export type Database = {
         Row: {
           athlete_id: number | null
           discipline: string | null
+          discipline_id: string | null
           id: number
+          measurement_type: string | null
+          metadata_version: string
+          performance_direction: string | null
           pr: string | null
           pr_date: string | null
+          pr_value: number | null
           sb: string | null
+          sb_value: number | null
+          unit: string | null
         }
         Insert: {
           athlete_id?: number | null
           discipline?: string | null
+          discipline_id?: string | null
           id?: number
+          measurement_type?: string | null
+          metadata_version?: string
+          performance_direction?: string | null
           pr?: string | null
           pr_date?: string | null
+          pr_value?: number | null
           sb?: string | null
+          sb_value?: number | null
+          unit?: string | null
         }
         Update: {
           athlete_id?: number | null
           discipline?: string | null
+          discipline_id?: string | null
           id?: number
+          measurement_type?: string | null
+          metadata_version?: string
+          performance_direction?: string | null
           pr?: string | null
           pr_date?: string | null
+          pr_value?: number | null
           sb?: string | null
+          sb_value?: number | null
+          unit?: string | null
         }
         Relationships: [
           {
@@ -1114,6 +1228,52 @@ export type Database = {
       }
     }
     Functions: {
+      add_athlete_performance: {
+        Args: {
+          p_breakdown?: Json | null
+          p_context?: string | null
+          p_discipline: string
+          p_idempotency_key?: string | null
+          p_metadata?: Json
+          p_performance_date: string
+          p_result_value: number
+          p_value: string
+        }
+        Returns: Json
+      }
+      add_competition_result_v2: {
+        Args: {
+          p_athlete_id: number
+          p_competition_id: number
+          p_context?: string | null
+          p_event: string
+          p_higher_is_better: boolean
+          p_idempotency_key?: string | null
+          p_metadata?: Json
+          p_result: string
+          p_result_value: number
+          p_unit?: string | null
+        }
+        Returns: Json
+      }
+      create_solo_competition_result_v2: {
+        Args: {
+          p_breakdown?: Json | null
+          p_context?: string | null
+          p_date: string
+          p_event: string
+          p_higher_is_better: boolean
+          p_idempotency_key?: string | null
+          p_location: string | null
+          p_metadata?: Json
+          p_name: string
+          p_result: string
+          p_result_value: number
+          p_type: string
+          p_unit?: string | null
+        }
+        Returns: Json
+      }
       create_coach_alert: {
         Args: {
           p_athlete_id: number

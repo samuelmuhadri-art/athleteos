@@ -251,8 +251,8 @@ export const TabCharge = memo(({ athlete, metrics, weeklyCharge, competitions, s
       {/* Graphique charge */}
       {chartData.length > 0 && (
         <div className="card p-5">
-          <h3 className="card-title mb-1">Charge vs Forme — 12 semaines</h3>
-          <p className="card-subtitle mb-4">Charge brute · Forme · Fatigue</p>
+          <h3 className="card-title mb-1">Charge observée — 12 semaines</h3>
+          <p className="card-subtitle mb-4">Durée réelle × RPE CR10 · aucune estimation de forme ou de fatigue</p>
           <ResponsiveContainer width="100%" height={220}>
             <AreaChart data={chartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
               <defs>
@@ -260,18 +260,12 @@ export const TabCharge = memo(({ athlete, metrics, weeklyCharge, competitions, s
                   <stop offset="5%" stopColor="#378ADD" stopOpacity={0.2} />
                   <stop offset="95%" stopColor="#378ADD" stopOpacity={0} />
                 </linearGradient>
-                <linearGradient id="gradForme2" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#1D9E75" stopOpacity={0.15} />
-                  <stop offset="95%" stopColor="#1D9E75" stopOpacity={0} />
-                </linearGradient>
               </defs>
               <CartesianGrid strokeDasharray="3 3" stroke="var(--c-border)" />
               <XAxis dataKey="label" tick={{ fontSize:12, fill:"var(--c-text-3)" }} axisLine={false} tickLine={false} />
               <YAxis tick={{ fontSize:12, fill:"var(--c-text-3)" }} axisLine={false} tickLine={false} width={45} />
               <Tooltip content={<ChartTooltip />} />
               <Area dataKey="rawLoad" name="Charge brute" stroke="#378ADD" fill="url(#gradCharge2)" strokeWidth={2} />
-              <Area dataKey="forme"   name="Forme"        stroke="#1D9E75" fill="url(#gradForme2)"  strokeWidth={2} />
-              <Line dataKey="fatigue" name="Fatigue"      stroke="#E24B4A" strokeWidth={1.5} dot={false} strokeDasharray="4 2" />
             </AreaChart>
           </ResponsiveContainer>
         </div>

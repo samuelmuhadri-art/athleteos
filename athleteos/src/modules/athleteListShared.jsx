@@ -6,7 +6,7 @@
 // ============================================================
 
 import { Trophy, Activity, Dumbbell, HeartPulse, User, Star } from "lucide-react";
-import { getStatusLabel } from "../utils/chargeCalculations";
+import { getWellnessStatus } from "../utils/chargeCalculations";
 
 export const TABS = [
   { id: "performances",  label: "Performances",      icon: Trophy     },
@@ -37,8 +37,8 @@ export function acwrColor(v) { return v > 1.3 ? "#E24B4A" : v < 0.8 ? "#378ADD" 
 
 // ─── Composants UI partagés ───────────────────────────────────────────────────
 
-export function StatusBadge({ readiness, fatigue, acwr }) {
-  const s = getStatusLabel(readiness, fatigue, acwr);
+export function StatusBadge({ wellnessScore }) {
+  const s = getWellnessStatus(wellnessScore);
   return (
     <span
       className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[12px] font-bold shadow-sm"

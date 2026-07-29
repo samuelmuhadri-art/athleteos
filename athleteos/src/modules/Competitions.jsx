@@ -16,7 +16,9 @@ import ErrorState                   from "../components/ui/ErrorState";
 import { dispatchOutboxNotifications } from "../utils/notifications";
 import { initialsFromName } from "../utils/helpers.js";
 import { TYPE_CONFIG, daysUntil } from "./competitionsShared";
-import { resolveDisciplineId, getDisciplineHib, getDisciplineUnit } from "../domain/disciplines.js";
+import {
+  normalizePerformanceMetadata, resolveDisciplineId, validatePerformanceMetadata,
+} from "../domain/disciplines.js";
 import { parsePerf } from "../athlete/shared.js";
 import CompCard from "./CompCard";
 import CompModal from "./CompModal";
@@ -120,6 +122,7 @@ function Competitions() {
         const results = compResultsRes.data
           .filter((r) => r.competition_id === c.id)
           .map((r) => ({
+            ...r,
             athleteId: r.athlete_id,
             event:     r.event,
             result:    r.result,
@@ -187,16 +190,22 @@ function Competitions() {
     // Tâche 9 : normalise un alias saisi librement ("100 m" -> "100m") vers
     // l'identifiant canonique du registre avant d'écrire en base.
     const event = resolveDisciplineId(form.event);
-    const { data, error } = await supabase.rpc("add_competition_result", {
+    const resultValue = parsePerf(form.result).value;
+    if (resultValue == null) throw new Error("Le résultat doit contenir une valeur numérique valide.");
+    const metadata = normalizePerformanceMetadata(event, form.metadata);
+    const metadataIssues = validatePerformanceMetadata(event, metadata);
+    if (metadataIssues.length) throw new Error(metadataIssues[0]);
+    const { data, error } = await supabase.rpc("add_competition_result_v2", {
       p_competition_id:   competitionId,
       p_athlete_id:       athleteId,
       p_event:            event,
       p_result:           form.result,
-      p_result_value:     parsePerf(form.result).value,
-      p_higher_is_better: getDisciplineHib(event),
+      p_result_value:     resultValue,
+      p_higher_is_better: metadata.performance_direction === "higher",
       p_context:          form.context || null,
       p_idempotency_key:  crypto.randomUUID(),
-      p_unit:             getDisciplineUnit(event),
+      p_unit:             metadata.unit,
+      p_metadata:         metadata,
     });
     if (error) throw error;
 

@@ -21,7 +21,9 @@ export const discColor = (disc) => getDisciplineColor(disc);
 // objectif au-delà de 100 dans le graphique d'évolution.
 export function performanceIndex(currentValue, referenceValue, discipline) {
   if (currentValue == null || referenceValue == null || currentValue === 0 || referenceValue === 0) return null;
-  const ratio = getDisciplineHib(discipline)
+  const higherIsBetter = getDisciplineHib(discipline);
+  if (higherIsBetter == null) return null;
+  const ratio = higherIsBetter
     ? currentValue / referenceValue
     : referenceValue / currentValue;
   return Math.round(ratio * 1000) / 10;

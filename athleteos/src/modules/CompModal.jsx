@@ -9,6 +9,7 @@ import { getAthleteMetricsForWeek } from "../utils/chargeCalculations";
 import { getTypeConfig, daysUntil, formatDate, dateToWeek, athleteColor, generateResultAnalysis } from "./competitionsShared";
 import { parsePerf } from "../athlete/shared.js";
 import AddResultInline from "./AddResultInline";
+import PerformanceContextChips from "../components/performance/PerformanceContextChips.jsx";
 
 const CompModal = memo(({ competition, athletes, weeklyCharge, records, onClose, onAddResult }) => {
   if (!competition) return null;
@@ -217,6 +218,7 @@ const CompModal = memo(({ competition, athletes, weeklyCharge, records, onClose,
                             Note du coach : {result.context}
                           </p>
                         )}
+                        <PerformanceContextChips performance={result} />
                       </div>
                     </div>
                   );

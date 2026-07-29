@@ -7,9 +7,11 @@ import { memo, useState } from "react";
 import { createPortal } from "react-dom";
 import { Plus, X } from "lucide-react";
 import { inputCls, labelCls } from "./athleteListShared";
+import PerformanceMetadataFields from "../components/performance/PerformanceMetadataFields.jsx";
+import { createPerformanceMetadata } from "../domain/disciplines.js";
 
 const AddRecordModal = memo(({ athleteName, onClose, onAdd }) => {
-  const [form, setForm]     = useState({ discipline: "", sb: "", pr: "", prDate: "" });
+  const [form, setForm]     = useState({ discipline: "", sb: "", pr: "", prDate: "", metadata: createPerformanceMetadata("") });
   const [saving, setSaving] = useState(false);
   const [err, setErr]       = useState(null);
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
@@ -60,6 +62,15 @@ const AddRecordModal = memo(({ athleteName, onClose, onAdd }) => {
             <label className={labelCls} style={{ color: "var(--c-text-3)" }}>Date du record perso</label>
             <input type="date" className={inputCls} value={form.prDate} onChange={e => set("prDate", e.target.value)} />
           </div>
+          <PerformanceMetadataFields
+            discipline={form.discipline}
+            metadata={form.metadata}
+            setMetadata={(updater) => setForm((current) => ({
+              ...current,
+              metadata: typeof updater === "function" ? updater(current.metadata) : updater,
+            }))}
+            idPrefix="record-meta"
+          />
         </div>
         <div className="px-6 py-4 flex items-center justify-between gap-3 flex-shrink-0" style={{ borderTop: "1px solid var(--c-border)" }}>
           <button onClick={onClose} disabled={saving} className="btn-secondary">Annuler</button>

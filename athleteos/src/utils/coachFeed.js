@@ -42,17 +42,17 @@ export function buildCoachFeed({ athletes, weeklyCharge, sessions, injuries, com
         });
       }
 
-      if (metrics.fatigue > 75) {
+      if (metrics.wellnessScore != null && metrics.wellnessScore < 25) {
         items.push({
           id: `fatigue-${athlete.id}`, priority: "warning", icon: "zap", color: "#EF9F27",
           sentence: `${name} signale un bien-être faible dans le questionnaire AthleteOS — prends contact pour comprendre le contexte.`,
         });
       }
 
-      if (metrics.readiness >= 85) {
+      if (metrics.wellnessScore >= 85) {
         items.push({
           id: `top-${athlete.id}`, priority: "positive", icon: "trending", color: "#1D9E75",
-          sentence: `${name} signale un bien-être élevé aujourd'hui (${metrics.readiness}/100).`,
+          sentence: `${name} signale un bien-être élevé aujourd'hui (${metrics.wellnessScore}/100).`,
         });
       }
     }

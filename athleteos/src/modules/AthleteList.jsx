@@ -11,7 +11,9 @@ import LoadingState  from "../components/ui/LoadingState";
 import ErrorState    from "../components/ui/ErrorState";
 import { initialsFromName } from "../utils/helpers.js";
 import { parsePerf } from "../athlete/shared.js";
-import { resolveDisciplineId, getDisciplineUnit } from "../domain/disciplines.js";
+import {
+  normalizePerformanceMetadata, resolveDisciplineId, validatePerformanceMetadata,
+} from "../domain/disciplines.js";
 import { getAthleteCsvImportError } from "../utils/athleteCsv.js";
 import AthleteProfile from "./AthleteProfile";
 import AthleteCard from "./AthleteCard";
@@ -79,7 +81,7 @@ function AthleteList() {
       setAthletes((athletesRes.data ?? []).map(a => {
         const pd = a.profile_data ?? {};
         const recs = {};
-        (recordsRes.data ?? []).filter(r => r.athlete_id === a.id).forEach(r => { recs[r.discipline] = { sb: r.sb, pr: r.pr, prDate: r.pr_date }; });
+        (recordsRes.data ?? []).filter(r => r.athlete_id === a.id).forEach(r => { recs[r.discipline] = { ...r, sb: r.sb, pr: r.pr, prDate: r.pr_date }; });
         return {
           id: a.id, name: a.name, age: a.age, avatar: pd.avatar ?? initialsFromName(a.name),
           mainDiscipline: a.main_discipline, secondaryDisciplines: pd.secondary_disciplines ?? [],
@@ -128,10 +130,19 @@ function AthleteList() {
     // athlète, le font depuis la tâche 9), donc "100 m" et "100m" pouvaient
     // ne jamais se rejoindre malgré la discipline canonique identique.
     const discipline = resolveDisciplineId(form.discipline);
+    const metadata = normalizePerformanceMetadata(discipline, form.metadata);
+    const metadataIssues = validatePerformanceMetadata(discipline, metadata);
+    if (metadataIssues.length) throw new Error(metadataIssues[0]);
+    const sbValue = parsePerf(form.sb).value;
+    const prValue = parsePerf(form.pr).value;
+    if (sbValue == null || prValue == null) throw new Error("Le SB et le PR doivent contenir une valeur numérique valide.");
     const patch = {
-      sb: form.sb, sb_value: parsePerf(form.sb).value,
-      pr: form.pr, pr_value: parsePerf(form.pr).value, pr_date: form.prDate || null,
-      unit: getDisciplineUnit(discipline), discipline_id: discipline,
+      sb: form.sb, sb_value: sbValue,
+      pr: form.pr, pr_value: prValue, pr_date: form.prDate || null,
+      unit: metadata.unit, discipline_id: discipline,
+      measurement_type: metadata.measurement_type,
+      performance_direction: metadata.performance_direction,
+      metadata_version: metadata.metadata_version,
     };
     const { data: existing } = await supabase.from("records").select("id")
       .eq("athlete_id", athleteId).eq("discipline", discipline).maybeSingle();

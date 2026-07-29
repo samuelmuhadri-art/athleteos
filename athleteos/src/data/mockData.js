@@ -874,12 +874,10 @@ export const sessionTypeColors = {
 };
 
 // ─────────────────────────────────────────────
-// STATUTS DE FORME (seuils pour badges UI)
+// LIBELLÉS DE SUIVI DESCRIPTIFS (compatibilité de l'export historique)
 // ─────────────────────────────────────────────
 export const statusThresholds = {
-  optimal:    { readinessMin: 75, fatigueMax: 45, label: "Optimal",        color: "#1D9E75" },
-  modere:     { readinessMin: 55, fatigueMax: 65, label: "Modéré",         color: "#EF9F27" },
-  fatigue:    { readinessMin: 40, fatigueMax: 80, label: "Fatigue élevée", color: "#EF9F27" },
-  surcharge:  { readinessMin: 0,  fatigueMax: 100, label: "Surcharge",     color: "#E24B4A" },
-  recuperation: { label: "Récupération",                                   color: "#378ADD" },
+  wellnessRecorded: { label: "Questionnaire complété", color: "#1D9E75" },
+  dataIncomplete:   { label: "Données à compléter",    color: "#EF9F27" },
+  spacingRule:      { label: "Règle d'espacement",     color: "#378ADD" },
 };
