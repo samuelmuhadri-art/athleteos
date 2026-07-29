@@ -274,24 +274,25 @@ function CoachFeedIcon({ icon, color }) {
   if (icon === "heart")    return <HeartPulse {...props} />;
   if (icon === "trophy")   return <Trophy {...props} />;
   if (icon === "users")    return <Users {...props} />;
+  if (icon === "check")    return <CheckCircle {...props} />;
   if (icon === "trending") return <TrendingUp {...props} />;
   return <Bell {...props} />;
 }
 
 function CoachFeedSection({ items, onNavigate }) {
-  const shown = items.slice(0, 6);
+  const shown = items.slice(0, 8);
   return (
     <div className="card overflow-hidden">
       <div className="px-5 py-4 border-b border-[color:var(--c-border)] flex items-center justify-between">
         <div>
-          <h2 className="card-title">À traiter aujourd'hui</h2>
+          <h2 className="card-title">Tes actions prioritaires</h2>
           <p className="card-subtitle mt-0.5">
-            {items.length > 0 ? "Signaux triés automatiquement par priorité" : "Rien à signaler cette semaine"}
+            {items.length > 0 ? "Commence par le haut : chaque ligne ouvre directement le bon écran." : "Aucune action urgente pour le moment"}
           </p>
         </div>
         {items.length > 0 && (
           <span className="text-[12px] font-bold px-2 py-0.5 rounded-full chip chip-warning">
-            {items.length} signal{items.length > 1 ? "aux" : ""}
+            {items.length} action{items.length > 1 ? "s" : ""}
           </span>
         )}
       </div>
@@ -301,7 +302,7 @@ function CoachFeedSection({ items, onNavigate }) {
             <CheckCircle size={16} color="#1D9E75" strokeWidth={2} />
           </div>
           <p className="text-[12.5px] font-medium" style={{ color: "var(--c-text-2)" }}>
-            Aucun retour de bien-être faible, blessure active ou absence répétée dans le groupe.
+            Les alertes, réponses, présences, validations et compétitions proches sont à jour.
           </p>
         </div>
       ) : (
@@ -309,16 +310,18 @@ function CoachFeedSection({ items, onNavigate }) {
           {shown.map(item => (
             <button
               key={item.id}
-              onClick={() => onNavigate("athletes")}
+              type="button"
+              onClick={() => onNavigate(item.route ?? "athletes")}
               className="w-full px-5 py-3.5 flex items-start gap-3 text-left hover:bg-[var(--c-surface-2)] transition-colors border-l-4"
               style={{ borderLeftColor: item.color }}
             >
               <div className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0 mt-0.5" style={{ background: `${item.color}18` }}>
                 <CoachFeedIcon icon={item.icon} color={item.color} />
               </div>
-              <p className="flex-1 text-[12.5px] leading-relaxed" style={{ color: "var(--c-text-2)" }}>
-                {item.sentence}
-              </p>
+              <span className="flex-1 min-w-0">
+                <span className="block text-[13px] font-semibold" style={{ color: "var(--c-text-1)" }}>{item.label ?? "À vérifier"}</span>
+                <span className="block text-[12.5px] leading-relaxed mt-0.5" style={{ color: "var(--c-text-2)" }}>{item.sentence}</span>
+              </span>
               <ChevronRight size={14} className="flex-shrink-0 mt-1" style={{ color: "var(--c-text-3)" }} />
             </button>
           ))}
@@ -327,7 +330,7 @@ function CoachFeedSection({ items, onNavigate }) {
       {items.length > shown.length && (
         <div className="px-5 py-2.5 text-center border-t border-[color:var(--c-border)]">
           <span className="meta-text">
-            +{items.length - shown.length} autre{items.length - shown.length > 1 ? "s" : ""} signal{items.length - shown.length > 1 ? "aux" : ""}
+            +{items.length - shown.length} autre{items.length - shown.length > 1 ? "s" : ""} action{items.length - shown.length > 1 ? "s" : ""}
           </span>
         </div>
       )}
@@ -391,6 +394,7 @@ function Dashboard({
           id: s.id, week: s.week, day: s.day, sessionDate: s.session_date,
           time: s.time, type: s.type, category: s.category, trainingFocus: s.training_focus, title: s.title,
           durationMinutes: s.duration_minutes, createdBy: s.created_by,
+          lifecycleStatus: s.lifecycle_status ?? "planned",
           createdByAthlete: s.created_by != null && athletesRes.data.some(a => a.user_id === s.created_by),
           athleteIds:   rows.map(v => v.athlete_id),
           validations:  rows.map(v => ({ athleteId: v.athlete_id, status: v.status, feeling: v.feeling, rpe: v.rpe, comment: v.comment, actualDurationMinutes: v.actual_duration_minutes, durationSource: v.duration_source, attendanceStatus: v.attendance_status, rsvpStatus: v.rsvp_status, rsvpNote: v.rsvp_note, coachNote: v.coach_note })),
@@ -479,8 +483,8 @@ function Dashboard({
   // Les anciens blocs "surcharge"/"blessés" (chiffres bruts) sont remplacés
   // par ce fil narrativisé et priorisé — voir src/utils/coachFeed.js.
   const coachFeed = useMemo(
-    () => buildCoachFeed({ athletes, weeklyCharge, sessions, injuries, competitions, currentWeek }),
-    [athletes, weeklyCharge, sessions, injuries, competitions, currentWeek]
+    () => buildCoachFeed({ athletes, weeklyCharge, sessions, injuries, competitions, alerts, currentWeek }),
+    [athletes, weeklyCharge, sessions, injuries, competitions, alerts, currentWeek]
   );
 
   const groupDailyState = useMemo(
@@ -531,6 +535,12 @@ function Dashboard({
           onDemo={onDemo}
         />
       )}
+
+      {/* Le coach voit d'abord ce qui demande une action. Les statistiques
+          restent entièrement disponibles juste après. */}
+      <div data-dashboard-priority-queue>
+        <CoachFeedSection items={coachFeed} onNavigate={onNavigate} />
+      </div>
 
       {/* ── Synthèse de la semaine ────────────────────────────────────────── */}
       <div
@@ -629,8 +639,6 @@ function Dashboard({
       </div>
 
       {/* ── Priorités coach ──────────────────────────────────────────────── */}
-      <CoachFeedSection items={coachFeed} onNavigate={onNavigate} />
-
       {/* ── KPIs — icône + liseré + glow au survol ────────────────────────── */}
       <section className="space-y-3" aria-labelledby="overview-title">
         <div>
@@ -644,10 +652,10 @@ function Dashboard({
             onClick={() => onNavigate("athletes")}
           />
           <MetricCard
-            icon={Zap} label="Charge moyenne" color="#378ADD"
+            icon={Zap} label="Effort moyen du groupe" color="#378ADD"
             value={metrics.avgCharge ?? "—"}
-            sub={metrics.trend != null ? `${metrics.trend > 0 ? "+" : ""}${metrics.trend}% vs S-1` : "pas de données"}
-            badge={metrics.trend > 20 ? { label: "↑ Élevée", color: "#E24B4A" } : metrics.trend < -20 ? { label: "↓ Baisse", color: "#378ADD" } : undefined}
+            sub={metrics.trend == null ? "Comparaison indisponible" : metrics.trend > 10 ? `Plus que la semaine passée (+${metrics.trend} %)` : metrics.trend < -10 ? `Moins que la semaine passée (${metrics.trend} %)` : "Proche de la semaine passée"}
+            badge={metrics.trend > 20 ? { label: "Hausse nette", color: "#D18A24" } : metrics.trend < -20 ? { label: "Baisse nette", color: "#378ADD" } : undefined}
           />
           <MetricCard
             icon={Bell} label="Alertes non lues" color="#E24B4A"

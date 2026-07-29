@@ -184,7 +184,9 @@ const WellnessRing = memo(({ value, color, size = 128 }) => {
 
 const DailyFocusCard = memo(({
   focus, todaySessions, nextCompetition,
+  dailyState, loadStory,
   onOpenWellness, onOpenSession, onOpenPlanning, onConfirmRestDay,
+  onOpenDailyState, onOpenLoadDetail,
 }) => {
   const wellnessCompleted = focus.kind !== "wellness";
   const session = focus.focusSession;
@@ -238,9 +240,9 @@ const DailyFocusCard = memo(({
     : `${focus.completedSessions}/${todaySessions.length} traitée${todaySessions.length > 1 ? "s" : ""}`;
 
   return (
-    <section className="card" aria-labelledby="daily-focus-title" style={{
+    <section className="card xl:col-span-2" aria-labelledby="daily-focus-title" style={{
       position: "relative", overflow: "hidden", minHeight: "100%",
-      background: "linear-gradient(155deg, rgba(36,168,125,0.08), rgba(255,255,255,0.018) 38%, transparent 72%), var(--c-surface)",
+      background: "linear-gradient(135deg, rgba(36,168,125,0.13), rgba(91,141,239,0.045) 45%, rgba(255,255,255,0.018) 72%), var(--c-surface)",
     }}>
       <div aria-hidden="true" style={{
         position: "absolute", width: 180, height: 180, borderRadius: "50%", right: -90, top: -100,
@@ -249,8 +251,9 @@ const DailyFocusCard = memo(({
       <div style={{ position: "relative", padding: "var(--card-padding-comfortable)", height: "100%", display: "flex", flexDirection: "column" }}>
         <div className="flex items-start justify-between gap-3">
           <div>
-            <p className="metric-label">Ton plan</p>
+            <p className="metric-label">Ton essentiel</p>
             <h2 id="daily-focus-title" className="section-title" style={{ marginTop: "var(--space-1)" }}>Aujourd’hui</h2>
+            <p className="secondary-text" style={{ marginTop: "var(--space-1)" }}>Une action prioritaire, puis les repères utiles de ta journée.</p>
           </div>
           <span style={{
             minWidth: 48, padding: "4px 10px", borderRadius: 99, textAlign: "center",
@@ -266,54 +269,68 @@ const DailyFocusCard = memo(({
           <div className="progress-fill" style={{ width: `${progress}%`, background: presentation.color }} />
         </div>
 
-        <div style={{
-          padding: "var(--space-4)", borderRadius: "var(--r-md)",
-          background: `color-mix(in srgb, ${presentation.color} 6%, transparent)`,
-          border: `1px solid color-mix(in srgb, ${presentation.color} 18%, transparent)`,
-        }}>
-          <div className="flex items-start gap-3">
-            <div style={{
-              width: 40, height: 40, borderRadius: 12, flexShrink: 0,
-              display: "flex", alignItems: "center", justifyContent: "center",
-              color: presentation.color, background: `color-mix(in srgb, ${presentation.color} 10%, transparent)`,
-            }}>
-              <FocusIcon size={18} strokeWidth={2} aria-hidden="true" />
+        <div className="grid grid-cols-1 md:grid-cols-[minmax(0,1.2fr)_minmax(260px,0.8fr)] gap-4">
+          <div style={{
+            padding: "var(--space-4)", borderRadius: "var(--r-lg)",
+            background: `color-mix(in srgb, ${presentation.color} 7%, transparent)`,
+            border: `1px solid color-mix(in srgb, ${presentation.color} 20%, transparent)`,
+          }}>
+            <div className="flex items-start gap-3">
+              <div style={{
+                width: 44, height: 44, borderRadius: 14, flexShrink: 0,
+                display: "flex", alignItems: "center", justifyContent: "center",
+                color: presentation.color, background: `color-mix(in srgb, ${presentation.color} 12%, transparent)`,
+              }}>
+                <FocusIcon size={20} strokeWidth={2} aria-hidden="true" />
+              </div>
+              <div className="min-w-0">
+                <p className="metric-label" style={{ color: presentation.color }}>{presentation.eyebrow}</p>
+                <p className="card-title" style={{ marginTop: "var(--space-1)", fontSize: 17 }}>{presentation.title}</p>
+                <p className="secondary-text" style={{ marginTop: "var(--space-1)" }}>{presentation.description}</p>
+              </div>
             </div>
-            <div className="min-w-0">
-              <p className="metric-label" style={{ color: presentation.color }}>{presentation.eyebrow}</p>
-              <p className="card-title" style={{ marginTop: "var(--space-1)" }}>{presentation.title}</p>
-              <p className="secondary-text" style={{ marginTop: "var(--space-1)" }}>{presentation.description}</p>
-            </div>
+            <button type="button" onClick={presentation.action} className="btn-primary" style={{ width: "100%", marginTop: "var(--space-4)" }}>
+              {presentation.cta}<ChevronRight size={15} aria-hidden="true" />
+            </button>
           </div>
-          <button type="button" onClick={presentation.action} className="btn-primary" style={{ width: "100%", marginTop: "var(--space-4)" }}>
-            {presentation.cta}<ChevronRight size={15} aria-hidden="true" />
-          </button>
-        </div>
 
-        <div style={{ marginTop: "var(--space-3)", borderTop: "1px solid var(--c-border)" }}>
-          <button type="button" onClick={onOpenWellness} className="tap-feedback" style={{
-            width: "100%", minHeight: 48, display: "flex", alignItems: "center", gap: 10,
-            background: "transparent", border: 0, borderBottom: "1px solid var(--c-border)", padding: 0,
-            color: "inherit", cursor: "pointer", textAlign: "left",
-          }}>
-            <CheckCircle size={15} color={wellnessCompleted ? "var(--color-success)" : "var(--c-text-3)"} aria-hidden="true" />
-            <span className="secondary-text" style={{ flex: 1, color: "var(--c-text-1)" }}>Wellness du jour</span>
-            <span className="meta-text" style={{ color: wellnessCompleted ? "var(--color-success)" : "var(--color-warning)", fontWeight: 600 }}>
-              {wellnessCompleted ? "Complété" : "À faire"}
-            </span>
-          </button>
-
-          <button type="button" onClick={session ? onOpenSession : onOpenPlanning} className="tap-feedback" style={{
-            width: "100%", minHeight: 48, display: "flex", alignItems: "center", gap: 10,
-            background: "transparent", border: 0, padding: 0, color: "inherit", cursor: "pointer", textAlign: "left",
-          }}>
-            <CalendarDays size={15} color={session ? presentation.color : "var(--c-text-3)"} aria-hidden="true" />
-            <span className="secondary-text" style={{ flex: 1, color: "var(--c-text-1)" }}>Entraînement</span>
-            <span className="meta-text" style={{ color: session ? "var(--color-warning)" : "var(--c-text-2)", fontWeight: 600 }}>
-              {completedSessionLabel}
-            </span>
-            <ChevronRight size={14} color="var(--c-text-3)" aria-hidden="true" />
-          </button>
+          <div style={{ borderRadius: "var(--r-lg)", overflow: "hidden", border: "1px solid var(--c-border)", background: "rgba(2,7,12,0.16)" }}>
+            {[
+              {
+                key: "checkin", icon: Activity, label: "Ton check-in",
+                value: wellnessCompleted ? (dailyState?.plainHeadline ?? "Complété") : "30 secondes pour le faire",
+                color: wellnessCompleted ? dailyState?.color : "var(--color-warning)", action: wellnessCompleted ? onOpenDailyState : onOpenWellness,
+              },
+              {
+                key: "session", icon: CalendarDays, label: "Ta séance",
+                value: session?.title ?? completedSessionLabel,
+                detail: session ? completedSessionLabel : null,
+                color: session ? presentation.color : "var(--c-text-2)", action: session ? onOpenSession : onOpenPlanning,
+              },
+              {
+                key: "progress", icon: TrendingUp, label: "Ta progression",
+                value: loadStory?.headline ?? "Ton historique se construit",
+                color: "var(--color-info)", action: onOpenLoadDetail,
+              },
+            ].map((item, index) => {
+              const ItemIcon = item.icon;
+              return (
+                <button key={item.key} type="button" onClick={item.action} className="tap-feedback" style={{
+                  width: "100%", minHeight: 58, display: "flex", alignItems: "center", gap: 10,
+                  background: "transparent", border: 0, borderBottom: index < 2 ? "1px solid var(--c-border)" : 0,
+                  padding: "10px 12px", color: "inherit", cursor: "pointer", textAlign: "left",
+                }}>
+                  <ItemIcon size={16} color={item.color} aria-hidden="true" />
+                  <span style={{ flex: 1, minWidth: 0 }}>
+                    <span className="metric-label" style={{ display: "block" }}>{item.label}</span>
+                    <span className="secondary-text line-clamp-1" style={{ display: "block", marginTop: 2, color: "var(--c-text-1)", fontWeight: 600 }}>{item.value}</span>
+                    {item.detail && <span className="meta-text" style={{ display: "block", marginTop: 2 }}>{item.detail}</span>}
+                  </span>
+                  <ChevronRight size={14} color="var(--c-text-3)" aria-hidden="true" />
+                </button>
+              );
+            })}
+          </div>
         </div>
 
         {nextCompetition && (
@@ -455,10 +472,29 @@ export default function AthleteDashboard({
         <span className="meta-text hidden sm:block">Semaine {currentWeek}</span>
       </header>
 
-      {/* Le premier écran répond à deux questions distinctes :
-          "comment je vais ?" à gauche, "que dois-je faire ?" à droite. */}
-      <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1.5fr)_minmax(300px,0.8fr)] gap-4 md:gap-5 items-stretch">
-        <section className="rounded-2xl overflow-hidden select-none border" aria-labelledby="wellness-title"
+      {/* L'action du jour occupe seule le premier niveau de lecture. Les
+          explications et chiffres restent juste après, sans être supprimés. */}
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 md:gap-5 items-stretch">
+        <DailyFocusCard
+          focus={todayFocus}
+          todaySessions={todaySessions}
+          nextCompetition={nextComp}
+          dailyState={dailyState}
+          loadStory={loadStory}
+          onOpenWellness={onOpenWellness}
+          onOpenSession={() => focusSession && setOpenTodaySessionId(focusSession.id)}
+          onOpenPlanning={() => onNavigate("planning")}
+          onConfirmRestDay={() => onConfirmRestDay?.(toLocalDateStr(today))}
+          onOpenDailyState={() => setShowDailyState(true)}
+          onOpenLoadDetail={() => setActiveMetric("variation")}
+        />
+
+        <div className="xl:col-span-2" style={{ paddingTop: "var(--space-2)" }}>
+          <h2 className="section-title">Mieux comprendre ta journée</h2>
+          <p className="secondary-text" style={{ marginTop: "var(--space-1)" }}>Ton ressenti et tes chiffres restent disponibles, avec une explication simple avant le détail scientifique.</p>
+        </div>
+
+        <section className="rounded-2xl overflow-hidden select-none border xl:col-span-2" aria-labelledby="wellness-title"
           style={{ position: "relative", background: "linear-gradient(160deg, var(--c-surface) 0%, var(--c-surface-2) 55%, var(--c-bg) 100%)", borderColor: "var(--c-border)" }}>
           {/* Grille décorative — très subtile */}
           <div className="absolute pointer-events-none" aria-hidden="true" style={{
@@ -550,15 +586,6 @@ export default function AthleteDashboard({
           </div>
         </section>
 
-        <DailyFocusCard
-          focus={todayFocus}
-          todaySessions={todaySessions}
-          nextCompetition={nextComp}
-          onOpenWellness={onOpenWellness}
-          onOpenSession={() => focusSession && setOpenTodaySessionId(focusSession.id)}
-          onOpenPlanning={() => onNavigate("planning")}
-          onConfirmRestDay={() => onConfirmRestDay?.(toLocalDateStr(today))}
-        />
       </div>
 
       {/* ══════════════════════════════════════════════════════════════════════
@@ -615,10 +642,10 @@ export default function AthleteDashboard({
       {/* ══════════════════════════════════════════════════════════════════════
           GRILLE PRINCIPALE
          ══════════════════════════════════════════════════════════════════════ */}
-      <div>
-        <p className="section-title">Tendances & progression</p>
-        <p className="secondary-text mt-1">Comprends ta charge, suis tes progrès et garde le lien avec ton équipe.</p>
-      </div>
+      <section aria-labelledby="athlete-progress-title">
+        <h2 id="athlete-progress-title" className="section-title">Ta progression</h2>
+        <p className="secondary-text mt-1">D'abord ce qui a changé et pourquoi. Les nombres et les formules restent accessibles si tu veux aller plus loin.</p>
+      </section>
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 md:gap-5">
         <div className="lg:col-span-2 space-y-4 md:space-y-5">
 
@@ -632,7 +659,7 @@ export default function AthleteDashboard({
                     <p className="card-title">Charge d'entraînement</p>
                     <span className={`chip ${EVIDENCE_LEVELS.statistical.chip}`}>session-RPE</span>
                   </div>
-                  <p className="card-subtitle">8 dernières semaines</p>
+                  <p className="card-subtitle">Ce que tes séances ont représenté sur les 8 dernières semaines</p>
                 </div>
                 {chargeTrend !== null && (
                   <div style={{ display: "flex", alignItems: "center", gap: 4, padding: "3px 9px", borderRadius: 8, flexShrink: 0,
@@ -641,7 +668,7 @@ export default function AthleteDashboard({
                     fontSize: "var(--text-meta)", fontWeight: 600,
                   }}>
                     {chargeTrend > 0 ? <TrendingUp size={10} /> : chargeTrend < 0 ? <TrendingDown size={10} /> : <Minus size={10} />}
-                    {chargeTrend > 0 ? "+" : ""}{chargeTrend}% vs semaine passée
+                    {chargeTrend > 10 ? "Plus que la semaine passée" : chargeTrend < -10 ? "Moins que la semaine passée" : "Proche de la semaine passée"}
                   </div>
                 )}
               </div>
@@ -720,9 +747,9 @@ export default function AthleteDashboard({
               {/* Métriques inline sous le graphe — pas de cards séparées */}
               <div style={{ padding: "12px 16px", display: "flex", alignItems: "center", gap: 0, borderTop: "1px solid var(--c-border)", marginTop: 4 }}>
                 {[
-                  { label: "Cette semaine", value: metrics.load7 ?? "—", color: "#4B7BDB", sub: "7 derniers jours" },
-                  { label: "Dernier mois", value: metrics.load28 ?? "—", color: "#14B8A6", sub: "4 dernières semaines" },
-                  { label: "Évolution", value: metrics.variationPercent == null ? "—" : `${metrics.variationPercent >= 0 ? "+" : ""}${metrics.variationPercent}%`, color: "var(--c-text-2)", sub: "face à tes habitudes" },
+                  { label: "Ta semaine", value: metrics.load7 ?? "—", color: "#4B7BDB", sub: "efforts des 7 derniers jours" },
+                  { label: "Ton habitude", value: metrics.load28 ?? "—", color: "#14B8A6", sub: "repère des 4 dernières semaines" },
+                  { label: "Ce qui change", value: metrics.variationPercent == null ? "—" : `${metrics.variationPercent >= 0 ? "+" : ""}${metrics.variationPercent}%`, color: "var(--c-text-2)", sub: "écart avec ton rythme habituel" },
                 ].map((s, idx) => (
                   <div key={s.label} style={{
                     flex: 1, textAlign: "center", paddingTop: 2, paddingBottom: 2,

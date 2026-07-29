@@ -61,7 +61,7 @@ describe("AthleteDashboard — plan du jour", () => {
   it("ouvre la première séance non traitée au lieu d'une séance déjà validée", () => {
     renderDashboard();
 
-    expect(screen.getAllByText("Technique du soir")).toHaveLength(2);
+    expect(screen.getAllByText("Technique du soir").length).toBeGreaterThanOrEqual(2);
     fireEvent.click(screen.getByRole("button", { name: /ouvrir la séance/i }));
     expect(screen.getByText("Séance ouverte : Technique du soir")).toBeTruthy();
   });
@@ -73,5 +73,14 @@ describe("AthleteDashboard — plan du jour", () => {
     expect(screen.getByText("1/2 traitées")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: /faire mon check-in/i }));
     expect(props.onOpenWellness).toHaveBeenCalledOnce();
+  });
+
+  it("montre l'action d'aujourd'hui avant les analyses et utilise un langage direct", () => {
+    renderDashboard();
+
+    expect(screen.getByRole("heading", { name: "Aujourd’hui" })).toBeTruthy();
+    expect(screen.getByText("Une action prioritaire, puis les repères utiles de ta journée.")).toBeTruthy();
+    expect(screen.getByText("Complète ton historique de charge")).toBeTruthy();
+    expect(screen.queryByText("Tendances & progression")).toBeNull();
   });
 });

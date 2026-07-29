@@ -212,6 +212,7 @@ src/
     clubBranding.js
     clubBranding.test.js
     coachFeed.js
+    coachFeed.test.js
     helpers.js
     loadAxes.js
     loadAxes.test.js
@@ -3574,7 +3575,9 @@ const WellnessRing = memo(({ value, color, size = 128 }) => {
 
 const DailyFocusCard = memo(({
   focus, todaySessions, nextCompetition,
+  dailyState, loadStory,
   onOpenWellness, onOpenSession, onOpenPlanning, onConfirmRestDay,
+  onOpenDailyState, onOpenLoadDetail,
 }) => {
   const wellnessCompleted = focus.kind !== "wellness";
   const session = focus.focusSession;
@@ -3628,9 +3631,9 @@ const DailyFocusCard = memo(({
     : `${focus.completedSessions}/${todaySessions.length} traitée${todaySessions.length > 1 ? "s" : ""}`;
 
   return (
-    <section className="card" aria-labelledby="daily-focus-title" style={{
+    <section className="card xl:col-span-2" aria-labelledby="daily-focus-title" style={{
       position: "relative", overflow: "hidden", minHeight: "100%",
-      background: "linear-gradient(155deg, rgba(36,168,125,0.08), rgba(255,255,255,0.018) 38%, transparent 72%), var(--c-surface)",
+      background: "linear-gradient(135deg, rgba(36,168,125,0.13), rgba(91,141,239,0.045) 45%, rgba(255,255,255,0.018) 72%), var(--c-surface)",
     }}>
       <div aria-hidden="true" style={{
         position: "absolute", width: 180, height: 180, borderRadius: "50%", right: -90, top: -100,
@@ -3639,8 +3642,9 @@ const DailyFocusCard = memo(({
       <div style={{ position: "relative", padding: "var(--card-padding-comfortable)", height: "100%", display: "flex", flexDirection: "column" }}>
         <div className="flex items-start justify-between gap-3">
           <div>
-            <p className="metric-label">Ton plan</p>
+            <p className="metric-label">Ton essentiel</p>
             <h2 id="daily-focus-title" className="section-title" style={{ marginTop: "var(--space-1)" }}>Aujourd’hui</h2>
+            <p className="secondary-text" style={{ marginTop: "var(--space-1)" }}>Une action prioritaire, puis les repères utiles de ta journée.</p>
           </div>
           <span style={{
             minWidth: 48, padding: "4px 10px", borderRadius: 99, textAlign: "center",
@@ -3656,54 +3660,68 @@ const DailyFocusCard = memo(({
           <div className="progress-fill" style={{ width: `${progress}%`, background: presentation.color }} />
         </div>
 
-        <div style={{
-          padding: "var(--space-4)", borderRadius: "var(--r-md)",
-          background: `color-mix(in srgb, ${presentation.color} 6%, transparent)`,
-          border: `1px solid color-mix(in srgb, ${presentation.color} 18%, transparent)`,
-        }}>
-          <div className="flex items-start gap-3">
-            <div style={{
-              width: 40, height: 40, borderRadius: 12, flexShrink: 0,
-              display: "flex", alignItems: "center", justifyContent: "center",
-              color: presentation.color, background: `color-mix(in srgb, ${presentation.color} 10%, transparent)`,
-            }}>
-              <FocusIcon size={18} strokeWidth={2} aria-hidden="true" />
+        <div className="grid grid-cols-1 md:grid-cols-[minmax(0,1.2fr)_minmax(260px,0.8fr)] gap-4">
+          <div style={{
+            padding: "var(--space-4)", borderRadius: "var(--r-lg)",
+            background: `color-mix(in srgb, ${presentation.color} 7%, transparent)`,
+            border: `1px solid color-mix(in srgb, ${presentation.color} 20%, transparent)`,
+          }}>
+            <div className="flex items-start gap-3">
+              <div style={{
+                width: 44, height: 44, borderRadius: 14, flexShrink: 0,
+                display: "flex", alignItems: "center", justifyContent: "center",
+                color: presentation.color, background: `color-mix(in srgb, ${presentation.color} 12%, transparent)`,
+              }}>
+                <FocusIcon size={20} strokeWidth={2} aria-hidden="true" />
+              </div>
+              <div className="min-w-0">
+                <p className="metric-label" style={{ color: presentation.color }}>{presentation.eyebrow}</p>
+                <p className="card-title" style={{ marginTop: "var(--space-1)", fontSize: 17 }}>{presentation.title}</p>
+                <p className="secondary-text" style={{ marginTop: "var(--space-1)" }}>{presentation.description}</p>
+              </div>
             </div>
-            <div className="min-w-0">
-              <p className="metric-label" style={{ color: presentation.color }}>{presentation.eyebrow}</p>
-              <p className="card-title" style={{ marginTop: "var(--space-1)" }}>{presentation.title}</p>
-              <p className="secondary-text" style={{ marginTop: "var(--space-1)" }}>{presentation.description}</p>
-            </div>
+            <button type="button" onClick={presentation.action} className="btn-primary" style={{ width: "100%", marginTop: "var(--space-4)" }}>
+              {presentation.cta}<ChevronRight size={15} aria-hidden="true" />
+            </button>
           </div>
-          <button type="button" onClick={presentation.action} className="btn-primary" style={{ width: "100%", marginTop: "var(--space-4)" }}>
-            {presentation.cta}<ChevronRight size={15} aria-hidden="true" />
-          </button>
-        </div>
 
-        <div style={{ marginTop: "var(--space-3)", borderTop: "1px solid var(--c-border)" }}>
-          <button type="button" onClick={onOpenWellness} className="tap-feedback" style={{
-            width: "100%", minHeight: 48, display: "flex", alignItems: "center", gap: 10,
-            background: "transparent", border: 0, borderBottom: "1px solid var(--c-border)", padding: 0,
-            color: "inherit", cursor: "pointer", textAlign: "left",
-          }}>
-            <CheckCircle size={15} color={wellnessCompleted ? "var(--color-success)" : "var(--c-text-3)"} aria-hidden="true" />
-            <span className="secondary-text" style={{ flex: 1, color: "var(--c-text-1)" }}>Wellness du jour</span>
-            <span className="meta-text" style={{ color: wellnessCompleted ? "var(--color-success)" : "var(--color-warning)", fontWeight: 600 }}>
-              {wellnessCompleted ? "Complété" : "À faire"}
-            </span>
-          </button>
-
-          <button type="button" onClick={session ? onOpenSession : onOpenPlanning} className="tap-feedback" style={{
-            width: "100%", minHeight: 48, display: "flex", alignItems: "center", gap: 10,
-            background: "transparent", border: 0, padding: 0, color: "inherit", cursor: "pointer", textAlign: "left",
-          }}>
-            <CalendarDays size={15} color={session ? presentation.color : "var(--c-text-3)"} aria-hidden="true" />
-            <span className="secondary-text" style={{ flex: 1, color: "var(--c-text-1)" }}>Entraînement</span>
-            <span className="meta-text" style={{ color: session ? "var(--color-warning)" : "var(--c-text-2)", fontWeight: 600 }}>
-              {completedSessionLabel}
-            </span>
-            <ChevronRight size={14} color="var(--c-text-3)" aria-hidden="true" />
-          </button>
+          <div style={{ borderRadius: "var(--r-lg)", overflow: "hidden", border: "1px solid var(--c-border)", background: "rgba(2,7,12,0.16)" }}>
+            {[
+              {
+                key: "checkin", icon: Activity, label: "Ton check-in",
+                value: wellnessCompleted ? (dailyState?.plainHeadline ?? "Complété") : "30 secondes pour le faire",
+                color: wellnessCompleted ? dailyState?.color : "var(--color-warning)", action: wellnessCompleted ? onOpenDailyState : onOpenWellness,
+              },
+              {
+                key: "session", icon: CalendarDays, label: "Ta séance",
+                value: session?.title ?? completedSessionLabel,
+                detail: session ? completedSessionLabel : null,
+                color: session ? presentation.color : "var(--c-text-2)", action: session ? onOpenSession : onOpenPlanning,
+              },
+              {
+                key: "progress", icon: TrendingUp, label: "Ta progression",
+                value: loadStory?.headline ?? "Ton historique se construit",
+                color: "var(--color-info)", action: onOpenLoadDetail,
+              },
+            ].map((item, index) => {
+              const ItemIcon = item.icon;
+              return (
+                <button key={item.key} type="button" onClick={item.action} className="tap-feedback" style={{
+                  width: "100%", minHeight: 58, display: "flex", alignItems: "center", gap: 10,
+                  background: "transparent", border: 0, borderBottom: index < 2 ? "1px solid var(--c-border)" : 0,
+                  padding: "10px 12px", color: "inherit", cursor: "pointer", textAlign: "left",
+                }}>
+                  <ItemIcon size={16} color={item.color} aria-hidden="true" />
+                  <span style={{ flex: 1, minWidth: 0 }}>
+                    <span className="metric-label" style={{ display: "block" }}>{item.label}</span>
+                    <span className="secondary-text line-clamp-1" style={{ display: "block", marginTop: 2, color: "var(--c-text-1)", fontWeight: 600 }}>{item.value}</span>
+                    {item.detail && <span className="meta-text" style={{ display: "block", marginTop: 2 }}>{item.detail}</span>}
+                  </span>
+                  <ChevronRight size={14} color="var(--c-text-3)" aria-hidden="true" />
+                </button>
+              );
+            })}
+          </div>
         </div>
 
         {nextCompetition && (
@@ -3845,10 +3863,29 @@ export default function AthleteDashboard({
         <span className="meta-text hidden sm:block">Semaine {currentWeek}</span>
       </header>
 
-      {/* Le premier écran répond à deux questions distinctes :
-          "comment je vais ?" à gauche, "que dois-je faire ?" à droite. */}
-      <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1.5fr)_minmax(300px,0.8fr)] gap-4 md:gap-5 items-stretch">
-        <section className="rounded-2xl overflow-hidden select-none border" aria-labelledby="wellness-title"
+      {/* L'action du jour occupe seule le premier niveau de lecture. Les
+          explications et chiffres restent juste après, sans être supprimés. */}
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 md:gap-5 items-stretch">
+        <DailyFocusCard
+          focus={todayFocus}
+          todaySessions={todaySessions}
+          nextCompetition={nextComp}
+          dailyState={dailyState}
+          loadStory={loadStory}
+          onOpenWellness={onOpenWellness}
+          onOpenSession={() => focusSession && setOpenTodaySessionId(focusSession.id)}
+          onOpenPlanning={() => onNavigate("planning")}
+          onConfirmRestDay={() => onConfirmRestDay?.(toLocalDateStr(today))}
+          onOpenDailyState={() => setShowDailyState(true)}
+          onOpenLoadDetail={() => setActiveMetric("variation")}
+        />
+
+        <div className="xl:col-span-2" style={{ paddingTop: "var(--space-2)" }}>
+          <h2 className="section-title">Mieux comprendre ta journée</h2>
+          <p className="secondary-text" style={{ marginTop: "var(--space-1)" }}>Ton ressenti et tes chiffres restent disponibles, avec une explication simple avant le détail scientifique.</p>
+        </div>
+
+        <section className="rounded-2xl overflow-hidden select-none border xl:col-span-2" aria-labelledby="wellness-title"
           style={{ position: "relative", background: "linear-gradient(160deg, var(--c-surface) 0%, var(--c-surface-2) 55%, var(--c-bg) 100%)", borderColor: "var(--c-border)" }}>
           {/* Grille décorative — très subtile */}
           <div className="absolute pointer-events-none" aria-hidden="true" style={{
@@ -3940,15 +3977,6 @@ export default function AthleteDashboard({
           </div>
         </section>
 
-        <DailyFocusCard
-          focus={todayFocus}
-          todaySessions={todaySessions}
-          nextCompetition={nextComp}
-          onOpenWellness={onOpenWellness}
-          onOpenSession={() => focusSession && setOpenTodaySessionId(focusSession.id)}
-          onOpenPlanning={() => onNavigate("planning")}
-          onConfirmRestDay={() => onConfirmRestDay?.(toLocalDateStr(today))}
-        />
       </div>
 
       {/* ══════════════════════════════════════════════════════════════════════
@@ -4005,10 +4033,10 @@ export default function AthleteDashboard({
       {/* ══════════════════════════════════════════════════════════════════════
           GRILLE PRINCIPALE
          ══════════════════════════════════════════════════════════════════════ */}
-      <div>
-        <p className="section-title">Tendances & progression</p>
-        <p className="secondary-text mt-1">Comprends ta charge, suis tes progrès et garde le lien avec ton équipe.</p>
-      </div>
+      <section aria-labelledby="athlete-progress-title">
+        <h2 id="athlete-progress-title" className="section-title">Ta progression</h2>
+        <p className="secondary-text mt-1">D'abord ce qui a changé et pourquoi. Les nombres et les formules restent accessibles si tu veux aller plus loin.</p>
+      </section>
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 md:gap-5">
         <div className="lg:col-span-2 space-y-4 md:space-y-5">
 
@@ -4022,7 +4050,7 @@ export default function AthleteDashboard({
                     <p className="card-title">Charge d'entraînement</p>
                     <span className={`chip ${EVIDENCE_LEVELS.statistical.chip}`}>session-RPE</span>
                   </div>
-                  <p className="card-subtitle">8 dernières semaines</p>
+                  <p className="card-subtitle">Ce que tes séances ont représenté sur les 8 dernières semaines</p>
                 </div>
                 {chargeTrend !== null && (
                   <div style={{ display: "flex", alignItems: "center", gap: 4, padding: "3px 9px", borderRadius: 8, flexShrink: 0,
@@ -4031,7 +4059,7 @@ export default function AthleteDashboard({
                     fontSize: "var(--text-meta)", fontWeight: 600,
                   }}>
                     {chargeTrend > 0 ? <TrendingUp size={10} /> : chargeTrend < 0 ? <TrendingDown size={10} /> : <Minus size={10} />}
-                    {chargeTrend > 0 ? "+" : ""}{chargeTrend}% vs semaine passée
+                    {chargeTrend > 10 ? "Plus que la semaine passée" : chargeTrend < -10 ? "Moins que la semaine passée" : "Proche de la semaine passée"}
                   </div>
                 )}
               </div>
@@ -4110,9 +4138,9 @@ export default function AthleteDashboard({
               {/* Métriques inline sous le graphe — pas de cards séparées */}
               <div style={{ padding: "12px 16px", display: "flex", alignItems: "center", gap: 0, borderTop: "1px solid var(--c-border)", marginTop: 4 }}>
                 {[
-                  { label: "Cette semaine", value: metrics.load7 ?? "—", color: "#4B7BDB", sub: "7 derniers jours" },
-                  { label: "Dernier mois", value: metrics.load28 ?? "—", color: "#14B8A6", sub: "4 dernières semaines" },
-                  { label: "Évolution", value: metrics.variationPercent == null ? "—" : `${metrics.variationPercent >= 0 ? "+" : ""}${metrics.variationPercent}%`, color: "var(--c-text-2)", sub: "face à tes habitudes" },
+                  { label: "Ta semaine", value: metrics.load7 ?? "—", color: "#4B7BDB", sub: "efforts des 7 derniers jours" },
+                  { label: "Ton habitude", value: metrics.load28 ?? "—", color: "#14B8A6", sub: "repère des 4 dernières semaines" },
+                  { label: "Ce qui change", value: metrics.variationPercent == null ? "—" : `${metrics.variationPercent >= 0 ? "+" : ""}${metrics.variationPercent}%`, color: "var(--c-text-2)", sub: "écart avec ton rythme habituel" },
                 ].map((s, idx) => (
                   <div key={s.label} style={{
                     flex: 1, textAlign: "center", paddingTop: 2, paddingBottom: 2,
@@ -8216,7 +8244,7 @@ describe("AthleteDashboard — plan du jour", () => {
   it("ouvre la première séance non traitée au lieu d'une séance déjà validée", () => {
     renderDashboard();
 
-    expect(screen.getAllByText("Technique du soir")).toHaveLength(2);
+    expect(screen.getAllByText("Technique du soir").length).toBeGreaterThanOrEqual(2);
     fireEvent.click(screen.getByRole("button", { name: /ouvrir la séance/i }));
     expect(screen.getByText("Séance ouverte : Technique du soir")).toBeTruthy();
   });
@@ -8228,6 +8256,15 @@ describe("AthleteDashboard — plan du jour", () => {
     expect(screen.getByText("1/2 traitées")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: /faire mon check-in/i }));
     expect(props.onOpenWellness).toHaveBeenCalledOnce();
+  });
+
+  it("montre l'action d'aujourd'hui avant les analyses et utilise un langage direct", () => {
+    renderDashboard();
+
+    expect(screen.getByRole("heading", { name: "Aujourd’hui" })).toBeTruthy();
+    expect(screen.getByText("Une action prioritaire, puis les repères utiles de ta journée.")).toBeTruthy();
+    expect(screen.getByText("Complète ton historique de charge")).toBeTruthy();
+    expect(screen.queryByText("Tendances & progression")).toBeNull();
   });
 });
 </file>
@@ -20868,24 +20905,25 @@ function CoachFeedIcon({ icon, color }) {
   if (icon === "heart")    return <HeartPulse {...props} />;
   if (icon === "trophy")   return <Trophy {...props} />;
   if (icon === "users")    return <Users {...props} />;
+  if (icon === "check")    return <CheckCircle {...props} />;
   if (icon === "trending") return <TrendingUp {...props} />;
   return <Bell {...props} />;
 }
 
 function CoachFeedSection({ items, onNavigate }) {
-  const shown = items.slice(0, 6);
+  const shown = items.slice(0, 8);
   return (
     <div className="card overflow-hidden">
       <div className="px-5 py-4 border-b border-[color:var(--c-border)] flex items-center justify-between">
         <div>
-          <h2 className="card-title">À traiter aujourd'hui</h2>
+          <h2 className="card-title">Tes actions prioritaires</h2>
           <p className="card-subtitle mt-0.5">
-            {items.length > 0 ? "Signaux triés automatiquement par priorité" : "Rien à signaler cette semaine"}
+            {items.length > 0 ? "Commence par le haut : chaque ligne ouvre directement le bon écran." : "Aucune action urgente pour le moment"}
           </p>
         </div>
         {items.length > 0 && (
           <span className="text-[12px] font-bold px-2 py-0.5 rounded-full chip chip-warning">
-            {items.length} signal{items.length > 1 ? "aux" : ""}
+            {items.length} action{items.length > 1 ? "s" : ""}
           </span>
         )}
       </div>
@@ -20895,7 +20933,7 @@ function CoachFeedSection({ items, onNavigate }) {
             <CheckCircle size={16} color="#1D9E75" strokeWidth={2} />
           </div>
           <p className="text-[12.5px] font-medium" style={{ color: "var(--c-text-2)" }}>
-            Aucun retour de bien-être faible, blessure active ou absence répétée dans le groupe.
+            Les alertes, réponses, présences, validations et compétitions proches sont à jour.
           </p>
         </div>
       ) : (
@@ -20903,16 +20941,18 @@ function CoachFeedSection({ items, onNavigate }) {
           {shown.map(item => (
             <button
               key={item.id}
-              onClick={() => onNavigate("athletes")}
+              type="button"
+              onClick={() => onNavigate(item.route ?? "athletes")}
               className="w-full px-5 py-3.5 flex items-start gap-3 text-left hover:bg-[var(--c-surface-2)] transition-colors border-l-4"
               style={{ borderLeftColor: item.color }}
             >
               <div className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0 mt-0.5" style={{ background: `${item.color}18` }}>
                 <CoachFeedIcon icon={item.icon} color={item.color} />
               </div>
-              <p className="flex-1 text-[12.5px] leading-relaxed" style={{ color: "var(--c-text-2)" }}>
-                {item.sentence}
-              </p>
+              <span className="flex-1 min-w-0">
+                <span className="block text-[13px] font-semibold" style={{ color: "var(--c-text-1)" }}>{item.label ?? "À vérifier"}</span>
+                <span className="block text-[12.5px] leading-relaxed mt-0.5" style={{ color: "var(--c-text-2)" }}>{item.sentence}</span>
+              </span>
               <ChevronRight size={14} className="flex-shrink-0 mt-1" style={{ color: "var(--c-text-3)" }} />
             </button>
           ))}
@@ -20921,7 +20961,7 @@ function CoachFeedSection({ items, onNavigate }) {
       {items.length > shown.length && (
         <div className="px-5 py-2.5 text-center border-t border-[color:var(--c-border)]">
           <span className="meta-text">
-            +{items.length - shown.length} autre{items.length - shown.length > 1 ? "s" : ""} signal{items.length - shown.length > 1 ? "aux" : ""}
+            +{items.length - shown.length} autre{items.length - shown.length > 1 ? "s" : ""} action{items.length - shown.length > 1 ? "s" : ""}
           </span>
         </div>
       )}
@@ -20985,6 +21025,7 @@ function Dashboard({
           id: s.id, week: s.week, day: s.day, sessionDate: s.session_date,
           time: s.time, type: s.type, category: s.category, trainingFocus: s.training_focus, title: s.title,
           durationMinutes: s.duration_minutes, createdBy: s.created_by,
+          lifecycleStatus: s.lifecycle_status ?? "planned",
           createdByAthlete: s.created_by != null && athletesRes.data.some(a => a.user_id === s.created_by),
           athleteIds:   rows.map(v => v.athlete_id),
           validations:  rows.map(v => ({ athleteId: v.athlete_id, status: v.status, feeling: v.feeling, rpe: v.rpe, comment: v.comment, actualDurationMinutes: v.actual_duration_minutes, durationSource: v.duration_source, attendanceStatus: v.attendance_status, rsvpStatus: v.rsvp_status, rsvpNote: v.rsvp_note, coachNote: v.coach_note })),
@@ -21073,8 +21114,8 @@ function Dashboard({
   // Les anciens blocs "surcharge"/"blessés" (chiffres bruts) sont remplacés
   // par ce fil narrativisé et priorisé — voir src/utils/coachFeed.js.
   const coachFeed = useMemo(
-    () => buildCoachFeed({ athletes, weeklyCharge, sessions, injuries, competitions, currentWeek }),
-    [athletes, weeklyCharge, sessions, injuries, competitions, currentWeek]
+    () => buildCoachFeed({ athletes, weeklyCharge, sessions, injuries, competitions, alerts, currentWeek }),
+    [athletes, weeklyCharge, sessions, injuries, competitions, alerts, currentWeek]
   );
 
   const groupDailyState = useMemo(
@@ -21125,6 +21166,12 @@ function Dashboard({
           onDemo={onDemo}
         />
       )}
+
+      {/* Le coach voit d'abord ce qui demande une action. Les statistiques
+          restent entièrement disponibles juste après. */}
+      <div data-dashboard-priority-queue>
+        <CoachFeedSection items={coachFeed} onNavigate={onNavigate} />
+      </div>
 
       {/* ── Synthèse de la semaine ────────────────────────────────────────── */}
       <div
@@ -21223,8 +21270,6 @@ function Dashboard({
       </div>
 
       {/* ── Priorités coach ──────────────────────────────────────────────── */}
-      <CoachFeedSection items={coachFeed} onNavigate={onNavigate} />
-
       {/* ── KPIs — icône + liseré + glow au survol ────────────────────────── */}
       <section className="space-y-3" aria-labelledby="overview-title">
         <div>
@@ -21238,10 +21283,10 @@ function Dashboard({
             onClick={() => onNavigate("athletes")}
           />
           <MetricCard
-            icon={Zap} label="Charge moyenne" color="#378ADD"
+            icon={Zap} label="Effort moyen du groupe" color="#378ADD"
             value={metrics.avgCharge ?? "—"}
-            sub={metrics.trend != null ? `${metrics.trend > 0 ? "+" : ""}${metrics.trend}% vs S-1` : "pas de données"}
-            badge={metrics.trend > 20 ? { label: "↑ Élevée", color: "#E24B4A" } : metrics.trend < -20 ? { label: "↓ Baisse", color: "#378ADD" } : undefined}
+            sub={metrics.trend == null ? "Comparaison indisponible" : metrics.trend > 10 ? `Plus que la semaine passée (+${metrics.trend} %)` : metrics.trend < -10 ? `Moins que la semaine passée (${metrics.trend} %)` : "Proche de la semaine passée"}
+            badge={metrics.trend > 20 ? { label: "Hausse nette", color: "#D18A24" } : metrics.trend < -20 ? { label: "Baisse nette", color: "#378ADD" } : undefined}
           />
           <MetricCard
             icon={Bell} label="Alertes non lues" color="#E24B4A"
@@ -28280,8 +28325,86 @@ function firstName(name) {
   return name?.split(" ")[0] ?? "Athlète";
 }
 
-export function buildCoachFeed({ athletes, weeklyCharge, sessions, injuries, competitions, currentWeek }) {
+function localDateKey(value) {
+  if (!value) return null;
+  if (value instanceof Date && !Number.isNaN(value.getTime())) {
+    return `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, "0")}-${String(value.getDate()).padStart(2, "0")}`;
+  }
+  const text = String(value);
+  if (/^\d{4}-\d{2}-\d{2}/u.test(text)) return text.slice(0, 10);
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? null : localDateKey(parsed);
+}
+
+export function buildCoachFeed({
+  athletes = [], weeklyCharge = [], sessions = [], injuries = [], competitions = [], alerts = [],
+  currentWeek, now = new Date(),
+}) {
   const items = [];
+  const todayKey = localDateKey(now);
+  const inSevenDays = new Date(now);
+  inSevenDays.setDate(inSevenDays.getDate() + 7);
+  const inSevenDaysKey = localDateKey(inSevenDays);
+  const weekSessions = sessions.filter(session => session.week === currentWeek);
+
+  const unreadAlerts = alerts.filter(alert => !alert.is_read);
+  if (unreadAlerts.length > 0) {
+    const important = unreadAlerts.filter(alert => ["high", "critical", "danger"].includes(String(alert.severity).toLowerCase())).length;
+    items.push({
+      id: "unread-alerts", priority: important > 0 ? "critical" : "warning", order: 0,
+      icon: "alert", color: important > 0 ? "#E24B4A" : "#EF9F27", route: "alerts", label: "Alertes à lire",
+      sentence: `${unreadAlerts.length} alerte${unreadAlerts.length > 1 ? "s" : ""} attend${unreadAlerts.length > 1 ? "ent" : ""} ton attention${important > 0 ? `, dont ${important} prioritaire${important > 1 ? "s" : ""}` : ""}.`,
+    });
+  }
+
+  const upcomingSessions = weekSessions.filter(session => {
+    const dateKey = localDateKey(session.sessionDate);
+    return dateKey && dateKey >= todayKey && dateKey <= inSevenDaysKey;
+  });
+  const missingResponses = upcomingSessions.reduce((count, session) => (
+    count + (session.validations ?? []).filter(validation => !validation.rsvpStatus).length
+  ), 0);
+  if (missingResponses > 0) {
+    items.push({
+      id: "missing-rsvp", priority: "warning", order: 10, icon: "users", color: "#EF9F27", route: "planning", label: "Réponses manquantes",
+      sentence: `${missingResponses} réponse${missingResponses > 1 ? "s" : ""} de présence manque${missingResponses > 1 ? "nt" : ""} encore pour les prochaines séances.`,
+    });
+  }
+
+  const incompleteSessions = weekSessions.filter(session => {
+    const dateKey = localDateKey(session.sessionDate);
+    if (!dateKey || dateKey > todayKey) return false;
+    if (dateKey === todayKey && session.lifecycleStatus !== "completed") return false;
+    return (session.validations ?? []).some(validation => !validation.attendanceStatus);
+  });
+  if (incompleteSessions.length > 0) {
+    items.push({
+      id: "incomplete-sessions", priority: "warning", order: 30, icon: "activity", color: "#F59E0B", route: "planning", label: "Séances à compléter",
+      sentence: `${incompleteSessions.length} séance${incompleteSessions.length > 1 ? "s" : ""} passée${incompleteSessions.length > 1 ? "s" : ""} doi${incompleteSessions.length > 1 ? "vent" : "t"} encore recevoir les présences réelles.`,
+    });
+  }
+
+  const pendingAthleteSessions = sessions.filter(session => session.createdByAthlete);
+  if (pendingAthleteSessions.length > 0) {
+    items.push({
+      id: "athlete-session-validations", priority: "info", order: 40, icon: "check", color: "#69C5F7", route: "planning", label: "Validations",
+      sentence: `${pendingAthleteSessions.length} séance${pendingAthleteSessions.length > 1 ? "s" : ""} ajoutée${pendingAthleteSessions.length > 1 ? "s" : ""} par un athlète ${pendingAthleteSessions.length > 1 ? "sont" : "est"} à vérifier.`,
+    });
+  }
+
+  const nextCompetition = [...competitions]
+    .filter(competition => localDateKey(competition.date) >= todayKey)
+    .sort((a, b) => String(a.date).localeCompare(String(b.date)))[0];
+  if (nextCompetition) {
+    const competitionDate = new Date(`${localDateKey(nextCompetition.date)}T12:00:00`);
+    const days = Math.max(0, Math.round((competitionDate - new Date(`${todayKey}T12:00:00`)) / 86_400_000));
+    if (days <= 14) {
+      items.push({
+        id: `competition-${nextCompetition.id}`, priority: "info", order: 50, icon: "trophy", color: "#A78BFA", route: "competitions", label: "Compétition proche",
+        sentence: `${nextCompetition.name} arrive ${days === 0 ? "aujourd'hui" : `dans ${days} jour${days > 1 ? "s" : ""}`}. Vérifie les athlètes et les épreuves prévues.`,
+      });
+    }
+  }
 
   athletes.forEach(athlete => {
     const hasCharge = weeklyCharge.some(w => w.athleteId === athlete.id);
@@ -28293,21 +28416,21 @@ export function buildCoachFeed({ athletes, weeklyCharge, sessions, injuries, com
       if (metrics.variationPercent != null && Math.abs(metrics.variationPercent) >= 20) {
         const direction = metrics.variationPercent > 0 ? "plus élevée" : "plus basse";
         items.push({
-          id: `load-variation-${athlete.id}`, priority: "info", icon: "activity", color: "#378ADD",
+          id: `load-variation-${athlete.id}`, priority: "info", order: 70, icon: "activity", color: "#378ADD", route: "charge", label: "Charge inhabituelle",
           sentence: `La charge de ${name} est ${direction} que d'habitude (${Math.abs(metrics.variationPercent)} % d'écart). Ouvre le détail pour voir quelles séances expliquent ce changement.`,
         });
       }
 
       if (metrics.wellnessScore != null && metrics.wellnessScore < 25) {
         items.push({
-          id: `fatigue-${athlete.id}`, priority: "warning", icon: "zap", color: "#EF9F27",
+          id: `fatigue-${athlete.id}`, priority: "warning", order: 60, icon: "zap", color: "#EF9F27", route: "athletes", label: "Ressenti à discuter",
           sentence: `${name} a donné plusieurs réponses basses dans son état du jour — prends contact pour comprendre ce qui pèse aujourd'hui.`,
         });
       }
 
       if (metrics.wellnessScore >= 85) {
         items.push({
-          id: `top-${athlete.id}`, priority: "positive", icon: "trending", color: "#1D9E75",
+          id: `top-${athlete.id}`, priority: "positive", order: 90, icon: "trending", color: "#1D9E75", route: "athletes", label: "Retour positif",
           sentence: `${name} décrit un bon ressenti aujourd'hui. Le détail des cinq réponses reste disponible.`,
         });
       }
@@ -28324,7 +28447,7 @@ export function buildCoachFeed({ athletes, weeklyCharge, sessions, injuries, com
         const [axisId, axisData] = worst;
         const axis = LOAD_AXES[axisId];
         items.push({
-          id: `axis-${athlete.id}`, priority: "info", icon: "activity", color: axisData.color,
+          id: `axis-${athlete.id}`, priority: "info", order: 80, icon: "activity", color: axisData.color, route: "charge", label: "Sollicitation marquée",
           sentence: `${name} a surtout travaillé ${axis.nounPhrase} cette semaine — ${axis.what}`,
         });
       }
@@ -28335,7 +28458,7 @@ export function buildCoachFeed({ athletes, weeklyCharge, sessions, injuries, com
     const missed = weekSessions.filter(s => s.validations?.find(v => v.athleteId === athlete.id && v.status === "none")).length;
     if (missed >= 2) {
       items.push({
-        id: `absent-${athlete.id}`, priority: "warning", icon: "users", color: "#E24B4A",
+        id: `absent-${athlete.id}`, priority: "warning", order: 65, icon: "users", color: "#E24B4A", route: "athletes", label: "Absences répétées",
         sentence: `${name} a manqué ${missed} séances cette semaine — vaut le coup de vérifier ce qui se passe.`,
       });
     }
@@ -28346,18 +28469,72 @@ export function buildCoachFeed({ athletes, weeklyCharge, sessions, injuries, com
     const athlete = athletes.find(a => a.id === inj.athleteId);
     if (!athlete) return;
     items.push({
-      id: `injury-${inj.id}`, priority: inj.intensity >= 6 ? "critical" : "warning", icon: "heart",
+      id: `injury-${inj.id}`, priority: inj.intensity >= 6 ? "critical" : "warning", order: 20, icon: "heart", route: "athletes", label: "Blessure active",
       color: inj.intensity >= 6 ? "#E24B4A" : "#EF9F27",
       sentence: `${firstName(athlete.name)} gère une blessure active (${inj.name}, intensité ${inj.intensity}/10).`,
     });
   });
 
-  // Les compétitions restent visibles ailleurs dans le dashboard. Aucun
-  // signal de risque n'est généré automatiquement à partir d'un ratio de charge.
-  void competitions;
-
-  return items.sort((a, b) => PRIORITY[a.priority] - PRIORITY[b.priority]);
+  return items.sort((a, b) => (a.order ?? 99) - (b.order ?? 99) || PRIORITY[a.priority] - PRIORITY[b.priority]);
 }
+</file>
+
+<file path="src/utils/coachFeed.test.js">
+import { describe, expect, it } from "vitest";
+import { buildCoachFeed } from "./coachFeed";
+
+describe("file d'actions du coach", () => {
+  it("place les tâches concrètes avant les analyses descriptives et conserve leur destination", () => {
+    const items = buildCoachFeed({
+      athletes: [{ id: 7, name: "Alicia Martin" }],
+      weeklyCharge: [],
+      currentWeek: 31,
+      now: new Date("2026-07-29T10:00:00+02:00"),
+      alerts: [{ id: 1, is_read: false, severity: "high" }],
+      injuries: [{ id: 2, athleteId: 7, name: "Cheville", intensity: 5, status: "actif" }],
+      competitions: [{ id: 3, name: "Meeting de Bruxelles", date: "2026-08-03", athleteIds: [7] }],
+      sessions: [
+        {
+          id: 4, week: 31, sessionDate: "2026-08-01", createdByAthlete: true,
+          athleteIds: [7], validations: [{ athleteId: 7, rsvpStatus: null, attendanceStatus: null }],
+        },
+        {
+          id: 5, week: 31, sessionDate: "2026-07-28", createdByAthlete: false,
+          athleteIds: [7], validations: [{ athleteId: 7, rsvpStatus: "going", attendanceStatus: null }],
+        },
+      ],
+    });
+
+    expect(items.slice(0, 6).map(item => item.label)).toEqual([
+      "Alertes à lire",
+      "Réponses manquantes",
+      "Blessure active",
+      "Séances à compléter",
+      "Validations",
+      "Compétition proche",
+    ]);
+    expect(items.slice(0, 6).map(item => item.route)).toEqual([
+      "alerts", "planning", "athletes", "planning", "planning", "competitions",
+    ]);
+  });
+
+  it("affiche une file vide quand aucune donnée ne demande d'action", () => {
+    expect(buildCoachFeed({ currentWeek: 31, now: new Date("2026-07-29T10:00:00+02:00") })).toEqual([]);
+  });
+
+  it("ne présente pas une séance planifiée aujourd'hui comme déjà incomplète", () => {
+    const items = buildCoachFeed({
+      currentWeek: 31,
+      now: new Date("2026-07-29T10:00:00+02:00"),
+      sessions: [{
+        id: 8, week: 31, sessionDate: "2026-07-29", lifecycleStatus: "planned",
+        athleteIds: [7], validations: [{ athleteId: 7, rsvpStatus: "going", attendanceStatus: null }],
+      }],
+    });
+
+    expect(items.find(item => item.id === "incomplete-sessions")).toBeUndefined();
+  });
+});
 </file>
 
 <file path="src/utils/helpers.js">
