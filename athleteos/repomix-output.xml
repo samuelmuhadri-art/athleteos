@@ -39306,6 +39306,7 @@ if (!SUPABASE_URL || !ANON_KEY || !SERVICE_ROLE_KEY) {
 }
 
 const admin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, { auth: { autoRefreshToken: false, persistSession: false } });
+const publicClient = createClient(SUPABASE_URL, ANON_KEY, { auth: { autoRefreshToken: false, persistSession: false } });
 
 const RUN_ID = Date.now();
 const results = [];
@@ -39446,7 +39447,11 @@ async function main() {
       record("create_club_invitation crée un lien unique", created.success === true && /^[A-Z2-9]{8}$/.test(created.invitation?.code ?? ""), created.error);
 
       const inspected = created.invitation?.code
-        ? await admin.rpc("inspect_club_invitation", { p_code: created.invitation.code })
+        // Le vrai parcours est celui d'un visiteur non connecté. La fonction
+        // est volontairement accordée à `anon` et ne renvoie ni email ni ID ;
+        // le client service_role utilisé pour les fixtures n'a, lui, pas ce
+        // droit après le REVOKE PUBLIC de la migration.
+        ? await publicClient.rpc("inspect_club_invitation", { p_code: created.invitation.code })
         : { data: null, error: new Error("Invitation absente") };
       record("inspect_club_invitation valide le lien sans exposer l'email", inspected.data?.status === "active" && inspected.data?.clubName && !Object.hasOwn(inspected.data, "recipientEmail"), inspected.error?.message);
 
@@ -39460,7 +39465,7 @@ async function main() {
         idempotencyKey: crypto.randomUUID(),
       });
       const afterRevoke = created.invitation?.code
-        ? await admin.rpc("inspect_club_invitation", { p_code: created.invitation.code })
+        ? await publicClient.rpc("inspect_club_invitation", { p_code: created.invitation.code })
         : { data: null };
       record("revoke_club_invitation invalide uniquement ce lien", revoked.success === true && afterRevoke.data?.status === "revoked", revoked.error);
     }
