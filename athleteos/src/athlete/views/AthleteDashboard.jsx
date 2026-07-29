@@ -125,10 +125,10 @@ const BadgeItem = memo(({ badge }) => (
     <p style={{ fontSize: "var(--text-meta)", color: "var(--c-text-3)", lineHeight: "var(--leading-meta)" }}>{badge.desc}</p>
   </div>
 ));
-// Ring héro readiness — se remplit de 0 à sa valeur au montage, façon
-// Whoop/Oura : c'est ce petit détail (l'anneau qui "arrive" plutôt que
-// d'apparaître déjà rempli) qui donne l'effet waouh à la première ouverture.
+// Anneau du questionnaire interne : l'absence de réponse reste « — » et
+// n'est jamais transformée en zéro, qui signifierait autre chose.
 const WellnessRing = memo(({ value, color, size = 128 }) => {
+  const hasValue = value != null && Number.isFinite(Number(value));
   const [animated, setAnimated] = useState(0);
   const [displayValue, setDisplayValue] = useState(0);
   useEffect(() => {
@@ -169,7 +169,7 @@ const WellnessRing = memo(({ value, color, size = 128 }) => {
       </svg>
       <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
         <span style={{ fontSize: Math.round(size * 0.27), fontWeight: 700, color, lineHeight: 1, letterSpacing: "-0.03em", fontVariantNumeric: "tabular-nums" }}>
-          {displayValue}
+          {hasValue ? displayValue : "—"}
         </span>
         <span style={{ fontSize: "var(--text-meta)", fontWeight: 600, letterSpacing: "0.07em", textTransform: "uppercase", color: "var(--c-text-3)", marginTop: "var(--space-1)" }}>
           Bien-être
@@ -490,7 +490,7 @@ export default function AthleteDashboard({
           {/* Le questionnaire reste visible, mais n'est jamais présenté comme
               une readiness physiologique ou une autorisation de s'entraîner. */}
           <div style={{ display: "flex", alignItems: "center", gap: 18, flexWrap: "wrap" }}>
-            <WellnessRing value={metrics.wellnessScore ?? 0} color={statusColor} />
+            <WellnessRing value={metrics.wellnessScore} color={statusColor} />
 
             <div style={{ flex: 1, minWidth: 190 }}>
               <p style={{ fontSize: "var(--text-body)", color: "var(--c-text-2)", lineHeight: "var(--leading-body)", marginBottom: "var(--space-4)" }}>
