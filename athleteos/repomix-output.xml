@@ -625,7 +625,8 @@ test("l'athlète navigue vers son planning", async ({ page }) => {
   await expect(page.getByRole("heading", { name: "Tableau de bord", exact: true })).toBeVisible({ timeout: 15000 });
   await dismissMorningWellnessIfVisible(page);
   await page.getByRole("button", { name: "Mon planning", exact: true }).click();
-  await expect(page.getByRole("heading", { name: "Mon planning", exact: true })).toBeVisible({ timeout: 10000 });
+  await expect(page).toHaveURL(/\/planning$/);
+  await expect(page.getByRole("main").getByRole("heading", { name: "Mon planning", exact: true })).toBeVisible({ timeout: 10000 });
 });
 
 test.describe("navigation mobile athlète", () => {
