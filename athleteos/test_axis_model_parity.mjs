@@ -113,15 +113,21 @@ async function main() {
       record("Deuxième version active -> rejetée (contrainte unique)", !!dupActiveErr, dupActiveErr?.message);
     }
 
-    // ── 4. Une nouvelle version ne modifie pas 'v1' déjà en place ─────────
+    // ── 4. Une version scratch ne modifie ni la version courante ni v1 ────
     {
-      const { data: v1Before } = await admin.from("axis_model_versions").select("axis_weights").eq("version", "v1").maybeSingle();
-      // La création d'une version scratch (ci-dessus, jamais activée) ne doit
-      // avoir touché ni le contenu ni le statut actif de 'v1'.
-      const { data: v1After } = await admin.from("axis_model_versions").select("axis_weights, is_active").eq("version", "v1").maybeSingle();
-      record("'v1' toujours actif après création d'une autre version", v1After?.is_active === true);
-      record("'v1' inchangé (poids identiques) après création d'une autre version",
-        JSON.stringify(v1Before?.axis_weights) === JSON.stringify(v1After?.axis_weights));
+      const { data: currentAfter } = await admin.from("axis_model_versions")
+        .select("axis_weights, is_active")
+        .eq("version", CURRENT_AXIS_MODEL_VERSION)
+        .maybeSingle();
+      const { data: v1After } = await admin.from("axis_model_versions")
+        .select("axis_weights, is_active")
+        .eq("version", "v1")
+        .maybeSingle();
+      record("La version courante reste active après création d'une version scratch", currentAfter?.is_active === true);
+      record("La version courante reste inchangée après création d'une version scratch",
+        JSON.stringify(active?.axis_weights) === JSON.stringify(currentAfter?.axis_weights));
+      record("'v1' reste disponible dans l'historique sans être active",
+        !!v1After && v1After.is_active === false);
     }
 
   } finally {

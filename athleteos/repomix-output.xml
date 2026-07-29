@@ -278,6 +278,7 @@ supabase/
     20260801110000_session_day_and_notifications.sql
     20260801120000_session_rsvp_notes_and_notification_reliability.sql
     20260801130000_athletics_training_focus.sql
+    20260801140000_activate_declared_focus_axis_model.sql
   .gitignore
   config.toml
   seed.sql
@@ -38147,6 +38148,38 @@ comment on column public.sessions.training_focus is
   'Objectif athlétique déclaré. N''applique aucun coefficient à la charge session-RPE.';
 </file>
 
+<file path="supabase/migrations/20260801140000_activate_declared_focus_axis_model.sql">
+BEGIN;
+
+-- La taxonomie d'objectifs déclarés introduite avec training_focus ne
+-- modifie pas les six poids de base : elle choisit un profil plus précis
+-- lorsque l'objectif est renseigné. On conserve donc v1 intacte pour
+-- l'audit, et on crée une nouvelle version active avec les mêmes poids.
+UPDATE public.axis_model_versions
+SET is_active = false
+WHERE is_active;
+
+INSERT INTO public.axis_model_versions (
+  version,
+  axis_weights,
+  is_active,
+  notes
+)
+SELECT
+  'v2-objectifs-declares',
+  axis_weights,
+  true,
+  'Ajoute la sélection descriptive par objectif athlétique déclaré. Les poids de catégorie v1 restent inchangés et la charge session-RPE totale n est jamais modifiée.'
+FROM public.axis_model_versions
+WHERE version = 'v1'
+ON CONFLICT (version) DO UPDATE SET
+  axis_weights = EXCLUDED.axis_weights,
+  is_active = true,
+  notes = EXCLUDED.notes;
+
+COMMIT;
+</file>
+
 <file path="supabase/.gitignore">
 # Supabase
 .branches
@@ -39687,15 +39720,21 @@ async function main() {
       record("Deuxième version active -> rejetée (contrainte unique)", !!dupActiveErr, dupActiveErr?.message);
     }
 
-    // ── 4. Une nouvelle version ne modifie pas 'v1' déjà en place ─────────
+    // ── 4. Une version scratch ne modifie ni la version courante ni v1 ────
     {
-      const { data: v1Before } = await admin.from("axis_model_versions").select("axis_weights").eq("version", "v1").maybeSingle();
-      // La création d'une version scratch (ci-dessus, jamais activée) ne doit
-      // avoir touché ni le contenu ni le statut actif de 'v1'.
-      const { data: v1After } = await admin.from("axis_model_versions").select("axis_weights, is_active").eq("version", "v1").maybeSingle();
-      record("'v1' toujours actif après création d'une autre version", v1After?.is_active === true);
-      record("'v1' inchangé (poids identiques) après création d'une autre version",
-        JSON.stringify(v1Before?.axis_weights) === JSON.stringify(v1After?.axis_weights));
+      const { data: currentAfter } = await admin.from("axis_model_versions")
+        .select("axis_weights, is_active")
+        .eq("version", CURRENT_AXIS_MODEL_VERSION)
+        .maybeSingle();
+      const { data: v1After } = await admin.from("axis_model_versions")
+        .select("axis_weights, is_active")
+        .eq("version", "v1")
+        .maybeSingle();
+      record("La version courante reste active après création d'une version scratch", currentAfter?.is_active === true);
+      record("La version courante reste inchangée après création d'une version scratch",
+        JSON.stringify(active?.axis_weights) === JSON.stringify(currentAfter?.axis_weights));
+      record("'v1' reste disponible dans l'historique sans être active",
+        !!v1After && v1After.is_active === false);
     }
 
   } finally {

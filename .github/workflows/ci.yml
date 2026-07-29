@@ -115,6 +115,7 @@ jobs:
       #    l'instance locale jetable ci-dessus, sans risque. ──────────────
       - name: Reste de la suite d'intégration (contre Supabase local)
         run: |
+          integration_status=0
           for test_file in \
             test_signup_regression.mjs \
             test_send_push_regression.mjs \
@@ -126,8 +127,10 @@ jobs:
             test_private_storage.mjs \
             test_performance_normalization.mjs
           do
-            bash ../.github/scripts/run-with-diagnostics.sh "$test_file" node "$test_file"
+            bash ../.github/scripts/run-with-diagnostics.sh "$test_file" node "$test_file" \
+              || integration_status=1
           done
+          exit "$integration_status"
 
       # ── E2E (Playwright) : rebuild avec les identifiants Supabase LOCAUX
       #    (le 1er build, dans npm run check, utilisait des identifiants
