@@ -12,19 +12,25 @@ export default function CoachSessionDayPanel({
   session, athletes, onSetAttendance, onSetCoachNote, onSetLifecycle, onRemindFeedback,
 }) {
   const summary = useMemo(() => getSessionDaySummary(session), [session]);
-  const [busy, setBusy] = useState(null);
+  const [busyKeys, setBusyKeys] = useState(() => new Set());
   const [feedback, setFeedback] = useState(null);
   const lifecycle = session.lifecycleStatus ?? "planned";
 
   const run = async (key, action, success) => {
-    if (busy) return;
-    setBusy(key); setFeedback(null);
+    if (busyKeys.has(key)) return;
+    setBusyKeys(previous => new Set(previous).add(key)); setFeedback(null);
     try {
       await action();
       if (success) setFeedback({ type: "success", text: success });
     } catch (error) {
       setFeedback({ type: "error", text: error?.message || "La modification n’a pas pu être enregistrée." });
-    } finally { setBusy(null); }
+    } finally {
+      setBusyKeys(previous => {
+        const next = new Set(previous);
+        next.delete(key);
+        return next;
+      });
+    }
   };
 
   const metrics = [
@@ -47,25 +53,25 @@ export default function CoachSessionDayPanel({
           </div>
           <div className="flex flex-wrap gap-2">
             {lifecycle === "planned" && (
-              <button type="button" className="btn-secondary" disabled={!!busy}
+              <button type="button" className="btn-secondary" disabled={busyKeys.size > 0}
                 onClick={() => run("start", () => onSetLifecycle(session.id, "live"), "Le suivi de séance est ouvert.")}>
                 <Play size={14} /> Démarrer
               </button>
             )}
             {lifecycle === "live" && (
-              <button type="button" className="btn-primary" disabled={!!busy}
+              <button type="button" className="btn-primary" disabled={busyKeys.size > 0}
                 onClick={() => run("close", () => onSetLifecycle(session.id, "completed"), "Séance clôturée et rappels envoyés.")}>
                 <CheckCircle2 size={14} /> Clôturer
               </button>
             )}
             {lifecycle === "completed" && (
-              <button type="button" className="btn-ghost" disabled={!!busy}
+              <button type="button" className="btn-ghost" disabled={busyKeys.size > 0}
                 onClick={() => run("reopen", () => onSetLifecycle(session.id, "live"), "La séance est de nouveau ouverte.")}>
                 <RotateCcw size={14} /> Rouvrir
               </button>
             )}
             {summary.feedbackMissing > 0 && (
-              <button type="button" className="btn-ghost" disabled={!!busy}
+              <button type="button" className="btn-ghost" disabled={busyKeys.size > 0}
                 onClick={() => run("remind", () => onRemindFeedback(session), "Rappel envoyé aux athlètes concernés.")}>
                 <BellRing size={14} /> Rappeler ({summary.feedbackMissing})
               </button>
@@ -101,13 +107,18 @@ export default function CoachSessionDayPanel({
                   {validation.rsvpStatus && <p className="meta-text">Réponse : {validation.rsvpStatus === "going" ? "présent prévu" : validation.rsvpStatus === "unavailable" ? "indisponible" : "incertain"}</p>}
                 </div>
               </div>
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
+              {validation.rsvpNote && (
+                <p className="mb-2.5 min-h-9 rounded-lg px-3 py-2 text-[12px] leading-relaxed" style={{ color: "var(--c-text-2)", background: "rgba(91,141,239,0.08)", border: "1px solid rgba(91,141,239,0.18)" }}>
+                  « {validation.rsvpNote} »
+                </p>
+              )}
+              <div className="grid grid-cols-4 gap-1.5">
                 {ATTENDANCE_OPTIONS.map((option) => {
                   const selected = validation.attendanceStatus === option.id;
                   const tone = TONES[option.tone];
-                  return <button key={option.id} type="button" aria-pressed={selected} disabled={!!busy}
+                  return <button key={option.id} type="button" aria-pressed={selected} disabled={busyKeys.has(`attendance-${athleteId}`)}
                     onClick={() => run(`attendance-${athleteId}`, () => onSetAttendance(session.id, athleteId, option.id))}
-                    className="min-h-10 rounded-xl border text-[12px] font-semibold tap-feedback"
+                    className="min-h-11 rounded-xl border px-1 text-[12px] leading-tight font-semibold tap-feedback"
                     style={selected ? { color: tone.color, background: tone.background, borderColor: tone.border } : { color: "var(--c-text-2)", background: "transparent", borderColor: "var(--c-border)" }}>
                     {option.label}
                   </button>;

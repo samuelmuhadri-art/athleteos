@@ -34,7 +34,7 @@ function renderDashboard(overrides = {}) {
       makeSession("evening", "Technique du soir", "18:00", "future"),
     ],
     competitions: [], lastMessages: [], coachName: "Coach Martin", myPerformances: [],
-    wellnessToday: { sleep: 4, fatigue: 2, soreness: 2, stress: 2, mood: 4 },
+    wellnessToday: { sleep: 4, energy: 4, soreness: 2, stress: 2, mood: 4 },
     onNavigate: vi.fn(), onOpenWellness: vi.fn(), onOpenInjuryReport: vi.fn(),
     allAthletes: [], onRpeChange: vi.fn(), onStatusChange: vi.fn(),
     onFeelingChange: vi.fn(), onCommentChange: vi.fn(),

@@ -7,9 +7,8 @@ import { useState, memo } from "react";
 import { createPortal } from "react-dom";
 import { Plus, X, FileText, Users, AlertCircle, CheckCircle, Zap } from "lucide-react";
 import { supabase } from "../../utils/supabaseClient";
-import { notifyCoachMessage, alertAthleteSession } from "../../utils/notifications";
+import { notifyCoachAthleteSession } from "../../utils/notifications";
 import { CATEGORIES, dateToISOWeek, dateToDayName, toLocalDateStr } from "../shared";
-import { parseLocalDate } from "../../utils/helpers";
 import { cat } from "./planningShared";
 
 const PDF_MAX_BYTES = 30 * 1024 * 1024; // aligné sur file_size_limit du bucket session-pdfs
@@ -70,10 +69,9 @@ const CreateSessionModal = memo(({ athlete, allAthletes, clubId, createdBy, coac
       await supabase.from("session_athletes").insert(
         allIds.map(id => ({ session_id: ns.id, athlete_id: id, status: null }))
       );
-      await alertAthleteSession(clubId, athlete, { title: form.title, sessionDate: form.sessionDate });
-      if (coachUserId) notifyCoachMessage(coachUserId, athlete.name,
-        `${athlete.name} a planifié "${form.title}" le ${parseLocalDate(form.sessionDate).toLocaleDateString("fr-BE", { day: "numeric", month: "long" })}`
-      ).catch(console.warn);
+      await notifyCoachAthleteSession(clubId, coachUserId, athlete, {
+        id: ns.id, title: form.title, sessionDate: form.sessionDate,
+      });
       onCreated(); onClose();
     } catch (e) { setErr(e.message ?? "Erreur"); setSaving(false); }
   };

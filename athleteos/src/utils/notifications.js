@@ -192,16 +192,46 @@ export async function notifyAthleteFeedbackReminder(clubId, athleteIds, session)
   await sendWebPush(targets, { title, body: description, url: "/planning", tag: `session-feedback-${session.id ?? session.title}` });
 }
 
-export async function notifyCoachSessionResponse(clubId, coachUserId, athlete, session, response) {
-  if (!coachUserId || response === "going") return;
+export async function notifyCoachSessionResponse(clubId, coachUserId, athlete, session, response, note = "") {
+  if (response === "going") return;
   const responseLabel = response === "unavailable" ? "ne pourra pas participer" : "n’est pas encore certain de participer";
   const title = `Réponse séance — ${athlete.name}`;
-  const description = `${athlete.name} ${responseLabel} à « ${session.title} ».`;
+  const cleanNote = String(note ?? "").trim().slice(0, 500);
+  const description = `${athlete.name} ${responseLabel} à « ${session.title} ».${cleanNote ? ` Message : « ${cleanNote} »` : ""}`;
+  const { data: existing } = await supabase.from("alerts").select("id")
+    .eq("club_id", clubId).eq("athlete_id", athlete.id).eq("type", "session_response")
+    .eq("session_id", session.id).order("created_at", { ascending: false }).limit(1).maybeSingle();
+  const alertPayload = {
+    club_id: clubId, athlete_id: athlete.id, session_id: session.id, type: "session_response", title, description,
+    severity: response === "unavailable" ? "modérée" : "info", is_read: false, created_at: new Date().toISOString(),
+  };
+  if (existing?.id) await supabase.from("alerts").update(alertPayload).eq("id", existing.id);
+  else await supabase.from("alerts").insert(alertPayload);
+  if (coachUserId) await sendWebPush([], { title, body: description, url: "/planning", tag: `session-response-${session.id}` }, [coachUserId]);
+}
+
+export async function notifyCoachAthleteSession(clubId, coachUserId, athlete, session) {
+  const date = session.sessionDate
+    ? new Date(`${String(session.sessionDate).slice(0, 10)}T12:00:00`).toLocaleDateString("fr-BE", { day: "numeric", month: "long" })
+    : "prochainement";
+  const title = `Séance proposée par ${athlete.name}`;
+  const description = `${athlete.name} a ajouté « ${session.title} » le ${date}. Elle attend ta vérification dans le planning.`;
   await supabase.from("alerts").insert({
-    club_id: clubId, athlete_id: athlete.id, type: "session_response", title, description,
-    severity: response === "unavailable" ? "modérée" : "info", is_read: false,
+    club_id: clubId, athlete_id: athlete.id, session_id: session.id, type: "athlete_session",
+    title, description, severity: "info", is_read: false,
   });
-  await sendWebPush([], { title, body: description, url: "/planning", tag: `session-response-${session.id}` }, [coachUserId]);
+  if (coachUserId) await sendWebPush([], { title, body: description, url: "/planning", tag: `athlete-session-${session.id}` }, [coachUserId]);
+}
+
+export async function notifyCoachClubPost(clubId, coachUserId, athlete, { hasPhoto = false, caption = "" } = {}) {
+  const title = `${hasPhoto ? "Nouvelle photo" : "Nouveau partage"} — ${athlete.name}`;
+  const cleanCaption = String(caption ?? "").trim().slice(0, 160);
+  const description = cleanCaption || `${athlete.name} a partagé un moment d’entraînement avec le club.`;
+  await supabase.from("alerts").insert({
+    club_id: clubId, athlete_id: athlete.id, type: "social_post",
+    title, description, severity: "info", is_read: false,
+  });
+  if (coachUserId) await sendWebPush([], { title, body: description, url: "/", tag: `club-post-${athlete.id}` }, [coachUserId]);
 }
 
 export async function notifyAthleteResult(clubId, athleteId, discipline, result, compName) {

@@ -63,6 +63,7 @@ export default function AthleteApp({ clubBrand, themeStyle }) {
   const [loading,        setLoading]        = useState(true);
   const [error,          setError]          = useState(null);
   const [wellnessToday,  setWellnessToday]  = useState(null);
+  const [wellnessHistory, setWellnessHistory] = useState([]);
   const [confirmedRestDays, setConfirmedRestDays] = useState([]);
   const [showWellness,   setShowWellness]   = useState(false);
   const [showInjuryReport, setShowInjuryReport] = useState(false);
@@ -86,6 +87,7 @@ export default function AthleteApp({ clubBrand, themeStyle }) {
       }
       const a = athleteRes.data; const athleteId = a.id;
       const todayStr = toLocalDateStr(new Date());
+      const wellnessStart = new Date(); wellnessStart.setDate(wellnessStart.getDate() - 28);
 
       const [recordsRes,injuriesRes,perfHistRes,sessionsRes,compsRes,coachRes,allAthletesRes,myPerfsRes,goalsRes,notifsRes,wellnessRes,weeklyChargeRes,restDaysRes] = await Promise.all([
         supabase.from("records").select("*").eq("athlete_id",athleteId),
@@ -94,11 +96,11 @@ export default function AthleteApp({ clubBrand, themeStyle }) {
         supabase.from("sessions").select("*, session_athletes(*)").eq("club_id",clubId),
         supabase.from("competitions").select("*, competition_athletes(*), competition_results(*)").eq("club_id",clubId),
         supabase.from("users").select("id, name").eq("club_id",clubId).eq("role","head_coach").single(),
-        supabase.from("athletes").select("id, name, profile_data").eq("club_id",clubId),
+        supabase.from("athletes").select("id, name, profile_data, user_id").eq("club_id",clubId),
         supabase.from("athlete_performances").select("*").eq("athlete_id",athleteId).order("performance_date",{ascending:true}),
         supabase.from("athlete_goals").select("*").eq("athlete_id",athleteId).order("created_at",{ascending:false}),
         supabase.from("athlete_notifications").select("*").eq("athlete_id",athleteId).order("created_at",{ascending:false}).limit(20),
-        supabase.from("athlete_wellness").select("*").eq("athlete_id",athleteId).eq("date",todayStr).maybeSingle(),
+        supabase.from("athlete_wellness").select("*").eq("athlete_id",athleteId).gte("date",toLocalDateStr(wellnessStart)).order("date",{ascending:false}),
         // Charge hebdomadaire calculée côté serveur (vue weekly_charge, voir
         // migration 20260726120000) — plus de recalcul JS à partir des séances.
         supabase.from("weekly_charge").select("*").eq("athlete_id",athleteId),
@@ -108,7 +110,9 @@ export default function AthleteApp({ clubBrand, themeStyle }) {
       setMyPerformances(myPerfsRes.data ?? []);
       setMyGoals(goalsRes.data ?? []);
       setMyNotifs(notifsRes?.data ?? []);
-      setWellnessToday(wellnessRes.data ?? null);
+      const wellnessRows = wellnessRes.data ?? [];
+      setWellnessHistory(wellnessRows);
+      setWellnessToday(wellnessRows.find(row => String(row.date).slice(0, 10) === todayStr) ?? null);
       setConfirmedRestDays((restDaysRes.data ?? []).map(row => row.load_date));
 
       const coachId = coachRes.data?.id ?? null;
@@ -121,7 +125,7 @@ export default function AthleteApp({ clubBrand, themeStyle }) {
         setLastMessages((msgs??[]).filter(m=>m.sender_id===coachId));
       }
 
-      setAllAthletes((allAthletesRes.data??[]).map(a=>({id:a.id,name:a.name,avatar:a.profile_data?.avatar??initialsFromName(a.name)})));
+      setAllAthletes((allAthletesRes.data??[]).map(a=>({id:a.id,name:a.name,user_id:a.user_id,avatar:a.profile_data?.avatar??initialsFromName(a.name)})));
 
       const pd   = a.profile_data ?? {};
       const recs = {};
@@ -153,7 +157,7 @@ export default function AthleteApp({ clubBrand, themeStyle }) {
             comment:v.comment,rpe:v.rpe,actualDurationMinutes:v.actual_duration_minutes,
             durationSource:v.duration_source,
             attendanceStatus:v.attendance_status,attendanceMarkedAt:v.attendance_marked_at,
-            rsvpStatus:v.rsvp_status,rsvpUpdatedAt:v.rsvp_updated_at,
+            rsvpStatus:v.rsvp_status,rsvpNote:v.rsvp_note,rsvpUpdatedAt:v.rsvp_updated_at,
             coachNote:v.coach_note,feedbackSubmittedAt:v.feedback_submitted_at,
           })),
         };
@@ -305,20 +309,21 @@ export default function AthleteApp({ clubBrand, themeStyle }) {
     setSessions(p=>p.map(s=>s.id!==sid?s:{...s,validations:s.validations.map(v=>v.athleteId===aid?{...v,comment}:v)}));
     await supabase.from("session_athletes").update({comment}).eq("session_id",sid).eq("athlete_id",aid);
   }, []);
-  const handleRsvp = useCallback(async (sid, aid, rsvpStatus) => {
+  const handleRsvp = useCallback(async (sid, aid, rsvpStatus, rsvpNote = "") => {
     const updatedAt = new Date().toISOString();
+    const cleanNote = rsvpNote.trim().slice(0, 500);
     setSessions(previous => previous.map(session => session.id !== sid ? session : {
       ...session,
       validations: session.validations.map(validation => validation.athleteId === aid
-        ? { ...validation, rsvpStatus, rsvpUpdatedAt: updatedAt }
+        ? { ...validation, rsvpStatus, rsvpNote: cleanNote, rsvpUpdatedAt: updatedAt }
         : validation),
     }));
     const { error: responseError } = await supabase.from("session_athletes")
-      .update({ rsvp_status: rsvpStatus, rsvp_updated_at: updatedAt })
+      .update({ rsvp_status: rsvpStatus, rsvp_note: cleanNote || null, rsvp_updated_at: updatedAt })
       .eq("session_id", sid).eq("athlete_id", aid);
     if (responseError) { await fetchAll(); throw responseError; }
     const session = sessions.find(item => item.id === sid);
-    if (session) await notifyCoachSessionResponse(clubId, coachUserId, athlete, session, rsvpStatus);
+    if (session) await notifyCoachSessionResponse(clubId, coachUserId, athlete, session, rsvpStatus, cleanNote);
   }, [athlete, clubId, coachUserId, fetchAll, sessions]);
 
   // ── Guards ─────────────────────────────────────────────────────────────────
@@ -524,7 +529,7 @@ export default function AthleteApp({ clubBrand, themeStyle }) {
                 athlete={athlete} weeklyCharge={weeklyCharge} sessions={sessions}
                 competitions={competitions} lastMessages={lastMessages} coachName={coachName}
                 myPerformances={myPerformances} onNavigate={navigate}
-                wellnessToday={wellnessToday} onOpenWellness={() => setShowWellness(true)}
+                wellnessToday={wellnessToday} wellnessHistory={wellnessHistory} onOpenWellness={() => setShowWellness(true)}
                 confirmedRestDays={confirmedRestDays} onConfirmRestDay={confirmRestDay}
                 onOpenInjuryReport={() => setShowInjuryReport(true)}
                 allAthletes={allAthletes}
@@ -557,7 +562,7 @@ export default function AthleteApp({ clubBrand, themeStyle }) {
             {activeView === "social" && (
               <AthleteClub
                 athlete={athlete} allAthletes={allAthletes}
-                clubId={clubId} sessions={sessions} clubBrand={clubBrand}
+                clubId={clubId} coachUserId={coachUserId} sessions={sessions} clubBrand={clubBrand}
               />
             )}
           </div>
@@ -596,6 +601,7 @@ export default function AthleteApp({ clubBrand, themeStyle }) {
             // Un seul batch React : ferme ET met à jour
             setShowWellness(false);
             setWellnessToday(data);
+            setWellnessHistory(previous => [data, ...previous.filter(row => String(row.date).slice(0, 10) !== String(data.date).slice(0, 10))]);
           }}
         />
       )}

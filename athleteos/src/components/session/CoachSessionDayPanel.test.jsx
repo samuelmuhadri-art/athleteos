@@ -9,7 +9,7 @@ const session = {
   athleteIds: [1, 2],
   validations: [
     { athleteId: 1, attendanceStatus: "present", status: "done", rpe: 8, actualDurationMinutes: 60, durationSource: "reported" },
-    { athleteId: 2, rsvpStatus: "unavailable" },
+    { athleteId: 2, rsvpStatus: "unavailable", rsvpNote: "J’ai un rendez-vous médical." },
   ],
 };
 const athletes = [
@@ -27,6 +27,7 @@ describe("CoachSessionDayPanel", () => {
 
     expect(screen.getByText("Séance en cours")).toBeTruthy();
     expect(screen.getByText("480")).toBeTruthy();
+    expect(screen.getByText("« J’ai un rendez-vous médical. »")).toBeTruthy();
     fireEvent.click(screen.getAllByRole("button", { name: "Absent" })[1]);
     await waitFor(() => expect(onSetAttendance).toHaveBeenCalledWith(12, 2, "absent"));
   });

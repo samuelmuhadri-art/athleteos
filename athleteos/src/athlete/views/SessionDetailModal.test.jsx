@@ -5,7 +5,7 @@ import SessionDetailModal from "./SessionDetailModal";
 afterEach(cleanup);
 
 describe("SessionDetailModal", () => {
-  it("sépare la réponse avant séance du retour après séance", () => {
+  it("sépare la réponse avant séance du retour après séance et transmet le message", async () => {
     const onSetRsvp = vi.fn();
     const athlete = { id: 1, name: "Alice", avatar: "A" };
     const session = {
@@ -19,7 +19,9 @@ describe("SessionDetailModal", () => {
 
     expect(screen.getByText("Seras-tu présent ?")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Je ne peux pas venir" }));
-    expect(onSetRsvp).toHaveBeenCalledWith(9, 1, "unavailable");
+    fireEvent.change(screen.getByLabelText(/Un message pour ton coach/), { target: { value: "Je suis chez le kiné." } });
+    fireEvent.click(screen.getByRole("button", { name: "Envoyer ma réponse" }));
+    expect(onSetRsvp).toHaveBeenCalledWith(9, 1, "unavailable", "Je suis chez le kiné.");
     expect(screen.getByText("Après la séance")).toBeTruthy();
   });
 });

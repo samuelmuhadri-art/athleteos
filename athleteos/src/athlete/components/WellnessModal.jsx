@@ -27,9 +27,9 @@ const WellnessModal = memo(({ athlete, clubId, onClose, onSaved }) => {
     : "#E05252";
 
   const scoreLabel = previewScore === null ? "—"
-    : previewScore >= 75 ? "Optimal"
-    : previewScore >= 50 ? "Correct"
-    : "Attention";
+    : previewScore >= 75 ? "Plutôt favorable"
+    : previewScore >= 55 ? "Ressenti équilibré"
+    : "À adapter";
 
   const handleSubmit = async () => {
     if (!allAnswered) return;

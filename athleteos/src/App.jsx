@@ -85,7 +85,7 @@ function ActiveView({ view, onNavigate, club, clubLoading, coachActions }) {
     case "charge":       return <ChargeView   />;
     case "rapports":     return <Rapports     />;
     case "competitions": return <Competitions />;
-    case "alerts":       return <AlertsView   />;
+    case "alerts":       return <AlertsView onNavigate={onNavigate} />;
     case "messaging":    return <Messaging    />;
     default:             return <Dashboard onNavigate={onNavigate} club={club} clubLoading={clubLoading} {...coachActions} />;
   }
@@ -150,6 +150,17 @@ function CoachShell({ user, profile, clubId, signOut, club, clubLoading, refresh
   }, [clubId]);
 
   useEffect(() => { fetchUnreadCount(); }, [fetchUnreadCount]);
+
+  useEffect(() => {
+    if (!clubId) return undefined;
+    const channel = supabase
+      .channel(`coach-alert-counter-${clubId}`)
+      .on("postgres_changes", {
+        event: "*", schema: "public", table: "alerts", filter: `club_id=eq.${clubId}`,
+      }, () => { fetchUnreadCount(); })
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [clubId, fetchUnreadCount]);
 
   const navigate = useCallback((view) => {
     if (activeView === "alerts") fetchUnreadCount();

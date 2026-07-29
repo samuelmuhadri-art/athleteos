@@ -56,7 +56,7 @@ function Planning() {
     try {
       setLoading(true); setError(null);
       const [athletesRes, sessionsRes] = await Promise.all([
-        supabase.from("athletes").select("id, name, main_discipline, profile_data").eq("club_id", clubId),
+        supabase.from("athletes").select("id, name, main_discipline, profile_data, user_id").eq("club_id", clubId),
         supabase.from("sessions").select("*").eq("club_id", clubId),
       ]);
       if (athletesRes.error) throw athletesRes.error;
@@ -90,7 +90,7 @@ function Planning() {
           lifecycleStatus: s.lifecycle_status ?? "planned",
           startedAt:       s.started_at,
           closedAt:        s.closed_at,
-          createdByAthlete: s.created_by != null && !athletesRes.data.every(a => a.id !== s.created_by),
+          createdByAthlete: s.created_by != null && athletesRes.data.some(a => a.user_id === s.created_by),
           athleteIds:  rows.map(v => v.athlete_id),
           validations: rows.map(v => ({
             athleteId: v.athlete_id, status: v.status,
@@ -101,6 +101,7 @@ function Planning() {
             attendanceStatus: v.attendance_status,
             attendanceMarkedAt: v.attendance_marked_at,
             rsvpStatus: v.rsvp_status,
+            rsvpNote: v.rsvp_note,
             rsvpUpdatedAt: v.rsvp_updated_at,
             coachNote: v.coach_note,
             feedbackSubmittedAt: v.feedback_submitted_at,
@@ -213,7 +214,7 @@ function Planning() {
     setSessionList(previous => previous.map(session => session.id !== sessionId ? session : {
       ...session,
       validations: session.validations.map(validation => validation.athleteId === athleteId
-        ? { ...validation, attendanceStatus, attendanceMarkedAt: markedAt }
+        ? { ...validation, attendanceStatus, attendanceMarkedAt: markedAt, ...((attendanceStatus === "absent" || attendanceStatus === "injured") ? { status: "none" } : {}) }
         : validation),
     }));
     const updates = { attendance_status: attendanceStatus, attendance_marked_at: markedAt };

@@ -24,6 +24,25 @@ const SessionDetailModal = memo(({ session, athlete, allAthletes, onClose, onSet
       : "",
   );
   const [loadError, setLoadError] = useState("");
+  const [rsvpDraft, setRsvpDraft] = useState(val?.rsvpStatus ?? null);
+  const [rsvpNote, setRsvpNote] = useState(val?.rsvpNote ?? "");
+  const [rsvpSaving, setRsvpSaving] = useState(false);
+  const [rsvpFeedback, setRsvpFeedback] = useState("");
+
+  const submitRsvp = async () => {
+    if (!rsvpDraft || rsvpSaving) return;
+    setRsvpSaving(true);
+    setRsvpFeedback("");
+    try {
+      const submittedNote = rsvpDraft === "going" ? "" : rsvpNote.trim();
+      await onSetRsvp(session.id, athlete.id, rsvpDraft, submittedNote);
+      setRsvpFeedback("Réponse envoyée au coach.");
+    } catch {
+      setRsvpFeedback("La réponse n’a pas pu être envoyée. Réessaie.");
+    } finally {
+      setRsvpSaving(false);
+    }
+  };
 
   const submitRpe = (rpe) => {
     const duration = Number(actualDuration);
@@ -187,10 +206,10 @@ const SessionDetailModal = memo(({ session, athlete, allAthletes, onClose, onSet
               <label style={labelStyle}>Seras-tu présent ?</label>
               <div className="grid gap-2">
                 {RSVP_OPTIONS.map(option => {
-                  const selected = val?.rsvpStatus === option.id;
+                  const selected = rsvpDraft === option.id;
                   return (
                     <button key={option.id} type="button" aria-pressed={selected}
-                      onClick={() => onSetRsvp(session.id, athlete.id, option.id)}
+                      onClick={() => { setRsvpDraft(option.id); setRsvpFeedback(""); }}
                       className="min-h-11 rounded-xl border px-3 text-left text-[13px] font-semibold tap-feedback"
                       style={{ color: selected ? "#A9CBFB" : "var(--c-text-2)", borderColor: selected ? "rgba(91,141,239,0.45)" : "var(--c-border)", background: selected ? "rgba(91,141,239,0.14)" : "var(--c-surface-2)" }}>
                       {option.label}
@@ -198,6 +217,35 @@ const SessionDetailModal = memo(({ session, athlete, allAthletes, onClose, onSet
                   );
                 })}
               </div>
+              {(rsvpDraft === "unavailable" || rsvpDraft === "unsure") && (
+                <div className="mt-3">
+                  <label htmlFor="rsvp-note" className="text-[12px] font-semibold" style={{ color: "var(--c-text-2)" }}>
+                    Un message pour ton coach <span style={{ color: "var(--c-text-3)" }}>(facultatif)</span>
+                  </label>
+                  <textarea
+                    id="rsvp-note"
+                    className="input-premium resize-none mt-2"
+                    rows={2}
+                    maxLength={500}
+                    value={rsvpNote}
+                    onChange={event => setRsvpNote(event.target.value)}
+                    placeholder="Ex. rendez-vous médical, transport, incertitude…"
+                  />
+                </div>
+              )}
+              <button
+                type="button"
+                onClick={submitRsvp}
+                disabled={!rsvpDraft || rsvpSaving}
+                className="btn-primary w-full mt-3 justify-center"
+              >
+                {rsvpSaving ? "Envoi…" : val?.rsvpStatus ? "Mettre à jour ma réponse" : "Envoyer ma réponse"}
+              </button>
+              {rsvpFeedback && (
+                <p role="status" className="text-[12px] font-medium mt-2" style={{ color: rsvpFeedback.startsWith("Réponse") ? "#7BD8B4" : "#F19A9A" }}>
+                  {rsvpFeedback}
+                </p>
+              )}
               <p className="meta-text mt-2.5">Tu peux modifier ta réponse jusqu’au jour de la séance. Le coach confirmera ensuite la présence réelle.</p>
             </div>
           )}

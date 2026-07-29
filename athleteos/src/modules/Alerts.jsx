@@ -31,6 +31,9 @@ const TYPE_CONFIG = {
   performance: { label: "Performance", icon: TrendingUp,    color: "#1D9E75", bg: "rgba(29,158,117,0.15)" },
   competition: { label: "Compétition", icon: Trophy,        color: "#9B84F0", bg: "rgba(155,132,240,0.15)" },
   recap:       { label: "Récap semaine", icon: BarChart2,   color: "#5B8DEF", bg: "rgba(91,141,239,0.15)" },
+  session_response: { label: "Réponse séance", icon: Users, color: "#EF9F27", bg: "rgba(239,159,39,0.15)" },
+  athlete_session: { label: "Séance athlète", icon: Activity, color: "#378ADD", bg: "rgba(55,138,221,0.15)" },
+  social_post: { label: "Vie du club", icon: Users, color: "#9B84F0", bg: "rgba(155,132,240,0.15)" },
 };
 
 const SEVERITY_CONFIG = {
@@ -127,7 +130,7 @@ const AlertFormContent = memo(({ form, set, athletes, saveError }) => (
 ));
 
 // ─── Composant principal ──────────────────────────────────────────────────────
-function Alerts() {
+function Alerts({ onNavigate }) {
   const { clubId } = useAuth(); // remplace club_id: 1
 
   const [alertList, setAlertList] = useState([]);
@@ -147,10 +150,10 @@ function Alerts() {
   const set = useCallback((key, val) => setForm((f) => ({ ...f, [key]: val })), []);
 
   // ═══ Chargement ═══════════════════════════════════════════════════════════
-  const fetchAll = useCallback(async () => {
+  const fetchAll = useCallback(async (silent = false) => {
     if (!clubId) return;
     try {
-      setLoading(true);
+      if (!silent) setLoading(true);
       setError(null);
 
       const [alertsRes, athletesRes] = await Promise.all([
@@ -180,11 +183,22 @@ function Alerts() {
       console.error("Alerts — chargement :", err);
       setError(err.message ?? "Erreur inconnue");
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }, [clubId]);
 
   useEffect(() => { fetchAll(); }, [fetchAll]);
+
+  useEffect(() => {
+    if (!clubId) return undefined;
+    const channel = supabase
+      .channel(`coach-alert-list-${clubId}`)
+      .on("postgres_changes", {
+        event: "*", schema: "public", table: "alerts", filter: `club_id=eq.${clubId}`,
+      }, () => { fetchAll(true); })
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [clubId, fetchAll]);
 
   // ═══ Écritures ════════════════════════════════════════════════════════════
 
@@ -430,6 +444,20 @@ function Alerts() {
                     <p className="text-[12.5px] text-[var(--c-text-2)] mt-1.5 leading-relaxed">
                       {alert.description || "Aucune description."}
                     </p>
+
+                    {(alert.type === "session_response" || alert.type === "athlete_session") && onNavigate && (
+                      <button
+                        type="button"
+                        className="btn-ghost mt-2.5"
+                        style={{ minHeight: 34, paddingInline: 0, color: typeConf.color }}
+                        onClick={() => {
+                          if (!alert.isRead) markRead(alert.id);
+                          onNavigate("planning");
+                        }}
+                      >
+                        Ouvrir dans le planning
+                      </button>
+                    )}
 
                     <div className="flex items-center gap-3 mt-3 flex-wrap">
                       {athlete && (

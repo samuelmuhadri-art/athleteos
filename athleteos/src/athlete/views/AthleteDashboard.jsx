@@ -16,7 +16,7 @@ import {
   Star, Clock,
 } from "lucide-react";
 import {
-  getAthleteMetricsForWeek, getWellnessStatus,
+  getAthleteMetricsForWeek,
 } from "../../utils/chargeCalculations";
 import { getAthleteAxisProfile } from "../../utils/loadAxes";
 import {
@@ -29,6 +29,8 @@ import { getAthleteLoadStory, getMonitoringReading } from "../../domain/monitori
 import { SessionDetailModal } from "./AthletePlanning";
 import { openSessionPdf } from "../../utils/storage";
 import { getTodayFocus } from "../dashboardFocus";
+import { buildDailyState } from "../../domain/dailyState";
+import DailyStateDetailPanel from "../components/DailyStateDetailPanel";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 function getDiscType(discName) {
@@ -328,7 +330,7 @@ const DailyFocusCard = memo(({
 // ═══════════════════════════════════════════════════════════════════════════════
 export default function AthleteDashboard({
   athlete, weeklyCharge, sessions, competitions, lastMessages,
-  coachName, myPerformances, onNavigate, wellnessToday, onOpenWellness,
+  coachName, myPerformances, onNavigate, wellnessToday, wellnessHistory = [], onOpenWellness,
   confirmedRestDays = [], onConfirmRestDay,
   onOpenInjuryReport, allAthletes, onRpeChange, onStatusChange,
   onFeelingChange, onCommentChange, onRsvpChange,
@@ -338,6 +340,7 @@ export default function AthleteDashboard({
   const currentWeek = getISOWeek(today);
   const [openTodaySessionId, setOpenTodaySessionId] = useState(null);
   const [activeMetric, setActiveMetric] = useState(null);
+  const [showDailyState, setShowDailyState] = useState(false);
 
   const metrics = useMemo(() =>
     getAthleteMetricsForWeek(athlete.id, weeklyCharge, currentWeek, wellnessToday ? [wellnessToday] : [], sessions),
@@ -352,7 +355,11 @@ export default function AthleteDashboard({
     [metrics, sessions, athlete.id],
   );
 
-  const status = getWellnessStatus(metrics.wellnessScore);
+  const dailyState = useMemo(
+    () => buildDailyState({ wellness: wellnessToday, history: wellnessHistory, metrics }),
+    [wellnessHistory, wellnessToday, metrics],
+  );
+  const status = { label: dailyState.label, color: dailyState.color };
 
   const nextComp = competitions
     .filter(c => c.athleteIds.includes(athlete.id) && new Date(c.date) >= today)
@@ -432,7 +439,7 @@ export default function AthleteDashboard({
   const doneThisWeek = weekSessions.filter(s =>
     s.validations?.find(v => v.athleteId === athlete.id && v.status === "done")).length;
 
-  const statusColor = metrics.wellnessScore == null ? "#64748B" : metrics.wellnessScore < 40 ? "#C8890A" : "#1D9E75";
+  const statusColor = dailyState.color;
 
   // ══════════════════════════════════════════════════════════════════════════
   return (
@@ -488,19 +495,24 @@ export default function AthleteDashboard({
               background: `${statusColor}12`, border: `1px solid ${statusColor}22`,
             }}>
               <div style={{ width: 5, height: 5, borderRadius: "50%", background: statusColor, flexShrink: 0 }} />
-              <span style={{ fontSize: "var(--text-meta)", fontWeight: 600, color: statusColor }}>Bien-être {metrics.wellnessScore ?? "—"}</span>
+              <span style={{ fontSize: "var(--text-meta)", fontWeight: 600, color: statusColor }}>Repère {dailyState.score ?? "—"}/100</span>
             </div>
           </div>
 
           {/* Le questionnaire reste visible, mais n'est jamais présenté comme
               une readiness physiologique ou une autorisation de s'entraîner. */}
           <div style={{ display: "flex", alignItems: "center", gap: 18, flexWrap: "wrap" }}>
-            <WellnessRing value={metrics.wellnessScore} color={statusColor} />
+            <button type="button" onClick={() => setShowDailyState(true)} className="tap-feedback rounded-full" aria-label="Comprendre mon repère AthleteOS du jour">
+              <WellnessRing value={dailyState.score} color={statusColor} />
+            </button>
 
             <div style={{ flex: 1, minWidth: 190 }}>
               <p style={{ fontSize: "var(--text-body)", color: "var(--c-text-2)", lineHeight: "var(--leading-body)", marginBottom: "var(--space-4)" }}>
-                Ton check-in résume simplement comment tu te sens aujourd’hui. Ouvre une donnée si tu veux comprendre son calcul.
+                {dailyState.summary}
               </p>
+              <button type="button" onClick={() => setShowDailyState(true)} className="btn-ghost mb-3" style={{ minHeight: 34, paddingInline: 0, color: statusColor }}>
+                Comprendre ce repère <ChevronRight size={14} />
+              </button>
               <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 8 }}>
                 {[
                   { key: "load7", label: "Cette semaine", value: metrics.load7 ?? "—", unit: "", pct: metrics.load7 && metrics.load28 ? Math.min(100,(metrics.load7/metrics.load28)*100) : 0, danger: false },
@@ -1077,6 +1089,17 @@ export default function AthleteDashboard({
           )}
         </div>
       </div>
+
+      {showDailyState && (
+        <DailyStateDetailPanel
+          state={dailyState}
+          onClose={() => setShowDailyState(false)}
+          onOpenMetric={(metricKey) => {
+            setShowDailyState(false);
+            setActiveMetric(metricKey);
+          }}
+        />
+      )}
 
       {activeMetric && (
         <FormeDetailPanel

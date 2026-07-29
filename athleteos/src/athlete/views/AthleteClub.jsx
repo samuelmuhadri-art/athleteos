@@ -12,7 +12,7 @@ import { createPortal } from "react-dom";
 import { X, Camera, Send, MessageSquare, Image, Trophy, Target, Users as UsersIcon, Award, Sparkles } from "lucide-react";
 import { supabase } from "../../utils/supabaseClient";
 import { initialsFromName, colorsFor, getISOWeek } from "../shared";
-import { notifyClubNewPost } from "../../utils/notifications";
+import { notifyClubNewPost, notifyCoachClubPost } from "../../utils/notifications";
 import { filterClubPosts, validateSocialImage } from "./clubFeed";
 import { EmptyState, SegmentedTabs } from "../../components/ui/premium";
 
@@ -184,7 +184,7 @@ const CommentsModal = memo(({ post, athlete, allAthletes, onClose, onCommentAdde
 });
 
 // ─── Modal post rapide ────────────────────────────────────────────────────────
-const QuickPostModal = memo(({ session, athlete, allAthletes, clubId, onClose, onPosted }) => {
+const QuickPostModal = memo(({ session, athlete, allAthletes, clubId, coachUserId, onClose, onPosted }) => {
   const [image,    setImage]    = useState(null);
   const [preview,  setPreview]  = useState(null);
   const [caption,  setCaption]  = useState(session ? `Séance "${session.title}" ✅` : "");
@@ -252,6 +252,11 @@ const QuickPostModal = memo(({ session, athlete, allAthletes, clubId, onClose, o
         const otherAthleteIds = otherAthletes.map(a => a.id);
         notifyClubNewPost(clubId, athlete.name, otherAthleteIds).catch(console.warn);
       }
+
+      await notifyCoachClubPost(clubId, coachUserId, athlete, {
+        hasPhoto: Boolean(imageUrl),
+        caption: caption.trim(),
+      });
 
       onPosted(); onClose();
     } catch(e) {
@@ -539,7 +544,7 @@ const PostCard = memo(({ post, athlete, allAthletes, sessions, onComment, onReac
 // ═══════════════════════════════════════════════════════════════════════════════
 // COMPOSANT PRINCIPAL
 // ═══════════════════════════════════════════════════════════════════════════════
-export default function AthleteClub({ athlete, allAthletes, clubId, sessions, clubBrand }) {
+export default function AthleteClub({ athlete, allAthletes, clubId, coachUserId, sessions, clubBrand }) {
   const [posts,          setPosts]          = useState([]);
   const [loading,        setLoading]        = useState(true);
   const [loadingMore,    setLoadingMore]    = useState(false);
@@ -934,7 +939,7 @@ export default function AthleteClub({ athlete, allAthletes, clubId, sessions, cl
       {quickPost && (
         <QuickPostModal
           session={quickPost===true ? null : quickPost}
-          athlete={athlete} allAthletes={allAthletes} clubId={clubId}
+          athlete={athlete} allAthletes={allAthletes} clubId={clubId} coachUserId={coachUserId}
           onClose={() => setQuickPost(null)}
           onPosted={() => { setQuickPost(null); fetchPosts(); }}
         />

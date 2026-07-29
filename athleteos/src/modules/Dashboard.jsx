@@ -28,13 +28,13 @@ import LoadingState                  from "../components/ui/LoadingState";
 import ErrorState                    from "../components/ui/ErrorState";
 import {
   getAthleteMetricsForWeek,
-  getWellnessStatus,
 } from "../utils/chargeCalculations";
 import { checkUpcomingCompetitions, checkAndAlertACWR, notifyAthleteCompetitionReminder, checkWeeklyRecap, checkWeeklyReports } from "../utils/notifications";
 import { buildCoachFeed } from "../utils/coachFeed";
 import { getISOWeek, initialsFromName } from "../utils/helpers.js";
 import ClubOnboardingCard from "../components/club/ClubOnboardingCard";
 import { PageHeader } from "../components/ui/premium";
+import { buildDailyState, buildGroupDailyState } from "../domain/dailyState";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -143,19 +143,22 @@ const MiniSparkline = memo(({ data, color }) => {
   );
 });
 
-function AthleteStatusCard({ athlete, weeklyCharge, currentWeek, injuries, sessions, onNavigate }) {
+function AthleteStatusCard({ athlete, weeklyCharge, currentWeek, injuries, sessions, wellnessToday, onNavigate }) {
   const metrics   = useMemo(
-    () => getAthleteMetricsForWeek(athlete.id, weeklyCharge, currentWeek),
-    [athlete.id, weeklyCharge, currentWeek]
+    () => getAthleteMetricsForWeek(athlete.id, weeklyCharge, currentWeek, wellnessToday ? [wellnessToday] : [], sessions),
+    [athlete.id, weeklyCharge, currentWeek, wellnessToday, sessions]
   );
-  const status    = getWellnessStatus(metrics.wellnessScore);
+  const status    = useMemo(
+    () => buildDailyState({ wellness: wellnessToday, metrics }),
+    [wellnessToday, metrics]
+  );
   const activeInj = (injuries ?? []).filter(i => i.athleteId === athlete.id && i.status !== "résolu");
   const weekSess  = sessions.filter(s => s.week === currentWeek && s.athleteIds?.includes(athlete.id));
   const doneCount = weekSess.filter(s => s.validations?.find(v => v.athleteId === athlete.id && v.status === "done")).length;
   const hasCharge = weeklyCharge.some(w => w.athleteId === athlete.id);
   const isAtRisk  = false;
 
-  const readColor = metrics.wellnessScore == null ? "#94A3B8" : metrics.wellnessScore >= 75 ? "#1D9E75" : metrics.wellnessScore >= 50 ? "#EF9F27" : "#E24B4A";
+  const readColor = status.color;
   const acwrCol   = "#378ADD";
   const fatCol    = "#14B8A6";
 
@@ -190,10 +193,10 @@ function AthleteStatusCard({ athlete, weeklyCharge, currentWeek, injuries, sessi
       </div>
 
       {/* Métriques — 3 valeurs + mini barres */}
-      {hasCharge ? (
+      {(hasCharge || status.score != null) ? (
         <div className="grid grid-cols-3 gap-1.5">
           {[
-            { lbl: "Bien-être", val: metrics.wellnessScore ?? "—", col: readColor, pct: metrics.wellnessScore ?? 0 },
+            { lbl: "Repère", val: status.score ?? "—", col: readColor, pct: status.score ?? 0 },
             { lbl: "Charge 7j", val: metrics.load7 ?? "—", col: acwrCol, pct: metrics.load7 && metrics.load28 ? Math.min(100, (metrics.load7 / metrics.load28) * 100) : 0 },
             { lbl: "Charge 28j", val: metrics.load28 ?? "—", col: fatCol, pct: metrics.load28 ? 100 : 0 },
           ].map(s => (
@@ -221,6 +224,10 @@ function AthleteStatusCard({ athlete, weeklyCharge, currentWeek, injuries, sessi
           <p className="meta-text font-medium">Pas encore de données</p>
         </div>
       )}
+
+      <p className="text-[12px] font-medium leading-snug" style={{ color: status.color }}>
+        {status.label}
+      </p>
 
       {/* Tendance charge — 6 dernières semaines */}
       {hasCharge && sparkData.length >= 2 && <MiniSparkline data={sparkData} color={acwrCol} />}
@@ -343,6 +350,7 @@ function Dashboard({
   const [competitions, setCompetitions] = useState([]);
   const [injuries,     setInjuries]     = useState([]);
   const [goals,        setGoals]        = useState([]);
+  const [wellnessRows, setWellnessRows] = useState([]);
   const [loading,      setLoading]      = useState(true);
   const [error,        setError]        = useState(null);
 
@@ -353,13 +361,14 @@ function Dashboard({
       setLoading(true); setError(null);
       const requestDate = new Date();
 
-      const [athletesRes, sessionsRes, alertsRes, compsRes, injuriesRes, goalsRes] = await Promise.all([
-        supabase.from("athletes").select("id, name, main_discipline, profile_data, group_name").eq("club_id", clubId),
+      const [athletesRes, sessionsRes, alertsRes, compsRes, injuriesRes, goalsRes, wellnessRes] = await Promise.all([
+        supabase.from("athletes").select("id, name, main_discipline, profile_data, group_name, user_id").eq("club_id", clubId),
         supabase.from("sessions").select("*, session_athletes(*)").eq("club_id", clubId),
         supabase.from("alerts").select("id, is_read, severity, type").eq("club_id", clubId),
         supabase.from("competitions").select("id, name, date, competition_athletes(athlete_id)").eq("club_id", clubId).gte("date", toLocalDateStr(requestDate)).order("date").limit(3),
         supabase.from("injuries").select("id, athlete_id, name, intensity, status, location").eq("status", "actif"),
         supabase.from("athlete_goals").select("*").eq("club_id", clubId).eq("achieved", false),
+        supabase.from("athlete_wellness").select("athlete_id, date, sleep, energy, soreness, mood, stress, notes").eq("club_id", clubId).eq("date", toLocalDateStr(requestDate)),
       ]);
 
       if (athletesRes.error) throw athletesRes.error;
@@ -377,9 +386,9 @@ function Dashboard({
           id: s.id, week: s.week, day: s.day, sessionDate: s.session_date,
           time: s.time, type: s.type, category: s.category, title: s.title,
           durationMinutes: s.duration_minutes, createdBy: s.created_by,
-          createdByAthlete: false,
+          createdByAthlete: s.created_by != null && athletesRes.data.some(a => a.user_id === s.created_by),
           athleteIds:   rows.map(v => v.athlete_id),
-          validations:  rows.map(v => ({ athleteId: v.athlete_id, status: v.status, feeling: v.feeling, rpe: v.rpe, comment: v.comment, actualDurationMinutes: v.actual_duration_minutes, durationSource: v.duration_source })),
+          validations:  rows.map(v => ({ athleteId: v.athlete_id, status: v.status, feeling: v.feeling, rpe: v.rpe, comment: v.comment, actualDurationMinutes: v.actual_duration_minutes, durationSource: v.duration_source, attendanceStatus: v.attendance_status, rsvpStatus: v.rsvp_status, rsvpNote: v.rsvp_note, coachNote: v.coach_note })),
         };
       });
 
@@ -413,6 +422,10 @@ function Dashboard({
         intensity: i.intensity, status: i.status, location: i.location,
       })));
       setGoals(goalsRes.data ?? []);
+      setWellnessRows((wellnessRes.data ?? []).map(row => ({
+        ...row,
+        athleteId: row.athlete_id,
+      })));
 
       if (mappedComps.length > 0) {
         await checkUpcomingCompetitions(clubId, mappedComps);
@@ -463,6 +476,11 @@ function Dashboard({
   const coachFeed = useMemo(
     () => buildCoachFeed({ athletes, weeklyCharge, sessions, injuries, competitions, currentWeek }),
     [athletes, weeklyCharge, sessions, injuries, competitions, currentWeek]
+  );
+
+  const groupDailyState = useMemo(
+    () => buildGroupDailyState(athletes, wellnessRows),
+    [athletes, wellnessRows]
   );
 
   const recentFeedbacks = useMemo(() => {
@@ -562,22 +580,21 @@ function Dashboard({
           <div className="grid grid-cols-3 gap-2">
             {[
               {
-                label: `Actifs S${currentWeek}`,
-                value: `${metrics.actifs}/${athletes.length}`,
+                label: "Check-ins du jour",
+                value: `${groupDailyState.completed}/${athletes.length}`,
                 color: "#1D9E75",
               },
               {
-                label: "Charge moy.",
-                value: metrics.avgCharge ?? "—",
-                color: "#378ADD",
-                sub: metrics.trend != null
-                  ? `${metrics.trend > 0 ? "+" : ""}${metrics.trend}% vs S-1`
-                  : null,
+                label: "Plutôt favorables",
+                value: groupDailyState.favorable,
+                color: "#4DC9A0",
+                sub: "signaux du jour",
               },
               {
-                label: "Validation",
-                value: metrics.validationRate != null ? `${metrics.validationRate}%` : "—",
-                color: metrics.validationRate != null && metrics.validationRate < 60 ? "#EF9F27" : "#1D9E75",
+                label: "À échanger",
+                value: groupDailyState.attention,
+                color: groupDailyState.attention > 0 ? "#F2C46D" : "#69C5F7",
+                sub: "sans prédire un risque",
               },
             ].map(s => (
               <div
@@ -677,6 +694,7 @@ function Dashboard({
                   currentWeek={currentWeek}
                   injuries={injuries}
                   sessions={sessions}
+                  wellnessToday={wellnessRows.find(row => row.athleteId === a.id)}
                   onNavigate={onNavigate}
                 />
               ))}
