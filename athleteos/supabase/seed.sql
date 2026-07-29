@@ -74,8 +74,15 @@ BEGIN
   INSERT INTO public.sessions (club_id, title, category, week, duration_minutes, session_date, created_by)
     VALUES (v_club_a_id, 'Séance vitesse', 'sprint', 1, 60, current_date, v_user_a_head_id) RETURNING id INTO v_session_a1_id;
 
-  INSERT INTO public.session_athletes (session_id, athlete_id, rpe, status) VALUES (v_session_a1_id, v_athlete_a1_id, 7, 'terminée');
-  INSERT INTO public.session_athletes (session_id, athlete_id, rpe, status) VALUES (v_session_a1_id, v_athlete_a2_id, 6, 'terminée');
+  -- Depuis le modèle session-RPE v2, tout RPE nouvellement enregistré doit
+  -- être accompagné de sa durée. Ici la séance fictive dure 60 minutes ;
+  -- `reported` indique qu'il s'agit bien de la durée utilisée pour la charge.
+  INSERT INTO public.session_athletes (
+    session_id, athlete_id, rpe, status, actual_duration_minutes, duration_source
+  ) VALUES (v_session_a1_id, v_athlete_a1_id, 7, 'terminée', 60, 'reported');
+  INSERT INTO public.session_athletes (
+    session_id, athlete_id, rpe, status, actual_duration_minutes, duration_source
+  ) VALUES (v_session_a1_id, v_athlete_a2_id, 6, 'terminée', 60, 'reported');
 
   INSERT INTO public.athlete_wellness (athlete_id, club_id, date, sleep, energy, soreness, mood, stress)
     VALUES (v_athlete_a1_id, v_club_a_id, current_date, 4, 4, 3, 4, 3);
