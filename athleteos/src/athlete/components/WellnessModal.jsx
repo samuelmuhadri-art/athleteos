@@ -60,6 +60,9 @@ const WellnessModal = memo(({ athlete, clubId, onClose, onSaved }) => {
 
   return (
     <div
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="wellness-dialog-title"
       style={{
         position: "fixed", inset: 0, zIndex: 9999,
         display: "flex", alignItems: "flex-end", justifyContent: "center",
@@ -102,7 +105,7 @@ const WellnessModal = memo(({ athlete, clubId, onClose, onSaved }) => {
                 <Activity size={17} color="#1D9E75" strokeWidth={2} />
               </div>
               <div>
-                <h3 style={{ fontSize: 14, fontWeight: 500, color: "var(--c-text-1)", lineHeight: 1.3 }}>
+                <h3 id="wellness-dialog-title" style={{ fontSize: 14, fontWeight: 500, color: "var(--c-text-1)", lineHeight: 1.3 }}>
                   Comment tu vas ce matin ?
                 </h3>
                 <p style={{ fontSize: 11, color: "var(--c-text-3)", marginTop: 2 }}>
@@ -110,7 +113,7 @@ const WellnessModal = memo(({ athlete, clubId, onClose, onSaved }) => {
                 </p>
               </div>
             </div>
-            <button onClick={onClose}
+            <button type="button" onClick={onClose} aria-label="Fermer le questionnaire bien-être"
               style={{ width: 32, height: 32, borderRadius: 9, background: "var(--c-surface-2)", border: "1px solid var(--c-border)", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: "var(--c-text-2)", flexShrink: 0 }}>
               <X size={15} />
             </button>

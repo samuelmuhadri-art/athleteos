@@ -24,6 +24,15 @@ async function login(page, email, password) {
   await page.getByRole("button", { name: "Se connecter" }).click();
 }
 
+async function dismissMorningWellnessIfVisible(page) {
+  const wellnessDialog = page.getByRole("dialog", { name: "Comment tu vas ce matin ?" });
+  await wellnessDialog.waitFor({ state: "visible", timeout: 1000 }).catch(() => {});
+  if (await wellnessDialog.isVisible()) {
+    await wellnessDialog.getByRole("button", { name: "Fermer le questionnaire bien-être" }).click();
+    await expect(wellnessDialog).toBeHidden();
+  }
+}
+
 test("l'athlète se connecte et voit son Tableau de bord", async ({ page }) => {
   await login(page, fixtures.athlete.email, fixtures.athlete.password);
   await expect(page.getByRole("heading", { name: "Tableau de bord", exact: true })).toBeVisible({ timeout: 15000 });
@@ -32,7 +41,8 @@ test("l'athlète se connecte et voit son Tableau de bord", async ({ page }) => {
 test("l'athlète navigue vers son planning", async ({ page }) => {
   await login(page, fixtures.athlete.email, fixtures.athlete.password);
   await expect(page.getByRole("heading", { name: "Tableau de bord", exact: true })).toBeVisible({ timeout: 15000 });
-  await page.getByRole("button", { name: "Planning", exact: true }).click();
+  await dismissMorningWellnessIfVisible(page);
+  await page.getByRole("button", { name: "Mon planning", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Mon planning", exact: true })).toBeVisible({ timeout: 10000 });
 });
 
@@ -44,6 +54,7 @@ test.describe("navigation mobile athlète", () => {
 
     const mobileNav = page.getByRole("navigation", { name: "Navigation athlète" });
     await expect(mobileNav).toBeVisible({ timeout: 15000 });
+    await dismissMorningWellnessIfVisible(page);
     await expect(mobileNav.getByRole("button")).toHaveCount(5);
     await expect(mobileNav.getByRole("button", { name: /Notifs/i })).toHaveCount(0);
     await page.getByRole("button", { name: "Ouvrir les réglages du compte" }).click();
