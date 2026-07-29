@@ -59,3 +59,26 @@ test.describe("authentification mobile", () => {
     expect(await page.evaluate(() => globalThis.document.documentElement.scrollWidth <= globalThis.document.documentElement.clientWidth)).toBe(true);
   });
 });
+
+test.describe("contrat responsive du shell coach", () => {
+  test.use({ viewport: { width: 390, height: 844 } });
+
+  test("la barre latérale reste cachée sur mobile et revient sur desktop", async ({ page }) => {
+    await page.goto("/");
+    await page.evaluate(() => {
+      const sidebar = globalThis.document.createElement("aside");
+      sidebar.id = "coach-sidebar";
+      sidebar.className = "hidden md:flex flex-col sidebar-premium";
+      sidebar.setAttribute("aria-label", "Navigation coach desktop");
+      sidebar.style.width = "224px";
+      sidebar.style.height = "200px";
+      globalThis.document.body.append(sidebar);
+    });
+
+    const sidebar = page.getByRole("complementary", { name: "Navigation coach desktop" });
+    await expect(sidebar).toBeHidden();
+
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await expect(sidebar).toBeVisible();
+  });
+});

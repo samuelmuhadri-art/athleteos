@@ -299,6 +299,17 @@ body {
   display: flex; flex-direction: column;
 }
 
+/* Navigation coach : le style premium ne doit jamais annuler son masquage mobile. */
+#coach-sidebar {
+  display: none;
+}
+
+@media (min-width: 768px) {
+  #coach-sidebar {
+    display: flex;
+  }
+}
+
 .nav-item {
   position: relative; display: flex; align-items: center; gap: 10px;
   min-height: var(--touch); padding: 0 12px;

@@ -55,6 +55,24 @@ test("le code d'invitation du club est affichable", async ({ page }) => {
   await expect(page.getByText("Inviter un athlète")).toBeVisible();
 });
 
+test("la barre latérale desktop se réduit puis se déploie", async ({ page }) => {
+  await login(page, fixtures.coach.email, fixtures.coach.password);
+
+  const sidebar = page.getByRole("complementary", { name: "Navigation coach desktop" });
+  await expect(sidebar).toBeVisible({ timeout: 15000 });
+  await expect(sidebar).toHaveCSS("width", "224px");
+
+  const reduceButton = page.getByRole("button", { name: "Réduire la barre latérale" });
+  await expect(reduceButton).toHaveAttribute("aria-expanded", "true");
+  await reduceButton.click();
+  await expect(sidebar).toHaveCSS("width", "68px");
+
+  const expandButton = page.getByRole("button", { name: "Déployer la barre latérale" });
+  await expect(expandButton).toHaveAttribute("aria-expanded", "false");
+  await expandButton.click();
+  await expect(sidebar).toHaveCSS("width", "224px");
+});
+
 test.describe("navigation mobile coach", () => {
   test.use({ viewport: { width: 390, height: 844 } });
 

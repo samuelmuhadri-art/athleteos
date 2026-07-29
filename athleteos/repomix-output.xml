@@ -653,6 +653,24 @@ test("le code d'invitation du club est affichable", async ({ page }) => {
   await expect(page.getByText("Inviter un athlète")).toBeVisible();
 });
 
+test("la barre latérale desktop se réduit puis se déploie", async ({ page }) => {
+  await login(page, fixtures.coach.email, fixtures.coach.password);
+
+  const sidebar = page.getByRole("complementary", { name: "Navigation coach desktop" });
+  await expect(sidebar).toBeVisible({ timeout: 15000 });
+  await expect(sidebar).toHaveCSS("width", "224px");
+
+  const reduceButton = page.getByRole("button", { name: "Réduire la barre latérale" });
+  await expect(reduceButton).toHaveAttribute("aria-expanded", "true");
+  await reduceButton.click();
+  await expect(sidebar).toHaveCSS("width", "68px");
+
+  const expandButton = page.getByRole("button", { name: "Déployer la barre latérale" });
+  await expect(expandButton).toHaveAttribute("aria-expanded", "false");
+  await expandButton.click();
+  await expect(sidebar).toHaveCSS("width", "224px");
+});
+
 test.describe("navigation mobile coach", () => {
   test.use({ viewport: { width: 390, height: 844 } });
 
@@ -824,6 +842,29 @@ test.describe("authentification mobile", () => {
     await page.getByRole("button", { name: /Athlète.*Rejoindre mon club/ }).click();
     await expect(page.getByLabel("Code d’invitation")).toBeVisible();
     expect(await page.evaluate(() => globalThis.document.documentElement.scrollWidth <= globalThis.document.documentElement.clientWidth)).toBe(true);
+  });
+});
+
+test.describe("contrat responsive du shell coach", () => {
+  test.use({ viewport: { width: 390, height: 844 } });
+
+  test("la barre latérale reste cachée sur mobile et revient sur desktop", async ({ page }) => {
+    await page.goto("/");
+    await page.evaluate(() => {
+      const sidebar = globalThis.document.createElement("aside");
+      sidebar.id = "coach-sidebar";
+      sidebar.className = "hidden md:flex flex-col sidebar-premium";
+      sidebar.setAttribute("aria-label", "Navigation coach desktop");
+      sidebar.style.width = "224px";
+      sidebar.style.height = "200px";
+      globalThis.document.body.append(sidebar);
+    });
+
+    const sidebar = page.getByRole("complementary", { name: "Navigation coach desktop" });
+    await expect(sidebar).toBeHidden();
+
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await expect(sidebar).toBeVisible();
   });
 });
 </file>
@@ -23889,6 +23930,8 @@ function CoachShell({ user, profile, clubId, signOut }) {
          SIDEBAR PREMIUM DARK
       ══════════════════════════════════════════════════════════════ */}
       <aside
+        id="coach-sidebar"
+        aria-label="Navigation coach desktop"
         className={[
           "hidden md:flex flex-col sidebar-premium z-30 flex-shrink-0 transition-all duration-300 ease-spring",
           sidebarOpen ? "w-58" : "w-[68px]",
@@ -23908,7 +23951,7 @@ function CoachShell({ user, profile, clubId, signOut }) {
         </div>
 
         {/* ── Navigation ── */}
-        <nav className="flex-1 py-3 overflow-y-auto overflow-x-hidden">
+        <nav id="coach-sidebar-navigation" className="flex-1 py-3 overflow-y-auto overflow-x-hidden">
           {NAV_ITEMS.map((item, idx) => {
             const Icon      = item.icon;
             const isActive  = activeView === item.id;
@@ -24026,6 +24069,10 @@ function CoachShell({ user, profile, clubId, signOut }) {
           {/* Toggle réduire / ouvrir */}
           <button
             onClick={() => setSidebarOpen((v) => !v)}
+            aria-label={sidebarOpen ? "Réduire la barre latérale" : "Déployer la barre latérale"}
+            aria-expanded={sidebarOpen}
+            aria-controls="coach-sidebar-navigation"
+            title={sidebarOpen ? "Réduire la barre latérale" : "Déployer la barre latérale"}
             className="hidden md:flex w-full items-center justify-center gap-2 py-2.5 transition-all text-[11.5px] font-medium tap-feedback"
             style={{ borderTop: "1px solid var(--c-border)", color: "var(--c-text-3)" }}
             onMouseEnter={e => { e.currentTarget.style.color = "var(--c-text-1)"; e.currentTarget.style.background = "var(--c-surface-2)"; }}
@@ -25082,6 +25129,17 @@ body {
   background: var(--c-surface);
   border-right: 1px solid var(--c-border);
   display: flex; flex-direction: column;
+}
+
+/* Navigation coach : le style premium ne doit jamais annuler son masquage mobile. */
+#coach-sidebar {
+  display: none;
+}
+
+@media (min-width: 768px) {
+  #coach-sidebar {
+    display: flex;
+  }
 }
 
 .nav-item {

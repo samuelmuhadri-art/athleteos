@@ -178,6 +178,8 @@ function CoachShell({ user, profile, clubId, signOut }) {
          SIDEBAR PREMIUM DARK
       ══════════════════════════════════════════════════════════════ */}
       <aside
+        id="coach-sidebar"
+        aria-label="Navigation coach desktop"
         className={[
           "hidden md:flex flex-col sidebar-premium z-30 flex-shrink-0 transition-all duration-300 ease-spring",
           sidebarOpen ? "w-58" : "w-[68px]",
@@ -197,7 +199,7 @@ function CoachShell({ user, profile, clubId, signOut }) {
         </div>
 
         {/* ── Navigation ── */}
-        <nav className="flex-1 py-3 overflow-y-auto overflow-x-hidden">
+        <nav id="coach-sidebar-navigation" className="flex-1 py-3 overflow-y-auto overflow-x-hidden">
           {NAV_ITEMS.map((item, idx) => {
             const Icon      = item.icon;
             const isActive  = activeView === item.id;
@@ -315,6 +317,10 @@ function CoachShell({ user, profile, clubId, signOut }) {
           {/* Toggle réduire / ouvrir */}
           <button
             onClick={() => setSidebarOpen((v) => !v)}
+            aria-label={sidebarOpen ? "Réduire la barre latérale" : "Déployer la barre latérale"}
+            aria-expanded={sidebarOpen}
+            aria-controls="coach-sidebar-navigation"
+            title={sidebarOpen ? "Réduire la barre latérale" : "Déployer la barre latérale"}
             className="hidden md:flex w-full items-center justify-center gap-2 py-2.5 transition-all text-[11.5px] font-medium tap-feedback"
             style={{ borderTop: "1px solid var(--c-border)", color: "var(--c-text-3)" }}
             onMouseEnter={e => { e.currentTarget.style.color = "var(--c-text-1)"; e.currentTarget.style.background = "var(--c-surface-2)"; }}
