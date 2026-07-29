@@ -27,6 +27,7 @@ import {
   DAYS_FR, DAYS_SHORT, MONTHS_FR, CATEGORIES,
   toLocalDateStr, isSameDay, sessionStatus, colors, getCalendarDays, StatusIcon,
 } from "./planningShared";
+import { getSessionTrainingFocus } from "../domain/trainingFocus";
 import SessionModal from "./SessionModal";
 import AddSessionModal from "./AddSessionModal";
 
@@ -81,6 +82,7 @@ function Planning() {
           time:            s.time,
           type:            s.type,
           category:        s.category,
+          trainingFocus:   s.training_focus,
           title:           s.title,
           description:     s.description,
           instructions:    s.instructions,
@@ -126,6 +128,7 @@ function Planning() {
         club_id: clubId, week: form.week, day: form.day,
         session_date: form.sessionDate, time: form.time,
         type: form.type, category: form.category, title: form.title,
+        training_focus: form.trainingFocus,
         description: form.description || null,
         instructions: form.instructions || null,
         duration_minutes: form.durationMinutes,
@@ -148,6 +151,7 @@ function Planning() {
     const { error: sessionError } = await supabase.from("sessions").update({
       week: form.week, day: form.day, session_date: form.sessionDate,
       time: form.time, type: form.type, category: form.category, title: form.title,
+      training_focus: form.trainingFocus,
       description: form.description || null, instructions: form.instructions || null,
       duration_minutes: form.durationMinutes,
       load_weight: 1.0,
@@ -329,7 +333,7 @@ function Planning() {
 
   function buildFormFromSession(s) {
     return {
-      title: s.title, type: s.type, category: s.category,
+      title: s.title, type: s.type, category: s.category, trainingFocus: s.trainingFocus,
       day: s.day, time: s.time, week: s.week,
       durationMinutes: s.durationMinutes ?? "",
       description: s.description ?? "", instructions: s.instructions ?? "",
@@ -536,6 +540,7 @@ function Planning() {
                                   >
                                     {CATEGORIES.find(x => x.id === s.category)?.label}
                                   </span>
+                                  <span className="chip chip-neutral">{getSessionTrainingFocus(s).shortLabel}</span>
                                   <Clock size={10} />
                                   <span>{s.time}{s.durationMinutes ? ` · ${s.durationMinutes}min` : ""}</span>
                                   {missingStatus > 0 && isPast && (
@@ -720,6 +725,7 @@ function Planning() {
                           <span className="text-[12px] font-bold uppercase tracking-wide" style={{ color: c.text }}>
                             {CATEGORIES.find(x => x.id === s.category)?.label ?? s.type}
                           </span>
+                          <span className="chip chip-neutral">{getSessionTrainingFocus(s).shortLabel}</span>
                           {s.createdByAthlete && (
                             <span className="text-[12px] font-bold px-1.5 py-0.5 rounded-full"
                               style={{ background: "rgba(168,85,247,0.16)", color: "#D8B4FE" }}>

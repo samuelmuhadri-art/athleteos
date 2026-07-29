@@ -5,10 +5,20 @@ describe("repère AthleteOS du jour", () => {
   it("normalise le questionnaire sur 0 à 100 et explique les facteurs", () => {
     const state = buildDailyState({ wellness: { date: "2026-08-01", sleep: 5, energy: 4, soreness: 4, mood: 4, stress: 1 } });
     expect(state.score).toBe(75);
-    expect(state.label).toBe("Plutôt favorable");
+    expect(state.label).toBe("De bonnes ressources aujourd'hui");
+    expect(state.legacyLabel).toBe("Plutôt favorable");
     expect(state.factors.find(item => item.key === "soreness")).toMatchObject({ tone: "attention" });
     expect(state.summary).toContain("Courbatures");
+    expect(state.watch).toContain("Tes courbatures sont marquées");
     expect(state.variation).toBeNull();
+  });
+
+  it("utilise la variation actuelle sans la mélanger au score de ressenti", () => {
+    const wellness = { sleep: 4, energy: 4, soreness: 2, mood: 4, stress: 2 };
+    const stable = buildDailyState({ wellness, metrics: { variationPercent: 5 } });
+    const higher = buildDailyState({ wellness, metrics: { variationPercent: 35 } });
+    expect(stable.score).toBe(higher.score);
+    expect(higher.loadContext).toContain("plus élevée");
   });
 
   it("compare uniquement à une référence personnelle suffisamment renseignée", () => {

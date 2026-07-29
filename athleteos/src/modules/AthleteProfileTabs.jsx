@@ -25,6 +25,7 @@ import {
 import AddRecordModal from "./AddRecordModal";
 import AddInjuryModal from "./AddInjuryModal";
 import AxisRadarCard from "../components/ui/AxisRadarCard";
+import { getAthleteLoadStory } from "../domain/monitoringMetrics";
 
 // ─── Onglet Performances ──────────────────────────────────────────────────────
 
@@ -214,20 +215,31 @@ export const TabCharge = memo(({ athlete, metrics, weeklyCharge, competitions, s
       .sort((a,b) => new Date(a.date) - new Date(b.date))[0] ?? null;
   }, [athlete.id, competitions]);
   const analysis  = useMemo(() => generateContextAnalysis(metrics, nextComp), [metrics, nextComp]);
+  const loadStory = useMemo(() => getAthleteLoadStory(metrics, sessions ?? [], athlete.id), [athlete.id, metrics, sessions]);
   const hasCharge = weeklyCharge.some(w => w.athleteId === athlete.id);
 
   if (!hasCharge) return <EmptySection icon={Activity} title="Aucune charge enregistrée" sub="Les scores apparaîtront dès la première séance saisie." />;
 
   const scoreCards = [
-    { label: "Charge 7 jours", value: load7 ?? "—", color: "#378ADD", hint: "somme observée" },
-    { label: "Charge 28 jours", value: load28 ?? "—", color: "#A9CBFB", hint: "somme observée" },
-    { label: "EWMA courte", value: acute == null ? "—" : Math.round(acute), color: "#14B8A6", hint: "série quotidienne" },
-    { label: "EWMA longue", value: chronic == null ? "—" : Math.round(chronic), color: "#A855F7", hint: "série quotidienne" },
-    { label: "Variation", value: variationPercent == null ? "—" : `${variationPercent >= 0 ? "+" : ""}${variationPercent}%`, color: "#EF9F27", hint: "moy. 7j vs 28j" },
+    { label: "Cette semaine", value: load7 ?? "—", color: "#378ADD", hint: "7 derniers jours" },
+    { label: "Rythme habituel", value: load28 ?? "—", color: "#A9CBFB", hint: "4 dernières semaines" },
+    { label: "Tendance récente", value: acute == null ? "—" : Math.round(acute), color: "#14B8A6", hint: "EWMA courte" },
+    { label: "Tendance stable", value: chronic == null ? "—" : Math.round(chronic), color: "#A855F7", hint: "EWMA longue" },
+    { label: "Écart à l'habitude", value: variationPercent == null ? "—" : `${variationPercent >= 0 ? "+" : ""}${variationPercent}%`, color: "#EF9F27", hint: "semaine vs habitude" },
   ];
 
   return (
     <div className="space-y-5">
+      <div className="card overflow-hidden" style={{ borderColor: "rgba(91,141,239,0.24)" }}>
+        <div className="p-5" style={{ background: "linear-gradient(135deg, rgba(91,141,239,0.12), rgba(20,184,166,0.05))" }}>
+          <span className="chip chip-neutral">Lecture coach</span>
+          <h3 className="mt-3 text-[17px] font-bold" style={{ color: "var(--c-text-1)" }}>{loadStory.headline}</h3>
+          <p className="mt-2 text-[13px] leading-6" style={{ color: "var(--c-text-2)" }}>{loadStory.summary}</p>
+          <p className="mt-3 rounded-xl px-3 py-2 text-[12px] leading-5" style={{ background: "rgba(2,7,12,0.22)", color: "var(--c-text-1)" }}>{loadStory.cause}</p>
+          <p className="mt-2 text-[12px] leading-5" style={{ color: "var(--c-text-2)" }}>À interpréter avec l'athlète et le contenu prévu de ses séances, jamais comme un risque automatique.</p>
+        </div>
+      </div>
+
       {/* Score rings */}
       <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
         {scoreCards.map(s => (
@@ -273,7 +285,7 @@ export const TabCharge = memo(({ athlete, metrics, weeklyCharge, competitions, s
 
       {/* Profil de charge (6 axes) */}
       <AxisRadarCard
-        profile={axisProfile} title="Profil de charge" subtitle="Comparé aux semaines habituelles de l'athlète"
+        profile={axisProfile} title="Ce que ses séances ont surtout sollicité" subtitle="Lecture descriptive des objectifs déclarés, comparée aux semaines habituelles de l'athlète"
         sessions={sessions} athleteId={athlete.id} currentWeek={currentWeek}
       />
 

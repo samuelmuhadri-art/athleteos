@@ -10,13 +10,15 @@ import { supabase } from "../../utils/supabaseClient";
 import { notifyCoachAthleteSession } from "../../utils/notifications";
 import { CATEGORIES, dateToISOWeek, dateToDayName, toLocalDateStr } from "../shared";
 import { cat } from "./planningShared";
+import TrainingFocusField from "../../components/session/TrainingFocusField";
+import { getDefaultTrainingFocus } from "../../domain/trainingFocus";
 
 const PDF_MAX_BYTES = 30 * 1024 * 1024; // aligné sur file_size_limit du bucket session-pdfs
 
 const CreateSessionModal = memo(({ athlete, allAthletes, clubId, createdBy, coachUserId, onClose, onCreated }) => {
   const today = toLocalDateStr(new Date());
   const [form, setForm] = useState({
-    title: "", category: "technique", time: "10:00", durationMinutes: 60,
+    title: "", category: "technique", trainingFocus: "technical_general", time: "10:00", durationMinutes: 60,
     description: "", sessionDate: today, invitedAthletes: [],
   });
   const [pdfFile, setPdfFile] = useState(null);
@@ -61,6 +63,7 @@ const CreateSessionModal = memo(({ athlete, allAthletes, clubId, createdBy, coac
         club_id: clubId, week: dateToISOWeek(form.sessionDate), day: dateToDayName(form.sessionDate),
         session_date: form.sessionDate, time: form.time, type: catLabel, category: form.category,
         title: form.title, description: form.description || null, duration_minutes: form.durationMinutes,
+        training_focus: form.trainingFocus,
         load_weight: 1.0, pdf_url: pdfUrl, created_by: createdBy,
       }).select().single();
       if (se) throw se;
@@ -140,7 +143,7 @@ const CreateSessionModal = memo(({ athlete, allAthletes, clubId, createdBy, coac
                 const cc  = cat(id);
                 const sel = form.category === id;
                 return (
-                  <button key={id} type="button" aria-pressed={sel} onClick={() => set("category", id)}
+                  <button key={id} type="button" aria-pressed={sel} onClick={() => setForm(previous => ({ ...previous, category: id, trainingFocus: getDefaultTrainingFocus(id) }))}
                     className="tap-feedback"
                     style={{
                       minHeight: 44, padding: "8px 13px", borderRadius: 12, fontSize: 13, fontWeight: 700,
@@ -156,6 +159,12 @@ const CreateSessionModal = memo(({ athlete, allAthletes, clubId, createdBy, coac
               })}
             </div>
           </div>
+
+          <TrainingFocusField
+            category={form.category}
+            value={form.trainingFocus}
+            onChange={value => set("trainingFocus", value)}
+          />
 
           {/* Date + Heure */}
           <div className="grid grid-cols-2 gap-3">

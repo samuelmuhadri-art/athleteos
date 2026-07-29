@@ -1,16 +1,18 @@
+import { getTrainingFocus } from "../domain/trainingFocus";
+
 // Profil descriptif des contraintes AthleteOS.
 // Les poids ventilent la charge session-RPE entre six dimensions séparées.
 // Ils ne modifient jamais la charge totale et ne prédisent aucun risque.
 
-export const CURRENT_AXIS_MODEL_VERSION = "v1";
+export const CURRENT_AXIS_MODEL_VERSION = "v2-objectifs-declares";
 
 export const LOAD_AXES = {
-  neuromuscular: { label: "Nerveux", nounPhrase: "neuromusculaire", what: "Vitesse et force maximale : sprints, départs, charges lourdes.", color: "#E24B4A" },
-  elastic: { label: "Élastique", nounPhrase: "élastique", what: "Bonds et rebonds : exposition aux impacts répétés.", color: "#EF9F27" },
-  metabolic: { label: "Métabolique", nounPhrase: "métabolique", what: "Efforts prolongés et travail d'endurance.", color: "#378ADD" },
-  muscular: { label: "Musculaire", nounPhrase: "musculaire", what: "Travail musculaire et musculation.", color: "#A855F7" },
-  technical: { label: "Technique", nounPhrase: "technique", what: "Apprentissage et répétition d'un geste précis.", color: "#14B8A6" },
-  mental: { label: "Mental", nounPhrase: "mentale", what: "Concentration et exigences perçues de la séance.", color: "#EC4899" },
+  neuromuscular: { label: "Vitesse", scientificLabel: "Contrainte neuromusculaire", nounPhrase: "de vitesse et d'explosivité", what: "Vitesse, accélération et production rapide de force.", color: "#E24B4A" },
+  elastic: { label: "Impacts", scientificLabel: "Contrainte élastique", nounPhrase: "d'impacts et de bonds", what: "Bonds, rebonds et contacts dynamiques avec le sol.", color: "#EF9F27" },
+  metabolic: { label: "Effort long", scientificLabel: "Contrainte métabolique", nounPhrase: "d'effort prolongé", what: "Efforts soutenus, répétitions longues et endurance.", color: "#378ADD" },
+  muscular: { label: "Muscles", scientificLabel: "Contrainte musculaire", nounPhrase: "musculaire", what: "Travail de force et sollicitation musculaire.", color: "#A855F7" },
+  technical: { label: "Geste", scientificLabel: "Contrainte technique", nounPhrase: "technique", what: "Apprentissage, précision et répétition du geste.", color: "#14B8A6" },
+  mental: { label: "Attention", scientificLabel: "Exigence attentionnelle perçue", nounPhrase: "d'attention", what: "Concentration et exigences perçues pendant la séance.", color: "#EC4899" },
 };
 
 const AXIS_IDS = Object.keys(LOAD_AXES);
@@ -29,12 +31,13 @@ export const AXIS_WEIGHTS = {
   recuperation: { neuromuscular: 0.05, elastic: 0.05, metabolic: 0.1, muscular: 0.05, technical: 0.05, mental: 0.1 },
 };
 
-export function computeSessionAxisLoads(actualDurationMinutes, rpe, category) {
+export function computeSessionAxisLoads(actualDurationMinutes, rpe, category, trainingFocus = null) {
   const duration = Number(actualDurationMinutes);
   const effort = Number(rpe);
   if (!Number.isFinite(duration) || duration <= 0 || !Number.isFinite(effort) || effort < 0 || effort > 10) return null;
   const base = duration * effort;
-  const weights = AXIS_WEIGHTS[category] ?? AXIS_WEIGHTS.technique;
+  const focus = trainingFocus ? getTrainingFocus(trainingFocus, category) : null;
+  const weights = focus?.weights ?? AXIS_WEIGHTS[category] ?? AXIS_WEIGHTS.technique;
   return Object.fromEntries(AXIS_IDS.map(axis => [axis, Math.round(base * (weights[axis] ?? 0))]));
 }
 
@@ -43,7 +46,7 @@ export function computeWeeklyAxisLoads(athleteId, sessions) {
   (sessions ?? []).forEach(session => {
     if (!session.athleteIds?.includes(athleteId)) return;
     const validation = session.validations?.find(item => item.athleteId === athleteId);
-    const loads = computeSessionAxisLoads(validation?.actualDurationMinutes, validation?.rpe, session.category);
+    const loads = computeSessionAxisLoads(validation?.actualDurationMinutes, validation?.rpe, session.category, session.trainingFocus);
     if (!loads) return;
     if (!byWeek.has(session.week)) byWeek.set(session.week, Object.fromEntries(AXIS_IDS.map(axis => [axis, 0])));
     AXIS_IDS.forEach(axis => { byWeek.get(session.week)[axis] += loads[axis]; });
@@ -93,9 +96,10 @@ export function getAxisTopContributors(athleteId, sessions, axis, currentWeek, l
     .filter(session => session.athleteIds?.includes(athleteId))
     .map(session => {
       const validation = session.validations?.find(item => item.athleteId === athleteId);
-      const loads = computeSessionAxisLoads(validation?.actualDurationMinutes, validation?.rpe, session.category);
+      const loads = computeSessionAxisLoads(validation?.actualDurationMinutes, validation?.rpe, session.category, session.trainingFocus);
       if (!loads?.[axis]) return null;
-      return { id: session.id, title: session.title, category: session.category, week: session.week, sessionDate: session.sessionDate, axisLoad: loads[axis] };
+      const focus = getTrainingFocus(session.trainingFocus, session.category);
+      return { id: session.id, title: session.title, category: session.category, trainingFocus: session.trainingFocus, focusLabel: focus?.shortLabel, week: session.week, sessionDate: session.sessionDate, axisLoad: loads[axis] };
     })
     .filter(Boolean)
     .sort((a, b) => b.axisLoad - a.axisLoad)

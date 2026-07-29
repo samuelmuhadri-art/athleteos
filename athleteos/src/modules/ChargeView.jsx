@@ -239,7 +239,7 @@ function ChargeView() {
 
       const sessionsRes = await supabase
         .from("sessions")
-        .select("id, week, category, duration_minutes")
+        .select("id, week, category, training_focus, duration_minutes")
         .eq("club_id", clubId);
       if (sessionsRes.error) throw sessionsRes.error;
 
@@ -272,6 +272,7 @@ function ChargeView() {
           id:              s.id,
           week:            s.week,
           category:        s.category,
+          trainingFocus:   s.training_focus,
           durationMinutes: s.duration_minutes,
           athleteIds:      rows.map((r) => r.athlete_id),
           validations:     rows.map((r) => ({ athleteId: r.athlete_id, rpe: r.rpe, actualDurationMinutes: r.actual_duration_minutes, durationSource: r.duration_source })),
@@ -323,6 +324,20 @@ function ChargeView() {
   const fatigueAlerts    = useMemo(() => allMetrics.filter((m) => m.metrics.wellnessScore != null && m.metrics.wellnessScore < 25), [allMetrics]);
   const sortedByLoad     = useMemo(() => [...allMetrics].sort((a, b) => b.rawLoad - a.rawLoad), [allMetrics]);
   const maxLoad          = sortedByLoad[0]?.rawLoad ?? 1;
+  const groupStory = useMemo(() => {
+    const known = allMetrics.filter(item => Number.isFinite(item.metrics.variationPercent));
+    const higher = known.filter(item => item.metrics.variationPercent >= 10).length;
+    const lower = known.filter(item => item.metrics.variationPercent <= -10).length;
+    const stable = known.length - higher - lower;
+    if (!known.length) return {
+      headline: "L'historique du groupe est encore en construction",
+      detail: "Confirme les jours de repos et complète les durées réelles et RPE pour obtenir des comparaisons compréhensibles.",
+    };
+    return {
+      headline: `${stable} charge${stable !== 1 ? "s" : ""} stable${stable !== 1 ? "s" : ""} · ${higher} en hausse · ${lower} en baisse`,
+      detail: `Comparaison disponible pour ${known.length} athlète${known.length !== 1 ? "s" : ""}. Une hausse ou une baisse décrit un changement par rapport aux trois semaines précédentes ; elle ne juge pas automatiquement le programme.`,
+    };
+  }, [allMetrics]);
 
   const chargeBreakdown = useMemo(() => {
     const byCategory  = computeWeeklyLoadByCategory(athletes, sessionsForBreakdown);
@@ -352,7 +367,7 @@ function ChargeView() {
       <div>
         <h2 className="page-title">Charge & suivi</h2>
         <p className="secondary-text mt-1">
-          Semaine {CURRENT_WEEK} · Analyse dynamique du groupe · {athletes.length} athlète{athletes.length !== 1 ? "s" : ""}
+          Semaine {CURRENT_WEEK} · Une lecture simple du travail réellement effectué par {athletes.length} athlète{athletes.length !== 1 ? "s" : ""}
         </p>
       </div>
 
@@ -369,11 +384,19 @@ function ChargeView() {
         <>
           {/* ── KPIs globaux ─────────────────────────────────────────── */}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-            <MetricCard icon={BarChart2}   label="Charge moyenne groupe"  value={globalMetrics.avgLoad}              sub="unités"                                color="#378ADD" trend={globalMetrics.trendLoad} />
-            <MetricCard icon={Activity}    label="Charge moyenne sur 7j" value={globalMetrics.avgLoad7 ?? "—"} sub="jours connus uniquement" color="#14B8A6" />
-            <MetricCard icon={Zap}         label="Athlète le plus chargé" value={globalMetrics.topLoader?.athlete.name.split(" ")[0] ?? "—"} sub={`${globalMetrics.topLoader?.rawLoad ?? 0} u`} color="#EF9F27" />
-            <MetricCard icon={AlertTriangle} label="Bien-être à revoir" value={globalMetrics.critFatigue} sub={`athlète${globalMetrics.critFatigue > 1 ? "s" : ""}`} color={globalMetrics.critFatigue > 0 ? "#EF9F27" : "#1D9E75"} />
+            <MetricCard icon={BarChart2} label="Effort moyen cette semaine" value={globalMetrics.avgLoad} sub="durée × ressenti" color="#378ADD" trend={globalMetrics.trendLoad} />
+            <MetricCard icon={Activity} label="Moyenne des 7 derniers jours" value={globalMetrics.avgLoad7 ?? "—"} sub="jours connus uniquement" color="#14B8A6" />
+            <MetricCard icon={Zap} label="Plus de points cette semaine" value={globalMetrics.topLoader?.athlete.name.split(" ")[0] ?? "—"} sub={`${globalMetrics.topLoader?.rawLoad ?? 0} points`} color="#EF9F27" />
+            <MetricCard icon={AlertTriangle} label="Ressentis à discuter" value={globalMetrics.critFatigue} sub={`athlète${globalMetrics.critFatigue > 1 ? "s" : ""}`} color={globalMetrics.critFatigue > 0 ? "#EF9F27" : "#1D9E75"} />
           </div>
+
+          <section className="card overflow-hidden" aria-labelledby="group-load-story-title">
+            <div className="p-5" style={{ background: "linear-gradient(135deg, rgba(91,141,239,0.12), rgba(20,184,166,0.05))" }}>
+              <span className="chip chip-neutral">En clair</span>
+              <h3 id="group-load-story-title" className="mt-3 text-[17px] font-bold" style={{ color: "var(--c-text-1)" }}>{groupStory.headline}</h3>
+              <p className="mt-2 text-[13px] leading-6" style={{ color: "var(--c-text-2)" }}>{groupStory.detail}</p>
+            </div>
+          </section>
 
           <AlertSignals fatigueAlerts={fatigueAlerts} />
 
@@ -381,8 +404,8 @@ function ChargeView() {
           <div className="card overflow-hidden">
             <div className="px-5 py-4 border-b flex items-center justify-between flex-wrap gap-2" style={{ borderColor: "var(--c-border)" }}>
               <div>
-                <h3 className="card-title">Charge calculée — Semaine {CURRENT_WEEK}</h3>
-                <p className="card-subtitle mt-0.5">Triée par charge décroissante · Basée sur durée × RPE</p>
+                <h3 className="card-title">Effort déclaré — Semaine {CURRENT_WEEK}</h3>
+                <p className="card-subtitle mt-0.5">Durée réellement effectuée × effort ressenti · tri descriptif</p>
               </div>
               <p className="text-[12px]" style={{ color: "var(--c-text-2)" }}>Comparaison descriptive dans le groupe · aucun seuil de risque</p>
             </div>
@@ -431,13 +454,13 @@ function ChargeView() {
                         <p className="text-[12px] font-bold" style={{ color: "#A9CBFB" }}>
                           {metrics.load7 ?? "—"}
                         </p>
-                        <p className="meta-text">7 jours</p>
+                        <p className="meta-text">semaine</p>
                       </div>
                       <div className="w-16 text-right flex-shrink-0">
                         <p className="text-[12px] font-bold" style={{ color: "#14B8A6" }}>
                           {metrics.load28 ?? "—"}
                         </p>
-                        <p className="meta-text">28 jours</p>
+                        <p className="meta-text">habitude</p>
                       </div>
                     </div>
                   );

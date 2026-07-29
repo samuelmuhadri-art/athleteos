@@ -192,13 +192,18 @@ function AthleteStatusCard({ athlete, weeklyCharge, currentWeek, injuries, sessi
         />
       </div>
 
+      <div className="rounded-xl px-3 py-2" style={{ background: `${status.color}0D`, border: `1px solid ${status.color}20` }}>
+        <p className="text-[12px] font-semibold leading-5" style={{ color: "var(--c-text-1)" }}>{status.plainHeadline ?? status.label}</p>
+        {status.score != null && <p className="mt-0.5 text-[12px] leading-4" style={{ color: "var(--c-text-2)" }}>{status.watch?.[0] ?? status.helps?.[0] ?? "Ressenti renseigné aujourd'hui."}</p>}
+      </div>
+
       {/* Métriques — 3 valeurs + mini barres */}
       {(hasCharge || status.score != null) ? (
         <div className="grid grid-cols-3 gap-1.5">
           {[
-            { lbl: "Repère", val: status.score ?? "—", col: readColor, pct: status.score ?? 0 },
-            { lbl: "Charge 7j", val: metrics.load7 ?? "—", col: acwrCol, pct: metrics.load7 && metrics.load28 ? Math.min(100, (metrics.load7 / metrics.load28) * 100) : 0 },
-            { lbl: "Charge 28j", val: metrics.load28 ?? "—", col: fatCol, pct: metrics.load28 ? 100 : 0 },
+            { lbl: "Ressenti", val: status.score ?? "—", col: readColor, pct: status.score ?? 0 },
+            { lbl: "Semaine", val: metrics.load7 ?? "—", col: acwrCol, pct: metrics.load7 && metrics.load28 ? Math.min(100, (metrics.load7 / metrics.load28) * 100) : 0 },
+            { lbl: "Habitude", val: metrics.load28 ?? "—", col: fatCol, pct: metrics.load28 ? 100 : 0 },
           ].map(s => (
             <div key={s.lbl} className="bg-[var(--c-surface-2)] rounded-xl px-1.5 py-2 text-center">
               <p
@@ -225,8 +230,8 @@ function AthleteStatusCard({ athlete, weeklyCharge, currentWeek, injuries, sessi
         </div>
       )}
 
-      <p className="text-[12px] font-medium leading-snug" style={{ color: status.color }}>
-        {status.label}
+      <p className="text-[12px] font-medium leading-snug" style={{ color: "var(--c-text-2)" }}>
+        {status.loadContext ?? status.summary}
       </p>
 
       {/* Tendance charge — 6 dernières semaines */}
@@ -384,7 +389,7 @@ function Dashboard({
         const rows = s.session_athletes ?? [];
         return {
           id: s.id, week: s.week, day: s.day, sessionDate: s.session_date,
-          time: s.time, type: s.type, category: s.category, title: s.title,
+          time: s.time, type: s.type, category: s.category, trainingFocus: s.training_focus, title: s.title,
           durationMinutes: s.duration_minutes, createdBy: s.created_by,
           createdByAthlete: s.created_by != null && athletesRes.data.some(a => a.user_id === s.created_by),
           athleteIds:   rows.map(v => v.athlete_id),
@@ -585,13 +590,13 @@ function Dashboard({
                 color: "#1D9E75",
               },
               {
-                label: "Plutôt favorables",
+                label: "Bon ressenti",
                 value: groupDailyState.favorable,
                 color: "#4DC9A0",
-                sub: "signaux du jour",
+                sub: "d'après leurs réponses",
               },
               {
-                label: "À échanger",
+                label: "À discuter",
                 value: groupDailyState.attention,
                 color: groupDailyState.attention > 0 ? "#F2C46D" : "#69C5F7",
                 sub: "sans prédire un risque",

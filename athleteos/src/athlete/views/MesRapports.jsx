@@ -13,6 +13,7 @@ import {
 import { LineChart, Line, ResponsiveContainer } from "recharts";
 import { supabase } from "../../utils/supabaseClient";
 import { CATEGORIES, colorsFor } from "../shared";
+import { getSessionTrainingFocus } from "../../domain/trainingFocus";
 import { getRPELabel } from "../../utils/chargeCalculations";
 import { parseLocalDate } from "../../utils/helpers";
 import {
@@ -78,7 +79,7 @@ function WeekReportDetail({ report }) {
           <p style={{ fontSize: 19, fontWeight: 700, color: "var(--c-text-1)", marginTop: 4 }}>{stats.total > 0 ? metrics.acute : "—"}</p>
         </div>
         <div style={{ padding: "12px 10px", borderRadius: 14, background: "var(--c-surface-2)", border: "1px solid var(--c-border)", textAlign: "center" }}>
-          <p style={{ fontSize: 12, fontWeight: 700, color: "var(--c-text-2)", textTransform: "uppercase", letterSpacing: "0.05em" }}>Charge 7 jours</p>
+          <p style={{ fontSize: 12, fontWeight: 700, color: "var(--c-text-2)", textTransform: "uppercase", letterSpacing: "0.05em" }}>Cette semaine</p>
           <p style={{ fontSize: 19, fontWeight: 700, color: "#A9CBFB", marginTop: 4 }}>
             {stats.total > 0 ? (metrics.load7 ?? "—") : "—"}
           </p>
@@ -97,7 +98,7 @@ function WeekReportDetail({ report }) {
               const col = colorsFor(c.id);
               return (
                 <span key={c.id} style={{ fontSize: 12, fontWeight: 700, padding: "6px 10px", borderRadius: 10, background: col.bg, color: col.text, border: `1px solid ${col.border}33` }}>
-                  {c.label} · {c.load} u.a.
+                  {c.label} · {c.load} points
                 </span>
               );
             })}
@@ -130,13 +131,14 @@ function WeekReportDetail({ report }) {
                       <span style={{ fontSize: 12, fontWeight: 700, padding: "3px 8px", borderRadius: 7, background: col.bg, color: col.text }}>
                         {CATEGORIES.find(c => c.id === s.category)?.label ?? s.category}
                       </span>
+                      <span className="chip chip-neutral">{getSessionTrainingFocus(s).shortLabel}</span>
                     </div>
                     <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 3, flexWrap: "wrap" }}>
                       <span style={{ fontSize: 12, color: "var(--c-text-2)" }}>
                         {s.sessionDate ? parseLocalDate(s.sessionDate.slice(0, 10)).toLocaleDateString("fr-BE", { weekday: "short", day: "numeric", month: "short" }) : s.day}
                       </span>
                       {s.rpe != null && <span style={{ fontSize: 12, fontWeight: 700, color: rpe.color }}>RPE {s.rpe} · {rpe.label}</span>}
-                      {s.load != null && <span style={{ fontSize: 12, color: "var(--c-text-2)" }}>{s.load} u.a.</span>}
+                      {s.load != null && <span style={{ fontSize: 12, color: "var(--c-text-2)" }}>{s.load} points d'effort</span>}
                     </div>
                     {s.comment && <p style={{ fontSize: 13, lineHeight: 1.5, color: "var(--c-text-2)", fontStyle: "italic", marginTop: 5 }}>« {s.comment} »</p>}
                   </div>
@@ -248,7 +250,7 @@ export default function MesRapports({ athlete, sessions, weeklyCharge }) {
             </div>
             <div style={{ display: "flex", alignItems: "baseline", gap: 6, marginBottom: 6 }}>
               <span style={{ fontSize: 22, fontWeight: 700, color: "var(--c-text-1)" }}>{monthAggregate.totalLoad}</span>
-              <span style={{ fontSize: 12, color: "var(--c-text-2)" }}>u.a. cumulées</span>
+              <span style={{ fontSize: 12, color: "var(--c-text-2)" }}>points d'effort cumulés</span>
             </div>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
               <span style={{ fontSize: 12, color: "var(--c-text-2)" }}>{monthAggregate.doneTotal}/{monthAggregate.sessionsTotal} séances faites</span>

@@ -660,7 +660,7 @@ export default function AthletePerfs({ athlete, competitions, myPerformances, my
             <div className="card" style={{ padding: 20 }}>
               <p className="card-title">Charge et niveau de performance</p>
               <p style={{ fontSize: 13, lineHeight: 1.5, color: "var(--c-text-2)", marginTop: 4, marginBottom: 16 }}>
-                Variation de charge moyenne 7 j vs 28 j (axe X) · % du PR réalisé (axe Y) — {selectedDisc}. Corrélation descriptive, pas prédiction.
+                Écart entre les 7 derniers jours et les 3 semaines précédentes (axe X) · % du record personnel réalisé (axe Y) — {selectedDisc}. Relation descriptive, pas prédiction.
               </p>
               <ResponsiveContainer width="100%" height={260}>
                 <ScatterChart margin={{ top: 12, right: 16, bottom: 12, left: 0 }}>
@@ -676,7 +676,7 @@ export default function AthletePerfs({ athlete, competitions, myPerformances, my
                         <p style={{ fontSize: 13, fontWeight: 700, color: "var(--c-text-1)" }}>{d.compName}</p>
                         <p style={{ fontSize: 12, color: "var(--c-text-2)", marginTop: 2, marginBottom: 8 }}>{parseLocalDate(d.date.slice(0, 10)).toLocaleDateString("fr-BE", { day: "numeric", month: "short", year: "numeric" })}</p>
                         <p style={{ fontSize: 12, color: "var(--c-text-2)" }}>Résultat : <strong style={{ color: "#7BD8B4" }}>{d.resultStr}</strong></p>
-                        <p style={{ fontSize: 12, color: "var(--c-text-2)", marginTop: 3 }}>Variation 7j/28j : <strong>{d.x >= 0 ? "+" : ""}{d.x}%</strong> · Niveau : <strong>{d.y}%</strong></p>
+                        <p style={{ fontSize: 12, color: "var(--c-text-2)", marginTop: 3 }}>Écart à l'habitude : <strong>{d.x >= 0 ? "+" : ""}{d.x}%</strong> · Niveau : <strong>{d.y}% du record</strong></p>
                       </div>
                     );
                   }} />
@@ -694,7 +694,7 @@ export default function AthletePerfs({ athlete, competitions, myPerformances, my
               </ResponsiveContainer>
               <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 12, fontSize: 12, color: "var(--c-text-2)" }}>
                 <span style={{ width: 10, height: 10, borderRadius: 3, background: "rgba(29,158,117,0.16)", border: "1px solid rgba(29,158,117,0.35)" }} />
-                <span>Zone de charge optimale (0.80 – 1.30)</span>
+                <span>Chaque point relie une compétition à la charge observée avant celle-ci. Le graphique montre une relation possible, pas une zone idéale ni une cause.</span>
               </div>
             </div>
           )}

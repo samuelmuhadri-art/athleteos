@@ -6,6 +6,7 @@
 import { memo, useState } from "react";
 import { X, Users, FileText, AlertCircle, Star, Zap } from "lucide-react";
 import { CATEGORIES, colors, sessionStatus, ValidationBadge, StatusIcon } from "./planningShared";
+import { getSessionTrainingFocus } from "../domain/trainingFocus";
 import { openSessionPdf } from "../utils/storage";
 import CoachSessionDayPanel from "../components/session/CoachSessionDayPanel";
 
@@ -26,6 +27,7 @@ const SessionModal = memo(({
   ));
   const [loadErrors, setLoadErrors] = useState({});
   const c      = colors(session.category);
+  const trainingFocus = getSessionTrainingFocus(session);
   const status = sessionStatus(session);
 
   const dateStr = session.sessionDate
@@ -80,6 +82,9 @@ const SessionModal = memo(({
                 style={{ background: c.border, color: "#0A150F" }}
               >
                 {CATEGORIES.find(x => x.id === session.category)?.label ?? session.type}
+              </span>
+              <span className="text-[12px] font-semibold px-2.5 py-1 rounded-full" style={{ background: "rgba(255,255,255,0.06)", border: "1px solid var(--c-border)", color: "var(--c-text-1)" }}>
+                Objectif · {trainingFocus.shortLabel}
               </span>
               {session.createdByAthlete && (
                 <span className="text-[12px] font-bold px-2 py-0.5 rounded-full"

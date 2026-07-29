@@ -29,8 +29,8 @@ export const MONITORING_METRICS = {
   },
   load28: {
     label: "Charge observée · 28 jours",
-    shortLabel: "Charge du dernier mois",
-    athleteMeaning: "Ton historique des 4 dernières semaines",
+    shortLabel: "Ton rythme habituel",
+    athleteMeaning: "La charge cumulée de tes 4 dernières semaines, utilisée comme point de comparaison",
     color: "#14B8A6",
     kind: "Mesure de charge interne",
     evidence: "Méthode publiée",
@@ -101,8 +101,8 @@ export const MONITORING_METRICS = {
   },
   dataQuality: {
     label: "Qualité de l'historique",
-    shortLabel: "Données disponibles",
-    athleteMeaning: "Les jours assez renseignés pour interpréter ta charge",
+    shortLabel: "Peut-on bien interpréter ?",
+    athleteMeaning: "Les jours assez renseignés pour que la comparaison soit fiable",
     color: "#94A3B8",
     kind: "Contrôle de complétude",
     evidence: "Contrôle technique",
@@ -144,39 +144,43 @@ export function getMonitoringReading(key, metrics = {}) {
     unit = "/100";
     if (value != null) {
       displayValue = formatNumber(value);
-      interpretation = `Questionnaire complété : ${displayValue}/100. Lis surtout le détail des cinq réponses.`;
+      interpretation = `Tes cinq réponses du jour donnent un résumé de ${displayValue}/100. Lis surtout ce qui t'aide et ce qui mérite ton attention.`;
     } else missingReason = "Le questionnaire AthleteOS du jour n'a pas encore été complété.";
   } else if (key === "load7" || key === "load28") {
     value = metrics[key];
     unit = "u";
     if (value != null) {
       displayValue = formatNumber(value);
-      interpretation = `${displayValue} unités de charge session-RPE observées sur ${key === "load7" ? 7 : 28} jours.`;
+      interpretation = key === "load7"
+        ? `Tu as cumulé ${displayValue} points d'effort sur les 7 derniers jours.`
+        : `Tu as cumulé ${displayValue} points d'effort sur les 4 dernières semaines. C'est ton rythme récent de comparaison.`;
     } else missingReason = `La fenêtre de ${key === "load7" ? 7 : 28} jours contient au moins un jour inconnu.`;
   } else if (key === "ewmaAcute" || key === "ewmaChronic") {
     value = key === "ewmaAcute" ? metrics.acute : metrics.chronic;
     unit = "u";
     if (value != null) {
       displayValue = formatNumber(value);
-      interpretation = `${displayValue} unités dans la moyenne exponentielle ${key === "ewmaAcute" ? "courte" : "longue"}.`;
+      interpretation = key === "ewmaAcute"
+        ? `Le calcul donne davantage d'importance à tes tout derniers jours : ${displayValue}.`
+        : `Le calcul lisse ton dernier mois pour obtenir une tendance plus stable : ${displayValue}.`;
     } else missingReason = "Aucune séquence quotidienne connue ne permet encore le lissage.";
   } else if (key === "variation") {
     value = metrics.variationPercent;
     unit = "%";
     if (value != null) {
       displayValue = `${value > 0 ? "+" : ""}${formatNumber(value)}`;
-      const direction = value > 0 ? "plus élevée" : value < 0 ? "plus basse" : "similaire";
-      interpretation = `La moyenne quotidienne récente est ${direction} que celle des 21 jours précédents (${displayValue}%).`;
+      const direction = value >= 10 ? "plus élevée que d'habitude" : value <= -10 ? "plus basse que d'habitude" : "stable par rapport à ton habitude";
+      interpretation = `Ta charge est ${direction} (${displayValue} %). Le pourcentage explique l'écart ; ce n'est ni une note ni un seuil de danger.`;
     } else missingReason = "La comparaison demande 28 jours connus et une moyenne habituelle supérieure à zéro.";
   } else if (key === "monotony") {
     value = metrics.monotony;
     if (metrics.monotonyStatus === "undefined_zero_variance") {
       displayValue = "Indéfinie";
-      interpretation = "Les sept charges quotidiennes sont identiques : l'écart-type est nul.";
+      interpretation = "Tes sept journées ont exactement la même charge. L'écart-type est nul : le calcul mathématique ne peut donc pas produire un nombre utile.";
       missingReason = null;
     } else if (value != null) {
       displayValue = formatNumber(value);
-      interpretation = `Monotonie descriptive calculée sur les sept jours connus : ${displayValue}.`;
+      interpretation = `Ce nombre décrit à quel point les charges de tes sept journées se ressemblent : ${displayValue}. Il ne juge pas la qualité du programme.`;
     } else missingReason = "Sept charges quotidiennes connues sont nécessaires.";
   } else if (key === "spacing") {
     const recovery = metrics.recovery;
@@ -194,10 +198,10 @@ export function getMonitoringReading(key, metrics = {}) {
     value = Math.min(metrics.observedDays ?? 0, 28);
     displayValue = `${value}/28`;
     interpretation = metrics.known28
-      ? "Les fenêtres de 7 et 28 jours sont complètes."
+      ? "Tous les jours nécessaires sont renseignés : la comparaison peut être lue correctement."
       : metrics.known7
-        ? "La fenêtre de 7 jours est complète ; celle de 28 jours reste partielle."
-        : "Au moins un jour récent reste inconnu ; confirme les repos et complète les durées/RPE.";
+        ? "Cette semaine est complète, mais il manque encore des jours dans le mois de comparaison."
+        : "Il manque au moins un jour récent. Confirme les repos et complète les durées et efforts ressentis.";
     missingReason = null;
   } else if (key === "acwrExperimental") {
     value = metrics.acwr;

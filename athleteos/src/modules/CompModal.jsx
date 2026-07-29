@@ -190,13 +190,13 @@ const CompModal = memo(({ competition, athletes, weeklyCharge, records, onClose,
                       <div className="px-4 py-3 bg-[var(--c-surface-3)] border-b border-[var(--c-border)] flex items-center gap-4 flex-wrap text-[12px]">
                         <span className="text-[var(--c-text-3)]">À la semaine ~{week} :</span>
                         <span className="flex items-center gap-1">
-                          Charge 7 jours :
+                          Cette semaine :
                           <strong className="ml-1" style={{ color: "#A9CBFB" }}>
                             {metrics.load7 ?? "—"}
                           </strong>
                         </span>
                         <span className="flex items-center gap-1">
-                          Charge 28 jours :
+                          Rythme habituel · 4 sem. :
                           <strong className="ml-1" style={{ color: "#7BD8B4" }}>
                             {metrics.load28 ?? "—"}
                           </strong>

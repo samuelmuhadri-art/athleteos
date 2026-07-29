@@ -147,7 +147,7 @@ export default function AthleteApp({ clubBrand, themeStyle }) {
         const rows = s.session_athletes??[];
         return {
           id:s.id, week:s.week, day:s.day, sessionDate:s.session_date, time:s.time,
-          type:s.type, category:s.category, title:s.title, description:s.description,
+          type:s.type, category:s.category, trainingFocus:s.training_focus, title:s.title, description:s.description,
           instructions:s.instructions, durationMinutes:s.duration_minutes, pdfUrl:s.pdf_url,
           createdBy:s.created_by,
           lifecycleStatus:s.lifecycle_status ?? "planned", startedAt:s.started_at, closedAt:s.closed_at,

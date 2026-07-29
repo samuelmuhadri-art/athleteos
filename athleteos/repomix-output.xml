@@ -129,6 +129,7 @@ src/
     session/
       CoachSessionDayPanel.jsx
       CoachSessionDayPanel.test.jsx
+      TrainingFocusField.jsx
     ui/
       premium/
         index.js
@@ -156,6 +157,8 @@ src/
     sessionDay.js
     sessionDay.test.js
     structuredPerformanceMigration.test.js
+    trainingFocus.js
+    trainingFocus.test.js
   hooks/
     PushToggleButton.test.jsx
     useClubBranding.js
@@ -274,6 +277,7 @@ supabase/
     20260801100000_individual_club_invitations.sql
     20260801110000_session_day_and_notifications.sql
     20260801120000_session_rsvp_notes_and_notification_reliability.sql
+    20260801130000_athletics_training_focus.sql
   .gitignore
   config.toml
   seed.sql
@@ -1050,7 +1054,7 @@ self.addEventListener("notificationclick", (event) => {
 <file path="src/athlete/components/DailyStateDetailPanel.jsx">
 import { useEffect } from "react";
 import { createPortal } from "react-dom";
-import { Activity, BookOpen, Calculator, ChevronRight, Database, X } from "lucide-react";
+import { Activity, BookOpen, Calculator, ChevronRight, Database, HeartHandshake, Info, Sparkles, X } from "lucide-react";
 
 const FACTOR_COLORS = { positive: "#7BD8B4", neutral: "#A9CBFB", attention: "#F2C46D", unknown: "#8A9B90" };
 
@@ -1061,6 +1065,9 @@ export default function DailyStateDetailPanel({ state, onClose, onOpenMetric }) 
     return () => window.removeEventListener("keydown", close);
   }, [onClose]);
 
+  const helps = state.helps ?? state.factors?.filter(item => item.tone === "positive").map(item => item.meaning) ?? [];
+  const watch = state.watch ?? state.factors?.filter(item => item.tone === "attention").map(item => item.meaning) ?? [];
+
   return createPortal(
     <div className="fixed inset-0 z-[110] flex items-end justify-center modal-backdrop" style={{ background: "rgba(2,7,12,0.78)", backdropFilter: "blur(14px)" }} onClick={event => event.target === event.currentTarget && onClose()}>
       <section role="dialog" aria-modal="true" aria-labelledby="daily-state-title" className="w-full max-w-2xl overflow-hidden rounded-t-3xl border modal-content" style={{ maxHeight: "92dvh", background: "linear-gradient(180deg, var(--c-surface), var(--c-bg))", borderColor: "var(--c-border-strong)", animation: "sheet-up 0.34s cubic-bezier(0.16,1,0.3,1) both" }}>
@@ -1069,40 +1076,74 @@ export default function DailyStateDetailPanel({ state, onClose, onOpenMetric }) 
           <div className="absolute inset-0 pointer-events-none" style={{ background: `radial-gradient(circle at 15% 20%, ${state.color}2B, transparent 43%)` }} />
           <div className="relative flex items-start justify-between gap-4">
             <div>
-              <span className="chip" style={{ color: state.color, background: `${state.color}14`, borderColor: `${state.color}30` }}>Repère AthleteOS · questionnaire interne</span>
-              <h2 id="daily-state-title" className="mt-3 text-[22px] font-bold" style={{ color: "var(--c-text-1)" }}>{state.label}</h2>
-              <p className="mt-2 secondary-text leading-6">{state.summary}</p>
+              <span className="chip" style={{ color: state.color, background: `${state.color}14`, borderColor: `${state.color}30` }}>État du jour · tes réponses</span>
+              <h2 id="daily-state-title" className="mt-3 text-[22px] font-bold" style={{ color: "var(--c-text-1)" }}>{state.plainHeadline ?? state.label}</h2>
+              <p className="mt-2 secondary-text leading-6">{state.plainSummary ?? state.summary}</p>
             </div>
             <button type="button" className="btn-icon" aria-label="Fermer le détail" onClick={onClose}><X size={18} /></button>
           </div>
-          <div className="relative mt-4 rounded-2xl border p-4 flex items-end justify-between" style={{ borderColor: `${state.color}28`, background: `${state.color}0C` }}>
-            <div><p className="meta-text uppercase tracking-[0.08em]">Repère du jour</p><p className="mt-1 text-[38px] font-bold leading-none" style={{ color: state.color }}>{state.score ?? "—"}<span className="text-[14px] ml-1">/100</span></p></div>
-            <div className="text-right"><p className="meta-text">Référence personnelle</p><p className="mt-1 text-[14px] font-semibold" style={{ color: "var(--c-text-1)" }}>{state.baseline == null ? "En construction" : `${state.delta >= 0 ? "+" : ""}${state.delta} vs habitude`}</p></div>
-          </div>
         </header>
-        <div className="overflow-y-auto px-5 pb-8 sm:px-6" style={{ maxHeight: "calc(92dvh - 240px)" }}>
-          <article className="card overflow-hidden">
-            <div className="border-b px-4 py-3 flex items-center gap-2" style={{ borderColor: "var(--c-border)" }}><Activity size={16} style={{ color: state.color }} /><h3 className="card-title">Pourquoi ce résultat ?</h3></div>
-            <div className="divide-y" style={{ borderColor: "var(--c-border)" }}>
-              {state.factors.map(factor => <div key={factor.key} className="flex items-center gap-3 px-4 py-3" style={{ borderColor: "var(--c-border)" }}>
-                <div className="h-2 w-2 rounded-full" style={{ background: FACTOR_COLORS[factor.tone] }} />
-                <div className="min-w-0 flex-1"><p className="text-[13px] font-semibold" style={{ color: "var(--c-text-1)" }}>{factor.label}</p><p className="meta-text mt-0.5">{factor.meaning}</p></div>
-                <strong className="text-[15px]" style={{ color: FACTOR_COLORS[factor.tone] }}>{factor.value ?? "—"}/5</strong>
-              </div>)}
+
+        <div className="overflow-y-auto px-5 pb-8 sm:px-6" style={{ maxHeight: "calc(92dvh - 170px)" }}>
+          <article className="rounded-2xl border p-4" style={{ borderColor: `${state.color}28`, background: `${state.color}0C` }}>
+            <div className="flex items-center gap-2"><Sparkles size={16} style={{ color: state.color }} /><h3 className="card-title">En clair</h3></div>
+            <div className="mt-3 grid gap-3 sm:grid-cols-2">
+              <div className="rounded-xl p-3" style={{ background: "rgba(123,216,180,0.08)" }}>
+                <p className="text-[12px] font-bold uppercase tracking-wide" style={{ color: "#7BD8B4" }}>Ce qui t'aide</p>
+                {helps.length ? helps.slice(0, 3).map(item => <p key={item} className="mt-2 text-[13px] leading-5" style={{ color: "var(--c-text-1)" }}>• {item}</p>) : <p className="mt-2 text-[13px] leading-5" style={{ color: "var(--c-text-2)" }}>Rien ne ressort nettement pour le moment.</p>}
+              </div>
+              <div className="rounded-xl p-3" style={{ background: "rgba(242,196,109,0.08)" }}>
+                <p className="text-[12px] font-bold uppercase tracking-wide" style={{ color: "#F2C46D" }}>À surveiller</p>
+                {watch.length ? watch.slice(0, 3).map(item => <p key={item} className="mt-2 text-[13px] leading-5" style={{ color: "var(--c-text-1)" }}>• {item}</p>) : <p className="mt-2 text-[13px] leading-5" style={{ color: "var(--c-text-2)" }}>Aucun point marqué dans tes réponses.</p>}
+              </div>
+            </div>
+            <div className="mt-3 flex items-start gap-2 rounded-xl border p-3" style={{ background: "var(--c-surface-2)", borderColor: "var(--c-border)" }}>
+              <HeartHandshake size={16} className="mt-0.5 shrink-0" style={{ color: "#A9CBFB" }} />
+              <div><p className="text-[12px] font-bold" style={{ color: "var(--c-text-1)" }}>Le bon réflexe</p><p className="mt-1 text-[13px] leading-5" style={{ color: "var(--c-text-2)" }}>{state.coachPrompt ?? "Utilise ce résumé pour échanger avec ton coach."}</p></div>
             </div>
           </article>
-          <button type="button" onClick={() => onOpenMetric("variation")} className="card card-hover mt-3 w-full p-4 text-left flex items-center gap-3">
-            <Database size={17} style={{ color: "#A9CBFB" }} /><div className="flex-1"><p className="card-title">Contexte de charge</p><p className="card-subtitle mt-1">{state.variation == null ? "Pas encore assez de journées connues." : `La moyenne récente varie de ${state.variation > 0 ? "+" : ""}${state.variation}% par rapport aux 28 derniers jours.`}</p></div><ChevronRight size={16} style={{ color: "var(--c-text-3)" }} />
+
+          <button type="button" onClick={() => onOpenMetric?.("variation")} className="card card-hover mt-3 w-full p-4 text-left flex items-center gap-3">
+            <Database size={17} style={{ color: "#A9CBFB" }} />
+            <div className="flex-1"><p className="card-title">Ta charge récente</p><p className="card-subtitle mt-1">{state.loadContext ?? (state.variation == null ? "Pas encore assez de journées connues." : `Évolution de ${state.variation > 0 ? "+" : ""}${state.variation}% par rapport à ton rythme habituel.`)}</p></div>
+            <ChevronRight size={16} style={{ color: "var(--c-text-3)" }} />
           </button>
-          <article className="card mt-3 p-4">
-            <div className="flex items-center gap-2"><Calculator size={16} style={{ color: "#B5A3F5" }} /><h3 className="card-title">Calcul transparent</h3></div>
-            <code className="mt-3 block rounded-xl p-3 text-[12px] leading-6" style={{ color: "var(--c-text-1)", background: "var(--c-surface-2)" }}>Moyenne de : sommeil + énergie + (6 − courbatures) + humeur + (6 − stress), puis normalisation de 1–5 vers 0–100.</code>
-            <p className="mt-3 text-[12px] leading-5" style={{ color: "var(--c-text-2)" }}>Ce repère résume les réponses du jour. La charge reste un contexte séparé : elle ne modifie pas secrètement le score.</p>
-          </article>
-          <article className="mt-3 rounded-2xl border p-4" style={{ background: "rgba(91,141,239,0.06)", borderColor: "rgba(91,141,239,0.18)" }}>
-            <div className="flex items-center gap-2 text-[#A9CBFB]"><BookOpen size={16} /><h3 className="card-title">Ce que ce repère ne dit pas</h3></div>
-            <p className="mt-2 text-[12px] leading-5" style={{ color: "var(--c-text-2)" }}>Il ne mesure pas directement la performance, la disponibilité physiologique ou un risque de blessure. Il aide l’athlète et le coach à ouvrir une discussion avec les données disponibles.</p>
-          </article>
+
+          <details className="card mt-3 overflow-hidden">
+            <summary className="tap-feedback flex cursor-pointer list-none items-center gap-3 p-4">
+              <Info size={17} style={{ color: "#B5A3F5" }} />
+              <div className="flex-1"><p className="card-title">Voir les réponses, le calcul et les limites</p><p className="card-subtitle mt-1">Le niveau scientifique reste disponible sans encombrer la lecture principale.</p></div>
+              <ChevronRight size={16} style={{ color: "var(--c-text-3)" }} />
+            </summary>
+            <div className="border-t p-4" style={{ borderColor: "var(--c-border)" }}>
+              <div className="flex items-center justify-between gap-4 rounded-xl p-3" style={{ background: "var(--c-surface-2)" }}>
+                <div><p className="meta-text uppercase tracking-[0.08em]">Résumé des 5 réponses</p><p className="mt-1 text-[28px] font-bold leading-none" style={{ color: state.color }}>{state.score ?? "—"}<span className="ml-1 text-[13px]">/100</span></p></div>
+                <div className="text-right"><p className="meta-text">Ta référence personnelle</p><p className="mt-1 text-[13px] font-semibold" style={{ color: "var(--c-text-1)" }}>{state.baseline == null ? "En construction" : `${state.delta >= 0 ? "+" : ""}${state.delta} vs habitude`}</p></div>
+              </div>
+
+              <article className="mt-3 overflow-hidden rounded-xl border" style={{ borderColor: "var(--c-border)" }}>
+                <div className="border-b px-4 py-3 flex items-center gap-2" style={{ borderColor: "var(--c-border)" }}><Activity size={16} style={{ color: state.color }} /><h3 className="card-title">Tes cinq réponses</h3></div>
+                <div className="divide-y" style={{ borderColor: "var(--c-border)" }}>
+                  {state.factors.map(factor => <div key={factor.key} className="flex items-center gap-3 px-4 py-3" style={{ borderColor: "var(--c-border)" }}>
+                    <div className="h-2 w-2 rounded-full" style={{ background: FACTOR_COLORS[factor.tone] }} />
+                    <div className="min-w-0 flex-1"><p className="text-[13px] font-semibold" style={{ color: "var(--c-text-1)" }}>{factor.label}</p><p className="meta-text mt-0.5">{factor.meaning}</p></div>
+                    <strong className="text-[15px]" style={{ color: FACTOR_COLORS[factor.tone] }}>{factor.value ?? "—"}/5</strong>
+                  </div>)}
+                </div>
+              </article>
+
+              <article className="mt-3 rounded-xl p-4" style={{ background: "var(--c-surface-2)" }}>
+                <div className="flex items-center gap-2"><Calculator size={16} style={{ color: "#B5A3F5" }} /><h3 className="card-title">Calcul transparent</h3></div>
+                <code className="mt-3 block rounded-xl p-3 text-[12px] leading-6" style={{ color: "var(--c-text-1)", background: "var(--c-bg)" }}>Moyenne de : sommeil + énergie + (6 − courbatures) + humeur + (6 − stress), puis normalisation de 1–5 vers 0–100.</code>
+                <p className="mt-3 text-[12px] leading-5" style={{ color: "var(--c-text-2)" }}>C'est un questionnaire interne AthleteOS, pas une mesure physiologique validée. La charge reste un contexte séparé et ne modifie pas secrètement ce résumé.</p>
+              </article>
+
+              <article className="mt-3 rounded-xl border p-4" style={{ background: "rgba(91,141,239,0.06)", borderColor: "rgba(91,141,239,0.18)" }}>
+                <div className="flex items-center gap-2 text-[#A9CBFB]"><BookOpen size={16} /><h3 className="card-title">Ce que cet état du jour ne dit pas</h3></div>
+                <p className="mt-2 text-[12px] leading-5" style={{ color: "var(--c-text-2)" }}>Il ne mesure pas directement ta forme physique, ta disponibilité physiologique, ta performance future ou un risque de blessure. Il résume tes réponses pour faciliter une discussion et ne remplace pas le jugement de l'athlète, du coach ou d'un professionnel de santé.</p>
+              </article>
+            </div>
+          </details>
         </div>
       </section>
     </div>, document.body,
@@ -3363,6 +3404,7 @@ import { openSessionPdf } from "../../utils/storage";
 import { getTodayFocus } from "../dashboardFocus";
 import { buildDailyState } from "../../domain/dailyState";
 import DailyStateDetailPanel from "../components/DailyStateDetailPanel";
+import { getSessionTrainingFocus } from "../../domain/trainingFocus";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 function getDiscType(discName) {
@@ -3812,7 +3854,7 @@ export default function AthleteDashboard({
               </div>
               <div>
                 <p className="meta-text" style={{ fontWeight: 600, letterSpacing: "0.07em", textTransform: "uppercase", marginBottom: "var(--space-1)" }}>
-                  État du jour · S{currentWeek}
+                  Comment tu te sens · S{currentWeek}
                 </p>
                 <p id="wellness-title" className="section-title">{status.label}</p>
                 <p className="meta-text" style={{ marginTop: "var(--space-1)" }}>
@@ -3827,23 +3869,23 @@ export default function AthleteDashboard({
               background: `${statusColor}12`, border: `1px solid ${statusColor}22`,
             }}>
               <div style={{ width: 5, height: 5, borderRadius: "50%", background: statusColor, flexShrink: 0 }} />
-              <span style={{ fontSize: "var(--text-meta)", fontWeight: 600, color: statusColor }}>Repère {dailyState.score ?? "—"}/100</span>
+              <span style={{ fontSize: "var(--text-meta)", fontWeight: 600, color: statusColor }}>{dailyState.score == null ? "À renseigner" : "5 réponses résumées"}</span>
             </div>
           </div>
 
           {/* Le questionnaire reste visible, mais n'est jamais présenté comme
               une readiness physiologique ou une autorisation de s'entraîner. */}
           <div style={{ display: "flex", alignItems: "center", gap: 18, flexWrap: "wrap" }}>
-            <button type="button" onClick={() => setShowDailyState(true)} className="tap-feedback rounded-full" aria-label="Comprendre mon repère AthleteOS du jour">
+            <button type="button" onClick={() => setShowDailyState(true)} className="tap-feedback rounded-full" aria-label="Comprendre mon état du jour">
               <WellnessRing value={dailyState.score} color={statusColor} />
             </button>
 
             <div style={{ flex: 1, minWidth: 190 }}>
               <p style={{ fontSize: "var(--text-body)", color: "var(--c-text-2)", lineHeight: "var(--leading-body)", marginBottom: "var(--space-4)" }}>
-                {dailyState.summary}
+                {dailyState.plainSummary ?? dailyState.summary}
               </p>
               <button type="button" onClick={() => setShowDailyState(true)} className="btn-ghost mb-3" style={{ minHeight: 34, paddingInline: 0, color: statusColor }}>
-                Comprendre ce repère <ChevronRight size={14} />
+                Voir ce qui t'aide et ce qui pèse <ChevronRight size={14} />
               </button>
               <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 8 }}>
                 {[
@@ -3903,8 +3945,8 @@ export default function AthleteDashboard({
                 <CheckCircle size={14} color="#1D9E75" strokeWidth={2} />
               </div>
               <div>
-                <p className="card-title">Wellness du jour</p>
-                <p className="card-subtitle">Questionnaire complété</p>
+                <p className="card-title">Ton état du jour</p>
+                <p className="card-subtitle">Tes cinq réponses sont enregistrées</p>
               </div>
             </div>
             {metrics.wellnessScore !== null && (
@@ -4079,17 +4121,18 @@ export default function AthleteDashboard({
 
           {/* ── Profil de charge (6 axes) ───────────────────────────────────── */}
           <AxisRadarCard
-            profile={axisProfile} title="Répartition de ta charge"
+            profile={axisProfile} title="Ce que tes séances ont surtout sollicité"
+            subtitle="Une lecture simple de tes objectifs de séance ; ouvre une ligne pour voir la méthode."
             sessions={sessions} athleteId={athlete.id} currentWeek={currentWeek}
           />
 
           {/* ── Repères du jour : lecture simple, détails scientifiques au clic */}
           <div className="card p-4">
               <div className="flex items-center justify-between mb-1">
-                <p className="card-title">Tes repères du jour</p>
+                <p className="card-title">Tes données expliquées simplement</p>
                 <span className="chip chip-neutral">Appuie pour comprendre</span>
               </div>
-              <p className="card-subtitle mb-4">D’abord l’essentiel. Les calculs complets restent accessibles dans chaque ligne.</p>
+              <p className="card-subtitle mb-4">Chaque ligne commence par ce que cela signifie pour toi. La formule et les limites restent accessibles au toucher.</p>
               <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                 {athleteMonitoring.map(s => {
                   const val = s.displayValue;
@@ -4174,6 +4217,7 @@ export default function AthleteDashboard({
                         ? new Date(s.sessionDate).toLocaleDateString("fr-BE", { weekday: "short", day: "numeric", month: "short" })
                         : s.day} · {s.time}
                     </p>
+                    <p className="meta-text" style={{ marginTop: 2, color: "var(--c-text-2)" }}>Objectif · {getSessionTrainingFocus(s).shortLabel}</p>
                   </div>
                   {s.pdfUrl && (
                     <button type="button" onClick={() => openSessionPdf(s.pdfUrl)}
@@ -5882,7 +5926,7 @@ export default function AthletePerfs({ athlete, competitions, myPerformances, my
             <div className="card" style={{ padding: 20 }}>
               <p className="card-title">Charge et niveau de performance</p>
               <p style={{ fontSize: 13, lineHeight: 1.5, color: "var(--c-text-2)", marginTop: 4, marginBottom: 16 }}>
-                Variation de charge moyenne 7 j vs 28 j (axe X) · % du PR réalisé (axe Y) — {selectedDisc}. Corrélation descriptive, pas prédiction.
+                Écart entre les 7 derniers jours et les 3 semaines précédentes (axe X) · % du record personnel réalisé (axe Y) — {selectedDisc}. Relation descriptive, pas prédiction.
               </p>
               <ResponsiveContainer width="100%" height={260}>
                 <ScatterChart margin={{ top: 12, right: 16, bottom: 12, left: 0 }}>
@@ -5898,7 +5942,7 @@ export default function AthletePerfs({ athlete, competitions, myPerformances, my
                         <p style={{ fontSize: 13, fontWeight: 700, color: "var(--c-text-1)" }}>{d.compName}</p>
                         <p style={{ fontSize: 12, color: "var(--c-text-2)", marginTop: 2, marginBottom: 8 }}>{parseLocalDate(d.date.slice(0, 10)).toLocaleDateString("fr-BE", { day: "numeric", month: "short", year: "numeric" })}</p>
                         <p style={{ fontSize: 12, color: "var(--c-text-2)" }}>Résultat : <strong style={{ color: "#7BD8B4" }}>{d.resultStr}</strong></p>
-                        <p style={{ fontSize: 12, color: "var(--c-text-2)", marginTop: 3 }}>Variation 7j/28j : <strong>{d.x >= 0 ? "+" : ""}{d.x}%</strong> · Niveau : <strong>{d.y}%</strong></p>
+                        <p style={{ fontSize: 12, color: "var(--c-text-2)", marginTop: 3 }}>Écart à l'habitude : <strong>{d.x >= 0 ? "+" : ""}{d.x}%</strong> · Niveau : <strong>{d.y}% du record</strong></p>
                       </div>
                     );
                   }} />
@@ -5916,7 +5960,7 @@ export default function AthletePerfs({ athlete, competitions, myPerformances, my
               </ResponsiveContainer>
               <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 12, fontSize: 12, color: "var(--c-text-2)" }}>
                 <span style={{ width: 10, height: 10, borderRadius: 3, background: "rgba(29,158,117,0.16)", border: "1px solid rgba(29,158,117,0.35)" }} />
-                <span>Zone de charge optimale (0.80 – 1.30)</span>
+                <span>Chaque point relie une compétition à la charge observée avant celle-ci. Le graphique montre une relation possible, pas une zone idéale ni une cause.</span>
               </div>
             </div>
           )}
@@ -6203,6 +6247,7 @@ import {
   Plus, ChevronLeft, ChevronRight, Clock, CalendarDays, CheckCircle,
 } from "lucide-react";
 import { MONTHS_FR, CATEGORIES, isSameDay, toLocalDateStr } from "../shared";
+import { getSessionTrainingFocus } from "../../domain/trainingFocus";
 import { parseLocalDate } from "../../utils/helpers";
 import { cat, StatusBadge, rpeColor } from "./planningShared";
 import CreateSessionModal from "./CreateSessionModal";
@@ -6321,6 +6366,7 @@ function SessionCard({ session, athleteId, isPast = false, compact = false, onOp
             <span style={{ fontSize: 12, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.06em", padding: "4px 10px", borderRadius: 99, background: c.border, color: "#0A150F" }}>
               {CATEGORIES.find(x => x.id === session.category)?.label ?? session.type}
             </span>
+            <span className="chip chip-neutral">{getSessionTrainingFocus(session).shortLabel}</span>
             {session.pdfUrl && (
               <span style={{ fontSize: 12, fontWeight: 700, padding: "3px 8px", borderRadius: 99, background: "rgba(91,158,245,0.16)", color: "#8DBDFA" }}>
                 PDF
@@ -6781,13 +6827,15 @@ import { supabase } from "../../utils/supabaseClient";
 import { notifyCoachAthleteSession } from "../../utils/notifications";
 import { CATEGORIES, dateToISOWeek, dateToDayName, toLocalDateStr } from "../shared";
 import { cat } from "./planningShared";
+import TrainingFocusField from "../../components/session/TrainingFocusField";
+import { getDefaultTrainingFocus } from "../../domain/trainingFocus";
 
 const PDF_MAX_BYTES = 30 * 1024 * 1024; // aligné sur file_size_limit du bucket session-pdfs
 
 const CreateSessionModal = memo(({ athlete, allAthletes, clubId, createdBy, coachUserId, onClose, onCreated }) => {
   const today = toLocalDateStr(new Date());
   const [form, setForm] = useState({
-    title: "", category: "technique", time: "10:00", durationMinutes: 60,
+    title: "", category: "technique", trainingFocus: "technical_general", time: "10:00", durationMinutes: 60,
     description: "", sessionDate: today, invitedAthletes: [],
   });
   const [pdfFile, setPdfFile] = useState(null);
@@ -6832,6 +6880,7 @@ const CreateSessionModal = memo(({ athlete, allAthletes, clubId, createdBy, coac
         club_id: clubId, week: dateToISOWeek(form.sessionDate), day: dateToDayName(form.sessionDate),
         session_date: form.sessionDate, time: form.time, type: catLabel, category: form.category,
         title: form.title, description: form.description || null, duration_minutes: form.durationMinutes,
+        training_focus: form.trainingFocus,
         load_weight: 1.0, pdf_url: pdfUrl, created_by: createdBy,
       }).select().single();
       if (se) throw se;
@@ -6911,7 +6960,7 @@ const CreateSessionModal = memo(({ athlete, allAthletes, clubId, createdBy, coac
                 const cc  = cat(id);
                 const sel = form.category === id;
                 return (
-                  <button key={id} type="button" aria-pressed={sel} onClick={() => set("category", id)}
+                  <button key={id} type="button" aria-pressed={sel} onClick={() => setForm(previous => ({ ...previous, category: id, trainingFocus: getDefaultTrainingFocus(id) }))}
                     className="tap-feedback"
                     style={{
                       minHeight: 44, padding: "8px 13px", borderRadius: 12, fontSize: 13, fontWeight: 700,
@@ -6927,6 +6976,12 @@ const CreateSessionModal = memo(({ athlete, allAthletes, clubId, createdBy, coac
               })}
             </div>
           </div>
+
+          <TrainingFocusField
+            category={form.category}
+            value={form.trainingFocus}
+            onChange={value => set("trainingFocus", value)}
+          />
 
           {/* Date + Heure */}
           <div className="grid grid-cols-2 gap-3">
@@ -7038,6 +7093,7 @@ import {
 import { LineChart, Line, ResponsiveContainer } from "recharts";
 import { supabase } from "../../utils/supabaseClient";
 import { CATEGORIES, colorsFor } from "../shared";
+import { getSessionTrainingFocus } from "../../domain/trainingFocus";
 import { getRPELabel } from "../../utils/chargeCalculations";
 import { parseLocalDate } from "../../utils/helpers";
 import {
@@ -7103,7 +7159,7 @@ function WeekReportDetail({ report }) {
           <p style={{ fontSize: 19, fontWeight: 700, color: "var(--c-text-1)", marginTop: 4 }}>{stats.total > 0 ? metrics.acute : "—"}</p>
         </div>
         <div style={{ padding: "12px 10px", borderRadius: 14, background: "var(--c-surface-2)", border: "1px solid var(--c-border)", textAlign: "center" }}>
-          <p style={{ fontSize: 12, fontWeight: 700, color: "var(--c-text-2)", textTransform: "uppercase", letterSpacing: "0.05em" }}>Charge 7 jours</p>
+          <p style={{ fontSize: 12, fontWeight: 700, color: "var(--c-text-2)", textTransform: "uppercase", letterSpacing: "0.05em" }}>Cette semaine</p>
           <p style={{ fontSize: 19, fontWeight: 700, color: "#A9CBFB", marginTop: 4 }}>
             {stats.total > 0 ? (metrics.load7 ?? "—") : "—"}
           </p>
@@ -7122,7 +7178,7 @@ function WeekReportDetail({ report }) {
               const col = colorsFor(c.id);
               return (
                 <span key={c.id} style={{ fontSize: 12, fontWeight: 700, padding: "6px 10px", borderRadius: 10, background: col.bg, color: col.text, border: `1px solid ${col.border}33` }}>
-                  {c.label} · {c.load} u.a.
+                  {c.label} · {c.load} points
                 </span>
               );
             })}
@@ -7155,13 +7211,14 @@ function WeekReportDetail({ report }) {
                       <span style={{ fontSize: 12, fontWeight: 700, padding: "3px 8px", borderRadius: 7, background: col.bg, color: col.text }}>
                         {CATEGORIES.find(c => c.id === s.category)?.label ?? s.category}
                       </span>
+                      <span className="chip chip-neutral">{getSessionTrainingFocus(s).shortLabel}</span>
                     </div>
                     <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 3, flexWrap: "wrap" }}>
                       <span style={{ fontSize: 12, color: "var(--c-text-2)" }}>
                         {s.sessionDate ? parseLocalDate(s.sessionDate.slice(0, 10)).toLocaleDateString("fr-BE", { weekday: "short", day: "numeric", month: "short" }) : s.day}
                       </span>
                       {s.rpe != null && <span style={{ fontSize: 12, fontWeight: 700, color: rpe.color }}>RPE {s.rpe} · {rpe.label}</span>}
-                      {s.load != null && <span style={{ fontSize: 12, color: "var(--c-text-2)" }}>{s.load} u.a.</span>}
+                      {s.load != null && <span style={{ fontSize: 12, color: "var(--c-text-2)" }}>{s.load} points d'effort</span>}
                     </div>
                     {s.comment && <p style={{ fontSize: 13, lineHeight: 1.5, color: "var(--c-text-2)", fontStyle: "italic", marginTop: 5 }}>« {s.comment} »</p>}
                   </div>
@@ -7273,7 +7330,7 @@ export default function MesRapports({ athlete, sessions, weeklyCharge }) {
             </div>
             <div style={{ display: "flex", alignItems: "baseline", gap: 6, marginBottom: 6 }}>
               <span style={{ fontSize: 22, fontWeight: 700, color: "var(--c-text-1)" }}>{monthAggregate.totalLoad}</span>
-              <span style={{ fontSize: 12, color: "var(--c-text-2)" }}>u.a. cumulées</span>
+              <span style={{ fontSize: 12, color: "var(--c-text-2)" }}>points d'effort cumulés</span>
             </div>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
               <span style={{ fontSize: 12, color: "var(--c-text-2)" }}>{monthAggregate.doneTotal}/{monthAggregate.sessionsTotal} séances faites</span>
@@ -7660,6 +7717,7 @@ import { useState, memo } from "react";
 import { createPortal } from "react-dom";
 import { X, ChevronRight, Users, FileText, Star } from "lucide-react";
 import { CATEGORIES } from "../shared";
+import { getSessionTrainingFocus } from "../../domain/trainingFocus";
 import { cat, StatusBadge, rpeColor } from "./planningShared";
 import { openSessionPdf } from "../../utils/storage";
 import { parseLocalDate } from "../../utils/helpers";
@@ -7667,6 +7725,7 @@ import { RSVP_OPTIONS } from "../../domain/sessionDay";
 
 const SessionDetailModal = memo(({ session, athlete, allAthletes, onClose, onSetStatus, onSetRpe, onSetFeeling, onSetComment, onSetRsvp }) => {
   const c   = cat(session.category);
+  const trainingFocus = getSessionTrainingFocus(session);
   const val = session.validations?.find(v => v.athleteId === athlete.id);
   const [comment, setComment] = useState(val?.comment ?? "");
   const [actualDuration, setActualDuration] = useState(
@@ -7747,6 +7806,9 @@ const SessionDetailModal = memo(({ session, athlete, allAthletes, onClose, onSet
               marginBottom: 10, background: c.border, color: "#0A150F",
             }}>
               {CATEGORIES.find(x => x.id === session.category)?.label ?? session.type}
+            </span>
+            <span className="text-[12px] font-semibold px-2.5 py-1 rounded-full" style={{ background: "rgba(255,255,255,0.06)", border: "1px solid var(--c-border)", color: "var(--c-text-1)" }}>
+              Objectif · {trainingFocus.shortLabel}
             </span>
             <h2 id="session-detail-title" style={{ fontSize: 20, fontWeight: 800, lineHeight: 1.2, color: c.text }}>
               {session.title}
@@ -9450,9 +9512,9 @@ import { Activity, CalendarDays, CheckCircle2, ShieldCheck, Sparkles, Users, X }
 import { useModalAccessibility } from "../../hooks/useModalAccessibility";
 
 const DEMO_ATHLETES = [
-  { name: "Nora", discipline: "Sprint", readiness: 86, state: "Prête" },
-  { name: "Yanis", discipline: "Haies", readiness: 74, state: "À surveiller" },
-  { name: "Lina", discipline: "Longueur", readiness: 91, state: "Prête" },
+  { name: "Nora", discipline: "Sprint", dailyState: 86, state: "Bon ressenti" },
+  { name: "Yanis", discipline: "Haies", dailyState: 54, state: "À discuter" },
+  { name: "Lina", discipline: "Longueur", dailyState: 91, state: "Bon ressenti" },
 ];
 
 export default function ClubDemoPreview({ onClose, onStart }) {
@@ -9484,7 +9546,7 @@ export default function ClubDemoPreview({ onClose, onStart }) {
               <h3>Le coach voit immédiatement où agir.</h3>
               <p>Les données importantes sont transformées en décisions simples et cliquables.</p>
             </div>
-            <div className="club-demo-score"><strong>82</strong><span>forme groupe</span></div>
+            <div className="club-demo-score"><strong>16/18</strong><span>états renseignés</span></div>
           </div>
 
           <div className="club-demo-metrics">
@@ -9504,7 +9566,7 @@ export default function ClubDemoPreview({ onClose, onStart }) {
                 <div className="club-demo-athlete" key={athlete.name}>
                   <span className="club-demo-avatar">{athlete.name.slice(0, 1)}</span>
                   <div><strong>{athlete.name}</strong><span>{athlete.discipline}</span></div>
-                  <div className="club-demo-readiness"><strong>{athlete.readiness}</strong><span>{athlete.state}</span></div>
+                  <div className="club-demo-readiness"><strong>{athlete.dailyState}</strong><span>{athlete.state}</span></div>
                 </div>
               ))}
             </article>
@@ -9513,7 +9575,7 @@ export default function ClubDemoPreview({ onClose, onStart }) {
               <div className="club-demo-panel-title"><h4>À faire aujourd’hui</h4><span>3 actions</span></div>
               {[
                 "Valider la séance Sprint",
-                "Consulter la fatigue de Yanis",
+                "Échanger avec Yanis sur son ressenti",
                 "Préparer la compétition de samedi",
               ].map((action) => (
                 <div className="club-demo-action" key={action}><CheckCircle2 size={17} aria-hidden="true" /><span>{action}</span></div>
@@ -10794,6 +10856,41 @@ describe("CoachSessionDayPanel", () => {
     await waitFor(() => expect(onRemindFeedback).toHaveBeenCalledWith(session));
   });
 });
+</file>
+
+<file path="src/components/session/TrainingFocusField.jsx">
+import { Info } from "lucide-react";
+import { getDefaultTrainingFocus, getTrainingFocus, getTrainingFocusOptions, isTrainingFocusCompatible } from "../../domain/trainingFocus";
+
+export default function TrainingFocusField({ category, value, onChange, label = "Objectif de la séance" }) {
+  const options = getTrainingFocusOptions(category);
+  const selectedId = isTrainingFocusCompatible(value, category) ? value : getDefaultTrainingFocus(category);
+  const selected = getTrainingFocus(selectedId, category);
+
+  return (
+    <div>
+      <label className="block text-[12px] font-bold uppercase tracking-wide mb-1.5" style={{ color: "var(--c-text-2)" }}>{label}</label>
+      <select
+        className="input-premium"
+        value={selectedId}
+        onChange={event => onChange(event.target.value)}
+        aria-describedby="training-focus-help"
+      >
+        {options.map(option => <option key={option.id} value={option.id}>{option.label}</option>)}
+      </select>
+      <div id="training-focus-help" className="mt-2 rounded-xl border p-3" style={{ background: "rgba(91,158,245,0.06)", borderColor: "rgba(91,158,245,0.18)" }}>
+        <div className="flex items-start gap-2">
+          <Info size={14} className="mt-0.5 shrink-0" style={{ color: "#A9CBFB" }} />
+          <div>
+            <p className="text-[13px] font-semibold" style={{ color: "var(--c-text-1)" }}>{selected.description}</p>
+            <p className="mt-1 text-[12px] leading-5" style={{ color: "var(--c-text-2)" }}>{selected.example}</p>
+            <p className="mt-1 text-[12px] leading-5" style={{ color: "#A9CBFB" }}>Ce choix explique la séance. Il ne modifie jamais la charge, qui reste durée réelle × effort ressenti.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
 </file>
 
 <file path="src/components/ui/premium/index.js">
@@ -12933,7 +13030,7 @@ function RadarDot({ cx, cy, payload }) {
 }
 
 const AxisRadarCard = memo(({
-  profile, title = "Profil de charge", subtitle = "Répartition descriptive des contraintes de la dernière semaine connue",
+  profile, title = "Ce que les séances ont surtout sollicité", subtitle = "Lecture descriptive de la dernière semaine connue, basée sur l'objectif déclaré de chaque séance.",
   sessions = null, athleteId = null, currentWeek = null,
 }) => {
   const [expanded, setExpanded] = useState(null); // axisId ouvert, ou null
@@ -12953,7 +13050,7 @@ const AxisRadarCard = memo(({
       <ResponsiveContainer width="100%" height={200}>
         <RadarChart data={data} cx="50%" cy="50%" outerRadius="70%">
           <PolarGrid stroke="var(--c-border)" />
-          <PolarAngleAxis dataKey="axis" tick={{ fontSize: 10.5, fill: "var(--c-text-2)", fontWeight: 600 }} />
+          <PolarAngleAxis dataKey="axis" tick={{ fontSize: 12, fill: "var(--c-text-2)", fontWeight: 600 }} />
           <PolarRadiusAxis angle={90} domain={[0, 100]} tick={false} axisLine={false} />
           <Radar
             dataKey="score"
@@ -12984,34 +13081,35 @@ const AxisRadarCard = memo(({
               >
                 <div className="flex items-center gap-2.5">
                   <span style={{ width: 7, height: 7, borderRadius: "50%", background: p.color, flexShrink: 0 }} />
-                  <span style={{ fontSize: 12, fontWeight: 500, color: "var(--c-text-1)", flex: 1 }}>{axis.label}</span>
-                  <span style={{ fontSize: 10.5, fontWeight: 700, color: p.color, flexShrink: 0 }}>{p.label}</span>
+                  <span style={{ fontSize: 13, fontWeight: 600, color: "var(--c-text-1)", flex: 1 }}>{axis.label}</span>
+                  <span style={{ fontSize: 12, fontWeight: 700, color: p.color, flexShrink: 0 }}>{p.label}</span>
                 </div>
                 {flagged && (
-                  <p style={{ fontSize: 10, color: "var(--c-text-3)", marginTop: 3, marginLeft: 17, lineHeight: 1.4 }}>
+                  <p style={{ fontSize: 12, color: "var(--c-text-2)", marginTop: 4, marginLeft: 17, lineHeight: 1.5 }}>
                     {axis.what}
                   </p>
                 )}
               </button>
 
               {isOpen && (
-                <div style={{ padding: "0 10px 10px 17px", fontSize: 10.5, color: "var(--c-text-3)", lineHeight: 1.6 }}>
+                <div style={{ padding: "2px 10px 12px 17px", fontSize: 12, color: "var(--c-text-2)", lineHeight: 1.6 }}>
                   <div className="flex items-center gap-1.5 mb-2">
-                    <span className="chip chip-warning" style={{ fontSize: 9 }}>Convention AthleteOS</span>
-                    <span style={{ fontSize: 9 }}>modèle {CURRENT_AXIS_MODEL_VERSION}</span>
+                    <span className="chip chip-warning">Lecture descriptive</span>
+                    <span>modèle {CURRENT_AXIS_MODEL_VERSION}</span>
                   </div>
+                  <p><strong style={{ color: "var(--c-text-1)" }}>{axis.scientificLabel}</strong> · {axis.what}</p>
                   <p>
                     Charge de la semaine S{p.currentWeek} : <strong style={{ color: "var(--c-text-2)" }}>{p.currentLoad}</strong>
                     {p.habitualLoad != null && <> · Moyenne précédente : <strong style={{ color: "var(--c-text-2)" }}>{p.habitualLoad}</strong></>}
                   </p>
                   <p style={{ marginTop: 2 }}>
-                    Qualité de l'historique : <strong style={{ color: "var(--c-text-2)" }}>{p.dataQuality}</strong> ({p.weeksOfData} semaine{p.weeksOfData > 1 ? "s" : ""} de données). Convention descriptive, pas estimation de risque.
+                    Historique disponible : <strong style={{ color: "var(--c-text-1)" }}>{p.dataQuality}</strong> ({p.weeksOfData} semaine{p.weeksOfData > 1 ? "s" : ""}). Cette lecture répartit la charge globale pour aider à comprendre le contenu ; ce n'est ni une mesure physiologique directe ni une estimation de risque.
                   </p>
                   {contributors.length > 0 && (
                     <div style={{ marginTop: 6 }}>
                       <p style={{ fontWeight: 500, color: "var(--c-text-2)" }}>Séances qui contribuent le plus :</p>
                       {contributors.map(c => (
-                        <p key={c.id}>· {c.title} (S{c.week}) — {c.axisLoad}</p>
+                        <p key={c.id}>· {c.title} · {c.focusLabel ?? "objectif général"} (S{c.week}) — contribution {c.axisLoad}</p>
                       ))}
                     </div>
                   )}
@@ -14325,20 +14423,22 @@ export const statusThresholds = {
 import { computeWellnessScore } from "../utils/trainingLoad";
 
 const FACTORS = Object.freeze([
-  { key: "sleep", label: "Sommeil", inverted: false },
-  { key: "energy", label: "Énergie", inverted: false },
-  { key: "soreness", label: "Courbatures", inverted: true },
-  { key: "mood", label: "Humeur", inverted: false },
-  { key: "stress", label: "Stress", inverted: true },
+  { key: "sleep", label: "Sommeil", inverted: false, positive: "Ton sommeil t'aide aujourd'hui", attention: "Ton sommeil semble moins bon aujourd'hui" },
+  { key: "energy", label: "Énergie", inverted: false, positive: "Tu déclares une bonne énergie", attention: "Tu déclares peu d'énergie" },
+  { key: "soreness", label: "Courbatures", inverted: true, positive: "Tu déclares peu de courbatures", attention: "Tes courbatures sont marquées" },
+  { key: "mood", label: "Humeur", inverted: false, positive: "Ton humeur est positive", attention: "Ton humeur est plus basse" },
+  { key: "stress", label: "Stress", inverted: true, positive: "Tu déclares peu de stress", attention: "Ton stress est marqué" },
 ]);
 
 function factorReading(factor, value) {
   if (value == null) return { ...factor, value: null, oriented: null, tone: "unknown", meaning: "Non renseigné" };
   const oriented = factor.inverted ? 6 - Number(value) : Number(value);
   const tone = oriented >= 4 ? "positive" : oriented <= 2 ? "attention" : "neutral";
-  const meaning = factor.inverted
-    ? (value <= 2 ? "Peu marqué" : value >= 4 ? "Marqué aujourd’hui" : "Intermédiaire")
-    : (value >= 4 ? "Positif aujourd’hui" : value <= 2 ? "Bas aujourd’hui" : "Intermédiaire");
+  const meaning = tone === "positive"
+    ? factor.positive
+    : tone === "attention"
+      ? factor.attention
+      : "Ta réponse est au milieu de l'échelle";
   return { ...factor, value: Number(value), oriented, tone, meaning };
 }
 
@@ -14353,34 +14453,53 @@ export function buildDailyState({ wellness, history = [], metrics = {} }) {
     ? Math.round(pastScores.reduce((sum, value) => sum + value, 0) / pastScores.length)
     : null;
   const delta = score != null && baseline != null ? score - baseline : null;
-  const variation = metrics.variation == null
+  const rawVariation = metrics.variationPercent ?? metrics.variation;
+  const variation = rawVariation == null
     ? null
-    : Number.isFinite(Number(metrics.variation)) ? Number(metrics.variation) : null;
+    : Number.isFinite(Number(rawVariation)) ? Number(rawVariation) : null;
 
   if (score == null) return {
-    score: null, label: "Ton check-in manque", color: "#8A9B90", tone: "unknown",
-    summary: "Réponds aux cinq questions pour obtenir une lecture claire de ton ressenti aujourd’hui.",
+    score: null, label: "Comment te sens-tu aujourd'hui ?", legacyLabel: "Ton check-in manque", color: "#8A9B90", tone: "unknown",
+    summary: "Réponds aux cinq questions pour donner à ton coach une image simple de ton ressenti.",
+    plainHeadline: "Ton ressenti n'est pas encore renseigné",
+    plainSummary: "Cinq réponses suffisent pour voir ce qui t'aide et ce qui mérite une discussion.",
+    helps: [], watch: [], coachPrompt: "Complète ton check-in avant la séance si tu le peux.",
     factors, baseline, delta, variation, known: factors.filter(item => item.value != null).length,
   };
 
   let descriptor = score >= 75
-    ? { label: "Plutôt favorable", color: "#4DC9A0", tone: "positive" }
+    ? { label: "De bonnes ressources aujourd'hui", legacyLabel: "Plutôt favorable", color: "#4DC9A0", tone: "positive" }
     : score >= 55
-      ? { label: baseline == null ? "Ressenti plutôt équilibré" : "Dans tes habitudes", color: "#69C5F7", tone: "neutral" }
+      ? { label: baseline == null ? "Un état globalement équilibré" : "Un état proche de tes habitudes", legacyLabel: baseline == null ? "Ressenti plutôt équilibré" : "Dans tes habitudes", color: "#69C5F7", tone: "neutral" }
       : score >= 35
-        ? { label: "À adapter aujourd’hui", color: "#F2C46D", tone: "attention" }
-        : { label: "Journée exigeante", color: "#F29B9A", tone: "attention" };
-  if (baseline != null && score >= 55 && score < 75 && delta >= 12) descriptor = { label: "Mieux que ton habitude", color: "#4DC9A0", tone: "positive" };
-  if (baseline != null && score >= 55 && score < 75 && delta <= -12) descriptor = { label: "En dessous de ton habitude", color: "#F2C46D", tone: "attention" };
+        ? { label: "Quelques points à adapter", legacyLabel: "À adapter aujourd'hui", color: "#F2C46D", tone: "attention" }
+        : { label: "Une journée à aborder avec prudence", legacyLabel: "Journée exigeante", color: "#F29B9A", tone: "attention" };
+  if (baseline != null && score >= 55 && score < 75 && delta >= 12) descriptor = { label: "Tu te sens mieux que d'habitude", legacyLabel: "Mieux que ton habitude", color: "#4DC9A0", tone: "positive" };
+  if (baseline != null && score >= 55 && score < 75 && delta <= -12) descriptor = { label: "Tu te sens moins bien que d'habitude", legacyLabel: "En dessous de ton habitude", color: "#F2C46D", tone: "attention" };
   const attention = factors.filter(item => item.tone === "attention");
   const positive = factors.filter(item => item.tone === "positive");
-  let summary = positive.length
-    ? `${positive.slice(0, 2).map(item => item.label.toLowerCase()).join(" et ")} ${positive.length > 1 ? "sont" : "est"} favorable${positive.length > 1 ? "s" : ""} aujourd’hui.`
-    : "Ton ressenti est proche du milieu de l’échelle aujourd’hui.";
-  if (attention.length) summary += ` ${attention.slice(0, 2).map(item => item.label).join(" et ")} mérite${attention.length > 1 ? "nt" : ""} ton attention.`;
-  if (variation != null && variation > 25) summary += " Ta charge récente est aussi plus élevée que d’habitude.";
+  const helps = positive.map(item => item.meaning);
+  const watch = attention.map(item => item.meaning);
+  let summary = attention.length
+    ? `${attention.slice(0, 2).map(item => item.label).join(" et ")} mérite${attention.length > 1 ? "nt" : ""} une attention particulière.`
+    : "Aucun des cinq ressentis déclarés ne ressort comme un point d'attention marqué.";
+  if (positive.length) summary = `${positive.slice(0, 2).map(item => item.label).join(" et ")} ${positive.length > 1 ? "sont" : "est"} plutôt favorable${positive.length > 1 ? "s" : ""}. ${summary}`;
+  const loadContext = variation == null
+    ? "Ta charge récente reste affichée séparément dès que suffisamment de séances sont renseignées."
+    : variation > 20
+      ? "Ta charge récente est plus élevée que ton rythme habituel."
+      : variation < -20
+        ? "Ta charge récente est plus basse que ton rythme habituel."
+        : "Ta charge récente est proche de ton rythme habituel.";
+  const coachPrompt = attention.length
+    ? `Parle à ton coach de ${attention.slice(0, 2).map(item => item.label.toLowerCase()).join(" et ")} avant d'adapter la séance.`
+    : "Si ton ressenti change pendant l'échauffement, signale-le simplement à ton coach.";
 
-  return { ...descriptor, score, summary, factors, baseline, delta, variation, known: 5 };
+  return {
+    ...descriptor, score, summary, plainHeadline: descriptor.label,
+    plainSummary: summary, loadContext, helps, watch, coachPrompt,
+    factors, baseline, delta, variation, known: 5,
+  };
 }
 
 export function buildGroupDailyState(athletes, wellnessRows, metricsByAthlete = new Map()) {
@@ -14407,10 +14526,20 @@ describe("repère AthleteOS du jour", () => {
   it("normalise le questionnaire sur 0 à 100 et explique les facteurs", () => {
     const state = buildDailyState({ wellness: { date: "2026-08-01", sleep: 5, energy: 4, soreness: 4, mood: 4, stress: 1 } });
     expect(state.score).toBe(75);
-    expect(state.label).toBe("Plutôt favorable");
+    expect(state.label).toBe("De bonnes ressources aujourd'hui");
+    expect(state.legacyLabel).toBe("Plutôt favorable");
     expect(state.factors.find(item => item.key === "soreness")).toMatchObject({ tone: "attention" });
     expect(state.summary).toContain("Courbatures");
+    expect(state.watch).toContain("Tes courbatures sont marquées");
     expect(state.variation).toBeNull();
+  });
+
+  it("utilise la variation actuelle sans la mélanger au score de ressenti", () => {
+    const wellness = { sleep: 4, energy: 4, soreness: 2, mood: 4, stress: 2 };
+    const stable = buildDailyState({ wellness, metrics: { variationPercent: 5 } });
+    const higher = buildDailyState({ wellness, metrics: { variationPercent: 35 } });
+    expect(stable.score).toBe(higher.score);
+    expect(higher.loadContext).toContain("plus élevée");
   });
 
   it("compare uniquement à une référence personnelle suffisamment renseignée", () => {
@@ -14988,8 +15117,8 @@ export const MONITORING_METRICS = {
   },
   load28: {
     label: "Charge observée · 28 jours",
-    shortLabel: "Charge du dernier mois",
-    athleteMeaning: "Ton historique des 4 dernières semaines",
+    shortLabel: "Ton rythme habituel",
+    athleteMeaning: "La charge cumulée de tes 4 dernières semaines, utilisée comme point de comparaison",
     color: "#14B8A6",
     kind: "Mesure de charge interne",
     evidence: "Méthode publiée",
@@ -15060,8 +15189,8 @@ export const MONITORING_METRICS = {
   },
   dataQuality: {
     label: "Qualité de l'historique",
-    shortLabel: "Données disponibles",
-    athleteMeaning: "Les jours assez renseignés pour interpréter ta charge",
+    shortLabel: "Peut-on bien interpréter ?",
+    athleteMeaning: "Les jours assez renseignés pour que la comparaison soit fiable",
     color: "#94A3B8",
     kind: "Contrôle de complétude",
     evidence: "Contrôle technique",
@@ -15103,39 +15232,43 @@ export function getMonitoringReading(key, metrics = {}) {
     unit = "/100";
     if (value != null) {
       displayValue = formatNumber(value);
-      interpretation = `Questionnaire complété : ${displayValue}/100. Lis surtout le détail des cinq réponses.`;
+      interpretation = `Tes cinq réponses du jour donnent un résumé de ${displayValue}/100. Lis surtout ce qui t'aide et ce qui mérite ton attention.`;
     } else missingReason = "Le questionnaire AthleteOS du jour n'a pas encore été complété.";
   } else if (key === "load7" || key === "load28") {
     value = metrics[key];
     unit = "u";
     if (value != null) {
       displayValue = formatNumber(value);
-      interpretation = `${displayValue} unités de charge session-RPE observées sur ${key === "load7" ? 7 : 28} jours.`;
+      interpretation = key === "load7"
+        ? `Tu as cumulé ${displayValue} points d'effort sur les 7 derniers jours.`
+        : `Tu as cumulé ${displayValue} points d'effort sur les 4 dernières semaines. C'est ton rythme récent de comparaison.`;
     } else missingReason = `La fenêtre de ${key === "load7" ? 7 : 28} jours contient au moins un jour inconnu.`;
   } else if (key === "ewmaAcute" || key === "ewmaChronic") {
     value = key === "ewmaAcute" ? metrics.acute : metrics.chronic;
     unit = "u";
     if (value != null) {
       displayValue = formatNumber(value);
-      interpretation = `${displayValue} unités dans la moyenne exponentielle ${key === "ewmaAcute" ? "courte" : "longue"}.`;
+      interpretation = key === "ewmaAcute"
+        ? `Le calcul donne davantage d'importance à tes tout derniers jours : ${displayValue}.`
+        : `Le calcul lisse ton dernier mois pour obtenir une tendance plus stable : ${displayValue}.`;
     } else missingReason = "Aucune séquence quotidienne connue ne permet encore le lissage.";
   } else if (key === "variation") {
     value = metrics.variationPercent;
     unit = "%";
     if (value != null) {
       displayValue = `${value > 0 ? "+" : ""}${formatNumber(value)}`;
-      const direction = value > 0 ? "plus élevée" : value < 0 ? "plus basse" : "similaire";
-      interpretation = `La moyenne quotidienne récente est ${direction} que celle des 21 jours précédents (${displayValue}%).`;
+      const direction = value >= 10 ? "plus élevée que d'habitude" : value <= -10 ? "plus basse que d'habitude" : "stable par rapport à ton habitude";
+      interpretation = `Ta charge est ${direction} (${displayValue} %). Le pourcentage explique l'écart ; ce n'est ni une note ni un seuil de danger.`;
     } else missingReason = "La comparaison demande 28 jours connus et une moyenne habituelle supérieure à zéro.";
   } else if (key === "monotony") {
     value = metrics.monotony;
     if (metrics.monotonyStatus === "undefined_zero_variance") {
       displayValue = "Indéfinie";
-      interpretation = "Les sept charges quotidiennes sont identiques : l'écart-type est nul.";
+      interpretation = "Tes sept journées ont exactement la même charge. L'écart-type est nul : le calcul mathématique ne peut donc pas produire un nombre utile.";
       missingReason = null;
     } else if (value != null) {
       displayValue = formatNumber(value);
-      interpretation = `Monotonie descriptive calculée sur les sept jours connus : ${displayValue}.`;
+      interpretation = `Ce nombre décrit à quel point les charges de tes sept journées se ressemblent : ${displayValue}. Il ne juge pas la qualité du programme.`;
     } else missingReason = "Sept charges quotidiennes connues sont nécessaires.";
   } else if (key === "spacing") {
     const recovery = metrics.recovery;
@@ -15153,10 +15286,10 @@ export function getMonitoringReading(key, metrics = {}) {
     value = Math.min(metrics.observedDays ?? 0, 28);
     displayValue = `${value}/28`;
     interpretation = metrics.known28
-      ? "Les fenêtres de 7 et 28 jours sont complètes."
+      ? "Tous les jours nécessaires sont renseignés : la comparaison peut être lue correctement."
       : metrics.known7
-        ? "La fenêtre de 7 jours est complète ; celle de 28 jours reste partielle."
-        : "Au moins un jour récent reste inconnu ; confirme les repos et complète les durées/RPE.";
+        ? "Cette semaine est complète, mais il manque encore des jours dans le mois de comparaison."
+        : "Il manque au moins un jour récent. Confirme les repos et complète les durées et efforts ressentis.";
     missingReason = null;
   } else if (key === "acwrExperimental") {
     value = metrics.acwr;
@@ -15454,6 +15587,126 @@ describe("migration des performances structurées", () => {
     expect(sql).toContain("u.role IN ('head_coach', 'coach')");
     expect(sql).toContain("RAISE EXCEPTION 'Résultat inaccessible.'");
     expect(sql).toContain("RAISE EXCEPTION 'Performance inaccessible.'");
+  });
+});
+</file>
+
+<file path="src/domain/trainingFocus.js">
+// Objectif déclaré de la séance d'athlétisme.
+//
+// Ce catalogue décrit ce que la séance cherche à travailler. Il ne change
+// jamais la charge session-RPE (durée réelle × RPE) et ne prédit ni fatigue,
+// ni performance, ni risque. Une même distance peut donc avoir des objectifs
+// différents : le coach choisit l'intention au lieu de laisser l'application
+// la deviner à partir du titre ou du volume.
+
+const weights = (neuromuscular, elastic, metabolic, muscular, technical, mental) => ({
+  neuromuscular, elastic, metabolic, muscular, technical, mental,
+});
+
+export const TRAINING_FOCUS_GROUPS = Object.freeze({
+  sprint: [
+    { id: "sprint_general", label: "Sprint · objectif général", shortLabel: "Sprint général", description: "Séance de sprint sans objectif plus précis.", example: "À utiliser pour les anciennes séances ou si l'objectif reste mixte.", weights: weights(1, .7, .35, .35, .55, .4) },
+    { id: "acceleration", label: "Départs & accélération", shortLabel: "Accélération", description: "Produire rapidement de la vitesse sur les premières foulées.", example: "Départs, 10 à 60 m, côtes courtes.", weights: weights(1, .7, .2, .45, .65, .5) },
+    { id: "max_velocity", label: "Vitesse maximale", shortLabel: "Vitesse max", description: "Courir très vite avec beaucoup de récupération et une haute qualité d'exécution.", example: "Lancé, 40 à 80 m, travail de fréquence et de relâchement.", weights: weights(1, .85, .25, .4, .6, .55) },
+    { id: "speed_endurance", label: "Tenir la vitesse", shortLabel: "Tenue de vitesse", description: "Maintenir une vitesse élevée quand l'effort se prolonge.", example: "Répétitions rapides typiques du 100–200 m.", weights: weights(.85, .65, .7, .5, .45, .55) },
+    { id: "special_endurance", label: "Résistance sprint", shortLabel: "Résistance sprint", description: "Résister à la baisse de vitesse sur un effort long de sprint.", example: "150 à 600 m selon le niveau et l'épreuve, notamment 300–400 m.", weights: weights(.65, .5, 1, .55, .4, .65) },
+    { id: "sprint_tempo", label: "Tempo & relâchement", shortLabel: "Tempo sprint", description: "Courir relâché à intensité contrôlée, sans rechercher la vitesse maximale.", example: "Répétitions sous-maximales avec récupération courte à modérée.", weights: weights(.35, .45, .65, .35, .45, .3) },
+    { id: "sprint_technical", label: "Technique de course", shortLabel: "Technique sprint", description: "Améliorer les placements, le rythme et la qualité du geste.", example: "Gammes, éducatifs, passages techniques.", weights: weights(.45, .45, .25, .25, 1, .4) },
+  ],
+  haies: [
+    { id: "hurdles_general", label: "Haies · objectif général", shortLabel: "Haies général", description: "Séance de haies à objectif mixte.", example: "Travail global de franchissement.", weights: weights(.85, .8, .35, .35, .9, .55) },
+    { id: "hurdle_technique", label: "Technique de franchissement", shortLabel: "Technique haies", description: "Travailler les placements et la qualité du franchissement.", example: "Haies basses, éducatifs, jambe d'attaque et retour.", weights: weights(.5, .65, .25, .25, 1, .55) },
+    { id: "hurdle_rhythm", label: "Rythme inter-haies", shortLabel: "Rythme haies", description: "Stabiliser le nombre de foulées et le rythme entre les obstacles.", example: "Parcours espacés ou rapprochés selon l'objectif.", weights: weights(.75, .75, .55, .35, .9, .65) },
+    { id: "hurdle_speed", label: "Vitesse sur les haies", shortLabel: "Vitesse haies", description: "Associer haute vitesse et franchissement de qualité.", example: "Départs et passages rapides avec récupération longue.", weights: weights(1, .85, .4, .4, .8, .65) },
+  ],
+  endurance: [
+    { id: "endurance_general", label: "Endurance · objectif général", shortLabel: "Endurance générale", description: "Séance d'endurance à objectif mixte ou non précisé.", example: "Utilisable pour les anciennes séances.", weights: weights(.2, .25, 1, .3, .2, .3) },
+    { id: "easy_run", label: "Footing facile", shortLabel: "Footing facile", description: "Courir à une allure confortable, propice à l'échange.", example: "Footing souple ou reprise progressive.", weights: weights(.1, .2, .55, .2, .15, .15) },
+    { id: "aerobic_endurance", label: "Endurance aérobie", shortLabel: "Endurance aérobie", description: "Développer la capacité à soutenir un effort continu modéré.", example: "Course continue ou répétitions longues contrôlées.", weights: weights(.15, .2, .85, .25, .15, .25) },
+    { id: "threshold", label: "Allure soutenue / seuil", shortLabel: "Allure soutenue", description: "Soutenir une allure exigeante mais contrôlée sur plusieurs minutes.", example: "Blocs longs ou tempo continu soutenu.", weights: weights(.2, .25, 1, .3, .2, .45) },
+    { id: "vma_vo2", label: "VMA / travail VO₂", shortLabel: "VMA", description: "Répéter des efforts à allure élevée pour solliciter fortement le système aérobie.", example: "Un 3 × 300 m peut appartenir ici si l'intention est la VMA.", weights: weights(.35, .4, 1, .4, .25, .5) },
+    { id: "race_pace", label: "Allure spécifique", shortLabel: "Allure spécifique", description: "Se rapprocher du rythme et des exigences de l'épreuve préparée.", example: "Allure 800 m, 1 500 m, 5 000 m, etc.", weights: weights(.3, .35, .95, .4, .35, .6) },
+    { id: "active_recovery", label: "Récupération active", shortLabel: "Récupération active", description: "Bouger facilement sans chercher un stimulus d'entraînement important.", example: "Footing très léger, vélo doux ou mobilité dynamique.", weights: weights(.05, .1, .3, .1, .1, .1) },
+  ],
+  saut: [
+    { id: "jump_general", label: "Saut · objectif général", shortLabel: "Saut général", description: "Séance de saut à objectif mixte.", example: "Utilisable pour les anciennes séances.", weights: weights(.8, 1, .3, .4, .8, .5) },
+    { id: "jump_technical", label: "Technique de saut", shortLabel: "Technique saut", description: "Améliorer l'élan, l'appel, le franchissement ou la réception.", example: "Répétitions techniques à qualité contrôlée.", weights: weights(.6, .7, .2, .3, 1, .55) },
+    { id: "approach_run", label: "Course d'élan", shortLabel: "Course d'élan", description: "Stabiliser la vitesse, les marques et le placement avant l'appel.", example: "Élans partiels ou complets sans saut maximal systématique.", weights: weights(.75, .55, .25, .25, 1, .5) },
+    { id: "plyometrics", label: "Pliométrie", shortLabel: "Pliométrie", description: "Produire rapidement de la force avec des contacts brefs et dynamiques.", example: "Sauts réactifs, contrebas, haies bondissantes selon le niveau.", weights: weights(.8, 1, .35, .55, .4, .45) },
+    { id: "bounds", label: "Bonds", shortLabel: "Bonds", description: "Enchaîner des appuis bondissants horizontaux ou alternés.", example: "Multibonds, foulées bondissantes, cloche-pied.", weights: weights(.7, 1, .45, .55, .45, .4) },
+    { id: "jump_power", label: "Impulsion & explosivité", shortLabel: "Explosivité", description: "Développer une production de force rapide à l'appel.", example: "Sauts courts, appels isolés, exercices explosifs.", weights: weights(1, .85, .25, .65, .45, .5) },
+  ],
+  lancer: [
+    { id: "throw_general", label: "Lancer · objectif général", shortLabel: "Lancer général", description: "Séance de lancer à objectif mixte.", example: "Utilisable pour les anciennes séances.", weights: weights(.7, .45, .2, .7, .9, .45) },
+    { id: "throw_technical", label: "Technique de lancer", shortLabel: "Technique lancer", description: "Améliorer les placements, le rythme et la trajectoire de l'engin.", example: "Lancers éducatifs, partiels ou complets contrôlés.", weights: weights(.55, .35, .15, .5, 1, .55) },
+    { id: "throw_power", label: "Explosivité de lancer", shortLabel: "Explosivité lancer", description: "Produire rapidement de la force dans le geste de lancer.", example: "Lancers dynamiques, engins adaptés, mouvements explosifs.", weights: weights(.9, .5, .2, .85, .55, .55) },
+    { id: "medicine_ball", label: "Médecine-ball", shortLabel: "Médecine-ball", description: "Développer la coordination et la puissance par des lancers variés.", example: "Lancers avant, arrière, rotationnels ou au-dessus de la tête.", weights: weights(.7, .35, .3, .8, .45, .4) },
+  ],
+  force: [
+    { id: "strength_general", label: "Musculation · objectif général", shortLabel: "Musculation", description: "Séance de renforcement à objectif mixte.", example: "Utilisable pour les anciennes séances.", weights: weights(.6, .3, .3, 1, .3, .35) },
+    { id: "max_strength", label: "Force maximale", shortLabel: "Force maximale", description: "Déplacer des charges élevées avec peu de répétitions et une technique maîtrisée.", example: "Séries lourdes avec récupération importante.", weights: weights(.85, .2, .2, 1, .4, .55) },
+    { id: "strength_power", label: "Force-vitesse / puissance", shortLabel: "Puissance", description: "Produire de la force rapidement avec une intention explosive.", example: "Mouvements explosifs, charges adaptées, dérivés olympiques.", weights: weights(1, .45, .3, .85, .5, .5) },
+    { id: "general_strength", label: "Renforcement général", shortLabel: "Renforcement", description: "Développer une base musculaire globale et contrôlée.", example: "Circuit, gainage, exercices unilatéraux.", weights: weights(.4, .25, .45, .85, .35, .3) },
+    { id: "targeted_strength", label: "Renforcement ciblé", shortLabel: "Renforcement ciblé", description: "Travailler une zone ou une qualité définie par le programme.", example: "Mollets, ischio-jambiers, pied, tronc ou épaule.", weights: weights(.35, .25, .25, 1, .4, .3) },
+  ],
+  technique: [
+    { id: "technical_general", label: "Technique générale", shortLabel: "Technique", description: "Apprendre ou stabiliser un geste précis.", example: "Éducatifs et répétitions de qualité.", weights: weights(.3, .3, .2, .2, 1, .35) },
+  ],
+  mobilite: [
+    { id: "mobility_general", label: "Mobilité", shortLabel: "Mobilité", description: "Travailler l'amplitude et le contrôle du mouvement.", example: "Mobilité active, routine articulaire, contrôle moteur.", weights: weights(.1, .2, .1, .15, .3, .2) },
+  ],
+  recuperation: [
+    { id: "recovery_general", label: "Récupération", shortLabel: "Récupération", description: "Séance facile orientée vers le relâchement et le retour au calme.", example: "Mobilité douce, marche, vélo léger ou routine de récupération.", weights: weights(.05, .05, .1, .05, .05, .1) },
+  ],
+});
+
+const ALL_FOCUSES = Object.values(TRAINING_FOCUS_GROUPS).flat();
+const FOCUS_BY_ID = new Map(ALL_FOCUSES.map(item => [item.id, item]));
+const FOCUS_CATEGORY_BY_ID = new Map(Object.entries(TRAINING_FOCUS_GROUPS).flatMap(([category, items]) => items.map(item => [item.id, category])));
+
+export function getTrainingFocusOptions(category) {
+  return TRAINING_FOCUS_GROUPS[category] ?? TRAINING_FOCUS_GROUPS.technique;
+}
+
+export function getDefaultTrainingFocus(category) {
+  return getTrainingFocusOptions(category)[0]?.id ?? "technical_general";
+}
+
+export function getTrainingFocus(focusId, category) {
+  const focus = FOCUS_BY_ID.get(focusId);
+  if (focus && (!category || FOCUS_CATEGORY_BY_ID.get(focusId) === category)) return focus;
+  return FOCUS_BY_ID.get(getDefaultTrainingFocus(category));
+}
+
+export function getSessionTrainingFocus(session) {
+  return getTrainingFocus(session?.trainingFocus ?? session?.training_focus, session?.category);
+}
+
+export function isTrainingFocusCompatible(focusId, category) {
+  return getTrainingFocusOptions(category).some(item => item.id === focusId);
+}
+</file>
+
+<file path="src/domain/trainingFocus.test.js">
+import { describe, expect, it } from "vitest";
+import { getDefaultTrainingFocus, getSessionTrainingFocus, getTrainingFocus, getTrainingFocusOptions, isTrainingFocusCompatible } from "./trainingFocus";
+
+describe("objectifs de séance d'athlétisme", () => {
+  it("couvre les intentions qui ne peuvent pas être déduites de la distance", () => {
+    expect(getTrainingFocusOptions("sprint").map(item => item.id)).toEqual(expect.arrayContaining(["acceleration", "max_velocity", "speed_endurance", "special_endurance"]));
+    expect(getTrainingFocusOptions("endurance").map(item => item.id)).toEqual(expect.arrayContaining(["easy_run", "vma_vo2", "race_pace"]));
+    expect(getTrainingFocusOptions("saut").map(item => item.id)).toEqual(expect.arrayContaining(["plyometrics", "bounds", "jump_technical"]));
+  });
+
+  it("reste compatible avec les anciennes séances sans objectif détaillé", () => {
+    expect(getSessionTrainingFocus({ category: "sprint" }).id).toBe("sprint_general");
+    expect(getSessionTrainingFocus({ category: "endurance" }).id).toBe("endurance_general");
+  });
+
+  it("retombe sur un objectif générique si une valeur appartient à une autre catégorie", () => {
+    expect(isTrainingFocusCompatible("vma_vo2", "sprint")).toBe(false);
+    expect(getTrainingFocus("unknown", "saut").id).toBe(getDefaultTrainingFocus("saut"));
   });
 });
 </file>
@@ -16432,6 +16685,8 @@ import { X, Plus, CheckCircle } from "lucide-react";
 import { supabase }  from "../utils/supabaseClient";
 import { useAuth }   from "../context/AuthContext";
 import { CATEGORIES, SESSION_COLORS, EMPTY_FORM, dateToISOWeek, dateToDayName, toLocalDateStr } from "./planningShared";
+import TrainingFocusField from "../components/session/TrainingFocusField";
+import { getDefaultTrainingFocus, isTrainingFocusCompatible } from "../domain/trainingFocus";
 
 const PDF_MAX_BYTES = 30 * 1024 * 1024; // aligné sur file_size_limit du bucket session-pdfs
 
@@ -16439,7 +16694,15 @@ const AddSessionModal = memo(({ athletes, initialData, onClose, onAdd }) => {
   const { clubId } = useAuth();
   const isEdit = !!initialData;
   const today  = toLocalDateStr(new Date());
-  const [form, setForm]             = useState(initialData ?? { ...EMPTY_FORM, sessionDate: today });
+  const [form, setForm]             = useState(() => {
+    const base = initialData ?? { ...EMPTY_FORM, sessionDate: today };
+    return {
+      ...base,
+      trainingFocus: isTrainingFocusCompatible(base.trainingFocus, base.category)
+        ? base.trainingFocus
+        : getDefaultTrainingFocus(base.category),
+    };
+  });
   const [saving, setSaving]         = useState(false);
   const [pdfFile, setPdfFile]       = useState(null);
   const [pdfError, setPdfError]     = useState(null);
@@ -16546,7 +16809,7 @@ const AddSessionModal = memo(({ athletes, initialData, onClose, onAdd }) => {
                 const cc  = SESSION_COLORS[cat.id];
                 const sel = form.category === cat.id;
                 return (
-                  <button key={cat.id} onClick={() => set("category", cat.id)}
+                  <button key={cat.id} type="button" onClick={() => setForm(previous => ({ ...previous, category: cat.id, trainingFocus: getDefaultTrainingFocus(cat.id) }))}
                     className="px-3 py-2 rounded-xl text-[12px] font-semibold border-2 transition-all tap-feedback"
                     style={sel
                       ? { background: cc.border, color: "#0A150F", borderColor: cc.border }
@@ -16558,6 +16821,12 @@ const AddSessionModal = memo(({ athletes, initialData, onClose, onAdd }) => {
               })}
             </div>
           </div>
+
+          <TrainingFocusField
+            category={form.category}
+            value={form.trainingFocus}
+            onChange={value => set("trainingFocus", value)}
+          />
 
           <div className="grid grid-cols-2 gap-3">
             <div>
@@ -17375,7 +17644,7 @@ function AthleteList() {
       setExistingEmails((usersRes.data ?? []).map((row) => row.email).filter(Boolean));
       setSessions((sessionsRes.data ?? []).map(s => {
         const rows = (sessionAthletesRes.data ?? []).filter(v => v.session_id === s.id);
-        return { id: s.id, week: s.week, day: s.day, sessionDate: s.session_date, time: s.time, type: s.type, category: s.category, title: s.title, description: s.description, instructions: s.instructions, durationMinutes: s.duration_minutes, loadWeight: s.load_weight, pdfUrl: s.pdf_url, athleteIds: rows.map(v => v.athlete_id), validations: rows.map(v => ({ athleteId: v.athlete_id, status: v.status, feeling: v.feeling, fatigue: v.fatigue, comment: v.comment, rpe: v.rpe, actualDurationMinutes: v.actual_duration_minutes, durationSource: v.duration_source })) };
+        return { id: s.id, week: s.week, day: s.day, sessionDate: s.session_date, time: s.time, type: s.type, category: s.category, trainingFocus: s.training_focus, title: s.title, description: s.description, instructions: s.instructions, durationMinutes: s.duration_minutes, loadWeight: s.load_weight, pdfUrl: s.pdf_url, athleteIds: rows.map(v => v.athlete_id), validations: rows.map(v => ({ athleteId: v.athlete_id, status: v.status, feeling: v.feeling, fatigue: v.fatigue, comment: v.comment, rpe: v.rpe, actualDurationMinutes: v.actual_duration_minutes, durationSource: v.duration_source })) };
       }));
       setCompetitions((competitionsRes.data ?? []).map(c => ({
         id: c.id, name: c.name, date: c.date, location: c.location, type: c.type,
@@ -17944,11 +18213,11 @@ const AthleteProfile = memo(({ athlete, weeklyCharge, sessions, competitions, on
             <ScoreRing value={metrics.wellnessScore ?? 0} color="white" label="Bien-être" size={80} />
             <div className="space-y-2 text-[12px]">
               <div className="flex items-center justify-between gap-6">
-                <span style={{ color: "rgba(255,255,255,0.76)" }}>Charge 7 jours</span>
+                <span style={{ color: "rgba(255,255,255,0.76)" }}>Cette semaine</span>
                 <span className="font-bold text-white">{metrics.load7 ?? "—"}</span>
               </div>
               <div className="flex items-center justify-between gap-6">
-                <span style={{ color: "rgba(255,255,255,0.76)" }}>Charge 28 jours</span>
+                <span style={{ color: "rgba(255,255,255,0.76)" }}>Rythme habituel · 4 sem.</span>
                 <span className="font-bold text-white">{metrics.load28 ?? "—"}</span>
               </div>
               <div className="flex items-center justify-between gap-6">
@@ -18032,6 +18301,7 @@ import {
 import AddRecordModal from "./AddRecordModal";
 import AddInjuryModal from "./AddInjuryModal";
 import AxisRadarCard from "../components/ui/AxisRadarCard";
+import { getAthleteLoadStory } from "../domain/monitoringMetrics";
 
 // ─── Onglet Performances ──────────────────────────────────────────────────────
 
@@ -18221,20 +18491,31 @@ export const TabCharge = memo(({ athlete, metrics, weeklyCharge, competitions, s
       .sort((a,b) => new Date(a.date) - new Date(b.date))[0] ?? null;
   }, [athlete.id, competitions]);
   const analysis  = useMemo(() => generateContextAnalysis(metrics, nextComp), [metrics, nextComp]);
+  const loadStory = useMemo(() => getAthleteLoadStory(metrics, sessions ?? [], athlete.id), [athlete.id, metrics, sessions]);
   const hasCharge = weeklyCharge.some(w => w.athleteId === athlete.id);
 
   if (!hasCharge) return <EmptySection icon={Activity} title="Aucune charge enregistrée" sub="Les scores apparaîtront dès la première séance saisie." />;
 
   const scoreCards = [
-    { label: "Charge 7 jours", value: load7 ?? "—", color: "#378ADD", hint: "somme observée" },
-    { label: "Charge 28 jours", value: load28 ?? "—", color: "#A9CBFB", hint: "somme observée" },
-    { label: "EWMA courte", value: acute == null ? "—" : Math.round(acute), color: "#14B8A6", hint: "série quotidienne" },
-    { label: "EWMA longue", value: chronic == null ? "—" : Math.round(chronic), color: "#A855F7", hint: "série quotidienne" },
-    { label: "Variation", value: variationPercent == null ? "—" : `${variationPercent >= 0 ? "+" : ""}${variationPercent}%`, color: "#EF9F27", hint: "moy. 7j vs 28j" },
+    { label: "Cette semaine", value: load7 ?? "—", color: "#378ADD", hint: "7 derniers jours" },
+    { label: "Rythme habituel", value: load28 ?? "—", color: "#A9CBFB", hint: "4 dernières semaines" },
+    { label: "Tendance récente", value: acute == null ? "—" : Math.round(acute), color: "#14B8A6", hint: "EWMA courte" },
+    { label: "Tendance stable", value: chronic == null ? "—" : Math.round(chronic), color: "#A855F7", hint: "EWMA longue" },
+    { label: "Écart à l'habitude", value: variationPercent == null ? "—" : `${variationPercent >= 0 ? "+" : ""}${variationPercent}%`, color: "#EF9F27", hint: "semaine vs habitude" },
   ];
 
   return (
     <div className="space-y-5">
+      <div className="card overflow-hidden" style={{ borderColor: "rgba(91,141,239,0.24)" }}>
+        <div className="p-5" style={{ background: "linear-gradient(135deg, rgba(91,141,239,0.12), rgba(20,184,166,0.05))" }}>
+          <span className="chip chip-neutral">Lecture coach</span>
+          <h3 className="mt-3 text-[17px] font-bold" style={{ color: "var(--c-text-1)" }}>{loadStory.headline}</h3>
+          <p className="mt-2 text-[13px] leading-6" style={{ color: "var(--c-text-2)" }}>{loadStory.summary}</p>
+          <p className="mt-3 rounded-xl px-3 py-2 text-[12px] leading-5" style={{ background: "rgba(2,7,12,0.22)", color: "var(--c-text-1)" }}>{loadStory.cause}</p>
+          <p className="mt-2 text-[12px] leading-5" style={{ color: "var(--c-text-2)" }}>À interpréter avec l'athlète et le contenu prévu de ses séances, jamais comme un risque automatique.</p>
+        </div>
+      </div>
+
       {/* Score rings */}
       <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
         {scoreCards.map(s => (
@@ -18280,7 +18561,7 @@ export const TabCharge = memo(({ athlete, metrics, weeklyCharge, competitions, s
 
       {/* Profil de charge (6 axes) */}
       <AxisRadarCard
-        profile={axisProfile} title="Profil de charge" subtitle="Comparé aux semaines habituelles de l'athlète"
+        profile={axisProfile} title="Ce que ses séances ont surtout sollicité" subtitle="Lecture descriptive des objectifs déclarés, comparée aux semaines habituelles de l'athlète"
         sessions={sessions} athleteId={athlete.id} currentWeek={currentWeek}
       />
 
@@ -18832,7 +19113,7 @@ function ChargeView() {
 
       const sessionsRes = await supabase
         .from("sessions")
-        .select("id, week, category, duration_minutes")
+        .select("id, week, category, training_focus, duration_minutes")
         .eq("club_id", clubId);
       if (sessionsRes.error) throw sessionsRes.error;
 
@@ -18865,6 +19146,7 @@ function ChargeView() {
           id:              s.id,
           week:            s.week,
           category:        s.category,
+          trainingFocus:   s.training_focus,
           durationMinutes: s.duration_minutes,
           athleteIds:      rows.map((r) => r.athlete_id),
           validations:     rows.map((r) => ({ athleteId: r.athlete_id, rpe: r.rpe, actualDurationMinutes: r.actual_duration_minutes, durationSource: r.duration_source })),
@@ -18916,6 +19198,20 @@ function ChargeView() {
   const fatigueAlerts    = useMemo(() => allMetrics.filter((m) => m.metrics.wellnessScore != null && m.metrics.wellnessScore < 25), [allMetrics]);
   const sortedByLoad     = useMemo(() => [...allMetrics].sort((a, b) => b.rawLoad - a.rawLoad), [allMetrics]);
   const maxLoad          = sortedByLoad[0]?.rawLoad ?? 1;
+  const groupStory = useMemo(() => {
+    const known = allMetrics.filter(item => Number.isFinite(item.metrics.variationPercent));
+    const higher = known.filter(item => item.metrics.variationPercent >= 10).length;
+    const lower = known.filter(item => item.metrics.variationPercent <= -10).length;
+    const stable = known.length - higher - lower;
+    if (!known.length) return {
+      headline: "L'historique du groupe est encore en construction",
+      detail: "Confirme les jours de repos et complète les durées réelles et RPE pour obtenir des comparaisons compréhensibles.",
+    };
+    return {
+      headline: `${stable} charge${stable !== 1 ? "s" : ""} stable${stable !== 1 ? "s" : ""} · ${higher} en hausse · ${lower} en baisse`,
+      detail: `Comparaison disponible pour ${known.length} athlète${known.length !== 1 ? "s" : ""}. Une hausse ou une baisse décrit un changement par rapport aux trois semaines précédentes ; elle ne juge pas automatiquement le programme.`,
+    };
+  }, [allMetrics]);
 
   const chargeBreakdown = useMemo(() => {
     const byCategory  = computeWeeklyLoadByCategory(athletes, sessionsForBreakdown);
@@ -18945,7 +19241,7 @@ function ChargeView() {
       <div>
         <h2 className="page-title">Charge & suivi</h2>
         <p className="secondary-text mt-1">
-          Semaine {CURRENT_WEEK} · Analyse dynamique du groupe · {athletes.length} athlète{athletes.length !== 1 ? "s" : ""}
+          Semaine {CURRENT_WEEK} · Une lecture simple du travail réellement effectué par {athletes.length} athlète{athletes.length !== 1 ? "s" : ""}
         </p>
       </div>
 
@@ -18962,11 +19258,19 @@ function ChargeView() {
         <>
           {/* ── KPIs globaux ─────────────────────────────────────────── */}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-            <MetricCard icon={BarChart2}   label="Charge moyenne groupe"  value={globalMetrics.avgLoad}              sub="unités"                                color="#378ADD" trend={globalMetrics.trendLoad} />
-            <MetricCard icon={Activity}    label="Charge moyenne sur 7j" value={globalMetrics.avgLoad7 ?? "—"} sub="jours connus uniquement" color="#14B8A6" />
-            <MetricCard icon={Zap}         label="Athlète le plus chargé" value={globalMetrics.topLoader?.athlete.name.split(" ")[0] ?? "—"} sub={`${globalMetrics.topLoader?.rawLoad ?? 0} u`} color="#EF9F27" />
-            <MetricCard icon={AlertTriangle} label="Bien-être à revoir" value={globalMetrics.critFatigue} sub={`athlète${globalMetrics.critFatigue > 1 ? "s" : ""}`} color={globalMetrics.critFatigue > 0 ? "#EF9F27" : "#1D9E75"} />
+            <MetricCard icon={BarChart2} label="Effort moyen cette semaine" value={globalMetrics.avgLoad} sub="durée × ressenti" color="#378ADD" trend={globalMetrics.trendLoad} />
+            <MetricCard icon={Activity} label="Moyenne des 7 derniers jours" value={globalMetrics.avgLoad7 ?? "—"} sub="jours connus uniquement" color="#14B8A6" />
+            <MetricCard icon={Zap} label="Plus de points cette semaine" value={globalMetrics.topLoader?.athlete.name.split(" ")[0] ?? "—"} sub={`${globalMetrics.topLoader?.rawLoad ?? 0} points`} color="#EF9F27" />
+            <MetricCard icon={AlertTriangle} label="Ressentis à discuter" value={globalMetrics.critFatigue} sub={`athlète${globalMetrics.critFatigue > 1 ? "s" : ""}`} color={globalMetrics.critFatigue > 0 ? "#EF9F27" : "#1D9E75"} />
           </div>
+
+          <section className="card overflow-hidden" aria-labelledby="group-load-story-title">
+            <div className="p-5" style={{ background: "linear-gradient(135deg, rgba(91,141,239,0.12), rgba(20,184,166,0.05))" }}>
+              <span className="chip chip-neutral">En clair</span>
+              <h3 id="group-load-story-title" className="mt-3 text-[17px] font-bold" style={{ color: "var(--c-text-1)" }}>{groupStory.headline}</h3>
+              <p className="mt-2 text-[13px] leading-6" style={{ color: "var(--c-text-2)" }}>{groupStory.detail}</p>
+            </div>
+          </section>
 
           <AlertSignals fatigueAlerts={fatigueAlerts} />
 
@@ -18974,8 +19278,8 @@ function ChargeView() {
           <div className="card overflow-hidden">
             <div className="px-5 py-4 border-b flex items-center justify-between flex-wrap gap-2" style={{ borderColor: "var(--c-border)" }}>
               <div>
-                <h3 className="card-title">Charge calculée — Semaine {CURRENT_WEEK}</h3>
-                <p className="card-subtitle mt-0.5">Triée par charge décroissante · Basée sur durée × RPE</p>
+                <h3 className="card-title">Effort déclaré — Semaine {CURRENT_WEEK}</h3>
+                <p className="card-subtitle mt-0.5">Durée réellement effectuée × effort ressenti · tri descriptif</p>
               </div>
               <p className="text-[12px]" style={{ color: "var(--c-text-2)" }}>Comparaison descriptive dans le groupe · aucun seuil de risque</p>
             </div>
@@ -19024,13 +19328,13 @@ function ChargeView() {
                         <p className="text-[12px] font-bold" style={{ color: "#A9CBFB" }}>
                           {metrics.load7 ?? "—"}
                         </p>
-                        <p className="meta-text">7 jours</p>
+                        <p className="meta-text">semaine</p>
                       </div>
                       <div className="w-16 text-right flex-shrink-0">
                         <p className="text-[12px] font-bold" style={{ color: "#14B8A6" }}>
                           {metrics.load28 ?? "—"}
                         </p>
-                        <p className="meta-text">28 jours</p>
+                        <p className="meta-text">habitude</p>
                       </div>
                     </div>
                   );
@@ -20002,13 +20306,13 @@ const CompModal = memo(({ competition, athletes, weeklyCharge, records, onClose,
                       <div className="px-4 py-3 bg-[var(--c-surface-3)] border-b border-[var(--c-border)] flex items-center gap-4 flex-wrap text-[12px]">
                         <span className="text-[var(--c-text-3)]">À la semaine ~{week} :</span>
                         <span className="flex items-center gap-1">
-                          Charge 7 jours :
+                          Cette semaine :
                           <strong className="ml-1" style={{ color: "#A9CBFB" }}>
                             {metrics.load7 ?? "—"}
                           </strong>
                         </span>
                         <span className="flex items-center gap-1">
-                          Charge 28 jours :
+                          Rythme habituel · 4 sem. :
                           <strong className="ml-1" style={{ color: "#7BD8B4" }}>
                             {metrics.load28 ?? "—"}
                           </strong>
@@ -20465,13 +20769,18 @@ function AthleteStatusCard({ athlete, weeklyCharge, currentWeek, injuries, sessi
         />
       </div>
 
+      <div className="rounded-xl px-3 py-2" style={{ background: `${status.color}0D`, border: `1px solid ${status.color}20` }}>
+        <p className="text-[12px] font-semibold leading-5" style={{ color: "var(--c-text-1)" }}>{status.plainHeadline ?? status.label}</p>
+        {status.score != null && <p className="mt-0.5 text-[12px] leading-4" style={{ color: "var(--c-text-2)" }}>{status.watch?.[0] ?? status.helps?.[0] ?? "Ressenti renseigné aujourd'hui."}</p>}
+      </div>
+
       {/* Métriques — 3 valeurs + mini barres */}
       {(hasCharge || status.score != null) ? (
         <div className="grid grid-cols-3 gap-1.5">
           {[
-            { lbl: "Repère", val: status.score ?? "—", col: readColor, pct: status.score ?? 0 },
-            { lbl: "Charge 7j", val: metrics.load7 ?? "—", col: acwrCol, pct: metrics.load7 && metrics.load28 ? Math.min(100, (metrics.load7 / metrics.load28) * 100) : 0 },
-            { lbl: "Charge 28j", val: metrics.load28 ?? "—", col: fatCol, pct: metrics.load28 ? 100 : 0 },
+            { lbl: "Ressenti", val: status.score ?? "—", col: readColor, pct: status.score ?? 0 },
+            { lbl: "Semaine", val: metrics.load7 ?? "—", col: acwrCol, pct: metrics.load7 && metrics.load28 ? Math.min(100, (metrics.load7 / metrics.load28) * 100) : 0 },
+            { lbl: "Habitude", val: metrics.load28 ?? "—", col: fatCol, pct: metrics.load28 ? 100 : 0 },
           ].map(s => (
             <div key={s.lbl} className="bg-[var(--c-surface-2)] rounded-xl px-1.5 py-2 text-center">
               <p
@@ -20498,8 +20807,8 @@ function AthleteStatusCard({ athlete, weeklyCharge, currentWeek, injuries, sessi
         </div>
       )}
 
-      <p className="text-[12px] font-medium leading-snug" style={{ color: status.color }}>
-        {status.label}
+      <p className="text-[12px] font-medium leading-snug" style={{ color: "var(--c-text-2)" }}>
+        {status.loadContext ?? status.summary}
       </p>
 
       {/* Tendance charge — 6 dernières semaines */}
@@ -20657,7 +20966,7 @@ function Dashboard({
         const rows = s.session_athletes ?? [];
         return {
           id: s.id, week: s.week, day: s.day, sessionDate: s.session_date,
-          time: s.time, type: s.type, category: s.category, title: s.title,
+          time: s.time, type: s.type, category: s.category, trainingFocus: s.training_focus, title: s.title,
           durationMinutes: s.duration_minutes, createdBy: s.created_by,
           createdByAthlete: s.created_by != null && athletesRes.data.some(a => a.user_id === s.created_by),
           athleteIds:   rows.map(v => v.athlete_id),
@@ -20858,13 +21167,13 @@ function Dashboard({
                 color: "#1D9E75",
               },
               {
-                label: "Plutôt favorables",
+                label: "Bon ressenti",
                 value: groupDailyState.favorable,
                 color: "#4DC9A0",
-                sub: "signaux du jour",
+                sub: "d'après leurs réponses",
               },
               {
-                label: "À échanger",
+                label: "À discuter",
                 value: groupDailyState.attention,
                 color: groupDailyState.attention > 0 ? "#F2C46D" : "#69C5F7",
                 sub: "sans prédire un risque",
@@ -22864,6 +23173,7 @@ import {
   DAYS_FR, DAYS_SHORT, MONTHS_FR, CATEGORIES,
   toLocalDateStr, isSameDay, sessionStatus, colors, getCalendarDays, StatusIcon,
 } from "./planningShared";
+import { getSessionTrainingFocus } from "../domain/trainingFocus";
 import SessionModal from "./SessionModal";
 import AddSessionModal from "./AddSessionModal";
 
@@ -22918,6 +23228,7 @@ function Planning() {
           time:            s.time,
           type:            s.type,
           category:        s.category,
+          trainingFocus:   s.training_focus,
           title:           s.title,
           description:     s.description,
           instructions:    s.instructions,
@@ -22963,6 +23274,7 @@ function Planning() {
         club_id: clubId, week: form.week, day: form.day,
         session_date: form.sessionDate, time: form.time,
         type: form.type, category: form.category, title: form.title,
+        training_focus: form.trainingFocus,
         description: form.description || null,
         instructions: form.instructions || null,
         duration_minutes: form.durationMinutes,
@@ -22985,6 +23297,7 @@ function Planning() {
     const { error: sessionError } = await supabase.from("sessions").update({
       week: form.week, day: form.day, session_date: form.sessionDate,
       time: form.time, type: form.type, category: form.category, title: form.title,
+      training_focus: form.trainingFocus,
       description: form.description || null, instructions: form.instructions || null,
       duration_minutes: form.durationMinutes,
       load_weight: 1.0,
@@ -23166,7 +23479,7 @@ function Planning() {
 
   function buildFormFromSession(s) {
     return {
-      title: s.title, type: s.type, category: s.category,
+      title: s.title, type: s.type, category: s.category, trainingFocus: s.trainingFocus,
       day: s.day, time: s.time, week: s.week,
       durationMinutes: s.durationMinutes ?? "",
       description: s.description ?? "", instructions: s.instructions ?? "",
@@ -23373,6 +23686,7 @@ function Planning() {
                                   >
                                     {CATEGORIES.find(x => x.id === s.category)?.label}
                                   </span>
+                                  <span className="chip chip-neutral">{getSessionTrainingFocus(s).shortLabel}</span>
                                   <Clock size={10} />
                                   <span>{s.time}{s.durationMinutes ? ` · ${s.durationMinutes}min` : ""}</span>
                                   {missingStatus > 0 && isPast && (
@@ -23557,6 +23871,7 @@ function Planning() {
                           <span className="text-[12px] font-bold uppercase tracking-wide" style={{ color: c.text }}>
                             {CATEGORIES.find(x => x.id === s.category)?.label ?? s.type}
                           </span>
+                          <span className="chip chip-neutral">{getSessionTrainingFocus(s).shortLabel}</span>
                           {s.createdByAthlete && (
                             <span className="text-[12px] font-bold px-1.5 py-0.5 rounded-full"
                               style={{ background: "rgba(168,85,247,0.16)", color: "#D8B4FE" }}>
@@ -23768,7 +24083,7 @@ export const SESSION_COLORS = {
 };
 
 export const EMPTY_FORM = {
-  title: "", type: "Sprint", category: "sprint",
+  title: "", type: "Sprint", category: "sprint", trainingFocus: "sprint_general",
   day: "Lundi", time: "10:00", durationMinutes: 60,
   description: "", instructions: "", athleteIds: [], sessionDate: "",
 };
@@ -23872,6 +24187,7 @@ import ErrorState    from "../components/ui/ErrorState";
 import { EmptyState, PageHeader, SegmentedTabs, StatCard } from "../components/ui/premium";
 import { getISOWeek, initialsFromName } from "../utils/helpers.js";
 import { CATEGORIES, colorsFor } from "../athlete/shared";
+import { getSessionTrainingFocus } from "../domain/trainingFocus";
 import { getRPELabel } from "../utils/chargeCalculations";
 import {
   getAvailableWeeks, formatWeekLabel,
@@ -23942,7 +24258,7 @@ function AthleteWeekRow({ athlete, report, onClick }) {
           {stats.total > 0 && (
             <>
               <span className="text-[12px] text-[var(--c-text-3)]">·</span>
-              <span className="text-[12px] text-[var(--c-text-2)]">{stats.totalLoad} u.a.</span>
+              <span className="text-[12px] text-[var(--c-text-2)]">{stats.totalLoad} points d'effort</span>
               {categoriesWorked[0] && (
                 <>
                   <span className="text-[12px] text-[var(--c-text-3)]">·</span>
@@ -24001,7 +24317,7 @@ function AthleteWeekDetail({ athlete, report, onClose }) {
               <p style={{ fontSize: 19, fontWeight: 700, color: "var(--c-text-1)", marginTop: 4 }}>{stats.total > 0 ? metrics.acute : "—"}</p>
             </div>
             <div style={{ padding: "12px 10px", borderRadius: 14, background: "var(--c-surface-2)", border: "1px solid var(--c-border)", textAlign: "center" }}>
-              <p className="metric-label">Charge 7 jours</p>
+              <p className="metric-label">Cette semaine</p>
               <p style={{ fontSize: 19, fontWeight: 700, color: "#A9CBFB", marginTop: 4 }}>
                 {stats.total > 0 ? (metrics.load7 ?? "—") : "—"}
               </p>
@@ -24021,7 +24337,7 @@ function AthleteWeekDetail({ athlete, report, onClose }) {
                   const col = colorsFor(c.id);
                   return (
                     <span key={c.id} style={{ fontSize: 12, fontWeight: 600, padding: "5px 10px", borderRadius: 10, background: col.bg, color: col.text, border: `1px solid ${col.border}33` }}>
-                      {c.label} · {c.load} u.a.
+                      {c.label} · {c.load} points
                     </span>
                   );
                 })}
@@ -24055,6 +24371,7 @@ function AthleteWeekDetail({ athlete, report, onClose }) {
                           <span style={{ fontSize: 12, fontWeight: 600, padding: "2px 7px", borderRadius: 7, background: col.bg, color: col.text }}>
                             {CATEGORIES.find(c => c.id === s.category)?.label ?? s.category}
                           </span>
+                          <span className="chip chip-neutral">{getSessionTrainingFocus(s).shortLabel}</span>
                         </div>
                         <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 3, flexWrap: "wrap" }}>
                           <span className="text-[12px] text-[var(--c-text-2)]">
@@ -24064,7 +24381,7 @@ function AthleteWeekDetail({ athlete, report, onClose }) {
                             <span className="text-[12px] font-semibold" style={{ color: rpe.color }}>RPE {s.rpe} · {rpe.label}</span>
                           )}
                           {s.load != null && (
-                            <span className="text-[12px] text-[var(--c-text-2)]">{s.load} u.a.</span>
+                            <span className="text-[12px] text-[var(--c-text-2)]">{s.load} points d'effort</span>
                           )}
                         </div>
                         {s.comment && (
@@ -24099,7 +24416,7 @@ function AthleteMonthCard({ athlete, aggregate }) {
       </div>
       <div style={{ display: "flex", alignItems: "baseline", gap: 6, marginBottom: 6 }}>
         <span style={{ fontSize: 20, fontWeight: 700, color: "var(--c-text-1)" }}>{totalLoad}</span>
-        <span className="text-[12px] text-[var(--c-text-2)]">u.a. sur {weeks.length} semaine{weeks.length !== 1 ? "s" : ""}</span>
+        <span className="text-[12px] text-[var(--c-text-2)]">points d'effort sur {weeks.length} semaine{weeks.length !== 1 ? "s" : ""}</span>
       </div>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
         <span className="text-[12px] text-[var(--c-text-2)]">{doneTotal}/{sessionsTotal} séances faites</span>
@@ -24165,7 +24482,7 @@ export default function Rapports() {
         const rows = s.session_athletes ?? [];
         return {
           id: s.id, week: s.week, day: s.day, sessionDate: s.session_date,
-          category: s.category, title: s.title, durationMinutes: s.duration_minutes,
+          category: s.category, trainingFocus: s.training_focus, title: s.title, durationMinutes: s.duration_minutes,
           athleteIds:  rows.map(v => v.athlete_id),
           validations: rows.map(v => ({ athleteId: v.athlete_id, status: v.status, feeling: v.feeling, rpe: v.rpe, comment: v.comment, actualDurationMinutes: v.actual_duration_minutes, durationSource: v.duration_source })),
         };
@@ -24341,6 +24658,7 @@ export default function Rapports() {
 import { memo, useState } from "react";
 import { X, Users, FileText, AlertCircle, Star, Zap } from "lucide-react";
 import { CATEGORIES, colors, sessionStatus, ValidationBadge, StatusIcon } from "./planningShared";
+import { getSessionTrainingFocus } from "../domain/trainingFocus";
 import { openSessionPdf } from "../utils/storage";
 import CoachSessionDayPanel from "../components/session/CoachSessionDayPanel";
 
@@ -24361,6 +24679,7 @@ const SessionModal = memo(({
   ));
   const [loadErrors, setLoadErrors] = useState({});
   const c      = colors(session.category);
+  const trainingFocus = getSessionTrainingFocus(session);
   const status = sessionStatus(session);
 
   const dateStr = session.sessionDate
@@ -24415,6 +24734,9 @@ const SessionModal = memo(({
                 style={{ background: c.border, color: "#0A150F" }}
               >
                 {CATEGORIES.find(x => x.id === session.category)?.label ?? session.type}
+              </span>
+              <span className="text-[12px] font-semibold px-2.5 py-1 rounded-full" style={{ background: "rgba(255,255,255,0.06)", border: "1px solid var(--c-border)", color: "var(--c-text-1)" }}>
+                Objectif · {trainingFocus.shortLabel}
               </span>
               {session.createdByAthlete && (
                 <span className="text-[12px] font-bold px-2 py-0.5 rounded-full"
@@ -24687,7 +25009,7 @@ export const COACH_MOBILE_PRIMARY_ITEMS = Object.freeze([
 
 export const COACH_MOBILE_MORE_ITEMS = Object.freeze([
   { id: "performances", label: "Performances", description: "Suivre les progrès" },
-  { id: "charge", label: "Charge", description: "Prévenir la fatigue" },
+  { id: "charge", label: "Charge", description: "Comprendre l'entraînement" },
   { id: "competitions", label: "Compétitions", description: "Préparer les échéances" },
   { id: "alerts", label: "Alertes", description: "Voir les signaux à traiter" },
   { id: "rapports", label: "Rapports", description: "Consulter les synthèses du club" },
@@ -27918,8 +28240,8 @@ describe("normalizeInviteCode", () => {
 // ============================================================
 // AthleteOS — src/utils/coachFeed.js
 //
-// "Fil du coach" — transforme les métriques déjà calculées (ACWR,
-// fatigue, readiness, blessures, absences, compétitions à venir) en
+// "Fil du coach" — transforme les métriques descriptives déjà calculées
+// (charge, ressenti, blessures, absences, compétitions à venir) en
 // phrases priorisées et actionnables, plutôt que de laisser le coach
 // relire des chiffres bruts et en déduire lui-même ce qui compte cette
 // semaine. Aucun nouveau calcul de charge : ce fichier lit uniquement
@@ -27952,24 +28274,24 @@ export function buildCoachFeed({ athletes, weeklyCharge, sessions, injuries, com
       const metrics = getAthleteMetricsForWeek(athlete.id, weeklyCharge, currentWeek);
 
       if (metrics.variationPercent != null && Math.abs(metrics.variationPercent) >= 20) {
-        const direction = metrics.variationPercent > 0 ? "au-dessus" : "en dessous";
+        const direction = metrics.variationPercent > 0 ? "plus élevée" : "plus basse";
         items.push({
           id: `load-variation-${athlete.id}`, priority: "info", icon: "activity", color: "#378ADD",
-          sentence: `${name} a une charge moyenne sur 7 jours ${Math.abs(metrics.variationPercent)} % ${direction} de sa moyenne sur 28 jours. Observation descriptive à mettre en contexte avec son retour.`,
+          sentence: `La charge de ${name} est ${direction} que d'habitude (${Math.abs(metrics.variationPercent)} % d'écart). Ouvre le détail pour voir quelles séances expliquent ce changement.`,
         });
       }
 
       if (metrics.wellnessScore != null && metrics.wellnessScore < 25) {
         items.push({
           id: `fatigue-${athlete.id}`, priority: "warning", icon: "zap", color: "#EF9F27",
-          sentence: `${name} signale un bien-être faible dans le questionnaire AthleteOS — prends contact pour comprendre le contexte.`,
+          sentence: `${name} a donné plusieurs réponses basses dans son état du jour — prends contact pour comprendre ce qui pèse aujourd'hui.`,
         });
       }
 
       if (metrics.wellnessScore >= 85) {
         items.push({
           id: `top-${athlete.id}`, priority: "positive", icon: "trending", color: "#1D9E75",
-          sentence: `${name} signale un bien-être élevé aujourd'hui (${metrics.wellnessScore}/100).`,
+          sentence: `${name} décrit un bon ressenti aujourd'hui. Le détail des cinq réponses reste disponible.`,
         });
       }
     }
@@ -27986,7 +28308,7 @@ export function buildCoachFeed({ athletes, weeklyCharge, sessions, injuries, com
         const axis = LOAD_AXES[axisId];
         items.push({
           id: `axis-${athlete.id}`, priority: "info", icon: "activity", color: axisData.color,
-          sentence: `${name} a surtout travaillé la dimension ${axis.nounPhrase} cette semaine — ${axis.what}`,
+          sentence: `${name} a surtout travaillé ${axis.nounPhrase} cette semaine — ${axis.what}`,
         });
       }
     }
@@ -28049,19 +28371,21 @@ export function initialsFromName(name) {
 </file>
 
 <file path="src/utils/loadAxes.js">
+import { getTrainingFocus } from "../domain/trainingFocus";
+
 // Profil descriptif des contraintes AthleteOS.
 // Les poids ventilent la charge session-RPE entre six dimensions séparées.
 // Ils ne modifient jamais la charge totale et ne prédisent aucun risque.
 
-export const CURRENT_AXIS_MODEL_VERSION = "v1";
+export const CURRENT_AXIS_MODEL_VERSION = "v2-objectifs-declares";
 
 export const LOAD_AXES = {
-  neuromuscular: { label: "Nerveux", nounPhrase: "neuromusculaire", what: "Vitesse et force maximale : sprints, départs, charges lourdes.", color: "#E24B4A" },
-  elastic: { label: "Élastique", nounPhrase: "élastique", what: "Bonds et rebonds : exposition aux impacts répétés.", color: "#EF9F27" },
-  metabolic: { label: "Métabolique", nounPhrase: "métabolique", what: "Efforts prolongés et travail d'endurance.", color: "#378ADD" },
-  muscular: { label: "Musculaire", nounPhrase: "musculaire", what: "Travail musculaire et musculation.", color: "#A855F7" },
-  technical: { label: "Technique", nounPhrase: "technique", what: "Apprentissage et répétition d'un geste précis.", color: "#14B8A6" },
-  mental: { label: "Mental", nounPhrase: "mentale", what: "Concentration et exigences perçues de la séance.", color: "#EC4899" },
+  neuromuscular: { label: "Vitesse", scientificLabel: "Contrainte neuromusculaire", nounPhrase: "de vitesse et d'explosivité", what: "Vitesse, accélération et production rapide de force.", color: "#E24B4A" },
+  elastic: { label: "Impacts", scientificLabel: "Contrainte élastique", nounPhrase: "d'impacts et de bonds", what: "Bonds, rebonds et contacts dynamiques avec le sol.", color: "#EF9F27" },
+  metabolic: { label: "Effort long", scientificLabel: "Contrainte métabolique", nounPhrase: "d'effort prolongé", what: "Efforts soutenus, répétitions longues et endurance.", color: "#378ADD" },
+  muscular: { label: "Muscles", scientificLabel: "Contrainte musculaire", nounPhrase: "musculaire", what: "Travail de force et sollicitation musculaire.", color: "#A855F7" },
+  technical: { label: "Geste", scientificLabel: "Contrainte technique", nounPhrase: "technique", what: "Apprentissage, précision et répétition du geste.", color: "#14B8A6" },
+  mental: { label: "Attention", scientificLabel: "Exigence attentionnelle perçue", nounPhrase: "d'attention", what: "Concentration et exigences perçues pendant la séance.", color: "#EC4899" },
 };
 
 const AXIS_IDS = Object.keys(LOAD_AXES);
@@ -28080,12 +28404,13 @@ export const AXIS_WEIGHTS = {
   recuperation: { neuromuscular: 0.05, elastic: 0.05, metabolic: 0.1, muscular: 0.05, technical: 0.05, mental: 0.1 },
 };
 
-export function computeSessionAxisLoads(actualDurationMinutes, rpe, category) {
+export function computeSessionAxisLoads(actualDurationMinutes, rpe, category, trainingFocus = null) {
   const duration = Number(actualDurationMinutes);
   const effort = Number(rpe);
   if (!Number.isFinite(duration) || duration <= 0 || !Number.isFinite(effort) || effort < 0 || effort > 10) return null;
   const base = duration * effort;
-  const weights = AXIS_WEIGHTS[category] ?? AXIS_WEIGHTS.technique;
+  const focus = trainingFocus ? getTrainingFocus(trainingFocus, category) : null;
+  const weights = focus?.weights ?? AXIS_WEIGHTS[category] ?? AXIS_WEIGHTS.technique;
   return Object.fromEntries(AXIS_IDS.map(axis => [axis, Math.round(base * (weights[axis] ?? 0))]));
 }
 
@@ -28094,7 +28419,7 @@ export function computeWeeklyAxisLoads(athleteId, sessions) {
   (sessions ?? []).forEach(session => {
     if (!session.athleteIds?.includes(athleteId)) return;
     const validation = session.validations?.find(item => item.athleteId === athleteId);
-    const loads = computeSessionAxisLoads(validation?.actualDurationMinutes, validation?.rpe, session.category);
+    const loads = computeSessionAxisLoads(validation?.actualDurationMinutes, validation?.rpe, session.category, session.trainingFocus);
     if (!loads) return;
     if (!byWeek.has(session.week)) byWeek.set(session.week, Object.fromEntries(AXIS_IDS.map(axis => [axis, 0])));
     AXIS_IDS.forEach(axis => { byWeek.get(session.week)[axis] += loads[axis]; });
@@ -28144,9 +28469,10 @@ export function getAxisTopContributors(athleteId, sessions, axis, currentWeek, l
     .filter(session => session.athleteIds?.includes(athleteId))
     .map(session => {
       const validation = session.validations?.find(item => item.athleteId === athleteId);
-      const loads = computeSessionAxisLoads(validation?.actualDurationMinutes, validation?.rpe, session.category);
+      const loads = computeSessionAxisLoads(validation?.actualDurationMinutes, validation?.rpe, session.category, session.trainingFocus);
       if (!loads?.[axis]) return null;
-      return { id: session.id, title: session.title, category: session.category, week: session.week, sessionDate: session.sessionDate, axisLoad: loads[axis] };
+      const focus = getTrainingFocus(session.trainingFocus, session.category);
+      return { id: session.id, title: session.title, category: session.category, trainingFocus: session.trainingFocus, focusLabel: focus?.shortLabel, week: session.week, sessionDate: session.sessionDate, axisLoad: loads[axis] };
     })
     .filter(Boolean)
     .sort((a, b) => b.axisLoad - a.axisLoad)
@@ -28162,9 +28488,9 @@ import {
 
 const AXIS_IDS = Object.keys(LOAD_AXES);
 
-function session(id, week, category, actualDurationMinutes, rpe, athleteId = 1) {
+function session(id, week, category, actualDurationMinutes, rpe, athleteId = 1, trainingFocus = null) {
   return {
-    id, week, category, athleteIds: [athleteId],
+    id, week, category, trainingFocus, athleteIds: [athleteId],
     validations: [{ athleteId, rpe, actualDurationMinutes, durationSource: "reported" }],
   };
 }
@@ -28185,6 +28511,28 @@ describe("dimensions de contrainte", () => {
 
   it("refuse une durée réelle absente", () => {
     expect(computeSessionAxisLoads(null, 7, "sprint")).toBeNull();
+  });
+
+  it("distingue l'objectif sans changer la formule globale durée × RPE", () => {
+    const resistance = computeSessionAxisLoads(60, 7, "sprint", "special_endurance");
+    const acceleration = computeSessionAxisLoads(60, 7, "sprint", "acceleration");
+    expect(resistance.metabolic).toBeGreaterThan(acceleration.metabolic);
+    expect(acceleration.neuromuscular).toBeGreaterThan(resistance.neuromuscular);
+    expect(60 * 7).toBe(420);
+  });
+
+  it("sépare un 3 × 300 VMA d'un 3 × 300 en résistance sprint", () => {
+    const vma = computeSessionAxisLoads(45, 8, "endurance", "vma_vo2");
+    const resistance = computeSessionAxisLoads(45, 8, "sprint", "special_endurance");
+    expect(vma.metabolic).toBe(resistance.metabolic);
+    expect(resistance.neuromuscular).toBeGreaterThan(vma.neuromuscular);
+  });
+
+  it("sépare la pliométrie de la technique de saut", () => {
+    const plyometrics = computeSessionAxisLoads(30, 6, "saut", "plyometrics");
+    const technique = computeSessionAxisLoads(30, 6, "saut", "jump_technical");
+    expect(plyometrics.elastic).toBeGreaterThan(technique.elastic);
+    expect(technique.technical).toBeGreaterThan(plyometrics.technical);
   });
 });
 
@@ -29521,7 +29869,7 @@ function buildSummaryText({ total, done, partial, none, totalLoad, categoriesWor
     (none ? `, ${none} manquée${none > 1 ? "s" : ""}` : "") + "."
   );
 
-  lines.push(`Charge totale de la semaine : ${totalLoad} u.a.`);
+  lines.push(`Effort cumulé cette semaine : ${totalLoad} points (durée réelle × effort ressenti).`);
 
   if (categoriesWorked.length) {
     const top = categoriesWorked.slice(0, 2).map(c => CATEGORIES.find(x => x.id === c.id)?.label ?? c.id);
@@ -29533,8 +29881,14 @@ function buildSummaryText({ total, done, partial, none, totalLoad, categoriesWor
   }
 
   if (load7 != null && load28 != null) {
-    const variation = variationPercent == null ? "variation indisponible" : `${variationPercent >= 0 ? "+" : ""}${variationPercent} %`;
-    lines.push(`Fenêtres descriptives : ${load7} u. sur 7 jours, ${load28} u. sur 28 jours (${variation} entre les moyennes quotidiennes).`);
+    const direction = variationPercent == null
+      ? "La comparaison avec l'habitude n'est pas encore disponible."
+      : variationPercent >= 10
+        ? `La charge est plus élevée que l'habitude (+${variationPercent} %).`
+        : variationPercent <= -10
+          ? `La charge est plus basse que l'habitude (${variationPercent} %).`
+          : `La charge est stable par rapport à l'habitude (${variationPercent >= 0 ? "+" : ""}${variationPercent} %).`;
+    lines.push(`${direction} Cette semaine : ${load7} points ; quatre dernières semaines : ${load28} points.`);
   }
 
   return lines.join(" ");
@@ -29553,7 +29907,7 @@ export function buildWeeklyReport({ athleteId, week, sessions, weeklyCharge, wel
       const v = s.validations?.find(x => x.athleteId === athleteId) ?? {};
       const load = v.rpe != null ? computeSessionLoad(v.actualDurationMinutes, v.rpe, s.category) : null;
       return {
-        id: s.id, title: s.title, category: s.category, day: s.day,
+        id: s.id, title: s.title, category: s.category, trainingFocus: s.trainingFocus, day: s.day,
         sessionDate: s.sessionDate, durationMinutes: s.durationMinutes,
         actualDurationMinutes: v.actualDurationMinutes ?? null,
         durationSource: v.durationSource ?? null,
@@ -30420,7 +30774,7 @@ export default function AthleteApp({ clubBrand, themeStyle }) {
         const rows = s.session_athletes??[];
         return {
           id:s.id, week:s.week, day:s.day, sessionDate:s.session_date, time:s.time,
-          type:s.type, category:s.category, title:s.title, description:s.description,
+          type:s.type, category:s.category, trainingFocus:s.training_focus, title:s.title, description:s.description,
           instructions:s.instructions, durationMinutes:s.duration_minutes, pdfUrl:s.pdf_url,
           createdBy:s.created_by,
           lifecycleStatus:s.lifecycle_status ?? "planned", startedAt:s.started_at, closedAt:s.closed_at,
@@ -37781,6 +38135,16 @@ begin
     end if;
   end if;
 end $$;
+</file>
+
+<file path="supabase/migrations/20260801130000_athletics_training_focus.sql">
+-- Objectif déclaré d'une séance : information descriptive séparée de la
+-- charge session-RPE. Nullable pour préserver toutes les séances existantes.
+alter table public.sessions
+  add column if not exists training_focus text;
+
+comment on column public.sessions.training_focus is
+  'Objectif athlétique déclaré. N''applique aucun coefficient à la charge session-RPE.';
 </file>
 
 <file path="supabase/.gitignore">

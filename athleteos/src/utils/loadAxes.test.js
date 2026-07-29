@@ -5,9 +5,9 @@ import {
 
 const AXIS_IDS = Object.keys(LOAD_AXES);
 
-function session(id, week, category, actualDurationMinutes, rpe, athleteId = 1) {
+function session(id, week, category, actualDurationMinutes, rpe, athleteId = 1, trainingFocus = null) {
   return {
-    id, week, category, athleteIds: [athleteId],
+    id, week, category, trainingFocus, athleteIds: [athleteId],
     validations: [{ athleteId, rpe, actualDurationMinutes, durationSource: "reported" }],
   };
 }
@@ -28,6 +28,28 @@ describe("dimensions de contrainte", () => {
 
   it("refuse une durée réelle absente", () => {
     expect(computeSessionAxisLoads(null, 7, "sprint")).toBeNull();
+  });
+
+  it("distingue l'objectif sans changer la formule globale durée × RPE", () => {
+    const resistance = computeSessionAxisLoads(60, 7, "sprint", "special_endurance");
+    const acceleration = computeSessionAxisLoads(60, 7, "sprint", "acceleration");
+    expect(resistance.metabolic).toBeGreaterThan(acceleration.metabolic);
+    expect(acceleration.neuromuscular).toBeGreaterThan(resistance.neuromuscular);
+    expect(60 * 7).toBe(420);
+  });
+
+  it("sépare un 3 × 300 VMA d'un 3 × 300 en résistance sprint", () => {
+    const vma = computeSessionAxisLoads(45, 8, "endurance", "vma_vo2");
+    const resistance = computeSessionAxisLoads(45, 8, "sprint", "special_endurance");
+    expect(vma.metabolic).toBe(resistance.metabolic);
+    expect(resistance.neuromuscular).toBeGreaterThan(vma.neuromuscular);
+  });
+
+  it("sépare la pliométrie de la technique de saut", () => {
+    const plyometrics = computeSessionAxisLoads(30, 6, "saut", "plyometrics");
+    const technique = computeSessionAxisLoads(30, 6, "saut", "jump_technical");
+    expect(plyometrics.elastic).toBeGreaterThan(technique.elastic);
+    expect(technique.technical).toBeGreaterThan(plyometrics.technical);
   });
 });
 

@@ -100,7 +100,7 @@ function AthleteList() {
       setExistingEmails((usersRes.data ?? []).map((row) => row.email).filter(Boolean));
       setSessions((sessionsRes.data ?? []).map(s => {
         const rows = (sessionAthletesRes.data ?? []).filter(v => v.session_id === s.id);
-        return { id: s.id, week: s.week, day: s.day, sessionDate: s.session_date, time: s.time, type: s.type, category: s.category, title: s.title, description: s.description, instructions: s.instructions, durationMinutes: s.duration_minutes, loadWeight: s.load_weight, pdfUrl: s.pdf_url, athleteIds: rows.map(v => v.athlete_id), validations: rows.map(v => ({ athleteId: v.athlete_id, status: v.status, feeling: v.feeling, fatigue: v.fatigue, comment: v.comment, rpe: v.rpe, actualDurationMinutes: v.actual_duration_minutes, durationSource: v.duration_source })) };
+        return { id: s.id, week: s.week, day: s.day, sessionDate: s.session_date, time: s.time, type: s.type, category: s.category, trainingFocus: s.training_focus, title: s.title, description: s.description, instructions: s.instructions, durationMinutes: s.duration_minutes, loadWeight: s.load_weight, pdfUrl: s.pdf_url, athleteIds: rows.map(v => v.athlete_id), validations: rows.map(v => ({ athleteId: v.athlete_id, status: v.status, feeling: v.feeling, fatigue: v.fatigue, comment: v.comment, rpe: v.rpe, actualDurationMinutes: v.actual_duration_minutes, durationSource: v.duration_source })) };
       }));
       setCompetitions((competitionsRes.data ?? []).map(c => ({
         id: c.id, name: c.name, date: c.date, location: c.location, type: c.type,

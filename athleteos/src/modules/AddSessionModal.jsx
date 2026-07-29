@@ -9,6 +9,8 @@ import { X, Plus, CheckCircle } from "lucide-react";
 import { supabase }  from "../utils/supabaseClient";
 import { useAuth }   from "../context/AuthContext";
 import { CATEGORIES, SESSION_COLORS, EMPTY_FORM, dateToISOWeek, dateToDayName, toLocalDateStr } from "./planningShared";
+import TrainingFocusField from "../components/session/TrainingFocusField";
+import { getDefaultTrainingFocus, isTrainingFocusCompatible } from "../domain/trainingFocus";
 
 const PDF_MAX_BYTES = 30 * 1024 * 1024; // aligné sur file_size_limit du bucket session-pdfs
 
@@ -16,7 +18,15 @@ const AddSessionModal = memo(({ athletes, initialData, onClose, onAdd }) => {
   const { clubId } = useAuth();
   const isEdit = !!initialData;
   const today  = toLocalDateStr(new Date());
-  const [form, setForm]             = useState(initialData ?? { ...EMPTY_FORM, sessionDate: today });
+  const [form, setForm]             = useState(() => {
+    const base = initialData ?? { ...EMPTY_FORM, sessionDate: today };
+    return {
+      ...base,
+      trainingFocus: isTrainingFocusCompatible(base.trainingFocus, base.category)
+        ? base.trainingFocus
+        : getDefaultTrainingFocus(base.category),
+    };
+  });
   const [saving, setSaving]         = useState(false);
   const [pdfFile, setPdfFile]       = useState(null);
   const [pdfError, setPdfError]     = useState(null);
@@ -123,7 +133,7 @@ const AddSessionModal = memo(({ athletes, initialData, onClose, onAdd }) => {
                 const cc  = SESSION_COLORS[cat.id];
                 const sel = form.category === cat.id;
                 return (
-                  <button key={cat.id} onClick={() => set("category", cat.id)}
+                  <button key={cat.id} type="button" onClick={() => setForm(previous => ({ ...previous, category: cat.id, trainingFocus: getDefaultTrainingFocus(cat.id) }))}
                     className="px-3 py-2 rounded-xl text-[12px] font-semibold border-2 transition-all tap-feedback"
                     style={sel
                       ? { background: cc.border, color: "#0A150F", borderColor: cc.border }
@@ -135,6 +145,12 @@ const AddSessionModal = memo(({ athletes, initialData, onClose, onAdd }) => {
               })}
             </div>
           </div>
+
+          <TrainingFocusField
+            category={form.category}
+            value={form.trainingFocus}
+            onChange={value => set("trainingFocus", value)}
+          />
 
           <div className="grid grid-cols-2 gap-3">
             <div>

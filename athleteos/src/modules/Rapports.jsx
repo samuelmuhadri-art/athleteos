@@ -19,6 +19,7 @@ import ErrorState    from "../components/ui/ErrorState";
 import { EmptyState, PageHeader, SegmentedTabs, StatCard } from "../components/ui/premium";
 import { getISOWeek, initialsFromName } from "../utils/helpers.js";
 import { CATEGORIES, colorsFor } from "../athlete/shared";
+import { getSessionTrainingFocus } from "../domain/trainingFocus";
 import { getRPELabel } from "../utils/chargeCalculations";
 import {
   getAvailableWeeks, formatWeekLabel,
@@ -89,7 +90,7 @@ function AthleteWeekRow({ athlete, report, onClick }) {
           {stats.total > 0 && (
             <>
               <span className="text-[12px] text-[var(--c-text-3)]">·</span>
-              <span className="text-[12px] text-[var(--c-text-2)]">{stats.totalLoad} u.a.</span>
+              <span className="text-[12px] text-[var(--c-text-2)]">{stats.totalLoad} points d'effort</span>
               {categoriesWorked[0] && (
                 <>
                   <span className="text-[12px] text-[var(--c-text-3)]">·</span>
@@ -148,7 +149,7 @@ function AthleteWeekDetail({ athlete, report, onClose }) {
               <p style={{ fontSize: 19, fontWeight: 700, color: "var(--c-text-1)", marginTop: 4 }}>{stats.total > 0 ? metrics.acute : "—"}</p>
             </div>
             <div style={{ padding: "12px 10px", borderRadius: 14, background: "var(--c-surface-2)", border: "1px solid var(--c-border)", textAlign: "center" }}>
-              <p className="metric-label">Charge 7 jours</p>
+              <p className="metric-label">Cette semaine</p>
               <p style={{ fontSize: 19, fontWeight: 700, color: "#A9CBFB", marginTop: 4 }}>
                 {stats.total > 0 ? (metrics.load7 ?? "—") : "—"}
               </p>
@@ -168,7 +169,7 @@ function AthleteWeekDetail({ athlete, report, onClose }) {
                   const col = colorsFor(c.id);
                   return (
                     <span key={c.id} style={{ fontSize: 12, fontWeight: 600, padding: "5px 10px", borderRadius: 10, background: col.bg, color: col.text, border: `1px solid ${col.border}33` }}>
-                      {c.label} · {c.load} u.a.
+                      {c.label} · {c.load} points
                     </span>
                   );
                 })}
@@ -202,6 +203,7 @@ function AthleteWeekDetail({ athlete, report, onClose }) {
                           <span style={{ fontSize: 12, fontWeight: 600, padding: "2px 7px", borderRadius: 7, background: col.bg, color: col.text }}>
                             {CATEGORIES.find(c => c.id === s.category)?.label ?? s.category}
                           </span>
+                          <span className="chip chip-neutral">{getSessionTrainingFocus(s).shortLabel}</span>
                         </div>
                         <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 3, flexWrap: "wrap" }}>
                           <span className="text-[12px] text-[var(--c-text-2)]">
@@ -211,7 +213,7 @@ function AthleteWeekDetail({ athlete, report, onClose }) {
                             <span className="text-[12px] font-semibold" style={{ color: rpe.color }}>RPE {s.rpe} · {rpe.label}</span>
                           )}
                           {s.load != null && (
-                            <span className="text-[12px] text-[var(--c-text-2)]">{s.load} u.a.</span>
+                            <span className="text-[12px] text-[var(--c-text-2)]">{s.load} points d'effort</span>
                           )}
                         </div>
                         {s.comment && (
@@ -246,7 +248,7 @@ function AthleteMonthCard({ athlete, aggregate }) {
       </div>
       <div style={{ display: "flex", alignItems: "baseline", gap: 6, marginBottom: 6 }}>
         <span style={{ fontSize: 20, fontWeight: 700, color: "var(--c-text-1)" }}>{totalLoad}</span>
-        <span className="text-[12px] text-[var(--c-text-2)]">u.a. sur {weeks.length} semaine{weeks.length !== 1 ? "s" : ""}</span>
+        <span className="text-[12px] text-[var(--c-text-2)]">points d'effort sur {weeks.length} semaine{weeks.length !== 1 ? "s" : ""}</span>
       </div>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
         <span className="text-[12px] text-[var(--c-text-2)]">{doneTotal}/{sessionsTotal} séances faites</span>
@@ -312,7 +314,7 @@ export default function Rapports() {
         const rows = s.session_athletes ?? [];
         return {
           id: s.id, week: s.week, day: s.day, sessionDate: s.session_date,
-          category: s.category, title: s.title, durationMinutes: s.duration_minutes,
+          category: s.category, trainingFocus: s.training_focus, title: s.title, durationMinutes: s.duration_minutes,
           athleteIds:  rows.map(v => v.athlete_id),
           validations: rows.map(v => ({ athleteId: v.athlete_id, status: v.status, feeling: v.feeling, rpe: v.rpe, comment: v.comment, actualDurationMinutes: v.actual_duration_minutes, durationSource: v.duration_source })),
         };

@@ -64,7 +64,7 @@ function buildSummaryText({ total, done, partial, none, totalLoad, categoriesWor
     (none ? `, ${none} manquée${none > 1 ? "s" : ""}` : "") + "."
   );
 
-  lines.push(`Charge totale de la semaine : ${totalLoad} u.a.`);
+  lines.push(`Effort cumulé cette semaine : ${totalLoad} points (durée réelle × effort ressenti).`);
 
   if (categoriesWorked.length) {
     const top = categoriesWorked.slice(0, 2).map(c => CATEGORIES.find(x => x.id === c.id)?.label ?? c.id);
@@ -76,8 +76,14 @@ function buildSummaryText({ total, done, partial, none, totalLoad, categoriesWor
   }
 
   if (load7 != null && load28 != null) {
-    const variation = variationPercent == null ? "variation indisponible" : `${variationPercent >= 0 ? "+" : ""}${variationPercent} %`;
-    lines.push(`Fenêtres descriptives : ${load7} u. sur 7 jours, ${load28} u. sur 28 jours (${variation} entre les moyennes quotidiennes).`);
+    const direction = variationPercent == null
+      ? "La comparaison avec l'habitude n'est pas encore disponible."
+      : variationPercent >= 10
+        ? `La charge est plus élevée que l'habitude (+${variationPercent} %).`
+        : variationPercent <= -10
+          ? `La charge est plus basse que l'habitude (${variationPercent} %).`
+          : `La charge est stable par rapport à l'habitude (${variationPercent >= 0 ? "+" : ""}${variationPercent} %).`;
+    lines.push(`${direction} Cette semaine : ${load7} points ; quatre dernières semaines : ${load28} points.`);
   }
 
   return lines.join(" ");
@@ -96,7 +102,7 @@ export function buildWeeklyReport({ athleteId, week, sessions, weeklyCharge, wel
       const v = s.validations?.find(x => x.athleteId === athleteId) ?? {};
       const load = v.rpe != null ? computeSessionLoad(v.actualDurationMinutes, v.rpe, s.category) : null;
       return {
-        id: s.id, title: s.title, category: s.category, day: s.day,
+        id: s.id, title: s.title, category: s.category, trainingFocus: s.trainingFocus, day: s.day,
         sessionDate: s.sessionDate, durationMinutes: s.durationMinutes,
         actualDurationMinutes: v.actualDurationMinutes ?? null,
         durationSource: v.durationSource ?? null,

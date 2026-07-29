@@ -1,8 +1,8 @@
 // ============================================================
 // AthleteOS — src/utils/coachFeed.js
 //
-// "Fil du coach" — transforme les métriques déjà calculées (ACWR,
-// fatigue, readiness, blessures, absences, compétitions à venir) en
+// "Fil du coach" — transforme les métriques descriptives déjà calculées
+// (charge, ressenti, blessures, absences, compétitions à venir) en
 // phrases priorisées et actionnables, plutôt que de laisser le coach
 // relire des chiffres bruts et en déduire lui-même ce qui compte cette
 // semaine. Aucun nouveau calcul de charge : ce fichier lit uniquement
@@ -35,24 +35,24 @@ export function buildCoachFeed({ athletes, weeklyCharge, sessions, injuries, com
       const metrics = getAthleteMetricsForWeek(athlete.id, weeklyCharge, currentWeek);
 
       if (metrics.variationPercent != null && Math.abs(metrics.variationPercent) >= 20) {
-        const direction = metrics.variationPercent > 0 ? "au-dessus" : "en dessous";
+        const direction = metrics.variationPercent > 0 ? "plus élevée" : "plus basse";
         items.push({
           id: `load-variation-${athlete.id}`, priority: "info", icon: "activity", color: "#378ADD",
-          sentence: `${name} a une charge moyenne sur 7 jours ${Math.abs(metrics.variationPercent)} % ${direction} de sa moyenne sur 28 jours. Observation descriptive à mettre en contexte avec son retour.`,
+          sentence: `La charge de ${name} est ${direction} que d'habitude (${Math.abs(metrics.variationPercent)} % d'écart). Ouvre le détail pour voir quelles séances expliquent ce changement.`,
         });
       }
 
       if (metrics.wellnessScore != null && metrics.wellnessScore < 25) {
         items.push({
           id: `fatigue-${athlete.id}`, priority: "warning", icon: "zap", color: "#EF9F27",
-          sentence: `${name} signale un bien-être faible dans le questionnaire AthleteOS — prends contact pour comprendre le contexte.`,
+          sentence: `${name} a donné plusieurs réponses basses dans son état du jour — prends contact pour comprendre ce qui pèse aujourd'hui.`,
         });
       }
 
       if (metrics.wellnessScore >= 85) {
         items.push({
           id: `top-${athlete.id}`, priority: "positive", icon: "trending", color: "#1D9E75",
-          sentence: `${name} signale un bien-être élevé aujourd'hui (${metrics.wellnessScore}/100).`,
+          sentence: `${name} décrit un bon ressenti aujourd'hui. Le détail des cinq réponses reste disponible.`,
         });
       }
     }
@@ -69,7 +69,7 @@ export function buildCoachFeed({ athletes, weeklyCharge, sessions, injuries, com
         const axis = LOAD_AXES[axisId];
         items.push({
           id: `axis-${athlete.id}`, priority: "info", icon: "activity", color: axisData.color,
-          sentence: `${name} a surtout travaillé la dimension ${axis.nounPhrase} cette semaine — ${axis.what}`,
+          sentence: `${name} a surtout travaillé ${axis.nounPhrase} cette semaine — ${axis.what}`,
         });
       }
     }

@@ -31,6 +31,7 @@ import { openSessionPdf } from "../../utils/storage";
 import { getTodayFocus } from "../dashboardFocus";
 import { buildDailyState } from "../../domain/dailyState";
 import DailyStateDetailPanel from "../components/DailyStateDetailPanel";
+import { getSessionTrainingFocus } from "../../domain/trainingFocus";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 function getDiscType(discName) {
@@ -480,7 +481,7 @@ export default function AthleteDashboard({
               </div>
               <div>
                 <p className="meta-text" style={{ fontWeight: 600, letterSpacing: "0.07em", textTransform: "uppercase", marginBottom: "var(--space-1)" }}>
-                  État du jour · S{currentWeek}
+                  Comment tu te sens · S{currentWeek}
                 </p>
                 <p id="wellness-title" className="section-title">{status.label}</p>
                 <p className="meta-text" style={{ marginTop: "var(--space-1)" }}>
@@ -495,23 +496,23 @@ export default function AthleteDashboard({
               background: `${statusColor}12`, border: `1px solid ${statusColor}22`,
             }}>
               <div style={{ width: 5, height: 5, borderRadius: "50%", background: statusColor, flexShrink: 0 }} />
-              <span style={{ fontSize: "var(--text-meta)", fontWeight: 600, color: statusColor }}>Repère {dailyState.score ?? "—"}/100</span>
+              <span style={{ fontSize: "var(--text-meta)", fontWeight: 600, color: statusColor }}>{dailyState.score == null ? "À renseigner" : "5 réponses résumées"}</span>
             </div>
           </div>
 
           {/* Le questionnaire reste visible, mais n'est jamais présenté comme
               une readiness physiologique ou une autorisation de s'entraîner. */}
           <div style={{ display: "flex", alignItems: "center", gap: 18, flexWrap: "wrap" }}>
-            <button type="button" onClick={() => setShowDailyState(true)} className="tap-feedback rounded-full" aria-label="Comprendre mon repère AthleteOS du jour">
+            <button type="button" onClick={() => setShowDailyState(true)} className="tap-feedback rounded-full" aria-label="Comprendre mon état du jour">
               <WellnessRing value={dailyState.score} color={statusColor} />
             </button>
 
             <div style={{ flex: 1, minWidth: 190 }}>
               <p style={{ fontSize: "var(--text-body)", color: "var(--c-text-2)", lineHeight: "var(--leading-body)", marginBottom: "var(--space-4)" }}>
-                {dailyState.summary}
+                {dailyState.plainSummary ?? dailyState.summary}
               </p>
               <button type="button" onClick={() => setShowDailyState(true)} className="btn-ghost mb-3" style={{ minHeight: 34, paddingInline: 0, color: statusColor }}>
-                Comprendre ce repère <ChevronRight size={14} />
+                Voir ce qui t'aide et ce qui pèse <ChevronRight size={14} />
               </button>
               <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 8 }}>
                 {[
@@ -571,8 +572,8 @@ export default function AthleteDashboard({
                 <CheckCircle size={14} color="#1D9E75" strokeWidth={2} />
               </div>
               <div>
-                <p className="card-title">Wellness du jour</p>
-                <p className="card-subtitle">Questionnaire complété</p>
+                <p className="card-title">Ton état du jour</p>
+                <p className="card-subtitle">Tes cinq réponses sont enregistrées</p>
               </div>
             </div>
             {metrics.wellnessScore !== null && (
@@ -747,17 +748,18 @@ export default function AthleteDashboard({
 
           {/* ── Profil de charge (6 axes) ───────────────────────────────────── */}
           <AxisRadarCard
-            profile={axisProfile} title="Répartition de ta charge"
+            profile={axisProfile} title="Ce que tes séances ont surtout sollicité"
+            subtitle="Une lecture simple de tes objectifs de séance ; ouvre une ligne pour voir la méthode."
             sessions={sessions} athleteId={athlete.id} currentWeek={currentWeek}
           />
 
           {/* ── Repères du jour : lecture simple, détails scientifiques au clic */}
           <div className="card p-4">
               <div className="flex items-center justify-between mb-1">
-                <p className="card-title">Tes repères du jour</p>
+                <p className="card-title">Tes données expliquées simplement</p>
                 <span className="chip chip-neutral">Appuie pour comprendre</span>
               </div>
-              <p className="card-subtitle mb-4">D’abord l’essentiel. Les calculs complets restent accessibles dans chaque ligne.</p>
+              <p className="card-subtitle mb-4">Chaque ligne commence par ce que cela signifie pour toi. La formule et les limites restent accessibles au toucher.</p>
               <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                 {athleteMonitoring.map(s => {
                   const val = s.displayValue;
@@ -842,6 +844,7 @@ export default function AthleteDashboard({
                         ? new Date(s.sessionDate).toLocaleDateString("fr-BE", { weekday: "short", day: "numeric", month: "short" })
                         : s.day} · {s.time}
                     </p>
+                    <p className="meta-text" style={{ marginTop: 2, color: "var(--c-text-2)" }}>Objectif · {getSessionTrainingFocus(s).shortLabel}</p>
                   </div>
                   {s.pdfUrl && (
                     <button type="button" onClick={() => openSessionPdf(s.pdfUrl)}

@@ -18,6 +18,7 @@ import {
   Plus, ChevronLeft, ChevronRight, Clock, CalendarDays, CheckCircle,
 } from "lucide-react";
 import { MONTHS_FR, CATEGORIES, isSameDay, toLocalDateStr } from "../shared";
+import { getSessionTrainingFocus } from "../../domain/trainingFocus";
 import { parseLocalDate } from "../../utils/helpers";
 import { cat, StatusBadge, rpeColor } from "./planningShared";
 import CreateSessionModal from "./CreateSessionModal";
@@ -136,6 +137,7 @@ function SessionCard({ session, athleteId, isPast = false, compact = false, onOp
             <span style={{ fontSize: 12, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.06em", padding: "4px 10px", borderRadius: 99, background: c.border, color: "#0A150F" }}>
               {CATEGORIES.find(x => x.id === session.category)?.label ?? session.type}
             </span>
+            <span className="chip chip-neutral">{getSessionTrainingFocus(session).shortLabel}</span>
             {session.pdfUrl && (
               <span style={{ fontSize: 12, fontWeight: 700, padding: "3px 8px", borderRadius: 99, background: "rgba(91,158,245,0.16)", color: "#8DBDFA" }}>
                 PDF

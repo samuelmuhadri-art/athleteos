@@ -4,9 +4,9 @@ import { Activity, CalendarDays, CheckCircle2, ShieldCheck, Sparkles, Users, X }
 import { useModalAccessibility } from "../../hooks/useModalAccessibility";
 
 const DEMO_ATHLETES = [
-  { name: "Nora", discipline: "Sprint", readiness: 86, state: "Prête" },
-  { name: "Yanis", discipline: "Haies", readiness: 74, state: "À surveiller" },
-  { name: "Lina", discipline: "Longueur", readiness: 91, state: "Prête" },
+  { name: "Nora", discipline: "Sprint", dailyState: 86, state: "Bon ressenti" },
+  { name: "Yanis", discipline: "Haies", dailyState: 54, state: "À discuter" },
+  { name: "Lina", discipline: "Longueur", dailyState: 91, state: "Bon ressenti" },
 ];
 
 export default function ClubDemoPreview({ onClose, onStart }) {
@@ -38,7 +38,7 @@ export default function ClubDemoPreview({ onClose, onStart }) {
               <h3>Le coach voit immédiatement où agir.</h3>
               <p>Les données importantes sont transformées en décisions simples et cliquables.</p>
             </div>
-            <div className="club-demo-score"><strong>82</strong><span>forme groupe</span></div>
+            <div className="club-demo-score"><strong>16/18</strong><span>états renseignés</span></div>
           </div>
 
           <div className="club-demo-metrics">
@@ -58,7 +58,7 @@ export default function ClubDemoPreview({ onClose, onStart }) {
                 <div className="club-demo-athlete" key={athlete.name}>
                   <span className="club-demo-avatar">{athlete.name.slice(0, 1)}</span>
                   <div><strong>{athlete.name}</strong><span>{athlete.discipline}</span></div>
-                  <div className="club-demo-readiness"><strong>{athlete.readiness}</strong><span>{athlete.state}</span></div>
+                  <div className="club-demo-readiness"><strong>{athlete.dailyState}</strong><span>{athlete.state}</span></div>
                 </div>
               ))}
             </article>
@@ -67,7 +67,7 @@ export default function ClubDemoPreview({ onClose, onStart }) {
               <div className="club-demo-panel-title"><h4>À faire aujourd’hui</h4><span>3 actions</span></div>
               {[
                 "Valider la séance Sprint",
-                "Consulter la fatigue de Yanis",
+                "Échanger avec Yanis sur son ressenti",
                 "Préparer la compétition de samedi",
               ].map((action) => (
                 <div className="club-demo-action" key={action}><CheckCircle2 size={17} aria-hidden="true" /><span>{action}</span></div>

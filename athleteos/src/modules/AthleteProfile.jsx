@@ -89,11 +89,11 @@ const AthleteProfile = memo(({ athlete, weeklyCharge, sessions, competitions, on
             <ScoreRing value={metrics.wellnessScore ?? 0} color="white" label="Bien-être" size={80} />
             <div className="space-y-2 text-[12px]">
               <div className="flex items-center justify-between gap-6">
-                <span style={{ color: "rgba(255,255,255,0.76)" }}>Charge 7 jours</span>
+                <span style={{ color: "rgba(255,255,255,0.76)" }}>Cette semaine</span>
                 <span className="font-bold text-white">{metrics.load7 ?? "—"}</span>
               </div>
               <div className="flex items-center justify-between gap-6">
-                <span style={{ color: "rgba(255,255,255,0.76)" }}>Charge 28 jours</span>
+                <span style={{ color: "rgba(255,255,255,0.76)" }}>Rythme habituel · 4 sem.</span>
                 <span className="font-bold text-white">{metrics.load28 ?? "—"}</span>
               </div>
               <div className="flex items-center justify-between gap-6">

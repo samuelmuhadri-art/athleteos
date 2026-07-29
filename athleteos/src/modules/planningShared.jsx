@@ -40,7 +40,7 @@ export const SESSION_COLORS = {
 };
 
 export const EMPTY_FORM = {
-  title: "", type: "Sprint", category: "sprint",
+  title: "", type: "Sprint", category: "sprint", trainingFocus: "sprint_general",
   day: "Lundi", time: "10:00", durationMinutes: 60,
   description: "", instructions: "", athleteIds: [], sessionDate: "",
 };

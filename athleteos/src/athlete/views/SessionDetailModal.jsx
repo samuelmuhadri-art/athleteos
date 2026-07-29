@@ -9,6 +9,7 @@ import { useState, memo } from "react";
 import { createPortal } from "react-dom";
 import { X, ChevronRight, Users, FileText, Star } from "lucide-react";
 import { CATEGORIES } from "../shared";
+import { getSessionTrainingFocus } from "../../domain/trainingFocus";
 import { cat, StatusBadge, rpeColor } from "./planningShared";
 import { openSessionPdf } from "../../utils/storage";
 import { parseLocalDate } from "../../utils/helpers";
@@ -16,6 +17,7 @@ import { RSVP_OPTIONS } from "../../domain/sessionDay";
 
 const SessionDetailModal = memo(({ session, athlete, allAthletes, onClose, onSetStatus, onSetRpe, onSetFeeling, onSetComment, onSetRsvp }) => {
   const c   = cat(session.category);
+  const trainingFocus = getSessionTrainingFocus(session);
   const val = session.validations?.find(v => v.athleteId === athlete.id);
   const [comment, setComment] = useState(val?.comment ?? "");
   const [actualDuration, setActualDuration] = useState(
@@ -96,6 +98,9 @@ const SessionDetailModal = memo(({ session, athlete, allAthletes, onClose, onSet
               marginBottom: 10, background: c.border, color: "#0A150F",
             }}>
               {CATEGORIES.find(x => x.id === session.category)?.label ?? session.type}
+            </span>
+            <span className="text-[12px] font-semibold px-2.5 py-1 rounded-full" style={{ background: "rgba(255,255,255,0.06)", border: "1px solid var(--c-border)", color: "var(--c-text-1)" }}>
+              Objectif · {trainingFocus.shortLabel}
             </span>
             <h2 id="session-detail-title" style={{ fontSize: 20, fontWeight: 800, lineHeight: 1.2, color: c.text }}>
               {session.title}

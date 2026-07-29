@@ -7,7 +7,7 @@ export const COACH_MOBILE_PRIMARY_ITEMS = Object.freeze([
 
 export const COACH_MOBILE_MORE_ITEMS = Object.freeze([
   { id: "performances", label: "Performances", description: "Suivre les progrès" },
-  { id: "charge", label: "Charge", description: "Prévenir la fatigue" },
+  { id: "charge", label: "Charge", description: "Comprendre l'entraînement" },
   { id: "competitions", label: "Compétitions", description: "Préparer les échéances" },
   { id: "alerts", label: "Alertes", description: "Voir les signaux à traiter" },
   { id: "rapports", label: "Rapports", description: "Consulter les synthèses du club" },

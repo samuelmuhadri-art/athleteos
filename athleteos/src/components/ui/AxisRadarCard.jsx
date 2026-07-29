@@ -34,7 +34,7 @@ function RadarDot({ cx, cy, payload }) {
 }
 
 const AxisRadarCard = memo(({
-  profile, title = "Profil de charge", subtitle = "Répartition descriptive des contraintes de la dernière semaine connue",
+  profile, title = "Ce que les séances ont surtout sollicité", subtitle = "Lecture descriptive de la dernière semaine connue, basée sur l'objectif déclaré de chaque séance.",
   sessions = null, athleteId = null, currentWeek = null,
 }) => {
   const [expanded, setExpanded] = useState(null); // axisId ouvert, ou null
@@ -54,7 +54,7 @@ const AxisRadarCard = memo(({
       <ResponsiveContainer width="100%" height={200}>
         <RadarChart data={data} cx="50%" cy="50%" outerRadius="70%">
           <PolarGrid stroke="var(--c-border)" />
-          <PolarAngleAxis dataKey="axis" tick={{ fontSize: 10.5, fill: "var(--c-text-2)", fontWeight: 600 }} />
+          <PolarAngleAxis dataKey="axis" tick={{ fontSize: 12, fill: "var(--c-text-2)", fontWeight: 600 }} />
           <PolarRadiusAxis angle={90} domain={[0, 100]} tick={false} axisLine={false} />
           <Radar
             dataKey="score"
@@ -85,34 +85,35 @@ const AxisRadarCard = memo(({
               >
                 <div className="flex items-center gap-2.5">
                   <span style={{ width: 7, height: 7, borderRadius: "50%", background: p.color, flexShrink: 0 }} />
-                  <span style={{ fontSize: 12, fontWeight: 500, color: "var(--c-text-1)", flex: 1 }}>{axis.label}</span>
-                  <span style={{ fontSize: 10.5, fontWeight: 700, color: p.color, flexShrink: 0 }}>{p.label}</span>
+                  <span style={{ fontSize: 13, fontWeight: 600, color: "var(--c-text-1)", flex: 1 }}>{axis.label}</span>
+                  <span style={{ fontSize: 12, fontWeight: 700, color: p.color, flexShrink: 0 }}>{p.label}</span>
                 </div>
                 {flagged && (
-                  <p style={{ fontSize: 10, color: "var(--c-text-3)", marginTop: 3, marginLeft: 17, lineHeight: 1.4 }}>
+                  <p style={{ fontSize: 12, color: "var(--c-text-2)", marginTop: 4, marginLeft: 17, lineHeight: 1.5 }}>
                     {axis.what}
                   </p>
                 )}
               </button>
 
               {isOpen && (
-                <div style={{ padding: "0 10px 10px 17px", fontSize: 10.5, color: "var(--c-text-3)", lineHeight: 1.6 }}>
+                <div style={{ padding: "2px 10px 12px 17px", fontSize: 12, color: "var(--c-text-2)", lineHeight: 1.6 }}>
                   <div className="flex items-center gap-1.5 mb-2">
-                    <span className="chip chip-warning" style={{ fontSize: 9 }}>Convention AthleteOS</span>
-                    <span style={{ fontSize: 9 }}>modèle {CURRENT_AXIS_MODEL_VERSION}</span>
+                    <span className="chip chip-warning">Lecture descriptive</span>
+                    <span>modèle {CURRENT_AXIS_MODEL_VERSION}</span>
                   </div>
+                  <p><strong style={{ color: "var(--c-text-1)" }}>{axis.scientificLabel}</strong> · {axis.what}</p>
                   <p>
                     Charge de la semaine S{p.currentWeek} : <strong style={{ color: "var(--c-text-2)" }}>{p.currentLoad}</strong>
                     {p.habitualLoad != null && <> · Moyenne précédente : <strong style={{ color: "var(--c-text-2)" }}>{p.habitualLoad}</strong></>}
                   </p>
                   <p style={{ marginTop: 2 }}>
-                    Qualité de l'historique : <strong style={{ color: "var(--c-text-2)" }}>{p.dataQuality}</strong> ({p.weeksOfData} semaine{p.weeksOfData > 1 ? "s" : ""} de données). Convention descriptive, pas estimation de risque.
+                    Historique disponible : <strong style={{ color: "var(--c-text-1)" }}>{p.dataQuality}</strong> ({p.weeksOfData} semaine{p.weeksOfData > 1 ? "s" : ""}). Cette lecture répartit la charge globale pour aider à comprendre le contenu ; ce n'est ni une mesure physiologique directe ni une estimation de risque.
                   </p>
                   {contributors.length > 0 && (
                     <div style={{ marginTop: 6 }}>
                       <p style={{ fontWeight: 500, color: "var(--c-text-2)" }}>Séances qui contribuent le plus :</p>
                       {contributors.map(c => (
-                        <p key={c.id}>· {c.title} (S{c.week}) — {c.axisLoad}</p>
+                        <p key={c.id}>· {c.title} · {c.focusLabel ?? "objectif général"} (S{c.week}) — contribution {c.axisLoad}</p>
                       ))}
                     </div>
                   )}
