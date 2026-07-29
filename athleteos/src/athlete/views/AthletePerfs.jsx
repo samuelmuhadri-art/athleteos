@@ -143,7 +143,7 @@ export default function AthletePerfs({ athlete, competitions, myPerformances, my
           ? Math.min(105, Math.round((resP.value / prP.value) * 1000) / 10)
           : Math.min(105, Math.round((prP.value / resP.value) * 1000) / 10);
         const week    = getISOWeek(parseLocalDate(comp.date.slice(0, 10)));
-        const metrics = getAthleteMetricsForWeek(athlete.id, weeklyCharge, week);
+        const metrics = getAthleteMetricsForWeek(athlete.id, weeklyCharge, week, [], [], comp.date);
         if (metrics.variationPercent == null) return null;
         return { x: metrics.variationPercent, y: pct, compName: comp.name, date: comp.date, resultStr: result.result };
       })

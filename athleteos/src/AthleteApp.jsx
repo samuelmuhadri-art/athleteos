@@ -63,6 +63,7 @@ export default function AthleteApp({ clubBrand, themeStyle }) {
   const [loading,        setLoading]        = useState(true);
   const [error,          setError]          = useState(null);
   const [wellnessToday,  setWellnessToday]  = useState(null);
+  const [confirmedRestDays, setConfirmedRestDays] = useState([]);
   const [showWellness,   setShowWellness]   = useState(false);
   const [showInjuryReport, setShowInjuryReport] = useState(false);
   const [showSettings,   setShowSettings]   = useState(false);
@@ -86,7 +87,7 @@ export default function AthleteApp({ clubBrand, themeStyle }) {
       const a = athleteRes.data; const athleteId = a.id;
       const todayStr = toLocalDateStr(new Date());
 
-      const [recordsRes,injuriesRes,perfHistRes,sessionsRes,compsRes,coachRes,allAthletesRes,myPerfsRes,goalsRes,notifsRes,wellnessRes,weeklyChargeRes] = await Promise.all([
+      const [recordsRes,injuriesRes,perfHistRes,sessionsRes,compsRes,coachRes,allAthletesRes,myPerfsRes,goalsRes,notifsRes,wellnessRes,weeklyChargeRes,restDaysRes] = await Promise.all([
         supabase.from("records").select("*").eq("athlete_id",athleteId),
         supabase.from("injuries").select("*").eq("athlete_id",athleteId),
         supabase.from("performance_history").select("*").eq("athlete_id",athleteId),
@@ -101,12 +102,14 @@ export default function AthleteApp({ clubBrand, themeStyle }) {
         // Charge hebdomadaire calculée côté serveur (vue weekly_charge, voir
         // migration 20260726120000) — plus de recalcul JS à partir des séances.
         supabase.from("weekly_charge").select("*").eq("athlete_id",athleteId),
+        supabase.from("athlete_daily_load_days").select("load_date").eq("athlete_id",athleteId).eq("state","rest_confirmed"),
       ]);
 
       setMyPerformances(myPerfsRes.data ?? []);
       setMyGoals(goalsRes.data ?? []);
       setMyNotifs(notifsRes?.data ?? []);
       setWellnessToday(wellnessRes.data ?? null);
+      setConfirmedRestDays((restDaysRes.data ?? []).map(row => row.load_date));
 
       const coachId = coachRes.data?.id ?? null;
       setCoachUserId(coachId); setCoachName(coachRes.data?.name ?? null);
@@ -263,6 +266,29 @@ export default function AthleteApp({ clubBrand, themeStyle }) {
       rpe, actual_duration_minutes:duration, duration_source:"reported",
     }).eq("session_id",sid).eq("athlete_id",aid);
   }, []);
+  const confirmRestDay = useCallback(async (date = toLocalDateStr(new Date())) => {
+    if (!athlete?.id) return false;
+    const { error: restError } = await supabase.from("athlete_daily_load_days").upsert({
+      athlete_id: athlete.id, load_date: date, state: "rest_confirmed", updated_at: new Date().toISOString(),
+    }, { onConflict: "athlete_id,load_date" });
+    if (restError) {
+      console.error("AthleteApp — confirmation repos :", restError);
+      return false;
+    }
+    setConfirmedRestDays(previous => previous.includes(date) ? previous : [...previous, date]);
+    const week = getISOWeek(new Date(`${date}T00:00:00`));
+    setWeeklyCharge(previous => {
+      const index = previous.findIndex(row => row.athleteId === athlete.id && row.week === week);
+      const point = { date, load: 0, estimated: false, complete: true };
+      if (index < 0) return [...previous, { athleteId: athlete.id, week, rawLoad: 0, dailyLoads: [point], knownDays: 1, unknownDays: 0, estimatedDays: 0 }];
+      const next = [...previous];
+      const row = next[index];
+      const alreadyPresent = (row.dailyLoads ?? []).some(day => day.date === date);
+      next[index] = alreadyPresent ? row : { ...row, dailyLoads: [...(row.dailyLoads ?? []), point], knownDays: (row.knownDays ?? 0) + 1 };
+      return next;
+    });
+    return true;
+  }, [athlete?.id]);
   const handleStatus = useCallback(async (sid,aid,status) => {
     setSessions(p=>p.map(s=>s.id!==sid?s:{...s,validations:s.validations.map(v=>v.athleteId===aid?{...v,status}:v)}));
     await supabase.from("session_athletes").update({status}).eq("session_id",sid).eq("athlete_id",aid);
@@ -480,6 +506,7 @@ export default function AthleteApp({ clubBrand, themeStyle }) {
                 competitions={competitions} lastMessages={lastMessages} coachName={coachName}
                 myPerformances={myPerformances} onNavigate={navigate}
                 wellnessToday={wellnessToday} onOpenWellness={() => setShowWellness(true)}
+                confirmedRestDays={confirmedRestDays} onConfirmRestDay={confirmRestDay}
                 onOpenInjuryReport={() => setShowInjuryReport(true)}
                 allAthletes={allAthletes}
                 onRpeChange={handleRpe} onStatusChange={handleStatus}

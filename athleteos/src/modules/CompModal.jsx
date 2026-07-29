@@ -86,7 +86,7 @@ const CompModal = memo(({ competition, athletes, weeklyCharge, records, onClose,
                   const result       = competition.results?.find((r) => r.athleteId === a.id);
                   const plannedEvent = competition.plannedEvents?.[a.id];
                   const week         = dateToWeek(competition.date);
-                  const metrics      = getAthleteMetricsForWeek(a.id, weeklyCharge, week);
+                  const metrics      = getAthleteMetricsForWeek(a.id, weeklyCharge, week, [], [], competition.date);
 
                   return (
                     <div key={a.id} className="bg-[var(--c-surface-2)] rounded-xl border border-[var(--c-border)] p-3.5 flex items-start gap-3">
@@ -168,7 +168,7 @@ const CompModal = memo(({ competition, athletes, weeklyCharge, records, onClose,
                   const color    = athleteColor(athlete.id, athletes);
                   const analysis = generateResultAnalysis(result, competition, athlete, weeklyCharge);
                   const week     = dateToWeek(competition.date);
-                  const metrics  = getAthleteMetricsForWeek(athlete.id, weeklyCharge, week);
+                  const metrics  = getAthleteMetricsForWeek(athlete.id, weeklyCharge, week, [], [], competition.date);
 
                   return (
                     <div key={i} className="bg-[var(--c-surface-2)] rounded-xl border border-[var(--c-border)] overflow-hidden shadow-sm">

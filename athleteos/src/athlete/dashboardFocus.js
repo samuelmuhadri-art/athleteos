@@ -7,14 +7,15 @@ export function getAthleteSessionStatus(session, athleteId) {
   return session?.validations?.find(validation => validation.athleteId === athleteId)?.status ?? "future";
 }
 
-export function getTodayFocus({ wellnessCompleted, todaySessions = [], athleteId }) {
+export function getTodayFocus({ wellnessCompleted, restConfirmed = false, todaySessions = [], athleteId }) {
   const sessions = Array.isArray(todaySessions) ? todaySessions : [];
   const pendingSessions = sessions.filter(
     session => !TERMINAL_SESSION_STATUSES.has(getAthleteSessionStatus(session, athleteId))
   );
   const completedSessions = sessions.length - pendingSessions.length;
-  const completedSteps = completedSessions + (wellnessCompleted ? 1 : 0);
-  const totalSteps = sessions.length + 1;
+  const restStep = sessions.length === 0;
+  const completedSteps = completedSessions + (wellnessCompleted ? 1 : 0) + (restStep && restConfirmed ? 1 : 0);
+  const totalSteps = sessions.length + 1 + (restStep ? 1 : 0);
 
   if (!wellnessCompleted) {
     return {
@@ -35,6 +36,17 @@ export function getTodayFocus({ wellnessCompleted, todaySessions = [], athleteId
       completedSessions,
       pendingSessions,
       focusSession: pendingSessions[0],
+    };
+  }
+
+  if (restStep && !restConfirmed) {
+    return {
+      kind: "rest",
+      completedSteps,
+      totalSteps,
+      completedSessions,
+      pendingSessions,
+      focusSession: null,
     };
   }
 

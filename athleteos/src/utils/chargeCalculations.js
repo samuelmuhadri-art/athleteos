@@ -44,7 +44,7 @@
 //     "Effects of high-intensity sprint exercise on neuromuscular function
 //     in sprinters: the countermovement jump as a fatigue assessment tool."
 //     PeerJ 12:e17443.
-//     → Récupération neuromusculaire sprint : 48-72h
+//     → Mesures aiguës après sprint ; ne valide pas un délai fixe de récupération.
 //
 // [8] Borg G. (1998).
 //     Borg's Perceived Exertion and Pain Scales. Human Kinetics.
@@ -89,12 +89,11 @@ import {
 // @param currentWeek  : number (semaine ISO courante)
 // @param wellnessData : [{ date, sleep, energy, soreness, mood, stress }] (optionnel)
 // @param sessions     : array de séances (optionnel, pour récupération)
-export function getAthleteMetricsForWeek(athleteId, weeklyCharge, currentWeek, wellnessData = [], sessions = []) {
+export function getAthleteMetricsForWeek(athleteId, weeklyCharge, currentWeek, wellnessData = [], sessions = [], cutoffDate = null) {
   const myCharge = weeklyCharge
     .filter(w => w.athleteId === athleteId)
-    .filter(w => currentWeek == null || w.week <= currentWeek)
     .sort((a, b) => a.week - b.week);
-  const dailyLoads = extractDailyLoads(athleteId, myCharge, currentWeek);
+  const dailyLoads = extractDailyLoads(athleteId, myCharge, currentWeek, cutoffDate);
   const { acute, chronic, acwr, ewmaHistory, observedDays, status: acwrStatus } = computeEWMA(dailyLoads);
   const loadWindows = computeLoadWindows(dailyLoads);
   const { monotony, strain, status: monotonyStatus } = computeMonotonyAndStrain(
@@ -105,6 +104,7 @@ export function getAthleteMetricsForWeek(athleteId, weeklyCharge, currentWeek, w
   // Prend le dernier questionnaire disponible (7 derniers jours)
   const recentWellness = wellnessData
     .filter(w => w.athleteId === athleteId || !w.athleteId)
+    .filter(w => !cutoffDate || !w.date || String(w.date).slice(0, 10) <= String(cutoffDate).slice(0, 10))
     .sort((a, b) => new Date(b.date) - new Date(a.date))[0] ?? null;
   const wellnessScore = computeWellnessScore(recentWellness);
 

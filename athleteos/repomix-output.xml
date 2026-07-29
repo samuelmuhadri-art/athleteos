@@ -248,6 +248,7 @@ supabase/
     20260801040000_import_club_athletes_rpc.sql
     20260801050000_claim_imported_athlete_on_signup.sql
     20260801060000_standard_session_rpe_daily_load.sql
+    20260801070000_confirmed_rest_days.sql
   .gitignore
   config.toml
   seed.sql
@@ -3408,7 +3409,7 @@ import {
 } from "../../utils/chargeCalculations";
 import { getAthleteAxisProfile } from "../../utils/loadAxes";
 import {
-  getISOWeek, dimColor, colorsFor, parsePerf, isSameDay, parseLocalDate,
+  getISOWeek, dimColor, colorsFor, parsePerf, isSameDay, parseLocalDate, toLocalDateStr,
   initialsFromName, getDiscHib, DISC_TYPE_COLORS, WELLNESS_QUESTIONS, EVIDENCE_LEVELS,
 } from "../shared";
 import AxisRadarCard from "../../components/ui/AxisRadarCard";
@@ -3567,7 +3568,7 @@ const ReadinessRing = memo(({ value, color, size = 128 }) => {
 
 const DailyFocusCard = memo(({
   focus, todaySessions, nextCompetition,
-  onOpenWellness, onOpenSession, onOpenPlanning,
+  onOpenWellness, onOpenSession, onOpenPlanning, onConfirmRestDay,
 }) => {
   const wellnessCompleted = focus.kind !== "wellness";
   const session = focus.focusSession;
@@ -3589,6 +3590,14 @@ const DailyFocusCard = memo(({
     color: session ? colorsFor(session.category).border : "var(--c-accent)",
     icon: Clock,
     action: onOpenSession,
+  } : focus.kind === "rest" ? {
+    eyebrow: "Donnée du jour",
+    title: "Confirmer le jour de repos",
+    description: "Aucune séance n'est prévue. Confirme seulement si tu n'as réalisé aucun autre entraînement aujourd'hui.",
+    cta: "Confirmer 0 de charge",
+    color: "var(--color-info)",
+    icon: CheckCircle,
+    action: onConfirmRestDay,
   } : focus.kind === "complete" ? {
     eyebrow: "Journée à jour",
     title: "Tout est validé",
@@ -3599,8 +3608,8 @@ const DailyFocusCard = memo(({
     action: onOpenPlanning,
   } : {
     eyebrow: "Journée légère",
-    title: "Récupération & continuité",
-    description: "Aucune séance aujourd’hui. Garde un œil sur la suite et profite de la récupération.",
+    title: "Repos confirmé",
+    description: "Le jour est enregistré à 0 de charge. Ce zéro est une donnée confirmée, pas une valeur supposée.",
     cta: "Voir le planning",
     color: "var(--color-info)",
     icon: CalendarDays,
@@ -3609,7 +3618,7 @@ const DailyFocusCard = memo(({
 
   const FocusIcon = presentation.icon;
   const completedSessionLabel = todaySessions.length === 0
-    ? "Journée libre"
+    ? (focus.kind === "rest" ? "Repos à confirmer" : "Repos confirmé")
     : `${focus.completedSessions}/${todaySessions.length} traitée${todaySessions.length > 1 ? "s" : ""}`;
 
   return (
@@ -3707,6 +3716,7 @@ const DailyFocusCard = memo(({
 export default function AthleteDashboard({
   athlete, weeklyCharge, sessions, competitions, lastMessages,
   coachName, myPerformances, onNavigate, wellnessToday, onOpenWellness,
+  confirmedRestDays = [], onConfirmRestDay,
   onOpenInjuryReport, allAthletes, onRpeChange, onStatusChange,
   onFeelingChange, onCommentChange,
 }) {
@@ -3734,7 +3744,9 @@ export default function AthleteDashboard({
   const todaySessions = weekSessions
     .filter(s => s.sessionDate && isSameDay(parseLocalDate(s.sessionDate), today));
   const todayFocus = getTodayFocus({
-    wellnessCompleted: Boolean(wellnessToday), todaySessions, athleteId: athlete.id,
+    wellnessCompleted: Boolean(wellnessToday),
+    restConfirmed: confirmedRestDays.includes(toLocalDateStr(today)),
+    todaySessions, athleteId: athlete.id,
   });
   const focusSession = todayFocus.focusSession;
   const openedTodaySession = todaySessions.find(session => session.id === openTodaySessionId) ?? null;
@@ -3906,6 +3918,7 @@ export default function AthleteDashboard({
           onOpenWellness={onOpenWellness}
           onOpenSession={() => focusSession && setOpenTodaySessionId(focusSession.id)}
           onOpenPlanning={() => onNavigate("planning")}
+          onConfirmRestDay={() => onConfirmRestDay?.(toLocalDateStr(today))}
         />
       </div>
 
@@ -5332,7 +5345,7 @@ export default function AthletePerfs({ athlete, competitions, myPerformances, my
           ? Math.min(105, Math.round((resP.value / prP.value) * 1000) / 10)
           : Math.min(105, Math.round((prP.value / resP.value) * 1000) / 10);
         const week    = getISOWeek(parseLocalDate(comp.date.slice(0, 10)));
-        const metrics = getAthleteMetricsForWeek(athlete.id, weeklyCharge, week);
+        const metrics = getAthleteMetricsForWeek(athlete.id, weeklyCharge, week, [], [], comp.date);
         if (metrics.variationPercent == null) return null;
         return { x: metrics.variationPercent, y: pct, compName: comp.name, date: comp.date, resultStr: result.result };
       })
@@ -8051,14 +8064,15 @@ export function getAthleteSessionStatus(session, athleteId) {
   return session?.validations?.find(validation => validation.athleteId === athleteId)?.status ?? "future";
 }
 
-export function getTodayFocus({ wellnessCompleted, todaySessions = [], athleteId }) {
+export function getTodayFocus({ wellnessCompleted, restConfirmed = false, todaySessions = [], athleteId }) {
   const sessions = Array.isArray(todaySessions) ? todaySessions : [];
   const pendingSessions = sessions.filter(
     session => !TERMINAL_SESSION_STATUSES.has(getAthleteSessionStatus(session, athleteId))
   );
   const completedSessions = sessions.length - pendingSessions.length;
-  const completedSteps = completedSessions + (wellnessCompleted ? 1 : 0);
-  const totalSteps = sessions.length + 1;
+  const restStep = sessions.length === 0;
+  const completedSteps = completedSessions + (wellnessCompleted ? 1 : 0) + (restStep && restConfirmed ? 1 : 0);
+  const totalSteps = sessions.length + 1 + (restStep ? 1 : 0);
 
   if (!wellnessCompleted) {
     return {
@@ -8079,6 +8093,17 @@ export function getTodayFocus({ wellnessCompleted, todaySessions = [], athleteId
       completedSessions,
       pendingSessions,
       focusSession: pendingSessions[0],
+    };
+  }
+
+  if (restStep && !restConfirmed) {
+    return {
+      kind: "rest",
+      completedSteps,
+      totalSteps,
+      completedSessions,
+      pendingSessions,
+      focusSession: null,
     };
   }
 
@@ -8141,9 +8166,14 @@ describe("dashboard athlete daily focus", () => {
     expect(focus.pendingSessions).toEqual([]);
   });
 
-  it("affiche une journée libre quand wellness est rempli et aucune séance n'est prévue", () => {
+  it("demande une confirmation explicite avant de compter un jour sans séance comme repos", () => {
     expect(getTodayFocus({ wellnessCompleted: true, todaySessions: [], athleteId: "athlete-1" }))
-      .toMatchObject({ kind: "free", completedSteps: 1, totalSteps: 1, focusSession: null });
+      .toMatchObject({ kind: "rest", completedSteps: 1, totalSteps: 2, focusSession: null });
+  });
+
+  it("affiche une journée libre seulement après confirmation du repos", () => {
+    expect(getTodayFocus({ wellnessCompleted: true, restConfirmed: true, todaySessions: [], athleteId: "athlete-1" }))
+      .toMatchObject({ kind: "free", completedSteps: 2, totalSteps: 2, focusSession: null });
   });
 
   it("isole correctement le statut de l'athlète dans une séance de groupe", () => {
@@ -17943,7 +17973,7 @@ export function dateToWeek(dateStr) {
 
 export function generateResultAnalysis(result, competition, athlete, weeklyCharge) {
   const week    = dateToWeek(competition.date);
-  const metrics = getAthleteMetricsForWeek(athlete.id, weeklyCharge, week);
+  const metrics = getAthleteMetricsForWeek(athlete.id, weeklyCharge, week, [], [], competition.date);
   const { load7, load28, variationPercent, wellnessScore } = metrics;
   const lines = [];
 
@@ -18109,7 +18139,7 @@ const CompModal = memo(({ competition, athletes, weeklyCharge, records, onClose,
                   const result       = competition.results?.find((r) => r.athleteId === a.id);
                   const plannedEvent = competition.plannedEvents?.[a.id];
                   const week         = dateToWeek(competition.date);
-                  const metrics      = getAthleteMetricsForWeek(a.id, weeklyCharge, week);
+                  const metrics      = getAthleteMetricsForWeek(a.id, weeklyCharge, week, [], [], competition.date);
 
                   return (
                     <div key={a.id} className="bg-[var(--c-surface-2)] rounded-xl border border-[var(--c-border)] p-3.5 flex items-start gap-3">
@@ -18191,7 +18221,7 @@ const CompModal = memo(({ competition, athletes, weeklyCharge, records, onClose,
                   const color    = athleteColor(athlete.id, athletes);
                   const analysis = generateResultAnalysis(result, competition, athlete, weeklyCharge);
                   const week     = dateToWeek(competition.date);
-                  const metrics  = getAthleteMetricsForWeek(athlete.id, weeklyCharge, week);
+                  const metrics  = getAthleteMetricsForWeek(athlete.id, weeklyCharge, week, [], [], competition.date);
 
                   return (
                     <div key={i} className="bg-[var(--c-surface-2)] rounded-xl border border-[var(--c-border)] overflow-hidden shadow-sm">
@@ -24256,6 +24286,38 @@ export type Database = {
           },
         ]
       }
+      athlete_daily_load_days: {
+        Row: {
+          athlete_id: number
+          created_at: string
+          load_date: string
+          state: string
+          updated_at: string
+        }
+        Insert: {
+          athlete_id: number
+          created_at?: string
+          load_date: string
+          state?: string
+          updated_at?: string
+        }
+        Update: {
+          athlete_id?: number
+          created_at?: string
+          load_date?: string
+          state?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "athlete_daily_load_days_athlete_id_fkey"
+            columns: ["athlete_id"]
+            isOneToOne: false
+            referencedRelation: "athletes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       session_athletes: {
         Row: {
           actual_duration_minutes: number | null
@@ -25433,7 +25495,7 @@ describe("fichier et modèle CSV", () => {
 //     "Effects of high-intensity sprint exercise on neuromuscular function
 //     in sprinters: the countermovement jump as a fatigue assessment tool."
 //     PeerJ 12:e17443.
-//     → Récupération neuromusculaire sprint : 48-72h
+//     → Mesures aiguës après sprint ; ne valide pas un délai fixe de récupération.
 //
 // [8] Borg G. (1998).
 //     Borg's Perceived Exertion and Pain Scales. Human Kinetics.
@@ -25478,12 +25540,11 @@ import {
 // @param currentWeek  : number (semaine ISO courante)
 // @param wellnessData : [{ date, sleep, energy, soreness, mood, stress }] (optionnel)
 // @param sessions     : array de séances (optionnel, pour récupération)
-export function getAthleteMetricsForWeek(athleteId, weeklyCharge, currentWeek, wellnessData = [], sessions = []) {
+export function getAthleteMetricsForWeek(athleteId, weeklyCharge, currentWeek, wellnessData = [], sessions = [], cutoffDate = null) {
   const myCharge = weeklyCharge
     .filter(w => w.athleteId === athleteId)
-    .filter(w => currentWeek == null || w.week <= currentWeek)
     .sort((a, b) => a.week - b.week);
-  const dailyLoads = extractDailyLoads(athleteId, myCharge, currentWeek);
+  const dailyLoads = extractDailyLoads(athleteId, myCharge, currentWeek, cutoffDate);
   const { acute, chronic, acwr, ewmaHistory, observedDays, status: acwrStatus } = computeEWMA(dailyLoads);
   const loadWindows = computeLoadWindows(dailyLoads);
   const { monotony, strain, status: monotonyStatus } = computeMonotonyAndStrain(
@@ -25494,6 +25555,7 @@ export function getAthleteMetricsForWeek(athleteId, weeklyCharge, currentWeek, w
   // Prend le dernier questionnaire disponible (7 derniers jours)
   const recentWellness = wellnessData
     .filter(w => w.athleteId === athleteId || !w.athleteId)
+    .filter(w => !cutoffDate || !w.date || String(w.date).slice(0, 10) <= String(cutoffDate).slice(0, 10))
     .sort((a, b) => new Date(b.date) - new Date(a.date))[0] ?? null;
   const wellnessScore = computeWellnessScore(recentWellness);
 
@@ -26763,6 +26825,23 @@ function addUtcDays(dateKey, amount) {
   return date.toISOString().slice(0, 10);
 }
 
+function isoWeekFromDateKey(dateKey) {
+  const date = new Date(`${dateKey}T00:00:00Z`);
+  date.setUTCDate(date.getUTCDate() + 4 - (date.getUTCDay() || 7));
+  const yearStart = new Date(Date.UTC(date.getUTCFullYear(), 0, 1));
+  return Math.ceil((((date - yearStart) / 86400000) + 1) / 7);
+}
+
+function endOfIsoWeek(dateKey) {
+  const date = new Date(`${dateKey}T00:00:00Z`);
+  return addUtcDays(dateKey, 7 - (date.getUTCDay() || 7));
+}
+
+function localTodayKey() {
+  const today = new Date();
+  return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+}
+
 /** Construit une série civile continue. Les dates absentes restent `null`. */
 export function buildContinuousDailyLoadSeries(points, startDate, endDate) {
   const normalized = new Map();
@@ -26785,13 +26864,24 @@ export function buildContinuousDailyLoadSeries(points, startDate, endDate) {
 }
 
 /** Extrait les jours détaillés fournis par la vue SQL weekly_charge v2. */
-export function extractDailyLoads(athleteId, weeklyCharge, currentWeek) {
+export function extractDailyLoads(athleteId, weeklyCharge, currentWeek, cutoffDate = null) {
   const rows = (weeklyCharge ?? [])
-    .filter((row) => row.athleteId === athleteId)
-    .filter((row) => currentWeek == null || row.week <= currentWeek);
+    .filter((row) => row.athleteId === athleteId);
   const points = rows.flatMap((row) => row.dailyLoads ?? []);
   if (!points.length) return [];
-  const end = points.map((point) => toDateKey(point.date)).filter(Boolean).sort().at(-1);
+
+  const today = localTodayKey();
+  let end = toDateKey(cutoffDate);
+  if (!end && currentWeek != null) {
+    const matchingDates = points
+      .map((point) => toDateKey(point.date))
+      .filter((date) => date && date <= today && isoWeekFromDateKey(date) === currentWeek)
+      .sort();
+    if (matchingDates.length) end = endOfIsoWeek(matchingDates.at(-1));
+  }
+  if (!end) end = today;
+  if (end > today && !cutoffDate) end = today;
+
   const start = addUtcDays(end, -55);
   return buildContinuousDailyLoadSeries(points, start, end);
 }
@@ -26921,6 +27011,7 @@ import {
   computeSessionLoad,
   computeWellnessScore,
   estimateRecovery,
+  extractDailyLoads,
   getRPELabel,
 } from "./trainingLoad.js";
 
@@ -26964,6 +27055,21 @@ describe("série quotidienne continue", () => {
   it("exclut une durée historique estimée des métriques quotidiennes", () => {
     const series = buildContinuousDailyLoadSeries([{ date: "2026-01-01", load: 300, estimated: true }]);
     expect(series[0].load).toBeNull();
+  });
+
+  it("coupe une analyse historique à la date demandée", () => {
+    const weeklyCharge = [{
+      athleteId: 7,
+      week: 10,
+      dailyLoads: [
+        { date: "2026-03-04", load: 100 },
+        { date: "2026-03-05", load: 200 },
+        { date: "2026-03-06", load: 900 },
+      ],
+    }];
+    const series = extractDailyLoads(7, weeklyCharge, 10, "2026-03-05");
+    expect(series.at(-1)).toEqual({ date: "2026-03-05", load: 200 });
+    expect(series.some(point => point.date === "2026-03-06")).toBe(false);
   });
 });
 
@@ -27938,6 +28044,7 @@ export default function AthleteApp({ clubBrand, themeStyle }) {
   const [loading,        setLoading]        = useState(true);
   const [error,          setError]          = useState(null);
   const [wellnessToday,  setWellnessToday]  = useState(null);
+  const [confirmedRestDays, setConfirmedRestDays] = useState([]);
   const [showWellness,   setShowWellness]   = useState(false);
   const [showInjuryReport, setShowInjuryReport] = useState(false);
   const [showSettings,   setShowSettings]   = useState(false);
@@ -27961,7 +28068,7 @@ export default function AthleteApp({ clubBrand, themeStyle }) {
       const a = athleteRes.data; const athleteId = a.id;
       const todayStr = toLocalDateStr(new Date());
 
-      const [recordsRes,injuriesRes,perfHistRes,sessionsRes,compsRes,coachRes,allAthletesRes,myPerfsRes,goalsRes,notifsRes,wellnessRes,weeklyChargeRes] = await Promise.all([
+      const [recordsRes,injuriesRes,perfHistRes,sessionsRes,compsRes,coachRes,allAthletesRes,myPerfsRes,goalsRes,notifsRes,wellnessRes,weeklyChargeRes,restDaysRes] = await Promise.all([
         supabase.from("records").select("*").eq("athlete_id",athleteId),
         supabase.from("injuries").select("*").eq("athlete_id",athleteId),
         supabase.from("performance_history").select("*").eq("athlete_id",athleteId),
@@ -27976,12 +28083,14 @@ export default function AthleteApp({ clubBrand, themeStyle }) {
         // Charge hebdomadaire calculée côté serveur (vue weekly_charge, voir
         // migration 20260726120000) — plus de recalcul JS à partir des séances.
         supabase.from("weekly_charge").select("*").eq("athlete_id",athleteId),
+        supabase.from("athlete_daily_load_days").select("load_date").eq("athlete_id",athleteId).eq("state","rest_confirmed"),
       ]);
 
       setMyPerformances(myPerfsRes.data ?? []);
       setMyGoals(goalsRes.data ?? []);
       setMyNotifs(notifsRes?.data ?? []);
       setWellnessToday(wellnessRes.data ?? null);
+      setConfirmedRestDays((restDaysRes.data ?? []).map(row => row.load_date));
 
       const coachId = coachRes.data?.id ?? null;
       setCoachUserId(coachId); setCoachName(coachRes.data?.name ?? null);
@@ -28138,6 +28247,29 @@ export default function AthleteApp({ clubBrand, themeStyle }) {
       rpe, actual_duration_minutes:duration, duration_source:"reported",
     }).eq("session_id",sid).eq("athlete_id",aid);
   }, []);
+  const confirmRestDay = useCallback(async (date = toLocalDateStr(new Date())) => {
+    if (!athlete?.id) return false;
+    const { error: restError } = await supabase.from("athlete_daily_load_days").upsert({
+      athlete_id: athlete.id, load_date: date, state: "rest_confirmed", updated_at: new Date().toISOString(),
+    }, { onConflict: "athlete_id,load_date" });
+    if (restError) {
+      console.error("AthleteApp — confirmation repos :", restError);
+      return false;
+    }
+    setConfirmedRestDays(previous => previous.includes(date) ? previous : [...previous, date]);
+    const week = getISOWeek(new Date(`${date}T00:00:00`));
+    setWeeklyCharge(previous => {
+      const index = previous.findIndex(row => row.athleteId === athlete.id && row.week === week);
+      const point = { date, load: 0, estimated: false, complete: true };
+      if (index < 0) return [...previous, { athleteId: athlete.id, week, rawLoad: 0, dailyLoads: [point], knownDays: 1, unknownDays: 0, estimatedDays: 0 }];
+      const next = [...previous];
+      const row = next[index];
+      const alreadyPresent = (row.dailyLoads ?? []).some(day => day.date === date);
+      next[index] = alreadyPresent ? row : { ...row, dailyLoads: [...(row.dailyLoads ?? []), point], knownDays: (row.knownDays ?? 0) + 1 };
+      return next;
+    });
+    return true;
+  }, [athlete?.id]);
   const handleStatus = useCallback(async (sid,aid,status) => {
     setSessions(p=>p.map(s=>s.id!==sid?s:{...s,validations:s.validations.map(v=>v.athleteId===aid?{...v,status}:v)}));
     await supabase.from("session_athletes").update({status}).eq("session_id",sid).eq("athlete_id",aid);
@@ -28355,6 +28487,7 @@ export default function AthleteApp({ clubBrand, themeStyle }) {
                 competitions={competitions} lastMessages={lastMessages} coachName={coachName}
                 myPerformances={myPerformances} onNavigate={navigate}
                 wellnessToday={wellnessToday} onOpenWellness={() => setShowWellness(true)}
+                confirmedRestDays={confirmedRestDays} onConfirmRestDay={confirmRestDay}
                 onOpenInjuryReport={() => setShowInjuryReport(true)}
                 allAthletes={allAthletes}
                 onRpeChange={handleRpe} onStatusChange={handleStatus}
@@ -34041,6 +34174,155 @@ FROM public.daily_training_load d
 GROUP BY d.athlete_id, d.week;
 
 GRANT SELECT ON public.weekly_charge TO authenticated;
+
+COMMIT;
+</file>
+
+<file path="supabase/migrations/20260801070000_confirmed_rest_days.sql">
+BEGIN;
+
+CREATE TABLE IF NOT EXISTS public.athlete_daily_load_days (
+  athlete_id integer NOT NULL REFERENCES public.athletes(id) ON DELETE CASCADE,
+  load_date date NOT NULL,
+  state text NOT NULL DEFAULT 'rest_confirmed' CHECK (state = 'rest_confirmed'),
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY (athlete_id, load_date)
+);
+
+ALTER TABLE public.athlete_daily_load_days ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS athlete_daily_load_days_owner_or_coach
+  ON public.athlete_daily_load_days;
+
+CREATE POLICY athlete_daily_load_days_owner_or_coach
+ON public.athlete_daily_load_days
+FOR ALL TO authenticated
+USING (
+  EXISTS (
+    SELECT 1
+    FROM public.athletes athlete
+    WHERE athlete.id = athlete_daily_load_days.athlete_id
+      AND athlete.club_id = public.get_my_club_id()
+      AND (
+        athlete.user_id = public.get_my_user_id()
+        OR public.get_my_role() IN ('head_coach', 'coach')
+      )
+  )
+)
+WITH CHECK (
+  EXISTS (
+    SELECT 1
+    FROM public.athletes athlete
+    WHERE athlete.id = athlete_daily_load_days.athlete_id
+      AND athlete.club_id = public.get_my_club_id()
+      AND (
+        athlete.user_id = public.get_my_user_id()
+        OR public.get_my_role() IN ('head_coach', 'coach')
+      )
+  )
+);
+
+GRANT SELECT, INSERT, UPDATE, DELETE
+  ON public.athlete_daily_load_days TO authenticated;
+
+COMMENT ON TABLE public.athlete_daily_load_days IS
+  'Confirmation explicite des jours sans charge. Une absence de ligne reste une donnée inconnue, jamais un repos implicite.';
+
+CREATE OR REPLACE VIEW public.daily_training_load
+WITH (security_invoker = true)
+AS
+WITH session_days AS (
+  SELECT
+    sa.athlete_id,
+    s.session_date AS load_date,
+    s.week,
+    CASE
+      WHEN bool_and(
+        COALESCE(sa.absent, false)
+        OR (
+          sa.rpe IS NOT NULL
+          AND COALESCE(
+            sa.actual_duration_minutes,
+            CASE
+              WHEN sa.duration_source = 'planned_legacy' THEN s.duration
+              ELSE NULL
+            END
+          ) IS NOT NULL
+        )
+      )
+      THEN round(sum(
+        CASE
+          WHEN COALESCE(sa.absent, false) THEN 0
+          ELSE COALESCE(
+            sa.actual_duration_minutes,
+            CASE
+              WHEN sa.duration_source = 'planned_legacy' THEN s.duration
+              ELSE NULL
+            END
+          ) * sa.rpe
+        END
+      )::numeric, 2)
+      ELSE NULL
+    END AS raw_load,
+    bool_and(
+      COALESCE(sa.absent, false)
+      OR (
+        sa.rpe IS NOT NULL
+        AND COALESCE(
+          sa.actual_duration_minutes,
+          CASE
+            WHEN sa.duration_source = 'planned_legacy' THEN s.duration
+            ELSE NULL
+          END
+        ) IS NOT NULL
+      )
+    ) AS is_complete,
+    bool_or(
+      NOT COALESCE(sa.absent, false)
+      AND sa.actual_duration_minutes IS NULL
+      AND sa.duration_source = 'planned_legacy'
+    ) AS is_estimated,
+    count(*)::integer AS assigned_session_count,
+    count(*) FILTER (
+      WHERE NOT COALESCE(sa.absent, false)
+        AND (
+          sa.rpe IS NULL
+          OR COALESCE(
+            sa.actual_duration_minutes,
+            CASE
+              WHEN sa.duration_source = 'planned_legacy' THEN s.duration
+              ELSE NULL
+            END
+          ) IS NULL
+        )
+    )::integer AS unknown_session_count
+  FROM public.session_athletes sa
+  JOIN public.sessions s ON s.id = sa.session_id
+  WHERE s.session_date IS NOT NULL
+  GROUP BY sa.athlete_id, s.session_date, s.week
+)
+SELECT * FROM session_days
+UNION ALL
+SELECT
+  rest.athlete_id,
+  rest.load_date,
+  EXTRACT(WEEK FROM rest.load_date)::integer AS week,
+  0 AS raw_load,
+  true AS is_complete,
+  false AS is_estimated,
+  0 AS assigned_session_count,
+  0 AS unknown_session_count
+FROM public.athlete_daily_load_days rest
+WHERE rest.state = 'rest_confirmed'
+  AND NOT EXISTS (
+    SELECT 1
+    FROM session_days day
+    WHERE day.athlete_id = rest.athlete_id
+      AND day.load_date = rest.load_date
+  );
+
+GRANT SELECT ON public.daily_training_load TO authenticated;
 
 COMMIT;
 </file>

@@ -45,9 +45,14 @@ describe("dashboard athlete daily focus", () => {
     expect(focus.pendingSessions).toEqual([]);
   });
 
-  it("affiche une journée libre quand wellness est rempli et aucune séance n'est prévue", () => {
+  it("demande une confirmation explicite avant de compter un jour sans séance comme repos", () => {
     expect(getTodayFocus({ wellnessCompleted: true, todaySessions: [], athleteId: "athlete-1" }))
-      .toMatchObject({ kind: "free", completedSteps: 1, totalSteps: 1, focusSession: null });
+      .toMatchObject({ kind: "rest", completedSteps: 1, totalSteps: 2, focusSession: null });
+  });
+
+  it("affiche une journée libre seulement après confirmation du repos", () => {
+    expect(getTodayFocus({ wellnessCompleted: true, restConfirmed: true, todaySessions: [], athleteId: "athlete-1" }))
+      .toMatchObject({ kind: "free", completedSteps: 2, totalSteps: 2, focusSession: null });
   });
 
   it("isole correctement le statut de l'athlète dans une séance de groupe", () => {

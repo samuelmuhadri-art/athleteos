@@ -7,6 +7,7 @@ import {
   computeSessionLoad,
   computeWellnessScore,
   estimateRecovery,
+  extractDailyLoads,
   getRPELabel,
 } from "./trainingLoad.js";
 
@@ -50,6 +51,21 @@ describe("série quotidienne continue", () => {
   it("exclut une durée historique estimée des métriques quotidiennes", () => {
     const series = buildContinuousDailyLoadSeries([{ date: "2026-01-01", load: 300, estimated: true }]);
     expect(series[0].load).toBeNull();
+  });
+
+  it("coupe une analyse historique à la date demandée", () => {
+    const weeklyCharge = [{
+      athleteId: 7,
+      week: 10,
+      dailyLoads: [
+        { date: "2026-03-04", load: 100 },
+        { date: "2026-03-05", load: 200 },
+        { date: "2026-03-06", load: 900 },
+      ],
+    }];
+    const series = extractDailyLoads(7, weeklyCharge, 10, "2026-03-05");
+    expect(series.at(-1)).toEqual({ date: "2026-03-05", load: 200 });
+    expect(series.some(point => point.date === "2026-03-06")).toBe(false);
   });
 });
 

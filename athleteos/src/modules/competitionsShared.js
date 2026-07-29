@@ -65,7 +65,7 @@ export function dateToWeek(dateStr) {
 
 export function generateResultAnalysis(result, competition, athlete, weeklyCharge) {
   const week    = dateToWeek(competition.date);
-  const metrics = getAthleteMetricsForWeek(athlete.id, weeklyCharge, week);
+  const metrics = getAthleteMetricsForWeek(athlete.id, weeklyCharge, week, [], [], competition.date);
   const { load7, load28, variationPercent, wellnessScore } = metrics;
   const lines = [];
 

@@ -20,7 +20,7 @@ import {
 } from "../../utils/chargeCalculations";
 import { getAthleteAxisProfile } from "../../utils/loadAxes";
 import {
-  getISOWeek, dimColor, colorsFor, parsePerf, isSameDay, parseLocalDate,
+  getISOWeek, dimColor, colorsFor, parsePerf, isSameDay, parseLocalDate, toLocalDateStr,
   initialsFromName, getDiscHib, DISC_TYPE_COLORS, WELLNESS_QUESTIONS, EVIDENCE_LEVELS,
 } from "../shared";
 import AxisRadarCard from "../../components/ui/AxisRadarCard";
@@ -179,7 +179,7 @@ const ReadinessRing = memo(({ value, color, size = 128 }) => {
 
 const DailyFocusCard = memo(({
   focus, todaySessions, nextCompetition,
-  onOpenWellness, onOpenSession, onOpenPlanning,
+  onOpenWellness, onOpenSession, onOpenPlanning, onConfirmRestDay,
 }) => {
   const wellnessCompleted = focus.kind !== "wellness";
   const session = focus.focusSession;
@@ -201,6 +201,14 @@ const DailyFocusCard = memo(({
     color: session ? colorsFor(session.category).border : "var(--c-accent)",
     icon: Clock,
     action: onOpenSession,
+  } : focus.kind === "rest" ? {
+    eyebrow: "Donnée du jour",
+    title: "Confirmer le jour de repos",
+    description: "Aucune séance n'est prévue. Confirme seulement si tu n'as réalisé aucun autre entraînement aujourd'hui.",
+    cta: "Confirmer 0 de charge",
+    color: "var(--color-info)",
+    icon: CheckCircle,
+    action: onConfirmRestDay,
   } : focus.kind === "complete" ? {
     eyebrow: "Journée à jour",
     title: "Tout est validé",
@@ -211,8 +219,8 @@ const DailyFocusCard = memo(({
     action: onOpenPlanning,
   } : {
     eyebrow: "Journée légère",
-    title: "Récupération & continuité",
-    description: "Aucune séance aujourd’hui. Garde un œil sur la suite et profite de la récupération.",
+    title: "Repos confirmé",
+    description: "Le jour est enregistré à 0 de charge. Ce zéro est une donnée confirmée, pas une valeur supposée.",
     cta: "Voir le planning",
     color: "var(--color-info)",
     icon: CalendarDays,
@@ -221,7 +229,7 @@ const DailyFocusCard = memo(({
 
   const FocusIcon = presentation.icon;
   const completedSessionLabel = todaySessions.length === 0
-    ? "Journée libre"
+    ? (focus.kind === "rest" ? "Repos à confirmer" : "Repos confirmé")
     : `${focus.completedSessions}/${todaySessions.length} traitée${todaySessions.length > 1 ? "s" : ""}`;
 
   return (
@@ -319,6 +327,7 @@ const DailyFocusCard = memo(({
 export default function AthleteDashboard({
   athlete, weeklyCharge, sessions, competitions, lastMessages,
   coachName, myPerformances, onNavigate, wellnessToday, onOpenWellness,
+  confirmedRestDays = [], onConfirmRestDay,
   onOpenInjuryReport, allAthletes, onRpeChange, onStatusChange,
   onFeelingChange, onCommentChange,
 }) {
@@ -346,7 +355,9 @@ export default function AthleteDashboard({
   const todaySessions = weekSessions
     .filter(s => s.sessionDate && isSameDay(parseLocalDate(s.sessionDate), today));
   const todayFocus = getTodayFocus({
-    wellnessCompleted: Boolean(wellnessToday), todaySessions, athleteId: athlete.id,
+    wellnessCompleted: Boolean(wellnessToday),
+    restConfirmed: confirmedRestDays.includes(toLocalDateStr(today)),
+    todaySessions, athleteId: athlete.id,
   });
   const focusSession = todayFocus.focusSession;
   const openedTodaySession = todaySessions.find(session => session.id === openTodaySessionId) ?? null;
@@ -518,6 +529,7 @@ export default function AthleteDashboard({
           onOpenWellness={onOpenWellness}
           onOpenSession={() => focusSession && setOpenTodaySessionId(focusSession.id)}
           onOpenPlanning={() => onNavigate("planning")}
+          onConfirmRestDay={() => onConfirmRestDay?.(toLocalDateStr(today))}
         />
       </div>
 

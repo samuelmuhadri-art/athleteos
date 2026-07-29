@@ -253,6 +253,23 @@ function addUtcDays(dateKey, amount) {
   return date.toISOString().slice(0, 10);
 }
 
+function isoWeekFromDateKey(dateKey) {
+  const date = new Date(`${dateKey}T00:00:00Z`);
+  date.setUTCDate(date.getUTCDate() + 4 - (date.getUTCDay() || 7));
+  const yearStart = new Date(Date.UTC(date.getUTCFullYear(), 0, 1));
+  return Math.ceil((((date - yearStart) / 86400000) + 1) / 7);
+}
+
+function endOfIsoWeek(dateKey) {
+  const date = new Date(`${dateKey}T00:00:00Z`);
+  return addUtcDays(dateKey, 7 - (date.getUTCDay() || 7));
+}
+
+function localTodayKey() {
+  const today = new Date();
+  return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+}
+
 /** Construit une série civile continue. Les dates absentes restent `null`. */
 export function buildContinuousDailyLoadSeries(points, startDate, endDate) {
   const normalized = new Map();
@@ -275,13 +292,24 @@ export function buildContinuousDailyLoadSeries(points, startDate, endDate) {
 }
 
 /** Extrait les jours détaillés fournis par la vue SQL weekly_charge v2. */
-export function extractDailyLoads(athleteId, weeklyCharge, currentWeek) {
+export function extractDailyLoads(athleteId, weeklyCharge, currentWeek, cutoffDate = null) {
   const rows = (weeklyCharge ?? [])
-    .filter((row) => row.athleteId === athleteId)
-    .filter((row) => currentWeek == null || row.week <= currentWeek);
+    .filter((row) => row.athleteId === athleteId);
   const points = rows.flatMap((row) => row.dailyLoads ?? []);
   if (!points.length) return [];
-  const end = points.map((point) => toDateKey(point.date)).filter(Boolean).sort().at(-1);
+
+  const today = localTodayKey();
+  let end = toDateKey(cutoffDate);
+  if (!end && currentWeek != null) {
+    const matchingDates = points
+      .map((point) => toDateKey(point.date))
+      .filter((date) => date && date <= today && isoWeekFromDateKey(date) === currentWeek)
+      .sort();
+    if (matchingDates.length) end = endOfIsoWeek(matchingDates.at(-1));
+  }
+  if (!end) end = today;
+  if (end > today && !cutoffDate) end = today;
+
   const start = addUtcDays(end, -55);
   return buildContinuousDailyLoadSeries(points, start, end);
 }

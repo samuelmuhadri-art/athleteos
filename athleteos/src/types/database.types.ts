@@ -720,6 +720,38 @@ export type Database = {
           },
         ]
       }
+      athlete_daily_load_days: {
+        Row: {
+          athlete_id: number
+          created_at: string
+          load_date: string
+          state: string
+          updated_at: string
+        }
+        Insert: {
+          athlete_id: number
+          created_at?: string
+          load_date: string
+          state?: string
+          updated_at?: string
+        }
+        Update: {
+          athlete_id?: number
+          created_at?: string
+          load_date?: string
+          state?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "athlete_daily_load_days_athlete_id_fkey"
+            columns: ["athlete_id"]
+            isOneToOne: false
+            referencedRelation: "athletes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       session_athletes: {
         Row: {
           actual_duration_minutes: number | null
