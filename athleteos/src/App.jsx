@@ -17,7 +17,6 @@ import SignupPage     from "./pages/SignupPage";
 import ResetPasswordPage from "./pages/ResetPasswordPage";
 import AccountSettingsModal from "./components/ui/AccountSettingsModal";
 import { AthleteOSBadge, AthleteOSWordmark } from "./components/brand/AthleteOSLogo";
-import AthleteApp     from "./AthleteApp";
 import { usePushNotifications, PushToggleButton } from "./hooks/usePushNotifications";
 import { useUrlView } from "./hooks/useUrlView";
 import { initialsFromName } from "./utils/helpers.js";
@@ -32,6 +31,12 @@ import {
   COACH_MOBILE_PRIMARY_ITEMS,
   isCoachMoreView,
 } from "./navigation/mobileNavigation";
+
+// Séparée du bundle principal : chargée uniquement quand le profil connecté
+// est un athlète, jamais pour un coach (et inversement pour les modules
+// coach ci-dessous) — évite d'expédier tout l'espace athlète au premier
+// chargement d'une session coach.
+const AthleteApp = lazy(() => import("./AthleteApp"));
 
 // ─── Lazy imports modules coach ───────────────────────────────────────────────
 const Dashboard    = lazy(() => import("./modules/Dashboard"));
@@ -530,7 +535,11 @@ export default function App() {
       ? <SignupPage initialInviteCode={inviteCodeFromUrl} onBack={() => setShowSignup(false)} />
       : <LoginPage inviteCode={inviteCodeFromUrl} onSignupClick={() => setShowSignup(true)} />;
   }
-  if (profile?.role === "athlete") return <AthleteApp clubBrand={club} themeStyle={themeStyle} />;
+  if (profile?.role === "athlete") return (
+    <Suspense fallback={<AuthLoader />}>
+      <AthleteApp clubBrand={club} themeStyle={themeStyle} />
+    </Suspense>
+  );
   if (!profile) return <AuthLoader />;
 
   return (

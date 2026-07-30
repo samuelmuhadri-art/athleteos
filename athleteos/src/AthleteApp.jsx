@@ -4,7 +4,7 @@
 // Couleurs hardcodées remplacées par variables CSS dark
 // ============================================================
 
-import { useState, useCallback, useEffect, useRef } from "react";
+import { useState, useCallback, useEffect, useRef, Suspense, lazy } from "react";
 import {
   LayoutDashboard, CalendarDays, TrendingUp, MessageSquare,
   LogOut, Users, Bell, Settings
@@ -16,11 +16,13 @@ import { initialsFromName, toLocalDateStr, getISOWeek } from "./athlete/shared";
 import { notifyAthleteWeeklyRecap, notifyAthleteWeeklyReport, notifyCoachSessionResponse } from "./utils/notifications";
 import { useUrlView } from "./hooks/useUrlView";
 
-import AthleteDashboard from "./athlete/views/AthleteDashboard";
-import AthletePlanning  from "./athlete/views/AthletePlanning";
-import AthletePerfs     from "./athlete/views/AthletePerfs";
-import AthleteMsgerie   from "./athlete/views/AthleteMsgerie";
-import AthleteClub      from "./athlete/views/AthleteClub";
+// Une vue par chunk (même pattern que CoachShell dans App.jsx) : seule la vue
+// active est téléchargée, pas les cinq d'un coup au premier chargement.
+const AthleteDashboard = lazy(() => import("./athlete/views/AthleteDashboard"));
+const AthletePlanning  = lazy(() => import("./athlete/views/AthletePlanning"));
+const AthletePerfs     = lazy(() => import("./athlete/views/AthletePerfs"));
+const AthleteMsgerie   = lazy(() => import("./athlete/views/AthleteMsgerie"));
+const AthleteClub      = lazy(() => import("./athlete/views/AthleteClub"));
 import WellnessModal    from "./athlete/components/WellnessModal";
 import InjuryReportModal from "./athlete/components/InjuryReportModal";
 import NotificationBanner from "./athlete/components/NotificationBanner";
@@ -42,6 +44,19 @@ const NAV_ITEM_IDS = NAV_ITEMS.map(n => n.id);
 const ATHLETE_MOBILE_NAV_ITEMS = ATHLETE_MOBILE_ITEM_IDS.map((id) => (
   NAV_ITEMS.find((item) => item.id === id)
 ));
+
+function ViewLoader() {
+  return (
+    <div className="flex-1 flex items-center justify-center min-h-[50vh]">
+      <div className="flex flex-col items-center gap-4">
+        <div className="loader-ring" />
+        <span className="text-[12px] font-semibold tracking-wide uppercase" style={{ color: "var(--c-text-3)" }}>
+          Chargement…
+        </span>
+      </div>
+    </div>
+  );
+}
 
 export default function AthleteApp({ clubBrand, themeStyle }) {
   const { profile, clubId, signOut } = useAuth();
@@ -524,6 +539,7 @@ export default function AthleteApp({ clubBrand, themeStyle }) {
         {/* Main */}
         <main className="flex-1 overflow-y-auto pb-20 md:pb-0">
           <div key={viewKey} className="view-transition">
+          <Suspense fallback={<ViewLoader />}>
             {activeView === "dashboard" && (
               <AthleteDashboard
                 athlete={athlete} weeklyCharge={weeklyCharge} sessions={sessions}
@@ -565,6 +581,7 @@ export default function AthleteApp({ clubBrand, themeStyle }) {
                 clubId={clubId} coachUserId={coachUserId} sessions={sessions} clubBrand={clubBrand}
               />
             )}
+          </Suspense>
           </div>
         </main>
       </div>
