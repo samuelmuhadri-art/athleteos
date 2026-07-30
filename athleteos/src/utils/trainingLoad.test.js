@@ -1,10 +1,13 @@
 import { describe, it, expect } from "vitest";
 import {
   buildContinuousDailyLoadSeries,
+  computeAllWeeklyLoads,
   computeEWMA,
   computeLoadWindows,
   computeMonotonyAndStrain,
   computeSessionLoad,
+  computeWeeklyLoadByCategory,
+  computeWeeklyLoadFromSessions,
   computeWellnessScore,
   estimateRecovery,
   extractDailyLoads,
@@ -32,6 +35,54 @@ describe("session-RPE standard", () => {
     expect(computeSessionLoad(60, null)).toBeNull();
     expect(computeSessionLoad(0, 5)).toBeNull();
     expect(computeSessionLoad(60, 11)).toBeNull();
+  });
+});
+
+describe("agrégation hebdomadaire depuis les séances", () => {
+  const sessions = [
+    {
+      id: 1, week: 10, category: "sprint", athleteIds: [1, 2],
+      validations: [
+        { athleteId: 1, rpe: 7, actualDurationMinutes: 60 },
+        { athleteId: 2, rpe: null, actualDurationMinutes: 60 },
+      ],
+    },
+    {
+      id: 2, week: 10, category: "force", athleteIds: [1],
+      validations: [{ athleteId: 1, rpe: 5, actualDurationMinutes: 40 }],
+    },
+    {
+      id: 3, week: 11, category: "sprint", athleteIds: [1],
+      validations: [{ athleteId: 1, rpe: 6, actualDurationMinutes: 50 }],
+    },
+  ];
+
+  it("computeWeeklyLoadFromSessions : somme uniquement les séances avec RPE renseigné", () => {
+    const result = computeWeeklyLoadFromSessions(1, 10, sessions);
+    expect(result.total).toBe(420 + 200);
+    expect(result.sessionCount).toBe(2);
+    expect(result.missingRpeCount).toBe(0);
+  });
+
+  it("computeWeeklyLoadFromSessions : compte les RPE manquants sans les inclure dans le total", () => {
+    const result = computeWeeklyLoadFromSessions(2, 10, sessions);
+    expect(result.total).toBe(0);
+    expect(result.sessionCount).toBe(0);
+    expect(result.missingRpeCount).toBe(1);
+  });
+
+  it("computeAllWeeklyLoads : une ligne par athlète et par semaine avec au moins une séance validée", () => {
+    const result = computeAllWeeklyLoads([{ id: 1 }, { id: 2 }], sessions);
+    expect(result).toContainEqual({ athleteId: 1, week: 10, rawLoad: 620 });
+    expect(result).toContainEqual({ athleteId: 1, week: 11, rawLoad: 300 });
+    expect(result.some((row) => row.athleteId === 2)).toBe(false);
+  });
+
+  it("computeWeeklyLoadByCategory : ventile la charge du groupe par semaine et catégorie", () => {
+    const result = computeWeeklyLoadByCategory([{ id: 1 }, { id: 2 }], sessions);
+    expect(result).toContainEqual({ week: 10, category: "sprint", total: 420 });
+    expect(result).toContainEqual({ week: 10, category: "force", total: 200 });
+    expect(result).toContainEqual({ week: 11, category: "sprint", total: 300 });
   });
 });
 
@@ -164,6 +215,38 @@ describe("règle d'espacement de programmation", () => {
   it("reste indisponible sans date, heure ou durée réelles", () => {
     const incomplete = { ...session, time: null };
     expect(estimateRecovery([incomplete], 1, null, now).status).toBe("insufficient_data");
+  });
+
+  it("compte aussi une séance 'partial' comme fin de séance connue", () => {
+    const partial = { ...session, validations: [{ athleteId: 1, status: "partial", rpe: 6, actualDurationMinutes: 30 }] };
+    const result = estimateRecovery([partial], 1, null, now);
+    expect(result.status).not.toBe("insufficient_data");
+    expect(result.lastSession.validation.status).toBe("partial");
+  });
+
+  it("retient la dernière séance quand plusieurs sont terminées", () => {
+    const older = { ...session, id: 2, sessionDate: "2026-07-26", category: "endurance" };
+    const result = estimateRecovery([older, session], 1, null, now);
+    expect(result.lastSession.id).toBe(session.id);
+  });
+
+  it("signale window_elapsed une fois la fenêtre de repli technique dépassée", () => {
+    const long = { ...session, category: "technique" };
+    const late = new Date("2026-08-01T12:00:00");
+    expect(estimateRecovery([long], 1, null, late).status).toBe("window_elapsed");
+  });
+
+  it("signale spacing_transition à l'intérieur de la fenêtre haute mais après la fenêtre basse", () => {
+    const long = { ...session, category: "sprint" }; // règle 48-96h
+    const between = new Date("2026-07-30T12:00:00"); // ~50h après la fin
+    const result = estimateRecovery([long], 1, null, between);
+    expect(result.status).toBe("spacing_transition");
+  });
+
+  it("retombe sur la règle 'technique' pour une catégorie non répertoriée", () => {
+    const unknownCategory = { ...session, category: "inexistante" };
+    const result = estimateRecovery([unknownCategory], 1, null, now);
+    expect(result.factors[0].label).toContain("Règle inexistante configurée");
   });
 });
 

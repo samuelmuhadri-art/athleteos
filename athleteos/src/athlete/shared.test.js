@@ -15,7 +15,10 @@
 // ============================================================
 
 import { describe, it, expect } from "vitest";
-import { parsePerf, getDiscHib, isBetterOrEqual, compareValues, pctOfReference } from "./shared.js";
+import {
+  parsePerf, getDiscHib, isBetterOrEqual, compareValues, pctOfReference,
+  dimColor, acwrColor, isSameDay, toLocalDateStr, dateToISOWeek, dateToDayName, colorsFor,
+} from "./shared.js";
 
 describe("parsePerf", () => {
   it.each([
@@ -125,5 +128,73 @@ describe("pctOfReference — % du PR, sens correct par discipline", () => {
 
   it("cible absente -> null", () => {
     expect(pctOfReference(11.0, null, "100m")).toBeNull();
+  });
+});
+
+describe("dimColor — couleur par dimension", () => {
+  it.each([
+    ["wellness", "#A78BFA"],
+    ["ewmaLong", "#EC4899"],
+    ["ewmaShort", "#A855F7"],
+    ["spacing", "#38BDF8"],
+    ["dataQuality", "#94A3B8"],
+    ["acwrExperimental", "#8B5CF6"],
+    ["inconnu", "#94A3B8"],
+  ])("dimColor(%s) -> %s", (metric, expected) => {
+    expect(dimColor(metric)).toBe(expected);
+  });
+
+  it("streak : série active (>=3) vs série faible", () => {
+    expect(dimColor("streak", 3)).toBe("#378ADD");
+    expect(dimColor("streak", 5)).toBe("#378ADD");
+    expect(dimColor("streak", 2)).toBe("rgba(55,138,221,0.45)");
+    expect(dimColor("streak", 0)).toBe("rgba(55,138,221,0.45)");
+  });
+});
+
+describe("acwrColor", () => {
+  it("retourne toujours la même couleur fixe", () => {
+    expect(acwrColor()).toBe("#8B5CF6");
+  });
+});
+
+describe("isSameDay", () => {
+  it("vrai pour deux Date au même jour civil, même à des heures différentes", () => {
+    expect(isSameDay(new Date(2026, 6, 30, 8, 0), new Date(2026, 6, 30, 23, 59))).toBe(true);
+  });
+
+  it("faux si le jour, le mois ou l'année diffère", () => {
+    expect(isSameDay(new Date(2026, 6, 30), new Date(2026, 6, 29))).toBe(false);
+    expect(isSameDay(new Date(2026, 6, 30), new Date(2026, 5, 30))).toBe(false);
+    expect(isSameDay(new Date(2026, 6, 30), new Date(2025, 6, 30))).toBe(false);
+  });
+});
+
+describe("toLocalDateStr", () => {
+  it("formate en YYYY-MM-DD en heure locale, sans passer par l'UTC", () => {
+    expect(toLocalDateStr(new Date(2026, 0, 5))).toBe("2026-01-05");
+    expect(toLocalDateStr(new Date(2026, 11, 25))).toBe("2026-12-25");
+  });
+});
+
+describe("dateToISOWeek / dateToDayName", () => {
+  it("dérive la semaine ISO et le nom du jour depuis une chaîne YYYY-MM-DD", () => {
+    // 2026-07-30 est un jeudi, semaine ISO 31
+    expect(dateToISOWeek("2026-07-30")).toBe(31);
+    expect(dateToDayName("2026-07-30")).toBe("Jeudi");
+  });
+
+  it("reconnaît le lundi comme premier jour de la semaine FR", () => {
+    expect(dateToDayName("2026-07-27")).toBe("Lundi");
+  });
+});
+
+describe("colorsFor", () => {
+  it("retourne les couleurs de la catégorie connue", () => {
+    expect(colorsFor("sprint")).toEqual({ bg: "#DBEAFE", border: "#3B82F6", text: "#1D4ED8" });
+  });
+
+  it("retient la palette technique comme repli pour une catégorie inconnue", () => {
+    expect(colorsFor("inexistant")).toEqual({ bg: "#F1F5F9", border: "#64748B", text: "#1E293B" });
   });
 });
