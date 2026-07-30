@@ -18,6 +18,7 @@ import { describe, it, expect } from "vitest";
 import {
   parsePerf, getDiscHib, isBetterOrEqual, compareValues, pctOfReference,
   dimColor, acwrColor, isSameDay, toLocalDateStr, dateToISOWeek, dateToDayName, colorsFor,
+  METRIC_SCIENCE,
 } from "./shared.js";
 
 describe("parsePerf", () => {
@@ -39,6 +40,10 @@ describe("parsePerf", () => {
 
   it("précision différente = même valeur numérique", () => {
     expect(parsePerf("11.2").value).toBe(parsePerf("11.20").value);
+  });
+
+  it("texte non numérique -> null, jamais NaN", () => {
+    expect(parsePerf("abandon").value).toBeNull();
   });
 });
 
@@ -75,6 +80,14 @@ describe("isBetterOrEqual", () => {
 
   it("égalité -> toujours vrai", () => {
     expect(isBetterOrEqual(11.2, 11.2, "100m")).toBe(true);
+  });
+
+  it("valeur candidate absente -> jamais meilleure", () => {
+    expect(isBetterOrEqual(null, 11.2, "100m")).toBe(false);
+  });
+
+  it("valeur de référence absente -> toujours meilleure (rien à battre)", () => {
+    expect(isBetterOrEqual(11.2, null, "100m")).toBe(true);
   });
 });
 
@@ -186,6 +199,38 @@ describe("dateToISOWeek / dateToDayName", () => {
 
   it("reconnaît le lundi comme premier jour de la semaine FR", () => {
     expect(dateToDayName("2026-07-27")).toBe("Lundi");
+  });
+});
+
+describe("METRIC_SCIENCE — couleur par seuil d'affichage", () => {
+  it("wellness : rouge en dessous de 50, orange entre 50 et 74, vert à partir de 75", () => {
+    expect(METRIC_SCIENCE.wellness.color(40)).toBe("#E24B4A");
+    expect(METRIC_SCIENCE.wellness.color(60)).toBe("#EF9F27");
+    expect(METRIC_SCIENCE.wellness.color(80)).toBe("#1D9E75");
+  });
+
+  it("ewmaLong : même grille de seuils que wellness (croissant = mieux)", () => {
+    expect(METRIC_SCIENCE.ewmaLong.color(40)).toBe("#E24B4A");
+    expect(METRIC_SCIENCE.ewmaLong.color(60)).toBe("#EF9F27");
+    expect(METRIC_SCIENCE.ewmaLong.color(80)).toBe("#1D9E75");
+  });
+
+  it("ewmaShort : inversé (croissant = plus chargé, donc pire)", () => {
+    expect(METRIC_SCIENCE.ewmaShort.color(30)).toBe("#1D9E75");
+    expect(METRIC_SCIENCE.ewmaShort.color(60)).toBe("#EF9F27");
+    expect(METRIC_SCIENCE.ewmaShort.color(80)).toBe("#E24B4A");
+  });
+
+  it("spacing : rouge si fenêtre encore active, vert si terminée", () => {
+    expect(METRIC_SCIENCE.spacing.color(20)).toBe("#E24B4A");
+    expect(METRIC_SCIENCE.spacing.color(55)).toBe("#EF9F27");
+    expect(METRIC_SCIENCE.spacing.color(90)).toBe("#1D9E75");
+  });
+
+  it("dataQuality : inversé (croissant = donnée manquante, donc pire)", () => {
+    expect(METRIC_SCIENCE.dataQuality.color(20)).toBe("#1D9E75");
+    expect(METRIC_SCIENCE.dataQuality.color(45)).toBe("#EF9F27");
+    expect(METRIC_SCIENCE.dataQuality.color(80)).toBe("#E24B4A");
   });
 });
 

@@ -11,6 +11,7 @@ import {
   DISCIPLINES, validateRegistry, resolveDisciplineId, getDiscipline,
   getDisciplineType, getDisciplineHib, getDisciplineUnit,
   getDisciplineDecimals, getDisciplineInputFormat, getDisciplineColor, getDisciplineSubEvents,
+  getDisciplineDirection, getDisciplineMeasurementType,
   getAllDisciplineIds, MEASUREMENT_TYPE, INPUT_FORMAT, PERFORMANCE_DIRECTION,
   createPerformanceMetadata, normalizePerformanceMetadata, validatePerformanceMetadata,
 } from "./disciplines.js";
@@ -113,6 +114,16 @@ describe("discipline inconnue / personnalisée — jamais de crash", () => {
     expect(resolveDisciplineId("  Épreuve Maison Inventée  ")).toBe("Épreuve Maison Inventée");
   });
 
+  it("getDiscipline(null) et getDiscipline('') -> null, sans planter", () => {
+    expect(getDiscipline(null)).toBeNull();
+    expect(getDiscipline("")).toBeNull();
+  });
+
+  it("getDisciplineDirection/getDisciplineMeasurementType retombent sur 'unknown' pour une épreuve libre", () => {
+    expect(getDisciplineDirection("Épreuve Maison Inventée")).toBe(PERFORMANCE_DIRECTION.UNKNOWN);
+    expect(getDisciplineMeasurementType("Épreuve Maison Inventée")).toBe(MEASUREMENT_TYPE.UNKNOWN);
+  });
+
   it("ne suppose jamais qu'une valeur décimale libre est un chrono", () => {
     const metadata = createPerformanceMetadata("Test club");
     expect(metadata.measurement_type).toBe(MEASUREMENT_TYPE.UNKNOWN);
@@ -125,6 +136,32 @@ describe("discipline inconnue / personnalisée — jamais de crash", () => {
       unit: "m", measurement_type: "distance", performance_direction: "higher",
     });
     expect(validatePerformanceMetadata("Test club", metadata)).toEqual([]);
+  });
+
+  it("une discipline connue impose ses propres unité/type/sens, même si le formulaire propose autre chose", () => {
+    const metadata = normalizePerformanceMetadata("100m", {
+      unit: "m", measurement_type: "distance", performance_direction: "higher",
+    });
+    expect(metadata.unit).toBe("s");
+    expect(metadata.measurement_type).toBe(MEASUREMENT_TYPE.TIME);
+    expect(metadata.performance_direction).toBe(PERFORMANCE_DIRECTION.LOWER);
+    expect(metadata.scoring_table_version).toBe(getDiscipline("100m").scoringTableVersion);
+  });
+
+  it("une discipline connue avec des champs techniques invalides est signalée", () => {
+    const metadata = normalizePerformanceMetadata("Poids", {
+      venue_type: "sur la lune", official_status: "peut-être", wind_mps: "vite",
+    });
+    const issues = validatePerformanceMetadata("Poids", { ...metadata, implement_weight_kg: -1 });
+    expect(issues).toContain("Environnement invalide.");
+    expect(issues).toContain("Statut officiel invalide.");
+    expect(issues).toContain("Vent invalide.");
+    expect(issues).toContain("Poids de l'engin invalide.");
+  });
+
+  it("une discipline connue avec une hauteur de haies invalide est signalée", () => {
+    const metadata = normalizePerformanceMetadata("110m haies", { hurdle_height_m: 0 });
+    expect(validatePerformanceMetadata("110m haies", metadata)).toContain("Hauteur des haies invalide.");
   });
 });
 
