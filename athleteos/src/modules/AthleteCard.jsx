@@ -50,7 +50,7 @@ const AthleteCard = memo(({ athlete, weeklyCharge, onClick }) => {
           {athlete.level ?? "Niveau —"}
         </span>
         {activeInjuries.length > 0 && (
-          <span className="flex items-center gap-1 text-[12px] font-bold px-2.5 py-1 rounded-full" style={{ background: "rgba(239,159,39,0.15)", color: "#F0CB61", border: "1px solid rgba(239,159,39,0.3)" }}>
+          <span className="flex items-center gap-1 text-[12px] font-bold px-2.5 py-1 rounded-full" style={{ background: "rgba(239,159,39,0.15)", color: "var(--tone-warning)", border: "1px solid rgba(239,159,39,0.3)" }}>
             <HeartPulse size={11} /> {activeInjuries.length} blessure{activeInjuries.length > 1 ? "s" : ""}
           </span>
         )}
@@ -62,7 +62,7 @@ const AthleteCard = memo(({ athlete, weeklyCharge, onClick }) => {
           {[
             { label: "Bien-être", value: metrics.wellnessScore ?? "—", color: scoreColor(metrics.wellnessScore ?? 0) },
             { label: "Charge 7j", value: metrics.load7 ?? "—", color: "#378ADD" },
-            { label: "Charge 28j", value: metrics.load28 ?? "—", color: "#A9CBFB" },
+            { label: "Charge 28j", value: metrics.load28 ?? "—", color: "var(--tone-info)" },
           ].map(s => (
             <div key={s.label} className="rounded-2xl p-2.5 text-center" style={{ background: "var(--c-surface-2)" }}>
               <p className="text-[18px] font-bold leading-tight" style={{ color: s.color }}>{s.value}</p>

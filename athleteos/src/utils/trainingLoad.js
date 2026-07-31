@@ -181,8 +181,8 @@ export function getRPELabel(rpe) {
   if (rpe <= 4)    return { label: "Facile",         color: "#1D9E75" };
   if (rpe <= 6)    return { label: "Modéré",         color: "#EF9F27" };
   if (rpe <= 8)    return { label: "Difficile",      color: "#EF9F27" };
-  if (rpe <= 9)    return { label: "Très difficile", color: "#E24B4A" };
-  return                  { label: "Maximum",        color: "#E24B4A" };
+  if (rpe <= 9)    return { label: "Très difficile", color: "var(--tone-danger)" };
+  return                  { label: "Maximum",        color: "var(--tone-danger)" };
 }
 
 // ─── AJOUT v2.0 : EWMA (Exponentially Weighted Moving Average) ───────────────

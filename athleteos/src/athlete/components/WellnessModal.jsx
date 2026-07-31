@@ -150,7 +150,7 @@ const WellnessModal = memo(({ athlete, clubId, onClose, onSaved }) => {
           {err && (
             <div style={{ display: "flex", alignItems: "center", gap: 8, background: "rgba(224,82,82,0.10)", border: "1px solid rgba(224,82,82,0.20)", borderRadius: 10, padding: "10px 14px" }}>
               <AlertTriangle size={14} color="#E05252" style={{ flexShrink: 0 }} />
-              <p style={{ fontSize: 12, color: "#E05252" }}>{err}</p>
+              <p style={{ fontSize: 12, color: "var(--tone-danger)" }}>{err}</p>
             </div>
           )}
 

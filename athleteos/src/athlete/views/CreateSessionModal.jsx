@@ -124,7 +124,7 @@ const CreateSessionModal = memo(({ athlete, allAthletes, clubId, createdBy, coac
           {err && (
             <div role="alert" style={{ display: "flex", alignItems: "flex-start", gap: 10, background: "rgba(239,107,107,0.10)", border: "1px solid rgba(239,107,107,0.25)", borderRadius: 14, padding: "12px 14px" }}>
               <AlertCircle size={14} color="#F19A9A" style={{ marginTop: 2, flexShrink: 0 }} />
-              <p style={{ fontSize: 12, color: "#F19A9A" }}>{err}</p>
+              <p style={{ fontSize: 12, color: "var(--tone-danger)" }}>{err}</p>
             </div>
           )}
 

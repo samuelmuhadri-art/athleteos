@@ -146,9 +146,9 @@ export function PushToggleButton({ subscribed, onToggle, permissionState, compac
       ].join(" ")}
       style={
         subscribed
-          ? { background: "rgba(29,158,117,0.12)", borderColor: "rgba(29,158,117,0.30)", color: "#4DC9A0" }
+          ? { background: "rgba(29,158,117,0.12)", borderColor: "rgba(29,158,117,0.30)", color: "var(--tone-success)" }
           : denied
-            ? { background: "rgba(224,82,82,0.08)", borderColor: "rgba(224,82,82,0.18)", color: "#F19A9A" }
+            ? { background: "rgba(224,82,82,0.08)", borderColor: "rgba(224,82,82,0.18)", color: "var(--tone-danger)" }
             : { background: "var(--c-surface-2)", borderColor: "var(--c-border)", color: "var(--c-text-2)" }
       }
     >

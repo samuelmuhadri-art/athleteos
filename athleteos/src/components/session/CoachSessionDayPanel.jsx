@@ -38,7 +38,7 @@ export default function CoachSessionDayPanel({
       <div className="p-4 border-b" style={{ borderColor: "var(--c-border)" }}>
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
-            <p className="meta-text font-bold uppercase tracking-wide" style={{ color: "#7BD8B4" }}>Jour de séance</p>
+            <p className="meta-text font-bold uppercase tracking-wide" style={{ color: "var(--tone-success)" }}>Jour de séance</p>
             <h3 className="mt-1 text-[15px] font-bold" style={{ color: "var(--c-text-1)" }}>
               {lifecycle === "completed" ? "Séance clôturée" : lifecycle === "live" ? "Séance en cours" : "Prête à démarrer"}
             </h3>
@@ -75,7 +75,7 @@ export default function CoachSessionDayPanel({
         <div className="grid grid-cols-3 gap-2 mt-4">
           {metrics.map(({ label, value, Icon }) => (
             <div key={label} className="rounded-xl border p-3" style={{ borderColor: "var(--c-border)", background: "var(--surface-recessed)" }}>
-              <Icon size={14} style={{ color: "#7BD8B4" }} />
+              <Icon size={14} style={{ color: "var(--tone-success)" }} />
               <p className="mt-2 text-[17px] font-bold" style={{ color: "var(--c-text-1)" }}>{value}</p>
               <p className="meta-text mt-0.5">{label}</p>
             </div>

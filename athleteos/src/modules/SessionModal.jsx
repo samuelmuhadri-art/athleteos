@@ -88,7 +88,7 @@ const SessionModal = memo(({
               </span>
               {session.createdByAthlete && (
                 <span className="text-[12px] font-bold px-2 py-0.5 rounded-full"
-                  style={{ background: "rgba(168,85,247,0.16)", color: "#D8B4FE" }}>
+                  style={{ background: "rgba(168,85,247,0.16)", color: "var(--tone-mental)" }}>
                   📋 Proposé par un athlète
                 </span>
               )}
@@ -136,7 +136,7 @@ const SessionModal = memo(({
                   style={{ background: "rgba(234,179,8,0.18)" }}>
                   <Zap size={13} color="#EAB308" />
                 </div>
-                <p className="text-[13px] font-bold" style={{ color: "#F0CB61" }}>Confirmer les présences</p>
+                <p className="text-[13px] font-bold" style={{ color: "var(--tone-warning)" }}>Confirmer les présences</p>
               </div>
               <div className="p-4 space-y-5">
                 {pendingFeedback.map(id => {
@@ -150,13 +150,13 @@ const SessionModal = memo(({
                           style={{ background: c.border, color: "#0A150F" }}>
                           {a.avatar?.slice(0,1) ?? "?"}
                         </div>
-                        <p className="text-[12.5px] font-bold" style={{ color: "#F0CB61" }}>{a.name.split(" ")[0]}</p>
+                        <p className="text-[12.5px] font-bold" style={{ color: "var(--tone-warning)" }}>{a.name.split(" ")[0]}</p>
                       </div>
                       <div className="flex gap-2 mb-2">
                         {[
-                          { id: "done",    label: "✅ Réalisée",  bg: "rgba(61,190,139,0.16)", border: "#3DBE8B", color: "#7BD8B4" },
-                          { id: "partial", label: "🟡 Partielle", bg: "rgba(234,179,8,0.16)",  border: "#EAB308", color: "#F0CB61" },
-                          { id: "none",    label: "❌ Absent",    bg: "rgba(239,107,107,0.16)",border: "#EF6B6B", color: "#F19A9A" },
+                          { id: "done",    label: "✅ Réalisée",  bg: "rgba(61,190,139,0.16)", border: "#3DBE8B", color: "var(--tone-success)" },
+                          { id: "partial", label: "🟡 Partielle", bg: "rgba(234,179,8,0.16)",  border: "#EAB308", color: "var(--tone-warning)" },
+                          { id: "none",    label: "❌ Absent",    bg: "rgba(239,107,107,0.16)",border: "#EF6B6B", color: "var(--tone-danger)" },
                         ].map(opt => {
                           const sel = v?.status === opt.id;
                           return (
@@ -212,7 +212,7 @@ const SessionModal = memo(({
                               );
                             })}
                           </div>
-                          {loadErrors[id] && <p role="alert" className="text-[12px] mt-2" style={{ color: "#F19A9A" }}>{loadErrors[id]}</p>}
+                          {loadErrors[id] && <p role="alert" className="text-[12px] mt-2" style={{ color: "var(--tone-danger)" }}>{loadErrors[id]}</p>}
                         </div>
                       )}
                     </div>
@@ -238,7 +238,7 @@ const SessionModal = memo(({
             <div className="rounded-2xl overflow-hidden" style={{ border: "1px solid rgba(234,179,8,0.30)", background: "rgba(234,179,8,0.06)" }}>
               <div className="px-4 py-2.5 flex items-center gap-2" style={{ borderBottom: "1px solid rgba(234,179,8,0.20)" }}>
                 <AlertCircle size={13} color="#EAB308" />
-                <span className="text-[12px] font-bold uppercase tracking-wide" style={{ color: "#F0CB61" }}>Consignes du coach</span>
+                <span className="text-[12px] font-bold uppercase tracking-wide" style={{ color: "var(--tone-warning)" }}>Consignes du coach</span>
               </div>
               <p className="px-4 py-3 text-[13px] leading-relaxed" style={{ color: "#E6D189" }}>{session.instructions}</p>
             </div>
@@ -248,7 +248,7 @@ const SessionModal = memo(({
           {session.pdfUrl && (
             <button type="button" onClick={() => openSessionPdf(session.pdfUrl)}
               className="w-full flex items-center gap-3 px-4 py-3.5 rounded-2xl text-[13px] font-semibold transition-colors"
-              style={{ background: "rgba(91,158,245,0.10)", border: "1px solid rgba(91,158,245,0.25)", color: "#A9CBFB" }}>
+              style={{ background: "rgba(91,158,245,0.10)", border: "1px solid rgba(91,158,245,0.25)", color: "var(--tone-info)" }}>
               <span className="text-[18px]">📄</span>
               Voir le PDF de séance
             </button>
@@ -309,7 +309,7 @@ const SessionModal = memo(({
           </div>
 
           {deleteError && (
-            <p className="text-[12px] rounded-xl px-3 py-2" style={{ color: "#F19A9A", background: "rgba(239,107,107,0.10)" }}>{deleteError}</p>
+            <p className="text-[12px] rounded-xl px-3 py-2" style={{ color: "var(--tone-danger)", background: "rgba(239,107,107,0.10)" }}>{deleteError}</p>
           )}
         </div>
 
@@ -319,12 +319,12 @@ const SessionModal = memo(({
             {!confirmDel ? (
               <button onClick={() => setConfirmDel(true)} disabled={deleting}
                 className="text-[12px] font-semibold transition-colors"
-                style={{ color: "#F19A9A" }}>
+                style={{ color: "var(--tone-danger)" }}>
                 Supprimer
               </button>
             ) : (
               <span className="flex items-center gap-2">
-                <span className="text-[12px] font-semibold" style={{ color: "#F19A9A" }}>Confirmer ?</span>
+                <span className="text-[12px] font-semibold" style={{ color: "var(--tone-danger)" }}>Confirmer ?</span>
                 <button onClick={handleDelete} disabled={deleting}
                   className="text-[12px] font-bold rounded-lg px-2.5 py-1 tap-feedback"
                   style={{ background: "#EF6B6B", color: "#0A150F" }}>

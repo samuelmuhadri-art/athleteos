@@ -106,7 +106,7 @@ const ScatterTooltip = ({ active, payload, currentWeek }) => {
         <p>Charge S{currentWeek} : <strong style={{ color: "var(--c-text-1)" }}>{d.x} u</strong></p>
         <p>% PR atteint : <strong style={{ color: pctColor(d.y) }}>{d.y}%</strong></p>
         <p>SB : <strong style={{ color: "var(--c-text-1)" }}>{d.sb}</strong></p>
-        <p>PR : <strong style={{ color: "#4DC9A0" }}>{d.pr}</strong></p>
+        <p>PR : <strong style={{ color: "var(--tone-success)" }}>{d.pr}</strong></p>
       </div>
     </div>
   );
@@ -353,7 +353,7 @@ function Performances() {
                       <div className="w-16 h-16 rounded-2xl flex items-center justify-center text-white text-[18px] font-bold shadow-sm" style={{ background: ATHLETE_COLORS[ranked[0].colorIdx] }}>{ranked[0].athlete.avatar}</div>
                       <div className="text-center">
                         <p className="text-[15px] font-bold" style={{ color: "var(--c-text-1)" }}>{ranked[0].athlete.name}</p>
-                        <p className="text-[18px] font-bold mt-1" style={{ color: "#4DC9A0" }}>{ranked[0].rec.sb}</p>
+                        <p className="text-[18px] font-bold mt-1" style={{ color: "var(--tone-success)" }}>{ranked[0].rec.sb}</p>
                         <p className="meta-text mt-1">Seul pratiquant dans le groupe</p>
                       </div>
                     </div>
@@ -461,7 +461,7 @@ function Performances() {
               {evolutionData.length > 0 && (
                 <div className="text-right">
                   <p className="metric-label">Meilleur résultat</p>
-                  <p className="text-[20px] font-bold" style={{ color: "#4DC9A0" }}>
+                  <p className="text-[20px] font-bold" style={{ color: "var(--tone-success)" }}>
                     {bestEvolution?.resultStr}
                   </p>
                 </div>

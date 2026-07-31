@@ -608,7 +608,7 @@ export default function AthleteDashboard({
                 <span style={{ fontSize: 16, fontWeight: 600, color: "#7C67C8", fontVariantNumeric: "tabular-nums", letterSpacing: "-0.02em" }}>
                   {metrics.wellnessScore}
                 </span>
-                <span style={{ fontSize: "var(--text-meta)", color: "#9B84F0", marginLeft: 2 }}>/100</span>
+                <span style={{ fontSize: "var(--text-meta)", color: "var(--tone-mental)", marginLeft: 2 }}>/100</span>
               </div>
             )}
           </div>
@@ -689,7 +689,7 @@ export default function AthleteDashboard({
                     <p style={{ fontSize: 15, fontWeight: 600, color: "var(--c-text-1)", lineHeight: 1.35 }}>{loadStory.headline}</p>
                     <p className="secondary-text mt-1" style={{ lineHeight: 1.55 }}>{loadStory.summary}</p>
                   </div>
-                  <ChevronRight size={17} style={{ color: "#8DB6FF", flexShrink: 0, marginTop: 2 }} />
+                  <ChevronRight size={17} style={{ color: "var(--tone-info)", flexShrink: 0, marginTop: 2 }} />
                 </div>
                 <p className="mt-3 rounded-xl px-3 py-2 text-[12px] leading-5" style={{ background: "rgba(2,7,12,0.2)", color: "var(--c-text-2)" }}>
                   {loadStory.cause}
@@ -855,9 +855,9 @@ export default function AthleteDashboard({
               const val = s.validations?.find(v => v.athleteId === athlete.id);
               const st  = val?.status ?? "future";
               const stCfg = {
-                done:    { label: "Fait",    bg: "rgba(29,158,117,0.15)",  color: "#4DC9A0" },
-                partial: { label: "Partiel", bg: "rgba(232,160,32,0.15)",  color: "#E8A020" },
-                none:    { label: "Absent",  bg: "rgba(224,82,82,0.15)",   color: "#E05252" },
+                done:    { label: "Fait",    bg: "rgba(29,158,117,0.15)",  color: "var(--tone-success)" },
+                partial: { label: "Partiel", bg: "rgba(232,160,32,0.15)",  color: "var(--tone-warning)" },
+                none:    { label: "Absent",  bg: "rgba(224,82,82,0.15)",   color: "var(--tone-danger)" },
                 future:  { label: "À venir", bg: "rgba(255,255,255,0.08)", color: "var(--c-text-3)" },
               }[st] ?? { label: "À venir", bg: "rgba(255,255,255,0.08)", color: "var(--c-text-3)" };
               return (
@@ -954,7 +954,7 @@ export default function AthleteDashboard({
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: 5, padding: "4px 10px", borderRadius: 8, background: "rgba(200,137,10,0.07)" }}>
                 <Trophy size={11} color="#C8890A" strokeWidth={2} />
-                <span style={{ fontSize: 13, fontWeight: 600, color: "#C8890A", fontVariantNumeric: "tabular-nums" }}>{unlockedBadges.length}</span>
+                <span style={{ fontSize: 13, fontWeight: 600, color: "var(--tone-warning)", fontVariantNumeric: "tabular-nums" }}>{unlockedBadges.length}</span>
               </div>
             </div>
             {unlockedBadges.length === 0 ? (
@@ -1039,7 +1039,7 @@ export default function AthleteDashboard({
                 </div>
               </div>
               <div style={{ display: "flex", alignItems: "flex-end", gap: 5, marginBottom: 4 }}>
-                <span style={{ fontSize: 40, fontWeight: 600, color: "#C8890A", fontVariantNumeric: "tabular-nums", letterSpacing: "-0.04em", lineHeight: 1 }}>
+                <span style={{ fontSize: 40, fontWeight: 600, color: "var(--tone-warning)", fontVariantNumeric: "tabular-nums", letterSpacing: "-0.04em", lineHeight: 1 }}>
                   {streak}
                 </span>
                 <span style={{ fontSize: 12, fontWeight: 400, color: "var(--c-text-3)", marginBottom: 3 }}>sem.</span>

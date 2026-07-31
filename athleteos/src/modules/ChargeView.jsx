@@ -160,7 +160,7 @@ const AlertSignals = memo(({ wellnessSignals, completedCount, athleteCount }) =>
           {wellnessSignals.map(({ athlete, metrics }) => (
             <div key={`f-${athlete.id}`} className="flex items-center gap-3 rounded-xl px-4 py-3" style={{ background: "rgba(224,82,82,0.10)", border: "1px solid rgba(224,82,82,0.20)" }}>
               <AlertTriangle size={15} color="#E24B4A" className="flex-shrink-0" />
-              <span className="text-[12px]" style={{ color: "#F19A9A" }}>
+              <span className="text-[12px]" style={{ color: "var(--tone-danger)" }}>
                 <strong>{athlete.name}</strong> décrit une journée difficile ({metrics.wellnessScore ?? "—"}/100 au questionnaire AthleteOS). À discuter avec l'athlète, sans diagnostic automatique.
               </span>
             </div>
@@ -520,7 +520,7 @@ function ChargeView() {
                 {groupStory.counts.known > 0 && (
                   <div className="grid grid-cols-3 gap-2 flex-shrink-0" aria-label="Résumé des évolutions du groupe">
                     <div className="rounded-xl px-3 py-2 text-center" style={{ background: "rgba(239,159,39,0.10)" }}>
-                      <strong className="block text-[15px]" style={{ color: "#F3C77D" }}>{groupStory.counts.higher}</strong>
+                      <strong className="block text-[15px]" style={{ color: "var(--tone-warning)" }}>{groupStory.counts.higher}</strong>
                       <span className="text-[11px]" style={{ color: "var(--c-text-2)" }}>au-dessus</span>
                     </div>
                     <div className="rounded-xl px-3 py-2 text-center" style={{ background: "rgba(20,184,166,0.10)" }}>
@@ -614,7 +614,7 @@ function ChargeView() {
                           <span className="text-[13px] font-bold w-12 text-right" style={{ color }}>{rawLoad ?? "—"}</span>
                         </div>
                         <div className="order-3 xl:order-none w-20 text-left xl:text-right flex-shrink-0">
-                          <p className="text-[12px] font-bold" style={{ color: "#A9CBFB" }}>{metrics.load7 ?? "—"}</p>
+                          <p className="text-[12px] font-bold" style={{ color: "var(--tone-info)" }}>{metrics.load7 ?? "—"}</p>
                           <p className="meta-text">7 jours</p>
                         </div>
                         <div className="order-3 xl:order-none w-20 text-left xl:text-right flex-shrink-0">

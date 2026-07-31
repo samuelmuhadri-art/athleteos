@@ -118,7 +118,7 @@ export default function PerformanceMetadataFields({ discipline, metadata, setMet
         )}
 
         <div className="sm:col-span-2 flex items-start gap-2 rounded-xl px-3 py-2.5" style={{ background: "rgba(29,158,117,0.08)", color: "var(--c-text-2)" }}>
-          <BadgeCheck size={15} className="mt-0.5 shrink-0" style={{ color: "#7BD8B4" }} />
+          <BadgeCheck size={15} className="mt-0.5 shrink-0" style={{ color: "var(--tone-success)" }} />
           <p className="text-[12px] leading-5">
             Le statut « déclaré officiel » mémorise ton information ; AthleteOS ne certifie pas automatiquement la conformité aux règles de compétition.
             {effectiveMetadata.scoring_table_version ? ` Référence de tables : ${effectiveMetadata.scoring_table_version}.` : ""}

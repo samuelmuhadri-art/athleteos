@@ -367,7 +367,7 @@ export default function AthleteApp({ clubBrand, themeStyle }) {
           {error}
         </p>
         <button onClick={signOut}
-          style={{ fontSize: 12, fontWeight: 500, color: "#E05252", background: "none", border: "none", cursor: "pointer" }}>
+          style={{ fontSize: 12, fontWeight: 500, color: "var(--tone-danger)", background: "none", border: "none", cursor: "pointer" }}>
           Se déconnecter
         </button>
       </div>

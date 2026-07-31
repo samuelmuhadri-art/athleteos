@@ -19,11 +19,11 @@ export default function TrainingFocusField({ category, value, onChange, label = 
       </select>
       <div id="training-focus-help" className="mt-2 rounded-xl border p-3" style={{ background: "rgba(91,158,245,0.06)", borderColor: "rgba(91,158,245,0.18)" }}>
         <div className="flex items-start gap-2">
-          <Info size={14} className="mt-0.5 shrink-0" style={{ color: "#A9CBFB" }} />
+          <Info size={14} className="mt-0.5 shrink-0" style={{ color: "var(--tone-info)" }} />
           <div>
             <p className="text-[13px] font-semibold" style={{ color: "var(--c-text-1)" }}>{selected.description}</p>
             <p className="mt-1 text-[12px] leading-5" style={{ color: "var(--c-text-2)" }}>{selected.example}</p>
-            <p className="mt-1 text-[12px] leading-5" style={{ color: "#A9CBFB" }}>Ce choix explique la séance. Il ne modifie jamais la charge, qui reste durée réelle × effort ressenti.</p>
+            <p className="mt-1 text-[12px] leading-5" style={{ color: "var(--tone-info)" }}>Ce choix explique la séance. Il ne modifie jamais la charge, qui reste durée réelle × effort ressenti.</p>
           </div>
         </div>
       </div>

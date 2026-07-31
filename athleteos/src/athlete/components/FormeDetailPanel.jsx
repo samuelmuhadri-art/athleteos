@@ -107,7 +107,7 @@ const FormeDetailPanel = memo(({ metricKey, metrics, sessions, weeklyCharge, ath
               <div className="mb-2 flex items-center gap-2" style={{ color }}><Activity size={16} /><h3 className="card-title">Lecture actuelle</h3></div>
               <p className="secondary-text leading-6">{reading.interpretation}</p>
               {reading.missingReason && (
-                <div className="mt-3 rounded-xl border px-3 py-2.5 text-[12px] leading-5" style={{ background: "rgba(239,159,39,0.08)", borderColor: "rgba(239,159,39,0.22)", color: "#F6C76B" }}>
+                <div className="mt-3 rounded-xl border px-3 py-2.5 text-[12px] leading-5" style={{ background: "rgba(239,159,39,0.08)", borderColor: "rgba(239,159,39,0.22)", color: "var(--tone-warning)" }}>
                   Pourquoi « — » : {reading.missingReason}
                 </div>
               )}

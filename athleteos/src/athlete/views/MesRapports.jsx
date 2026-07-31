@@ -42,8 +42,8 @@ function MiniLoadSpark({ data }) {
 }
 
 function TrendArrow({ trend }) {
-  if (trend === "up")   return <span style={{ display: "inline-flex", alignItems: "center", gap: 2, color: "#4DC9A0" }}><TrendingUp size={12} /> Hausse</span>;
-  if (trend === "down") return <span style={{ display: "inline-flex", alignItems: "center", gap: 2, color: "#F19A9A" }}><TrendingDown size={12} /> Baisse</span>;
+  if (trend === "up")   return <span style={{ display: "inline-flex", alignItems: "center", gap: 2, color: "var(--tone-success)" }}><TrendingUp size={12} /> Hausse</span>;
+  if (trend === "down") return <span style={{ display: "inline-flex", alignItems: "center", gap: 2, color: "var(--tone-danger)" }}><TrendingDown size={12} /> Baisse</span>;
   return <span style={{ display: "inline-flex", alignItems: "center", gap: 4, color: "var(--c-text-2)" }}><Minus size={14} /> Stable</span>;
 }
 
@@ -80,7 +80,7 @@ function WeekReportDetail({ report }) {
         </div>
         <div style={{ padding: "12px 10px", borderRadius: 14, background: "var(--c-surface-2)", border: "1px solid var(--c-border)", textAlign: "center" }}>
           <p style={{ fontSize: 12, fontWeight: 700, color: "var(--c-text-2)", textTransform: "uppercase", letterSpacing: "0.05em" }}>Cette semaine</p>
-          <p style={{ fontSize: 19, fontWeight: 700, color: "#A9CBFB", marginTop: 4 }}>
+          <p style={{ fontSize: 19, fontWeight: 700, color: "var(--tone-info)", marginTop: 4 }}>
             {stats.total > 0 ? (metrics.load7 ?? "—") : "—"}
           </p>
         </div>
@@ -227,7 +227,7 @@ export default function MesRapports({ athlete, sessions, weeklyCharge }) {
       {viewMode === "week" && selectedWeek != null && selectedReport && (
         <div className="space-y-3">
           <button type="button" onClick={() => setSelectedWeek(null)} className="tap-feedback"
-            style={{ minHeight: 44, display: "flex", alignItems: "center", gap: 6, fontSize: 13, fontWeight: 700, color: "#7BD8B4", background: "none", border: "none", cursor: "pointer", padding: "0 4px" }}>
+            style={{ minHeight: 44, display: "flex", alignItems: "center", gap: 6, fontSize: 13, fontWeight: 700, color: "var(--tone-success)", background: "none", border: "none", cursor: "pointer", padding: "0 4px" }}>
             <ChevronLeft size={16} aria-hidden="true" /> Toutes mes semaines
           </button>
           <p style={{ fontSize: 17, fontWeight: 700, color: "var(--c-text-1)" }}>

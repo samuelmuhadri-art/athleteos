@@ -42,7 +42,7 @@ const AddRecordModal = memo(({ athleteName, onClose, onAdd }) => {
           </button>
         </div>
         <div className="flex-1 overflow-y-auto px-6 py-5 space-y-4">
-          {err && <div className="rounded-2xl px-4 py-3 text-[12px]" style={{ background: "rgba(226,75,74,0.1)", border: "1px solid rgba(226,75,74,0.2)", color: "#F19A9A" }}>{err}</div>}
+          {err && <div className="rounded-2xl px-4 py-3 text-[12px]" style={{ background: "rgba(226,75,74,0.1)", border: "1px solid rgba(226,75,74,0.2)", color: "var(--tone-danger)" }}>{err}</div>}
           <div>
             <label className={labelCls} style={{ color: "var(--c-text-3)" }}>Épreuve *</label>
             <input className={inputCls} placeholder="Ex: 100m, Longueur…"

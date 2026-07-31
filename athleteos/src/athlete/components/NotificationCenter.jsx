@@ -61,7 +61,7 @@ export default function NotificationCenter({
           <Sparkles aria-hidden="true" size={30} color="#8DB1F6" strokeWidth={1.2} style={{ position:"absolute", right:24, bottom:10, opacity:0.08 }}/>
           <div style={{ position:"relative", display:"flex", alignItems:"flex-start", justifyContent:"space-between", gap:16 }}>
             <div>
-              <p style={{ fontSize:12, fontWeight:800, color:"#8DB1F6", letterSpacing:"0.06em", textTransform:"uppercase" }}>Centre d’activité</p>
+              <p style={{ fontSize:12, fontWeight:800, color:"var(--tone-info)", letterSpacing:"0.06em", textTransform:"uppercase" }}>Centre d’activité</p>
               <h2 id="notification-center-title" style={{ marginTop:5, fontSize:22, lineHeight:1.2, fontWeight:800, letterSpacing:"-0.02em", color:"var(--c-text-1)" }}>Notifications</h2>
               <p style={{ marginTop:5, fontSize:13, color:"var(--c-text-2)" }}>{unreadCount ? `${unreadCount} nouve${unreadCount > 1 ? "lles" : "lle"} à découvrir` : "Tu es à jour"}</p>
             </div>
@@ -94,7 +94,7 @@ export default function NotificationCenter({
           })}
         </nav>
 
-        {actionError && <p role="alert" style={{ padding:"10px 16px", fontSize:13, color:"#F19A9A", background:"rgba(224,82,82,0.08)", borderBottom:"1px solid rgba(224,82,82,0.14)" }}>{actionError}</p>}
+        {actionError && <p role="alert" style={{ padding:"10px 16px", fontSize:13, color:"var(--tone-danger)", background:"rgba(224,82,82,0.08)", borderBottom:"1px solid rgba(224,82,82,0.14)" }}>{actionError}</p>}
 
         <div style={{ flex:1, overflowY:"auto", padding:12, background:"var(--c-bg)" }}>
           {filteredNotifications.length === 0 ? (

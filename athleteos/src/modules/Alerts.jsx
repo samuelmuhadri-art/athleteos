@@ -25,15 +25,15 @@ import { initialsFromName } from "../utils/helpers.js";
 // (voir src/utils/notifications.js) : "charge" pour surcharge/sous-charge ACWR,
 // pas "surcharge" — sinon l'alerte tombe dans le fallback gris sans couleur.
 const TYPE_CONFIG = {
-  charge:      { label: "Charge",      icon: Activity,      color: "#E24B4A", bg: "rgba(226,75,74,0.15)" },
+  charge:      { label: "Charge",      icon: Activity,      color: "var(--tone-danger)", bg: "rgba(226,75,74,0.15)" },
   blessure:    { label: "Blessure",    icon: AlertTriangle, color: "#EF9F27", bg: "rgba(239,159,39,0.15)" },
   absence:     { label: "Absence",     icon: Users,         color: "#378ADD", bg: "rgba(55,138,221,0.15)" },
   performance: { label: "Performance", icon: TrendingUp,    color: "#1D9E75", bg: "rgba(29,158,117,0.15)" },
-  competition: { label: "Compétition", icon: Trophy,        color: "#9B84F0", bg: "rgba(155,132,240,0.15)" },
+  competition: { label: "Compétition", icon: Trophy,        color: "var(--tone-mental)", bg: "rgba(155,132,240,0.15)" },
   recap:       { label: "Récap semaine", icon: BarChart2,   color: "#5B8DEF", bg: "rgba(91,141,239,0.15)" },
   session_response: { label: "Réponse séance", icon: Users, color: "#EF9F27", bg: "rgba(239,159,39,0.15)" },
   athlete_session: { label: "Séance athlète", icon: Activity, color: "#378ADD", bg: "rgba(55,138,221,0.15)" },
-  social_post: { label: "Vie du club", icon: Users, color: "#9B84F0", bg: "rgba(155,132,240,0.15)" },
+  social_post: { label: "Vie du club", icon: Users, color: "var(--tone-mental)", bg: "rgba(155,132,240,0.15)" },
 };
 
 const SEVERITY_CONFIG = {

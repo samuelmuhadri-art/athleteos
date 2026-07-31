@@ -46,14 +46,14 @@ export function buildDailyState({ wellness, history = [], metrics = {} }) {
   };
 
   let descriptor = score >= 75
-    ? { label: "De bonnes ressources aujourd'hui", legacyLabel: "Plutôt favorable", color: "#4DC9A0", tone: "positive" }
+    ? { label: "De bonnes ressources aujourd'hui", legacyLabel: "Plutôt favorable", color: "var(--tone-success)", tone: "positive" }
     : score >= 55
-      ? { label: baseline == null ? "Un état globalement équilibré" : "Un état proche de tes habitudes", legacyLabel: baseline == null ? "Ressenti plutôt équilibré" : "Dans tes habitudes", color: "#69C5F7", tone: "neutral" }
+      ? { label: baseline == null ? "Un état globalement équilibré" : "Un état proche de tes habitudes", legacyLabel: baseline == null ? "Ressenti plutôt équilibré" : "Dans tes habitudes", color: "var(--tone-info)", tone: "neutral" }
       : score >= 35
-        ? { label: "Quelques points à adapter", legacyLabel: "À adapter aujourd'hui", color: "#F2C46D", tone: "attention" }
-        : { label: "Une journée à aborder avec prudence", legacyLabel: "Journée exigeante", color: "#F29B9A", tone: "attention" };
-  if (baseline != null && score >= 55 && score < 75 && delta >= 12) descriptor = { label: "Tu te sens mieux que d'habitude", legacyLabel: "Mieux que ton habitude", color: "#4DC9A0", tone: "positive" };
-  if (baseline != null && score >= 55 && score < 75 && delta <= -12) descriptor = { label: "Tu te sens moins bien que d'habitude", legacyLabel: "En dessous de ton habitude", color: "#F2C46D", tone: "attention" };
+        ? { label: "Quelques points à adapter", legacyLabel: "À adapter aujourd'hui", color: "var(--tone-warning)", tone: "attention" }
+        : { label: "Une journée à aborder avec prudence", legacyLabel: "Journée exigeante", color: "var(--tone-danger)", tone: "attention" };
+  if (baseline != null && score >= 55 && score < 75 && delta >= 12) descriptor = { label: "Tu te sens mieux que d'habitude", legacyLabel: "Mieux que ton habitude", color: "var(--tone-success)", tone: "positive" };
+  if (baseline != null && score >= 55 && score < 75 && delta <= -12) descriptor = { label: "Tu te sens moins bien que d'habitude", legacyLabel: "En dessous de ton habitude", color: "var(--tone-warning)", tone: "attention" };
   const attention = factors.filter(item => item.tone === "attention");
   const positive = factors.filter(item => item.tone === "positive");
   const helps = positive.map(item => item.meaning);

@@ -243,7 +243,7 @@ function AthleteStatusCard({ athlete, weeklyCharge, currentWeek, injuries, sessi
           {activeInj.length > 0 && (
             <span
               className="flex items-center gap-1 text-[12px] font-bold border px-2 py-0.5 rounded-full"
-              style={{ color: "#F0CB61", background: "rgba(239,159,39,0.15)", borderColor: "#EF9F27" }}
+              style={{ color: "var(--tone-warning)", background: "rgba(239,159,39,0.15)", borderColor: "#EF9F27" }}
             >
               <HeartPulse size={8} /> {activeInj.length} blessure{activeInj.length > 1 ? "s" : ""}
             </span>
@@ -602,7 +602,7 @@ function Dashboard({
               {
                 label: "Bon ressenti",
                 value: groupDailyState.favorable,
-                color: "#4DC9A0",
+                color: "var(--tone-success)",
                 sub: "d'après leurs réponses",
               },
               {

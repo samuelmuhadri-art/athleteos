@@ -462,7 +462,7 @@ function Planning() {
                         {ds.length > 0 && (
                           <span className="text-[12px] font-bold px-2 py-0.5 rounded-full"
                             style={isToday
-                              ? { background: "rgba(29,158,117,0.16)", color: "#7BD8B4" }
+                              ? { background: "rgba(29,158,117,0.16)", color: "var(--tone-success)" }
                               : { background: "var(--c-surface-2)", color: "var(--c-text-2)" }}>
                             {ds.length} séance{ds.length > 1 ? "s" : ""}
                           </span>
@@ -506,7 +506,7 @@ function Planning() {
                                   <p className="text-[13.5px] font-bold truncate" style={{ color: "var(--c-text-1)" }}>{s.title}</p>
                                   {s.createdByAthlete && (
                                     <span className="text-[12px] font-bold px-1.5 py-0.5 rounded-full flex-shrink-0"
-                                      style={{ background: "rgba(168,85,247,0.16)", color: "#D8B4FE" }}>
+                                      style={{ background: "rgba(168,85,247,0.16)", color: "var(--tone-mental)" }}>
                                       <span aria-label="Proposée par un athlète">📋</span>
                                     </span>
                                   )}
@@ -522,7 +522,7 @@ function Planning() {
                                   <Clock size={10} />
                                   <span>{s.time}{s.durationMinutes ? ` · ${s.durationMinutes}min` : ""}</span>
                                   {missingStatus > 0 && isPast && (
-                                    <span className="font-bold" style={{ color: "#F0CB61" }}>· {missingStatus} en attente</span>
+                                    <span className="font-bold" style={{ color: "var(--tone-warning)" }}>· {missingStatus} en attente</span>
                                   )}
                                 </div>
                               </div>
@@ -680,7 +680,7 @@ function Planning() {
                   <CalendarDays size={32} strokeWidth={1.5} />
                   <p className="text-[12px] text-center font-medium">Aucune séance ce jour</p>
                   <button onClick={() => setSessionModalTarget("create")}
-                    className="text-[12px] font-semibold transition-colors" style={{ color: "#3DBE8B" }}>
+                    className="text-[12px] font-semibold transition-colors" style={{ color: "var(--tone-success)" }}>
                     + Planifier une séance
                   </button>
                 </div>
@@ -706,7 +706,7 @@ function Planning() {
                           <span className="chip chip-neutral">{getSessionTrainingFocus(s).shortLabel}</span>
                           {s.createdByAthlete && (
                             <span className="text-[12px] font-bold px-1.5 py-0.5 rounded-full"
-                              style={{ background: "rgba(168,85,247,0.16)", color: "#D8B4FE" }}>
+                              style={{ background: "rgba(168,85,247,0.16)", color: "var(--tone-mental)" }}>
                               📋
                             </span>
                           )}
@@ -719,18 +719,18 @@ function Planning() {
                         <div className="flex items-center gap-2 text-[12px] mb-2" style={{ color: "var(--c-text-2)" }}>
                           <Clock size={10} />
                           <span>{s.time}{s.durationMinutes ? ` · ${s.durationMinutes}min` : ""}</span>
-                          {s.pdfUrl && <span style={{ color: "#A9CBFB" }}>📄</span>}
+                          {s.pdfUrl && <span style={{ color: "var(--tone-info)" }}>📄</span>}
                         </div>
 
                         {missingStatus > 0 && (
                           <div className="flex items-center gap-1 text-[12px] font-bold rounded-lg px-2 py-1 mb-1"
-                            style={{ background: "rgba(239,107,107,0.10)", color: "#F19A9A" }}>
+                            style={{ background: "rgba(239,107,107,0.10)", color: "var(--tone-danger)" }}>
                             ❗ {missingStatus} présence{missingStatus > 1 ? "s" : ""} à confirmer
                           </div>
                         )}
                         {missingRpe > 0 && (
                           <div className="flex items-center gap-1 text-[12px] font-bold rounded-lg px-2 py-1 mb-1"
-                            style={{ background: "rgba(234,179,8,0.10)", color: "#F0CB61" }}>
+                            style={{ background: "rgba(234,179,8,0.10)", color: "var(--tone-warning)" }}>
                             🔥 {missingRpe} RPE manquant{missingRpe > 1 ? "s" : ""}
                           </div>
                         )}
@@ -764,7 +764,7 @@ function Planning() {
               <button
                 onClick={() => setSessionModalTarget("create")}
                 className="w-full flex items-center justify-center gap-2 py-2.5 rounded-2xl text-[12px] font-bold transition-colors"
-                style={{ background: "rgba(29,158,117,0.10)", border: "1px solid rgba(29,158,117,0.25)", color: "#3DBE8B" }}
+                style={{ background: "rgba(29,158,117,0.10)", border: "1px solid rgba(29,158,117,0.25)", color: "var(--tone-success)" }}
               >
                 <Plus size={13} /> Ajouter une séance
               </button>
@@ -830,7 +830,7 @@ function Planning() {
               <button
                 onClick={() => { setSessionModalTarget("create"); setSelectedDate(null); }}
                 className="w-full py-3 rounded-2xl text-[13px] font-bold tap-feedback"
-                style={{ background: "rgba(29,158,117,0.10)", border: "1px solid rgba(29,158,117,0.25)", color: "#3DBE8B" }}
+                style={{ background: "rgba(29,158,117,0.10)", border: "1px solid rgba(29,158,117,0.25)", color: "var(--tone-success)" }}
               >
                 <Plus size={14} className="inline mr-1.5" />
                 Ajouter une séance

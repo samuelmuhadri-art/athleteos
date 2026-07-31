@@ -398,7 +398,7 @@ function CoachShell({ user, profile, clubId, signOut, club, clubLoading, refresh
             onClick={() => setShowInvite(true)}
             aria-label="Inviter un athlète"
             className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-[12px] font-semibold transition-all tap-feedback"
-            style={{ background: "rgba(29,158,117,0.10)", border: "1px solid rgba(29,158,117,0.20)", color: "#4DC9A0" }}
+            style={{ background: "rgba(29,158,117,0.10)", border: "1px solid rgba(29,158,117,0.20)", color: "var(--tone-success)" }}
           >
             <UserPlus size={13} />
             <span className="hidden sm:inline">Inviter</span>

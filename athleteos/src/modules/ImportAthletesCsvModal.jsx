@@ -299,7 +299,7 @@ function ImportAthletesCsvModal({ onClose, onImport, existingEmails = [] }) {
             <div
               role="alert"
               className="rounded-2xl px-4 py-3 flex items-start gap-3 text-[13px]"
-              style={{ background: "rgba(226,75,74,0.1)", border: "1px solid rgba(226,75,74,0.25)", color: "#F19A9A" }}
+              style={{ background: "rgba(226,75,74,0.1)", border: "1px solid rgba(226,75,74,0.25)", color: "var(--tone-danger)" }}
             >
               <AlertCircle size={17} className="mt-0.5 flex-shrink-0" aria-hidden="true" />
               <span>{fileError}</span>
@@ -321,14 +321,14 @@ function ImportAthletesCsvModal({ onClose, onImport, existingEmails = [] }) {
                   <div className="flex items-center gap-2 flex-wrap">
                     <span
                       className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[12px] font-bold"
-                      style={{ background: "rgba(61,190,139,0.13)", color: "#7BD8B4" }}
+                      style={{ background: "rgba(61,190,139,0.13)", color: "var(--tone-success)" }}
                     >
                       <CheckCircle2 size={14} aria-hidden="true" /> {validCount} prêt{validCount > 1 ? "s" : ""}
                     </span>
                     {invalidCount > 0 && (
                       <span
                         className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[12px] font-bold"
-                        style={{ background: "rgba(239,159,39,0.13)", color: "#F0CB61" }}
+                        style={{ background: "rgba(239,159,39,0.13)", color: "var(--tone-warning)" }}
                       >
                         <AlertCircle size={14} aria-hidden="true" /> {invalidCount} ignorée{invalidCount > 1 ? "s" : ""}
                       </span>
@@ -392,7 +392,7 @@ function ImportAthletesCsvModal({ onClose, onImport, existingEmails = [] }) {
                   >
                     {result.errors.slice(0, ERROR_PREVIEW_LIMIT).map((error, index) => (
                       <li key={`${error.row}-${error.code}-${index}`} className="px-4 py-3 flex items-start gap-3 text-[13px]" style={{ color: "var(--c-text-2)" }}>
-                        <span className="font-bold flex-shrink-0" style={{ color: "#F0CB61" }}>Ligne {error.row ?? "—"}</span>
+                        <span className="font-bold flex-shrink-0" style={{ color: "var(--tone-warning)" }}>Ligne {error.row ?? "—"}</span>
                         <span>{error.message}</span>
                       </li>
                     ))}
@@ -408,7 +408,7 @@ function ImportAthletesCsvModal({ onClose, onImport, existingEmails = [] }) {
           )}
 
           {importError && (
-            <div role="alert" className="rounded-2xl px-4 py-3 text-[13px]" style={{ background: "rgba(226,75,74,0.1)", color: "#F19A9A" }}>
+            <div role="alert" className="rounded-2xl px-4 py-3 text-[13px]" style={{ background: "rgba(226,75,74,0.1)", color: "var(--tone-danger)" }}>
               {importError}
             </div>
           )}

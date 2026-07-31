@@ -131,7 +131,7 @@ const SessionDetailModal = memo(({ session, athlete, allAthletes, onClose, onSet
           {session.instructions && (
             <div style={{ borderRadius: 16, overflow: "hidden", border: "1px solid rgba(234,179,8,0.25)", background: "rgba(234,179,8,0.06)" }}>
               <div style={{ padding: "10px 16px", borderBottom: "1px solid rgba(234,179,8,0.18)" }}>
-                <span style={{ fontSize: 12, fontWeight: 800, color: "#F0CB61", textTransform: "uppercase", letterSpacing: "0.07em" }}>
+                <span style={{ fontSize: 12, fontWeight: 800, color: "var(--tone-warning)", textTransform: "uppercase", letterSpacing: "0.07em" }}>
                   Consignes du coach
                 </span>
               </div>
@@ -301,7 +301,7 @@ const SessionDetailModal = memo(({ session, athlete, allAthletes, onClose, onSet
                 </span>
               </div>
               {val?.durationSource === "planned_legacy" && (
-                <p style={{ fontSize: 12, color: "#F0CB61", marginTop: -8, marginBottom: 12 }}>
+                <p style={{ fontSize: 12, color: "var(--tone-warning)", marginTop: -8, marginBottom: 12 }}>
                   Ancienne charge estimée avec la durée planifiée. Renseigne la durée réelle pour la fiabiliser.
                 </p>
               )}
@@ -342,7 +342,7 @@ const SessionDetailModal = memo(({ session, athlete, allAthletes, onClose, onSet
                   </div>
                 ))}
               </div>
-              {loadError && <p role="alert" style={{ marginTop: 10, fontSize: 13, color: "#F19A9A" }}>{loadError}</p>}
+              {loadError && <p role="alert" style={{ marginTop: 10, fontSize: 13, color: "var(--tone-danger)" }}>{loadError}</p>}
             </div>
           )}
 

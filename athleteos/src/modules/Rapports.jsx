@@ -50,8 +50,8 @@ function MiniLoadSpark({ data }) {
 }
 
 function TrendArrow({ trend }) {
-  if (trend === "up")   return <span style={{ display: "inline-flex", alignItems: "center", gap: 2, color: "#4DC9A0" }}><TrendingUp size={12} /> Hausse</span>;
-  if (trend === "down") return <span style={{ display: "inline-flex", alignItems: "center", gap: 2, color: "#F19A9A" }}><TrendingDown size={12} /> Baisse</span>;
+  if (trend === "up")   return <span style={{ display: "inline-flex", alignItems: "center", gap: 2, color: "var(--tone-success)" }}><TrendingUp size={12} /> Hausse</span>;
+  if (trend === "down") return <span style={{ display: "inline-flex", alignItems: "center", gap: 2, color: "var(--tone-danger)" }}><TrendingDown size={12} /> Baisse</span>;
   return <span style={{ display: "inline-flex", alignItems: "center", gap: 4, color: "var(--c-text-2)" }}><Minus size={12} /> Stable</span>;
 }
 
@@ -104,7 +104,7 @@ function AthleteWeekRow({ athlete, report, onClick }) {
       {stats.total > 0 && (
         <div className="flex items-center gap-1.5 flex-shrink-0">
           <span style={{ width: 7, height: 7, borderRadius: "50%", background: "#378ADD" }} />
-          <span className="text-[12px] font-semibold" style={{ color: "#A9CBFB" }}>{metrics.load7 ?? "—"} u. / 7j</span>
+          <span className="text-[12px] font-semibold" style={{ color: "var(--tone-info)" }}>{metrics.load7 ?? "—"} u. / 7j</span>
         </div>
       )}
       <ChevronRight size={15} color="var(--c-text-3)" style={{ flexShrink: 0 }} />
@@ -150,7 +150,7 @@ function AthleteWeekDetail({ athlete, report, onClose }) {
             </div>
             <div style={{ padding: "12px 10px", borderRadius: 14, background: "var(--c-surface-2)", border: "1px solid var(--c-border)", textAlign: "center" }}>
               <p className="metric-label">Cette semaine</p>
-              <p style={{ fontSize: 19, fontWeight: 700, color: "#A9CBFB", marginTop: 4 }}>
+              <p style={{ fontSize: 19, fontWeight: 700, color: "var(--tone-info)", marginTop: 4 }}>
                 {stats.total > 0 ? (metrics.load7 ?? "—") : "—"}
               </p>
             </div>

@@ -33,16 +33,16 @@ const AddInjuryModal = memo(({ athleteName, initialData, onClose, onSave }) => {
         <div className="px-6 py-5 flex items-center justify-between flex-shrink-0"
           style={{ background: "rgba(226,75,74,0.08)", borderBottom: "2px solid rgba(226,75,74,0.2)" }}>
           <div>
-            <h2 className="text-[17px] font-bold" style={{ color: "#E24B4A" }}>{isEdit ? "Modifier la blessure" : "Signaler une blessure"}</h2>
-            <p className="text-[12px] mt-0.5" style={{ color: "#F19A9A" }}>{athleteName}</p>
+            <h2 className="text-[17px] font-bold" style={{ color: "var(--tone-danger)" }}>{isEdit ? "Modifier la blessure" : "Signaler une blessure"}</h2>
+            <p className="text-[12px] mt-0.5" style={{ color: "var(--tone-danger)" }}>{athleteName}</p>
           </div>
           <button type="button" aria-label="Fermer" onClick={onClose} disabled={saving} className="p-2 rounded-xl transition-colors disabled:opacity-40"
-                  style={{ color: "#F19A9A" }} onMouseEnter={e => e.currentTarget.style.background = "rgba(226,75,74,0.15)"} onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
+                  style={{ color: "var(--tone-danger)" }} onMouseEnter={e => e.currentTarget.style.background = "rgba(226,75,74,0.15)"} onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
             <X size={18} />
           </button>
         </div>
         <div className="flex-1 overflow-y-auto px-6 py-5 space-y-4">
-          {err && <div className="rounded-2xl px-4 py-3 text-[12px]" style={{ background: "rgba(226,75,74,0.1)", border: "1px solid rgba(226,75,74,0.2)", color: "#F19A9A" }}>{err}</div>}
+          {err && <div className="rounded-2xl px-4 py-3 text-[12px]" style={{ background: "rgba(226,75,74,0.1)", border: "1px solid rgba(226,75,74,0.2)", color: "var(--tone-danger)" }}>{err}</div>}
           <div>
             <label className={labelCls} style={{ color: "var(--c-text-3)" }}>Nom de la blessure *</label>
             <input className={inputCls} placeholder="Ex: Tendinopathie rotulienne"

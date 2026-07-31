@@ -113,6 +113,14 @@
   --surface-auth-card:       rgba(14,30,21,0.94);
   --scrollbar-thumb:         rgba(255,255,255,0.10);
 
+  /* ── Teintes de statut (texte) — pastel sur fond sombre, assombries
+       automatiquement en clair pour rester lisibles sur blanc ── */
+  --tone-success: #7BD8B4;
+  --tone-danger:  #F19A9A;
+  --tone-warning: #F0CB61;
+  --tone-info:    #A9CBFB;
+  --tone-mental:  #9B84F0;
+
   /* ── Radius — 4 valeurs fixes ── */
   --r-sm:   8px;
   --r-md:   12px;
@@ -185,6 +193,13 @@
   --surface-recessed-strong: rgba(219,229,223,0.65);
   --surface-auth-card:       rgba(255,255,255,0.94);
   --scrollbar-thumb:         rgba(14,30,21,0.16);
+
+  /* Mêmes teintes, assombries/saturées pour rester ≥ 4.5:1 sur blanc. */
+  --tone-success: #0E7A56;
+  --tone-danger:  #B91C1C;
+  --tone-warning: #92600A;
+  --tone-info:    #1D4ED8;
+  --tone-mental:  #6D28D9;
 }
 
 /* ─── Reset ─────────────────────────────────────────────────────────────────── */

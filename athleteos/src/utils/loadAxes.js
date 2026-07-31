@@ -7,7 +7,7 @@ import { getTrainingFocus } from "../domain/trainingFocus.js";
 export const CURRENT_AXIS_MODEL_VERSION = "v2-objectifs-declares";
 
 export const LOAD_AXES = {
-  neuromuscular: { label: "Vitesse", scientificLabel: "Contrainte neuromusculaire", nounPhrase: "de vitesse et d'explosivité", what: "Vitesse, accélération et production rapide de force.", color: "#E24B4A" },
+  neuromuscular: { label: "Vitesse", scientificLabel: "Contrainte neuromusculaire", nounPhrase: "de vitesse et d'explosivité", what: "Vitesse, accélération et production rapide de force.", color: "var(--tone-danger)" },
   elastic: { label: "Impacts", scientificLabel: "Contrainte élastique", nounPhrase: "d'impacts et de bonds", what: "Bonds, rebonds et contacts dynamiques avec le sol.", color: "#EF9F27" },
   metabolic: { label: "Effort long", scientificLabel: "Contrainte métabolique", nounPhrase: "d'effort prolongé", what: "Efforts soutenus, répétitions longues et endurance.", color: "#378ADD" },
   muscular: { label: "Muscles", scientificLabel: "Contrainte musculaire", nounPhrase: "musculaire", what: "Travail de force et sollicitation musculaire.", color: "#A855F7" },
@@ -55,8 +55,8 @@ export function computeWeeklyAxisLoads(athleteId, sessions) {
 }
 
 export function axisStatus(score) {
-  if (score >= 75) return { label: "Dominant", color: "#A9CBFB" };
-  if (score >= 40) return { label: "Présent", color: "#7BD8B4" };
+  if (score >= 75) return { label: "Dominant", color: "var(--tone-info)" };
+  if (score >= 40) return { label: "Présent", color: "var(--tone-success)" };
   return { label: "Secondaire", color: "#94A3B8" };
 }
 

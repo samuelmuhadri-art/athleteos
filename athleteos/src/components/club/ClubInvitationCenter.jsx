@@ -254,13 +254,13 @@ export default function ClubInvitationCenter({ callAdmin, clubName }) {
                     <p className="secondary-text">Ce lien cessera immédiatement de fonctionner.</p>
                     <div className="mt-3 flex gap-2">
                       <button type="button" className="btn-ghost flex-1" onClick={() => setConfirmRevokeId(null)}><X size={15} /> Annuler</button>
-                      <button type="button" className="btn-secondary flex-1" style={{ color: "#F29B9A", borderColor: "rgba(226,75,74,0.35)" }} onClick={() => revokeInvitation(selected.id)} disabled={revokingId === selected.id}>
+                      <button type="button" className="btn-secondary flex-1" style={{ color: "var(--tone-danger)", borderColor: "rgba(226,75,74,0.35)" }} onClick={() => revokeInvitation(selected.id)} disabled={revokingId === selected.id}>
                         {revokingId === selected.id ? <RefreshCw size={15} className="animate-spin" /> : <Check size={15} />} Confirmer
                       </button>
                     </div>
                   </div>
                 ) : (
-                  <button type="button" className="btn-ghost w-full" onClick={() => setConfirmRevokeId(selected.id)} style={{ color: "#F29B9A" }}>
+                  <button type="button" className="btn-ghost w-full" onClick={() => setConfirmRevokeId(selected.id)} style={{ color: "var(--tone-danger)" }}>
                     Révoquer cette invitation
                   </button>
                 )

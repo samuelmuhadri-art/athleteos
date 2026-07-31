@@ -106,9 +106,9 @@ export function StatusIcon({ status, size = 14 }) {
 
 export function ValidationBadge({ status }) {
   const map = {
-    done:    { label: "Réalisée",     bg: "rgba(61,190,139,0.14)", color: "#7BD8B4" },
-    partial: { label: "Partielle",    bg: "rgba(234,179,8,0.14)",  color: "#F0CB61" },
-    none:    { label: "Non réalisée", bg: "rgba(239,107,107,0.14)",color: "#F19A9A" },
+    done:    { label: "Réalisée",     bg: "rgba(61,190,139,0.14)", color: "var(--tone-success)" },
+    partial: { label: "Partielle",    bg: "rgba(234,179,8,0.14)",  color: "var(--tone-warning)" },
+    none:    { label: "Non réalisée", bg: "rgba(239,107,107,0.14)",color: "var(--tone-danger)" },
   };
   const b = map[status] ?? { label: "À venir", bg: "var(--c-surface-3)", color: "var(--c-text-3)" };
   return (

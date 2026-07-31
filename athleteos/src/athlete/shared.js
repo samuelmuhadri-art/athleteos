@@ -48,9 +48,9 @@ export const DISC_TYPE_COLORS = DISCIPLINE_TYPE_COLORS;
 export const WELLNESS_QUESTIONS = [
   { key: "sleep",    label: "Qualité du sommeil",    icon: Moon,       color: "#7C3AED", desc: ["Très mauvais","Mauvais","Correct","Bon","Excellent"],            inverted: false },
   { key: "energy",   label: "Niveau d'énergie",       icon: Battery,    color: "#0284C7", desc: ["Épuisé","Fatigué","Correct","Énergique","Très énergique"],      inverted: false },
-  { key: "soreness", label: "Courbatures / douleurs", icon: HeartPulse, color: "#E24B4A", desc: ["Aucune","Légères","Modérées","Importantes","Très importantes"], inverted: true  },
+  { key: "soreness", label: "Courbatures / douleurs", icon: HeartPulse, color: "var(--tone-danger)", desc: ["Aucune","Légères","Modérées","Importantes","Très importantes"], inverted: true  },
   { key: "mood",     label: "Humeur",                 icon: Smile,      color: "#EF9F27", desc: ["Très mauvaise","Mauvaise","Neutre","Bonne","Excellente"],        inverted: false },
-  { key: "stress",   label: "Niveau de stress",       icon: Activity,   color: "#E24B4A", desc: ["Aucun","Faible","Modéré","Élevé","Très élevé"],                 inverted: true  },
+  { key: "stress",   label: "Niveau de stress",       icon: Activity,   color: "var(--tone-danger)", desc: ["Aucun","Faible","Modéré","Élevé","Très élevé"],                 inverted: true  },
 ];
 
 // Niveau de preuve affiché à côté de chaque métrique — la distinction que
@@ -100,7 +100,7 @@ export const METRIC_SCIENCE = {
     legacyThresholdsDoNotUse: [
       { min: 75, max: 100, label: "Ressenti favorable", color: "#1D9E75", advice: "Retour déclaré favorable, à mettre en contexte avec le coach." },
       { min: 55, max: 74, label: "Ressenti intermédiaire", color: "#EF9F27", advice: "Retour déclaré intermédiaire, sans prescription automatique." },
-      { min: 0, max: 54, label: "Ressenti difficile", color: "#E24B4A", advice: "Prends contact avec ton coach pour expliquer le contexte." },
+      { min: 0, max: 54, label: "Ressenti difficile", color: "var(--tone-danger)", advice: "Prends contact avec ton coach pour expliquer le contexte." },
     ],
   },
   ewmaLong: {
@@ -116,7 +116,7 @@ export const METRIC_SCIENCE = {
     legacyThresholdsDoNotUse: [
       { min: 75, max: 100, label: "Excellente", color: "#1D9E75", advice: "Condition physique au-dessus de ta normale. Idéal pour compétitions ou blocs intenses." },
       { min: 50, max: 74,  label: "Correcte",   color: "#EF9F27", advice: "En progression. Continue la régularité, évite les coupures." },
-      { min: 0,  max: 49,  label: "Faible",     color: "#E24B4A", advice: "Augmente progressivement le volume. La régularité prime sur l'intensité." },
+      { min: 0,  max: 49,  label: "Faible",     color: "var(--tone-danger)", advice: "Augmente progressivement le volume. La régularité prime sur l'intensité." },
     ],
   },
   ewmaShort: {
@@ -132,7 +132,7 @@ export const METRIC_SCIENCE = {
     legacyThresholdsDoNotUse: [
       { min: 0,  max: 45,  label: "Normale",  color: "#1D9E75", advice: "Pas de signe de suraccumulation. Tu peux maintenir ou augmenter la charge." },
       { min: 46, max: 70,  label: "Modérée",  color: "#EF9F27", advice: "Attention aux séances très intenses consécutives. Planifie une journée légère." },
-      { min: 71, max: 100, label: "Élevée",   color: "#E24B4A", advice: "Réduction de charge recommandée." },
+      { min: 71, max: 100, label: "Élevée",   color: "var(--tone-danger)", advice: "Réduction de charge recommandée." },
     ],
   },
   spacing: {
@@ -148,7 +148,7 @@ export const METRIC_SCIENCE = {
     legacyThresholdsDoNotUse: [
       { min: 70, max: 100, label: "Fenêtre terminée", color: "#1D9E75", advice: "La règle d'espacement est terminée ; cela ne prouve pas une récupération complète." },
       { min: 45, max: 69, label: "Transition", color: "#EF9F27", advice: "La fenêtre configurée arrive à son terme." },
-      { min: 0, max: 44, label: "Fenêtre active", color: "#E24B4A", advice: "La règle d'espacement configurée est encore active." },
+      { min: 0, max: 44, label: "Fenêtre active", color: "var(--tone-danger)", advice: "La règle d'espacement configurée est encore active." },
     ],
   },
   dataQuality: {
@@ -170,7 +170,7 @@ export const METRIC_SCIENCE = {
       { ref: "Foster (1998)",       detail: "Monotony of training — J Strength Cond" },
     ],
     legacyThresholdsDoNotUse: [
-      { min: 0, max: 30, label: "Incomplète", color: "#E24B4A", advice: "Plusieurs données quotidiennes manquent." },
+      { min: 0, max: 30, label: "Incomplète", color: "var(--tone-danger)", advice: "Plusieurs données quotidiennes manquent." },
       { min: 31, max: 60, label: "Partielle", color: "#EF9F27", advice: "Certaines fenêtres restent indisponibles." },
       { min: 61, max: 100, label: "Bonne", color: "#1D9E75", advice: "Les données nécessaires sont majoritairement présentes." },
     ],

@@ -73,7 +73,7 @@ export function buildCoachFeed({
   const pendingAthleteSessions = sessions.filter(session => session.createdByAthlete);
   if (pendingAthleteSessions.length > 0) {
     items.push({
-      id: "athlete-session-validations", priority: "info", order: 40, icon: "check", color: "#69C5F7", route: "planning", label: "Validations",
+      id: "athlete-session-validations", priority: "info", order: 40, icon: "check", color: "var(--tone-info)", route: "planning", label: "Validations",
       sentence: `${pendingAthleteSessions.length} séance${pendingAthleteSessions.length > 1 ? "s" : ""} ajoutée${pendingAthleteSessions.length > 1 ? "s" : ""} par un athlète ${pendingAthleteSessions.length > 1 ? "sont" : "est"} à vérifier.`,
     });
   }
@@ -144,7 +144,7 @@ export function buildCoachFeed({
     const missed = weekSessions.filter(s => s.validations?.find(v => v.athleteId === athlete.id && v.status === "none")).length;
     if (missed >= 2) {
       items.push({
-        id: `absent-${athlete.id}`, priority: "warning", order: 65, icon: "users", color: "#E24B4A", route: "athletes", label: "Absences répétées",
+        id: `absent-${athlete.id}`, priority: "warning", order: 65, icon: "users", color: "var(--tone-danger)", route: "athletes", label: "Absences répétées",
         sentence: `${name} a manqué ${missed} séances cette semaine — vaut le coup de vérifier ce qui se passe.`,
       });
     }

@@ -136,11 +136,11 @@ const CompModal = memo(({ competition, athletes, weeklyCharge, records, onClose,
                         ) : (
                           <div className="flex items-center gap-2 mt-2 text-[12px] text-[var(--c-text-2)] flex-wrap">
                             <span>Charge observée sur 7 jours :</span>
-                            <span className="font-bold" style={{ color: "#A9CBFB" }}>
+                            <span className="font-bold" style={{ color: "var(--tone-info)" }}>
                               {metrics.load7 ?? "—"}
                             </span>
                             <span>· Bien-être :</span>
-                            <span className="font-bold" style={{ color: "#7BD8B4" }}>
+                            <span className="font-bold" style={{ color: "var(--tone-success)" }}>
                               {metrics.wellnessScore == null ? "—" : `${metrics.wellnessScore}/100`}
                             </span>
                           </div>
@@ -191,19 +191,19 @@ const CompModal = memo(({ competition, athletes, weeklyCharge, records, onClose,
                         <span className="text-[var(--c-text-3)]">À la semaine ~{week} :</span>
                         <span className="flex items-center gap-1">
                           Cette semaine :
-                          <strong className="ml-1" style={{ color: "#A9CBFB" }}>
+                          <strong className="ml-1" style={{ color: "var(--tone-info)" }}>
                             {metrics.load7 ?? "—"}
                           </strong>
                         </span>
                         <span className="flex items-center gap-1">
                           Rythme habituel · 4 sem. :
-                          <strong className="ml-1" style={{ color: "#7BD8B4" }}>
+                          <strong className="ml-1" style={{ color: "var(--tone-success)" }}>
                             {metrics.load28 ?? "—"}
                           </strong>
                         </span>
                         <span className="flex items-center gap-1">
                           Bien-être déclaré :
-                          <strong className="ml-1" style={{ color: "#A9CBFB" }}>
+                          <strong className="ml-1" style={{ color: "var(--tone-info)" }}>
                             {metrics.wellnessScore == null ? "—" : `${metrics.wellnessScore}/100`}
                           </strong>
                         </span>

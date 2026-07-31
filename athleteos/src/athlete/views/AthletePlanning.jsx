@@ -139,7 +139,7 @@ function SessionCard({ session, athleteId, isPast = false, compact = false, onOp
             </span>
             <span className="chip chip-neutral">{getSessionTrainingFocus(session).shortLabel}</span>
             {session.pdfUrl && (
-              <span style={{ fontSize: 12, fontWeight: 700, padding: "3px 8px", borderRadius: 99, background: "rgba(91,158,245,0.16)", color: "#8DBDFA" }}>
+              <span style={{ fontSize: 12, fontWeight: 700, padding: "3px 8px", borderRadius: 99, background: "rgba(91,158,245,0.16)", color: "var(--tone-info)" }}>
                 PDF
               </span>
             )}
@@ -154,12 +154,12 @@ function SessionCard({ session, athleteId, isPast = false, compact = false, onOp
             {val?.rpe != null && <span style={{ fontWeight: 700, color: rpeColor(val.rpe).active }}>RPE {val.rpe}/10</span>}
           </div>
           {session.instructions && (
-            <p style={{ fontSize: 13, lineHeight: 1.5, color: "#F0CB61", background: "rgba(234,179,8,0.08)", borderRadius: 12, padding: "8px 12px", marginBottom: 8 }} className="line-clamp-2">
+            <p style={{ fontSize: 13, lineHeight: 1.5, color: "var(--tone-warning)", background: "rgba(234,179,8,0.08)", borderRadius: 12, padding: "8px 12px", marginBottom: 8 }} className="line-clamp-2">
               {session.instructions}
             </p>
           )}
           {rpeNeeded && (
-            <p style={{ fontSize: 12, fontWeight: 700, color: "#F0CB61", display: "flex", alignItems: "center", gap: 8 }}>
+            <p style={{ fontSize: 12, fontWeight: 700, color: "var(--tone-warning)", display: "flex", alignItems: "center", gap: 8 }}>
               <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#EAB308" }} className="animate-pulse-soft" />
               Valide ta séance
             </p>
@@ -498,7 +498,7 @@ export default function AthletePlanning({
                     <CalendarDays size={24} color="var(--c-text-3)" strokeWidth={1.5} />
                   </div>
                   <p style={{ fontSize: 13, fontWeight: 700, color: "var(--c-text-3)" }}>Repos ce jour</p>
-                  <button type="button" onClick={() => setShowCreate(true)} style={{ minHeight: 44, padding: "0 12px", fontSize: 13, fontWeight: 700, color: "#7BD8B4", background: "none", border: "none", cursor: "pointer" }}>
+                  <button type="button" onClick={() => setShowCreate(true)} style={{ minHeight: 44, padding: "0 12px", fontSize: 13, fontWeight: 700, color: "var(--tone-success)", background: "none", border: "none", cursor: "pointer" }}>
                     + Planifier une séance
                   </button>
                 </div>

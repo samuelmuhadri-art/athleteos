@@ -396,7 +396,7 @@ export default function AthletePerfs({ athlete, competitions, myPerformances, my
           <div style={{ minWidth: 0 }}>
             <div style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "4px 9px", borderRadius: 99, background: "rgba(29,158,117,0.10)", border: "1px solid rgba(77,201,160,0.18)", marginBottom: 12 }}>
               <Sparkles size={13} color="#7BD8B4" aria-hidden="true" />
-              <span style={{ fontSize: 12, fontWeight: 700, color: "#7BD8B4", letterSpacing: "0.05em", textTransform: "uppercase" }}>Performance lab</span>
+              <span style={{ fontSize: 12, fontWeight: 700, color: "var(--tone-success)", letterSpacing: "0.05em", textTransform: "uppercase" }}>Performance lab</span>
             </div>
             <h1 className="page-title">Mes performances</h1>
             <p style={{ fontSize: 13, lineHeight: 1.5, color: "var(--c-text-2)", marginTop: 6 }}>
@@ -510,7 +510,7 @@ export default function AthletePerfs({ athlete, competitions, myPerformances, my
                       <p style={{ fontSize: 12, color: "var(--c-text-2)", marginTop: 3 }}>{result.event}</p>
                     </div>
                     <div style={{ textAlign: "right", flexShrink: 0 }}>
-                      <p style={{ fontSize: 16, fontWeight: 700, color: "#7BD8B4", fontVariantNumeric: "tabular-nums" }}>{result.result}</p>
+                      <p style={{ fontSize: 16, fontWeight: 700, color: "var(--tone-success)", fontVariantNumeric: "tabular-nums" }}>{result.result}</p>
                       <p style={{ fontSize: 12, color: "var(--c-text-3)", marginTop: 3 }}>
                         {parseLocalDate(comp.date.slice(0, 10)).toLocaleDateString("fr-BE", { day: "numeric", month: "short" })}
                       </p>
@@ -569,7 +569,7 @@ export default function AthletePerfs({ athlete, competitions, myPerformances, my
                   Indice de niveau · {chartData.length} mesure{chartData.length !== 1 ? "s" : ""}
                 </p>
               </div>
-              <button type="button" onClick={() => { setPerformanceError(""); setShowAddPerf(true); }} className="btn-ghost" style={{ minHeight: 44, color: "#7BD8B4" }}>
+              <button type="button" onClick={() => { setPerformanceError(""); setShowAddPerf(true); }} className="btn-ghost" style={{ minHeight: 44, color: "var(--tone-success)" }}>
                 <Plus size={14} aria-hidden="true" /> Ajouter
               </button>
             </div>
@@ -582,7 +582,7 @@ export default function AthletePerfs({ athlete, competitions, myPerformances, my
                 <p style={{ fontSize: 13, color: "var(--c-text-2)", textAlign: "center" }}>
                   Minimum 2 mesures pour afficher le graphique
                 </p>
-                <button type="button" onClick={() => { setPerformanceError(""); setShowAddPerf(true); }} className="btn-ghost" style={{ minHeight: 44, color: "#7BD8B4" }}>
+                <button type="button" onClick={() => { setPerformanceError(""); setShowAddPerf(true); }} className="btn-ghost" style={{ minHeight: 44, color: "var(--tone-success)" }}>
                   + Saisir une performance
                 </button>
               </div>
@@ -649,7 +649,7 @@ export default function AthletePerfs({ athlete, competitions, myPerformances, my
                 </ResponsiveContainer>
 
                 <div style={{ display: "flex", alignItems: "center", gap: 16, marginTop: 12, paddingTop: 12, borderTop: "1px solid var(--c-border)", fontSize: 12, color: "var(--c-text-2)", flexWrap: "wrap" }}>
-                  <span><strong style={{ color: "#7BD8B4" }}>100 %</strong> = record personnel</span>
+                  <span><strong style={{ color: "var(--tone-success)" }}>100 %</strong> = record personnel</span>
                   {goalZone && <span><strong style={{ color: "#EAB308" }}>{goalZone.target.toFixed(1)} %</strong> = objectif</span>}
                 </div>
               </>
@@ -675,7 +675,7 @@ export default function AthletePerfs({ athlete, competitions, myPerformances, my
                       <div style={{ background: "var(--c-surface-2)", border: "1px solid var(--c-border-strong)", borderRadius: 12, padding: "12px 14px", minWidth: 156 }}>
                         <p style={{ fontSize: 13, fontWeight: 700, color: "var(--c-text-1)" }}>{d.compName}</p>
                         <p style={{ fontSize: 12, color: "var(--c-text-2)", marginTop: 2, marginBottom: 8 }}>{parseLocalDate(d.date.slice(0, 10)).toLocaleDateString("fr-BE", { day: "numeric", month: "short", year: "numeric" })}</p>
-                        <p style={{ fontSize: 12, color: "var(--c-text-2)" }}>Résultat : <strong style={{ color: "#7BD8B4" }}>{d.resultStr}</strong></p>
+                        <p style={{ fontSize: 12, color: "var(--c-text-2)" }}>Résultat : <strong style={{ color: "var(--tone-success)" }}>{d.resultStr}</strong></p>
                         <p style={{ fontSize: 12, color: "var(--c-text-2)", marginTop: 3 }}>Écart à l'habitude : <strong>{d.x >= 0 ? "+" : ""}{d.x}%</strong> · Niveau : <strong>{d.y}% du record</strong></p>
                       </div>
                     );
@@ -733,7 +733,7 @@ export default function AthletePerfs({ athlete, competitions, myPerformances, my
                         aria-label={`Supprimer la performance ${p.value}`}
                         onClick={() => handleDeletePerf(p.id)}
                         className="tap-feedback"
-                        style={{ minHeight: 40, padding: "0 10px", borderRadius: 10, background: "rgba(224,82,82,0.08)", border: "1px solid rgba(224,82,82,0.12)", cursor: "pointer", color: "#F19A9A", fontSize: 12, fontWeight: 700 }}>
+                        style={{ minHeight: 40, padding: "0 10px", borderRadius: 10, background: "rgba(224,82,82,0.08)", border: "1px solid rgba(224,82,82,0.12)", cursor: "pointer", color: "var(--tone-danger)", fontSize: 12, fontWeight: 700 }}>
                         Supprimer
                       </button>
                     </div>
@@ -816,11 +816,11 @@ export default function AthletePerfs({ athlete, competitions, myPerformances, my
                           <GoalProgressBar pr={pr} target={g.target_value} discipline={g.discipline} color={col} />
                           <div style={{ display: "flex", alignItems: "center", gap: 14, marginTop: 12, paddingTop: 12, borderTop: "1px solid var(--c-border)" }}>
                             <button type="button" onClick={() => handleMarkGoalDone(g.id)}
-                              style={{ minHeight: 44, display: "flex", alignItems: "center", gap: 6, padding: "0 8px", fontSize: 12, fontWeight: 700, color: "#7BD8B4", background: "none", border: "none", cursor: "pointer" }}>
+                              style={{ minHeight: 44, display: "flex", alignItems: "center", gap: 6, padding: "0 8px", fontSize: 12, fontWeight: 700, color: "var(--tone-success)", background: "none", border: "none", cursor: "pointer" }}>
                               <CheckCircle size={15} aria-hidden="true" /> Marquer atteint
                             </button>
                             <button type="button" onClick={() => handleDeleteGoal(g.id)}
-                              style={{ minHeight: 44, padding: "0 8px", fontSize: 12, fontWeight: 700, color: "#F19A9A", background: "none", border: "none", cursor: "pointer", marginLeft: "auto" }}>
+                              style={{ minHeight: 44, padding: "0 8px", fontSize: 12, fontWeight: 700, color: "var(--tone-danger)", background: "none", border: "none", cursor: "pointer", marginLeft: "auto" }}>
                               Supprimer
                             </button>
                           </div>
@@ -894,10 +894,10 @@ export default function AthletePerfs({ athlete, competitions, myPerformances, my
                       {parseLocalDate(comp.date.slice(0, 10)).toLocaleDateString("fr-BE", { day: "numeric", month: "long", year: "numeric" })}
                     </p>
                     <div style={{ display: "inline-block", borderRadius: 14, padding: "10px 16px", background: "rgba(29,158,117,0.10)", border: "1px solid rgba(29,158,117,0.20)" }}>
-                      <p style={{ fontSize: 12, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", color: "#7BD8B4", marginBottom: 4 }}>
+                      <p style={{ fontSize: 12, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", color: "var(--tone-success)", marginBottom: 4 }}>
                         {result.event}
                       </p>
-                      <p style={{ fontSize: 22, fontWeight: 700, color: "#7BD8B4", letterSpacing: "-0.02em", lineHeight: 1 }}>
+                      <p style={{ fontSize: 22, fontWeight: 700, color: "var(--tone-success)", letterSpacing: "-0.02em", lineHeight: 1 }}>
                         {result.result}
                       </p>
                     </div>

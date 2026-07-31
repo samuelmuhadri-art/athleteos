@@ -94,7 +94,7 @@ const HEPTATHLON_EVENTS = ["100m haies", "Hauteur", "Poids", "200m", "Longueur",
 export const DISCIPLINES = {
   "100m":        { label: "100m",        ...TIME_SHORT, type: "sprint",    color: "#5B9EF5", aliases: ["100 m", "100 metres", "100m."] },
   "200m":        { label: "200m",        ...TIME_SHORT, type: "sprint",    color: "#A78BFA", aliases: ["200 m"] },
-  "400m":        { label: "400m",        ...TIME_SHORT, type: "sprint",    color: "#F0CB61", aliases: ["400 m"] },
+  "400m":        { label: "400m",        ...TIME_SHORT, type: "sprint",    color: "var(--tone-warning)", aliases: ["400 m"] },
   "800m":        { label: "800m",        ...TIME_LONG,  type: "endurance", color: "#EF6B6B", aliases: ["800 m"] },
   "1500m":       { label: "1500m",       ...TIME_LONG,  type: "endurance", color: "#EC4899", aliases: ["1500 m", "1 500m"] },
   "3000m":       { label: "3000m",       ...TIME_LONG,  type: "endurance", color: "#38BDF8", aliases: ["3000 m", "3 000m"] },

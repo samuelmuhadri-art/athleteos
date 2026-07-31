@@ -405,13 +405,13 @@ export default function AthleteMsgerie({ athlete, coachUserId, athleteUserId, cl
               <div>
                 <div style={{ display:"flex", alignItems:"center", gap:6, marginBottom:6 }}>
                   <Sparkles size={13} color="#8DB1F6"/>
-                  <span style={{ fontSize:12, fontWeight:800, letterSpacing:"0.06em", textTransform:"uppercase", color:"#8DB1F6" }}>Espace équipe</span>
+                  <span style={{ fontSize:12, fontWeight:800, letterSpacing:"0.06em", textTransform:"uppercase", color:"var(--tone-info)" }}>Espace équipe</span>
                 </div>
                 <h1 style={{ fontSize:24, lineHeight:1.15, fontWeight:800, letterSpacing:"-0.025em", color:"var(--c-text-1)" }}>Messages</h1>
                 <p style={{ marginTop:5, fontSize:13, color:"var(--c-text-2)" }}>{contacts.length} contact{contacts.length > 1 ? "s" : ""} dans ton club</p>
               </div>
               {totalUnread > 0 && (
-                <span style={{ minHeight:32, padding:"0 10px", borderRadius:99, display:"inline-flex", alignItems:"center", background:"rgba(224,82,82,0.12)", border:"1px solid rgba(224,82,82,0.20)", color:"#F19A9A", fontSize:12, fontWeight:800 }}>
+                <span style={{ minHeight:32, padding:"0 10px", borderRadius:99, display:"inline-flex", alignItems:"center", background:"rgba(224,82,82,0.12)", border:"1px solid rgba(224,82,82,0.20)", color:"var(--tone-danger)", fontSize:12, fontWeight:800 }}>
                   {totalUnread} non lu{totalUnread > 1 ? "s" : ""}
                 </span>
               )}
@@ -483,12 +483,12 @@ export default function AthleteMsgerie({ athlete, coachUserId, athleteUserId, cl
                   <div style={{ display:"flex", alignItems:"center", gap:8 }}>
                     <h2 style={{ fontSize:15, fontWeight:800, color:"var(--c-text-1)", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{activeContact.name}</h2>
                     {activeContact.type === "coach" && (
-                      <span style={{ padding:"3px 8px", borderRadius:99, background:"rgba(91,141,239,0.13)", border:"1px solid rgba(91,141,239,0.20)", color:"#8DB1F6", fontSize:12, fontWeight:800 }}>Coach</span>
+                      <span style={{ padding:"3px 8px", borderRadius:99, background:"rgba(91,141,239,0.13)", border:"1px solid rgba(91,141,239,0.20)", color:"var(--tone-info)", fontSize:12, fontWeight:800 }}>Coach</span>
                     )}
                   </div>
                   <p style={{ marginTop:3, fontSize:12, color:"var(--c-text-2)" }}>{activeContact.subtitle} · conversation privée</p>
                 </div>
-                <div className="hidden sm:flex" style={{ minHeight:36, padding:"0 10px", alignItems:"center", gap:6, borderRadius:99, background:"rgba(29,158,117,0.08)", color:"#7BD8B4", fontSize:12, fontWeight:700 }}>
+                <div className="hidden sm:flex" style={{ minHeight:36, padding:"0 10px", alignItems:"center", gap:6, borderRadius:99, background:"rgba(29,158,117,0.08)", color:"var(--tone-success)", fontSize:12, fontWeight:700 }}>
                   <span style={{ width:7, height:7, borderRadius:"50%", background:"#4DC9A0", boxShadow:"0 0 0 4px rgba(77,201,160,0.10)" }}/>
                   Temps réel
                 </div>
@@ -519,8 +519,8 @@ export default function AthleteMsgerie({ athlete, coachUserId, athleteUserId, cl
               <footer style={{ flexShrink:0, background:"var(--c-surface)", borderTop:"1px solid var(--c-border)" }}>
                 {actionError && (
                   <div role="alert" style={{ minHeight:48, padding:"8px 12px 8px 16px", display:"flex", alignItems:"center", gap:10, background:"rgba(224,82,82,0.08)", borderBottom:"1px solid rgba(224,82,82,0.16)" }}>
-                    <p style={{ flex:1, fontSize:13, lineHeight:1.4, color:"#F19A9A" }}>{actionError}</p>
-                    <button type="button" aria-label="Fermer le message d’erreur" onClick={() => setActionError(null)} style={{ width:44, height:44, display:"flex", alignItems:"center", justifyContent:"center", border:"none", background:"transparent", color:"#F19A9A", cursor:"pointer" }}><X size={17}/></button>
+                    <p style={{ flex:1, fontSize:13, lineHeight:1.4, color:"var(--tone-danger)" }}>{actionError}</p>
+                    <button type="button" aria-label="Fermer le message d’erreur" onClick={() => setActionError(null)} style={{ width:44, height:44, display:"flex", alignItems:"center", justifyContent:"center", border:"none", background:"transparent", color:"var(--tone-danger)", cursor:"pointer" }}><X size={17}/></button>
                   </div>
                 )}
                 <div style={{ padding:"10px 12px max(10px, env(safe-area-inset-bottom))", display:"flex", alignItems:"flex-end", gap:10 }}>

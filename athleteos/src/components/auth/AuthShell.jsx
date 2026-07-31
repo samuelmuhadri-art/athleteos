@@ -16,14 +16,6 @@ export default function AuthShell({ eyebrow, title, description, children, foote
       <div className="auth-layout">
         <aside className="auth-story" aria-label="Présentation AthleteOS">
           <AthleteOSLogo direction="row" size={44} wordmarkSize={21} />
-          <div className="auth-story-copy">
-            <p className="auth-kicker">Le quotidien sportif, clarifié</p>
-            <h2>Le club avance quand chacun sait quoi faire.</h2>
-            <p>
-              Planning, suivi, communication et progression réunis dans une expérience calme,
-              lisible et pensée pour le terrain.
-            </p>
-          </div>
           <div className="auth-product-points">
             {PRODUCT_POINTS.map(({ icon: Icon, text }) => (
               <div key={text} className="auth-product-point">

@@ -35,29 +35,29 @@ export default function DailyStateDetailPanel({ state, onClose, onOpenMetric }) 
             <div className="flex items-center gap-2"><Sparkles size={16} style={{ color: state.color }} /><h3 className="card-title">En clair</h3></div>
             <div className="mt-3 grid gap-3 sm:grid-cols-2">
               <div className="rounded-xl p-3" style={{ background: "rgba(123,216,180,0.08)" }}>
-                <p className="text-[12px] font-bold uppercase tracking-wide" style={{ color: "#7BD8B4" }}>Ce qui t'aide</p>
+                <p className="text-[12px] font-bold uppercase tracking-wide" style={{ color: "var(--tone-success)" }}>Ce qui t'aide</p>
                 {helps.length ? helps.slice(0, 3).map(item => <p key={item} className="mt-2 text-[13px] leading-5" style={{ color: "var(--c-text-1)" }}>• {item}</p>) : <p className="mt-2 text-[13px] leading-5" style={{ color: "var(--c-text-2)" }}>Rien ne ressort nettement pour le moment.</p>}
               </div>
               <div className="rounded-xl p-3" style={{ background: "rgba(242,196,109,0.08)" }}>
-                <p className="text-[12px] font-bold uppercase tracking-wide" style={{ color: "#F2C46D" }}>À surveiller</p>
+                <p className="text-[12px] font-bold uppercase tracking-wide" style={{ color: "var(--tone-warning)" }}>À surveiller</p>
                 {watch.length ? watch.slice(0, 3).map(item => <p key={item} className="mt-2 text-[13px] leading-5" style={{ color: "var(--c-text-1)" }}>• {item}</p>) : <p className="mt-2 text-[13px] leading-5" style={{ color: "var(--c-text-2)" }}>Aucun point marqué dans tes réponses.</p>}
               </div>
             </div>
             <div className="mt-3 flex items-start gap-2 rounded-xl border p-3" style={{ background: "var(--c-surface-2)", borderColor: "var(--c-border)" }}>
-              <HeartHandshake size={16} className="mt-0.5 shrink-0" style={{ color: "#A9CBFB" }} />
+              <HeartHandshake size={16} className="mt-0.5 shrink-0" style={{ color: "var(--tone-info)" }} />
               <div><p className="text-[12px] font-bold" style={{ color: "var(--c-text-1)" }}>Le bon réflexe</p><p className="mt-1 text-[13px] leading-5" style={{ color: "var(--c-text-2)" }}>{state.coachPrompt ?? "Utilise ce résumé pour échanger avec ton coach."}</p></div>
             </div>
           </article>
 
           <button type="button" onClick={() => onOpenMetric?.("variation")} className="card card-hover mt-3 w-full p-4 text-left flex items-center gap-3">
-            <Database size={17} style={{ color: "#A9CBFB" }} />
+            <Database size={17} style={{ color: "var(--tone-info)" }} />
             <div className="flex-1"><p className="card-title">Ta charge récente</p><p className="card-subtitle mt-1">{state.loadContext ?? (state.variation == null ? "Pas encore assez de journées connues." : `Évolution de ${state.variation > 0 ? "+" : ""}${state.variation}% par rapport à ton rythme habituel.`)}</p></div>
             <ChevronRight size={16} style={{ color: "var(--c-text-3)" }} />
           </button>
 
           <details className="card mt-3 overflow-hidden">
             <summary className="tap-feedback flex cursor-pointer list-none items-center gap-3 p-4">
-              <Info size={17} style={{ color: "#B5A3F5" }} />
+              <Info size={17} style={{ color: "var(--tone-mental)" }} />
               <div className="flex-1"><p className="card-title">Voir les réponses, le calcul et les limites</p><p className="card-subtitle mt-1">Le niveau scientifique reste disponible sans encombrer la lecture principale.</p></div>
               <ChevronRight size={16} style={{ color: "var(--c-text-3)" }} />
             </summary>
@@ -79,7 +79,7 @@ export default function DailyStateDetailPanel({ state, onClose, onOpenMetric }) 
               </article>
 
               <article className="mt-3 rounded-xl p-4" style={{ background: "var(--c-surface-2)" }}>
-                <div className="flex items-center gap-2"><Calculator size={16} style={{ color: "#B5A3F5" }} /><h3 className="card-title">Calcul transparent</h3></div>
+                <div className="flex items-center gap-2"><Calculator size={16} style={{ color: "var(--tone-mental)" }} /><h3 className="card-title">Calcul transparent</h3></div>
                 <code className="mt-3 block rounded-xl p-3 text-[12px] leading-6" style={{ color: "var(--c-text-1)", background: "var(--c-bg)" }}>Moyenne de : sommeil + énergie + (6 − courbatures) + humeur + (6 − stress), puis normalisation de 1–5 vers 0–100.</code>
                 <p className="mt-3 text-[12px] leading-5" style={{ color: "var(--c-text-2)" }}>C'est un questionnaire interne AthleteOS, pas une mesure physiologique validée. La charge reste un contexte séparé et ne modifie pas secrètement ce résumé.</p>
               </article>

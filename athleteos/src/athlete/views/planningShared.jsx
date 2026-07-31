@@ -30,9 +30,9 @@ export function cat(key) {
 // ─── Helper : badge statut ────────────────────────────────────────────────────
 export function StatusBadge({ status, size = "sm" }) {
   const cfg = {
-    done:    { label: "Réalisée",  bg: "rgba(61,190,139,0.16)",  color: "#7BD8B4", dot: "#3DBE8B" },
-    partial: { label: "Partielle", bg: "rgba(234,179,8,0.16)",   color: "#F0CB61", dot: "#EAB308" },
-    none:    { label: "Absent",    bg: "rgba(239,107,107,0.16)", color: "#F19A9A", dot: "#EF6B6B" },
+    done:    { label: "Réalisée",  bg: "rgba(61,190,139,0.16)",  color: "var(--tone-success)", dot: "#3DBE8B" },
+    partial: { label: "Partielle", bg: "rgba(234,179,8,0.16)",   color: "var(--tone-warning)", dot: "#EAB308" },
+    none:    { label: "Absent",    bg: "rgba(239,107,107,0.16)", color: "var(--tone-danger)", dot: "#EF6B6B" },
     future:  { label: "Prévue",    bg: "var(--c-surface-3)",     color: "var(--c-text-3)", dot: "#5B9EF5" },
   };
   const s = cfg[status] ?? cfg.future;

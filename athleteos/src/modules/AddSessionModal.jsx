@@ -188,14 +188,14 @@ const AddSessionModal = memo(({ athletes, initialData, onClose, onAdd }) => {
           <div>
             <label className={labelCls} style={labelStyle}>PDF (optionnel)</label>
             {isEdit && form.pdfUrl && !pdfFile && (
-              <p className="text-[12px] mb-1.5" style={{ color: "#7BD8B4" }}>📎 PDF déjà joint</p>
+              <p className="text-[12px] mb-1.5" style={{ color: "var(--tone-success)" }}>📎 PDF déjà joint</p>
             )}
             <input type="file" accept="application/pdf"
               onChange={e => pickPdf(e.target.files?.[0] ?? null)}
               className="w-full text-[12px] file:mr-3 file:py-2 file:px-3 file:rounded-xl file:border-0 file:text-[12px] file:font-semibold"
               style={{ color: "var(--c-text-3)" }} />
             {pdfFile && <p className="meta-text mt-1">📎 {pdfFile.name}</p>}
-            {pdfError && <p className="text-[12px] mt-1" style={{ color: "#F19A9A" }}>{pdfError}</p>}
+            {pdfError && <p className="text-[12px] mt-1" style={{ color: "var(--tone-danger)" }}>{pdfError}</p>}
           </div>
 
           <div>
@@ -212,7 +212,7 @@ const AddSessionModal = memo(({ athletes, initialData, onClose, onAdd }) => {
                     <button key={a.id} type="button" onClick={() => toggleAthlete(a.id)}
                       className="flex items-center gap-2 px-3 py-2 rounded-xl text-[12px] font-semibold border-2 transition-all tap-feedback"
                       style={sel
-                        ? { background: "rgba(29,158,117,0.14)", borderColor: "#1D9E75", color: "#7BD8B4" }
+                        ? { background: "rgba(29,158,117,0.14)", borderColor: "#1D9E75", color: "var(--tone-success)" }
                         : { background: "var(--c-surface-2)", borderColor: "var(--c-border)", color: "var(--c-text-3)" }}>
                       <div className="w-7 h-7 rounded-full flex items-center justify-center text-[12px] font-bold"
                         style={{ background: sel ? "#1D9E75" : "var(--c-surface-3)", color: sel ? "#0A150F" : "var(--c-text-3)" }}>

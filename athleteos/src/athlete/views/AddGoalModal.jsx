@@ -24,7 +24,7 @@ export default function AddGoalModal({ disciplines, goalForm, setGoalForm, onClo
           <div>
             <div style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "4px 10px", borderRadius: 99, marginBottom: 6, background: "rgba(234,179,8,0.14)", border: "1px solid rgba(234,179,8,0.25)" }}>
               <Target size={14} color="#F0CB61" aria-hidden="true" />
-              <h2 id="add-goal-title" style={{ fontSize: 15, fontWeight: 700, color: "#F0CB61" }}>Nouvel objectif</h2>
+              <h2 id="add-goal-title" style={{ fontSize: 15, fontWeight: 700, color: "var(--tone-warning)" }}>Nouvel objectif</h2>
             </div>
             <p style={{ fontSize: 13, color: "var(--c-text-2)" }}>Fixe-toi un cap à atteindre</p>
           </div>

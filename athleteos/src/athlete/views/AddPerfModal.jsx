@@ -30,7 +30,7 @@ export default function AddPerfModal({ disciplines, perfForm, setPerfForm, onClo
           <div>
             <div style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "4px 10px", borderRadius: 99, marginBottom: 6, background: "rgba(29,158,117,0.14)", border: "1px solid rgba(29,158,117,0.25)" }}>
               <TrendingUp size={14} color="#7BD8B4" aria-hidden="true" />
-              <h2 id="add-perf-title" style={{ fontSize: 15, fontWeight: 700, color: "#7BD8B4" }}>Saisir une performance</h2>
+              <h2 id="add-perf-title" style={{ fontSize: 15, fontWeight: 700, color: "var(--tone-success)" }}>Saisir une performance</h2>
             </div>
             <p style={{ fontSize: 13, color: "var(--c-text-2)" }}>Chrono, distance, hauteur…</p>
           </div>

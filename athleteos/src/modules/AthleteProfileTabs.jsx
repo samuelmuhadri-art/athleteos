@@ -151,7 +151,7 @@ export const TabPerformances = memo(({ athlete, competitions, onAddRecord }) => 
           {rec && (
             <div className="mt-3 flex items-center gap-4 text-[12px] flex-wrap pt-3" style={{ color: "var(--c-text-3)", borderTop: "1px solid var(--c-border)" }}>
               <span>SB : <strong style={{ color: "var(--c-text-2)" }}>{rec.sb}</strong></span>
-              <span>PR : <strong style={{ color: "#3DBE8B" }}>{rec.pr}</strong></span>
+              <span>PR : <strong style={{ color: "var(--tone-success)" }}>{rec.pr}</strong></span>
               {rec.prDate && <span>Date PR : <strong style={{ color: "var(--c-text-2)" }}>{new Date(rec.prDate).toLocaleDateString("fr-BE",{day:"numeric",month:"short",year:"numeric"})}</strong></span>}
             </div>
           )}
@@ -181,7 +181,7 @@ export const TabPerformances = memo(({ athlete, competitions, onAddRecord }) => 
                     <span className="text-[12px] font-semibold px-2 py-0.5 rounded-full" style={{ background: "var(--c-surface-3)", color: "var(--c-text-2)" }}>{comp.type}</span>
                   </div>
                   <p className="text-[12px]" style={{ color: "var(--c-text-3)" }}>
-                    {result.event} — <strong className="text-[13px]" style={{ color: "#3DBE8B" }}>{result.result}</strong>
+                    {result.event} — <strong className="text-[13px]" style={{ color: "var(--tone-success)" }}>{result.result}</strong>
                   </p>
                   {result.context && <p className="meta-text italic mt-0.5">{result.context}</p>}
                 </div>
@@ -222,7 +222,7 @@ export const TabCharge = memo(({ athlete, metrics, weeklyCharge, competitions, s
 
   const scoreCards = [
     { label: "Cette semaine", value: load7 ?? "—", color: "#378ADD", hint: "7 derniers jours" },
-    { label: "Rythme habituel", value: load28 ?? "—", color: "#A9CBFB", hint: "4 dernières semaines" },
+    { label: "Rythme habituel", value: load28 ?? "—", color: "var(--tone-info)", hint: "4 dernières semaines" },
     { label: "Tendance récente", value: acute == null ? "—" : Math.round(acute), color: "#14B8A6", hint: "EWMA courte" },
     { label: "Tendance stable", value: chronic == null ? "—" : Math.round(chronic), color: "#A855F7", hint: "EWMA longue" },
     { label: "Écart à l'habitude", value: variationPercent == null ? "—" : `${variationPercent >= 0 ? "+" : ""}${variationPercent}%`, color: "#EF9F27", hint: "semaine vs habitude" },
@@ -375,10 +375,10 @@ export const TabBlessures = memo(({ athlete, onAddInjury, onUpdateInjury, onDele
   const [confirmDeleteId, setConfirmDeleteId] = useState(null);
 
   const statusConfig = {
-    "chronique": { bg: "rgba(226,75,74,0.15)", color: "#F19A9A", border: "#E24B4A", label: "Chronique" },
-    "en suivi":  { bg: "rgba(239,159,39,0.15)", color: "#F0CB61", border: "#EF9F27", label: "En suivi"  },
-    "résolu":    { bg: "rgba(29,158,117,0.15)", color: "#7BD8B4", border: "#1D9E75", label: "Résolu"    },
-    "actif":     { bg: "rgba(226,75,74,0.15)", color: "#F19A9A", border: "#E24B4A", label: "Actif"      },
+    "chronique": { bg: "rgba(226,75,74,0.15)", color: "var(--tone-danger)", border: "#E24B4A", label: "Chronique" },
+    "en suivi":  { bg: "rgba(239,159,39,0.15)", color: "var(--tone-warning)", border: "#EF9F27", label: "En suivi"  },
+    "résolu":    { bg: "rgba(29,158,117,0.15)", color: "var(--tone-success)", border: "#1D9E75", label: "Résolu"    },
+    "actif":     { bg: "rgba(226,75,74,0.15)", color: "var(--tone-danger)", border: "#E24B4A", label: "Actif"      },
   };
 
   return (
@@ -460,14 +460,14 @@ export const TabBlessures = memo(({ athlete, onAddInjury, onUpdateInjury, onDele
                   </button>
                   {confirmDeleteId === inj.id ? (
                     <span className="flex items-center gap-2">
-                      <span className="text-[12px] font-semibold" style={{ color: "#F19A9A" }}>Confirmer ?</span>
+                      <span className="text-[12px] font-semibold" style={{ color: "var(--tone-danger)" }}>Confirmer ?</span>
                       <button onClick={async () => { await onDeleteInjury(inj.id); setConfirmDeleteId(null); }}
                         className="text-[12px] font-bold text-white rounded-lg px-2 py-0.5" style={{ background: "#E24B4A" }}>Oui</button>
                       <button onClick={() => setConfirmDeleteId(null)} className="text-[12px]" style={{ color: "var(--c-text-2)" }}>Non</button>
                     </span>
                   ) : (
                     <button onClick={() => setConfirmDeleteId(inj.id)}
-                      className="text-[12px] font-semibold transition-colors" style={{ color: "#F19A9A" }} onMouseEnter={e => e.currentTarget.style.color = "#E24B4A"} onMouseLeave={e => e.currentTarget.style.color = "#F19A9A"}>
+                      className="text-[12px] font-semibold transition-colors" style={{ color: "var(--tone-danger)" }} onMouseEnter={e => e.currentTarget.style.color = "#E24B4A"} onMouseLeave={e => e.currentTarget.style.color = "#F19A9A"}>
                       🗑️ Supprimer
                     </button>
                   )}

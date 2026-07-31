@@ -176,7 +176,7 @@ const CommentsModal = memo(({ post, athlete, allAthletes, onClose, onCommentAdde
             <Send size={16} color="white" strokeWidth={2.5}/>
           </button>
         </div>
-        {error && <p role="alert" style={{ padding:"0 16px 12px", fontSize:12, color:"#F19A9A" }}>{error}</p>}
+        {error && <p role="alert" style={{ padding:"0 16px 12px", fontSize:12, color:"var(--tone-danger)" }}>{error}</p>}
       </div>
     </div>,
     document.body
@@ -294,11 +294,11 @@ const QuickPostModal = memo(({ session, athlete, allAthletes, clubId, coachUserI
 
           {/* Zone saisie + publier */}
           <div style={{ background:"#0D0D0D", padding:"12px 14px", paddingBottom:"calc(12px + env(safe-area-inset-bottom))", display:"flex", flexDirection:"column", gap:10 }}>
-            {err && <p role="alert" style={{ fontSize:13, color:"#F19A9A" }}>{err}</p>}
+            {err && <p role="alert" style={{ fontSize:13, color:"var(--tone-danger)" }}>{err}</p>}
             {session && (
               <div style={{ display:"flex", alignItems:"center", gap:6, padding:"6px 10px", borderRadius:8, background:"rgba(29,158,117,0.12)", border:"1px solid rgba(29,158,117,0.20)" }}>
                 <div style={{ width:6, height:6, borderRadius:"50%", background:"#1D9E75", flexShrink:0 }}/>
-                <p style={{ fontSize:12, color:"#7BD8B4", fontWeight:700 }}>{session.title}</p>
+                <p style={{ fontSize:12, color:"var(--tone-success)", fontWeight:700 }}>{session.title}</p>
               </div>
             )}
             <div style={{ display:"flex", alignItems:"center", gap:10 }}>
@@ -328,13 +328,13 @@ const QuickPostModal = memo(({ session, athlete, allAthletes, clubId, coachUserI
           <div style={{ padding:"12px 16px", borderBottom:"1px solid var(--c-border)", display:"flex", alignItems:"center", justifyContent:"space-between" }}>
             <div>
               <h2 id="quick-post-title" style={{ fontSize:17, fontWeight:700, color:"var(--c-text-1)" }}>Partager avec le club</h2>
-              {session && <p style={{ fontSize:12, color:"#7BD8B4", marginTop:3 }}>{session.title}</p>}
+              {session && <p style={{ fontSize:12, color:"var(--tone-success)", marginTop:3 }}>{session.title}</p>}
             </div>
             <button type="button" aria-label="Fermer" onClick={onClose} style={{ width:44, height:44, display:"flex", alignItems:"center", justifyContent:"center", borderRadius:12, background:"var(--c-surface-2)", border:"1px solid var(--c-border)", cursor:"pointer", color:"var(--c-text-2)" }}><X size={18}/></button>
           </div>
 
           <div style={{ padding:"20px 16px", display:"flex", flexDirection:"column", gap:10, paddingBottom:"calc(20px + env(safe-area-inset-bottom))" }}>
-            {err && <p role="alert" style={{ fontSize:13, color:"#F19A9A", background:"rgba(224,82,82,0.08)", borderRadius:10, padding:"10px 12px" }}>{err}</p>}
+            {err && <p role="alert" style={{ fontSize:13, color:"var(--tone-danger)", background:"rgba(224,82,82,0.08)", borderRadius:10, padding:"10px 12px" }}>{err}</p>}
 
             <div>
               <label htmlFor="club-post-caption" style={{ display:"block", fontSize:12, fontWeight:700, color:"var(--c-text-2)", textTransform:"uppercase", letterSpacing:"0.06em", marginBottom:8 }}>Message</label>
@@ -373,7 +373,7 @@ const QuickPostModal = memo(({ session, athlete, allAthletes, clubId, coachUserI
 
 // ─── Card post Instagram ──────────────────────────────────────────────────────
 const AUTO_CELEBRATION_CONFIG = {
-  record: { icon: Trophy, color: "#E8A020", label: "Nouveau record personnel", gradient: "linear-gradient(135deg, #7B5104 0%, #9A6800 50%, #C8890A 100%)" },
+  record: { icon: Trophy, color: "var(--tone-warning)", label: "Nouveau record personnel", gradient: "linear-gradient(135deg, #7B5104 0%, #9A6800 50%, #C8890A 100%)" },
   goal:   { icon: Target, color: "#7C67C8", label: "Objectif atteint",         gradient: "linear-gradient(135deg, #362A5C 0%, #4A3780 50%, #7C67C8 100%)" },
 };
 
@@ -428,7 +428,7 @@ const PostCard = memo(({ post, athlete, allAthletes, sessions, onComment, onReac
           <div style={{ flex:1, minWidth:0 }}>
             <div style={{ display:"flex", alignItems:"center", gap:6 }}>
               <p style={{ fontSize:14, fontWeight:700, color:"var(--c-text-1)" }}>{postAthlete?.name ?? "Athlète"}</p>
-              {isOwn && <span style={{ fontSize:12, fontWeight:700, padding:"2px 7px", borderRadius:6, background:"rgba(29,158,117,0.12)", color:"#7BD8B4" }}>Moi</span>}
+              {isOwn && <span style={{ fontSize:12, fontWeight:700, padding:"2px 7px", borderRadius:6, background:"rgba(29,158,117,0.12)", color:"var(--tone-success)" }}>Moi</span>}
             </div>
             <div style={{ display:"flex", alignItems:"center", gap:5, marginTop:1 }}>
               <p style={{ fontSize:12, color:"var(--c-text-2)" }}>{timeAgo}</p>
@@ -532,7 +532,7 @@ const PostCard = memo(({ post, athlete, allAthletes, sessions, onComment, onReac
           <p style={{ flex:1, minWidth:180, fontSize:13, fontWeight:700, color:"var(--c-text-1)" }}>Supprimer définitivement cette publication ?</p>
           <button type="button" onClick={() => setConfirmDelete(false)} className="btn-secondary">Annuler</button>
           <button type="button" onClick={onDelete}
-            style={{ minHeight:44, padding:"0 14px", borderRadius:12, border:"1px solid rgba(224,82,82,0.24)", background:"rgba(224,82,82,0.12)", color:"#F19A9A", fontSize:13, fontWeight:700, cursor:"pointer" }}>
+            style={{ minHeight:44, padding:"0 14px", borderRadius:12, border:"1px solid rgba(224,82,82,0.24)", background:"rgba(224,82,82,0.12)", color:"var(--tone-danger)", fontSize:13, fontWeight:700, cursor:"pointer" }}>
             Supprimer
           </button>
         </div>
@@ -671,7 +671,7 @@ export default function AthleteClub({ athlete, allAthletes, clubId, coachUserId,
     }
     if (operationError) {
       setPosts(prev => prev.map(item => item.id === postId ? post : item));
-      setToast({ name:"AthleteOS", action:"n’a pas pu enregistrer ta réaction. Réessaie.", color:"#E05252" });
+      setToast({ name:"AthleteOS", action:"n’a pas pu enregistrer ta réaction. Réessaie.", color:"var(--tone-danger)" });
     }
   };
 
@@ -685,7 +685,7 @@ export default function AthleteClub({ athlete, allAthletes, clubId, coachUserId,
       .eq("athlete_id", athlete.id);
     if (error) {
       setPosts(prev => [...prev, deletedPost].sort((a,b) => new Date(b.created_at) - new Date(a.created_at)));
-      setToast({ name:"AthleteOS", action:"n’a pas pu supprimer la publication. Elle a été restaurée.", color:"#E05252" });
+      setToast({ name:"AthleteOS", action:"n’a pas pu supprimer la publication. Elle a été restaurée.", color:"var(--tone-danger)" });
       return;
     }
     setCommentCounts(prev => {
@@ -812,7 +812,7 @@ export default function AthleteClub({ athlete, allAthletes, clubId, coachUserId,
           </div>
           <div style={{ flex:1, minWidth:0 }}>
             <p style={{ fontSize:14, fontWeight:700, color:"var(--c-text-1)", lineHeight:1.3 }}>Séance terminée</p>
-            <p style={{ fontSize:12, color:"#7BD8B4", marginTop:3 }} className="truncate">{lastValidatedSession.title}</p>
+            <p style={{ fontSize:12, color:"var(--tone-success)", marginTop:3 }} className="truncate">{lastValidatedSession.title}</p>
           </div>
           <button type="button" onClick={() => setQuickPost(lastValidatedSession)} className="btn-primary" style={{ flexShrink:0 }}>
             📸 Partager
@@ -916,7 +916,7 @@ export default function AthleteClub({ athlete, allAthletes, clubId, coachUserId,
         {posts.length>0 && hasMorePosts && (
           <div style={{ textAlign:"center", padding:"8px 0 24px" }}>
             <button type="button" onClick={() => fetchPosts(false)} disabled={loadingMore} className="tap-feedback"
-              style={{ minHeight:44, fontSize:13, fontWeight:700, color:"#7BD8B4", background:"var(--c-surface-2)", border:"1px solid var(--c-border)", borderRadius:99, padding:"0 20px", cursor:"pointer" }}>
+              style={{ minHeight:44, fontSize:13, fontWeight:700, color:"var(--tone-success)", background:"var(--c-surface-2)", border:"1px solid var(--c-border)", borderRadius:99, padding:"0 20px", cursor:"pointer" }}>
               {loadingMore ? <><div className="loader-ring loader-ring-sm" style={{ display:"inline-block", marginRight:6 }}/>Chargement…</> : "Charger plus"}
             </button>
           </div>

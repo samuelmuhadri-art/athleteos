@@ -127,7 +127,7 @@ export function getWellnessStatus(wellnessScore) {
   if (wellnessScore == null) return { label: "Comment te sens-tu aujourd’hui ?", dot: "⚪", color: "#8A9B90" };
   if (wellnessScore >= 75) return { label: "Tu te sens bien aujourd’hui", dot: "🟢", color: "#1D9E75" };
   if (wellnessScore >= 50) return { label: "Tu te sens plutôt bien", dot: "🟡", color: "#EF9F27" };
-  if (wellnessScore < 25) return { label: "Ta journée semble difficile", dot: "🟠", color: "#E24B4A" };
+  if (wellnessScore < 25) return { label: "Ta journée semble difficile", dot: "🟠", color: "var(--tone-danger)" };
   return { label: "Ton ressenti est mitigé", dot: "🔵", color: "#378ADD" };
 }
 

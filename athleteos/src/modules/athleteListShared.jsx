@@ -67,9 +67,9 @@ export function ScoreRing({ value, color, label, size = 72 }) {
 
 export function ValidationBadge({ status }) {
   const map = {
-    done:    { label: "Réalisée",     bg: "rgba(61,190,139,0.15)", color: "#7BD8B4", border: "rgba(61,190,139,0.3)" },
-    partial: { label: "Partielle",    bg: "rgba(234,179,8,0.15)",  color: "#F0CB61", border: "rgba(234,179,8,0.3)" },
-    none:    { label: "Non réalisée", bg: "rgba(239,107,107,0.15)",color: "#F19A9A", border: "rgba(239,107,107,0.3)" },
+    done:    { label: "Réalisée",     bg: "rgba(61,190,139,0.15)", color: "var(--tone-success)", border: "rgba(61,190,139,0.3)" },
+    partial: { label: "Partielle",    bg: "rgba(234,179,8,0.15)",  color: "var(--tone-warning)", border: "rgba(234,179,8,0.3)" },
+    none:    { label: "Non réalisée", bg: "rgba(239,107,107,0.15)",color: "var(--tone-danger)", border: "rgba(239,107,107,0.3)" },
     future:  { label: "À venir",      bg: "var(--c-surface-3)",    color: "var(--c-text-3)", border: "transparent" },
   };
   const b = map[status] ?? map.future;
