@@ -364,9 +364,9 @@ export default function AthleteDashboard({
     getAthleteMetricsForWeek(athlete.id, weeklyCharge, currentWeek, wellnessToday ? [wellnessToday] : [], sessions),
   [athlete.id, weeklyCharge, currentWeek, wellnessToday, sessions]);
 
-  const athleteMonitoring = useMemo(() => ["wellness", "load7", "load28", "variation", "spacing", "dataQuality"]
+  const athleteMonitoring = useMemo(() => ["wellness", "load7", "load28", "variation", "spacing"]
     .map((key) => getMonitoringReading(key, metrics)), [metrics]);
-  const advancedMonitoring = useMemo(() => ["ewmaAcute", "ewmaChronic", "monotony", "acwrExperimental"]
+  const advancedMonitoring = useMemo(() => ["dataQuality", "ewmaAcute", "ewmaChronic", "monotony", "acwrExperimental"]
     .map((key) => getMonitoringReading(key, metrics)), [metrics]);
   const loadStory = useMemo(
     () => getAthleteLoadStory(metrics, sessions, athlete.id),

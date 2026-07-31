@@ -18,7 +18,6 @@ import ErrorState    from "../components/ui/ErrorState";
 import { SegmentedTabs } from "../components/ui/premium";
 import { initialsFromName } from "../utils/helpers.js";
 import {
-  alertSessionAbsence,
   notifyAthleteNewSession,
   notifyAthleteSessionUpdated,
   notifyAthleteFeedbackReminder,
@@ -183,33 +182,6 @@ function Planning() {
     }
     await fetchAll();
   }, [fetchAll, sessionList]);
-
-  const setRpe = useCallback(async (sessionId, athleteId, rpe, actualDurationMinutes) => {
-    const duration = Number(actualDurationMinutes);
-    if (!Number.isFinite(duration) || duration <= 0 || duration > 1440) return;
-    setSessionList(prev => prev.map(s => s.id !== sessionId ? s : {
-      ...s, validations: s.validations.map(v => v.athleteId === athleteId ? {
-        ...v, rpe, actualDurationMinutes: duration, durationSource: "reported",
-      } : v),
-    }));
-    await supabase.from("session_athletes").update({
-      rpe, actual_duration_minutes: duration, duration_source: "reported",
-    }).eq("session_id", sessionId).eq("athlete_id", athleteId);
-  }, []);
-
-  const setStatus = useCallback(async (sessionId, athleteId, status) => {
-    setSessionList(prev => prev.map(s => s.id !== sessionId ? s : {
-      ...s, validations: s.validations.map(v => v.athleteId === athleteId ? { ...v, status } : v),
-    }));
-    const { error: updateErr } = await supabase.from("session_athletes").update({ status })
-      .eq("session_id", sessionId).eq("athlete_id", athleteId);
-    if (updateErr) { fetchAll(); return; }
-    if (status === "none") {
-      const session = sessionList.find(s => s.id === sessionId);
-      const athlete = athletes.find(a => a.id === athleteId);
-      if (session && athlete) await alertSessionAbsence(clubId, athlete, session);
-    }
-  }, [fetchAll, sessionList, athletes, clubId]);
 
   const setCoachNote = useCallback(async (sessionId, athleteId, coachNote) => {
     const { error: updateError } = await supabase.from("session_athletes").update({ coach_note: coachNote || null })
@@ -846,8 +818,6 @@ function Planning() {
           session={liveActiveSession}
           athletes={athletes}
           onClose={() => setActiveSession(null)}
-          onSetRpe={setRpe}
-          onSetStatus={setStatus}
           onEditRequest={s => { setSessionModalTarget(s); setActiveSession(null); }}
           onDeleteSession={deleteSession}
           onSetCoachNote={setCoachNote}

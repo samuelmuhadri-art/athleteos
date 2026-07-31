@@ -4,28 +4,19 @@
 // ============================================================
 
 import { memo, useState } from "react";
-import { X, Users, FileText, AlertCircle, Star, Zap } from "lucide-react";
+import { X, Users, FileText, AlertCircle, Star } from "lucide-react";
 import { CATEGORIES, colors, sessionStatus, ValidationBadge, StatusIcon } from "./planningShared";
 import { getSessionTrainingFocus } from "../domain/trainingFocus";
 import { openSessionPdf } from "../utils/storage";
 import CoachSessionDayPanel from "../components/session/CoachSessionDayPanel";
 
 const SessionModal = memo(({
-  session, athletes, onClose, onSetRpe, onSetStatus, onEditRequest, onDeleteSession,
+  session, athletes, onClose, onEditRequest, onDeleteSession,
   onSetCoachNote, onSetLifecycle, onRemindFeedback,
 }) => {
   const [deleting,    setDeleting]    = useState(false);
   const [deleteError, setDeleteError] = useState(null);
   const [confirmDel,  setConfirmDel]  = useState(false);
-  const [durationDrafts, setDurationDrafts] = useState(() => Object.fromEntries(
-    (session.validations ?? []).map(validation => [
-      validation.athleteId,
-      validation.durationSource === "reported" && validation.actualDurationMinutes != null
-        ? String(validation.actualDurationMinutes)
-        : "",
-    ]),
-  ));
-  const [loadErrors, setLoadErrors] = useState({});
   const c      = colors(session.category);
   const trainingFocus = getSessionTrainingFocus(session);
   const status = sessionStatus(session);
@@ -38,23 +29,6 @@ const SessionModal = memo(({
     setDeleting(true);
     try { await onDeleteSession(session.id); onClose(); }
     catch { setDeleteError("Impossible de supprimer."); setDeleting(false); }
-  };
-
-  const pendingFeedback = session.athleteIds.filter(id => {
-    const v = session.validations?.find(val => val.athleteId === id);
-    return v?.status == null || ((v?.status === "done" || v?.status === "partial") && (
-      v?.rpe == null || v?.durationSource !== "reported" || v?.actualDurationMinutes == null
-    ));
-  });
-
-  const submitRpe = (athleteId, rpe) => {
-    const duration = Number(durationDrafts[athleteId]);
-    if (!Number.isFinite(duration) || duration <= 0 || duration > 1440) {
-      setLoadErrors(previous => ({ ...previous, [athleteId]: "Durée réelle requise (1 à 1 440 min)." }));
-      return;
-    }
-    setLoadErrors(previous => ({ ...previous, [athleteId]: "" }));
-    onSetRpe(session.id, athleteId, rpe, duration);
   };
 
   return (
@@ -125,102 +99,6 @@ const SessionModal = memo(({
             onSetLifecycle={onSetLifecycle}
             onRemindFeedback={onRemindFeedback}
           />
-
-          {/* Feedback rapide */}
-          {pendingFeedback.length > 0 && (
-            <div className="rounded-2xl border overflow-hidden"
-              style={{ borderColor: "rgba(234,179,8,0.35)", background: "rgba(234,179,8,0.06)" }}>
-              <div className="px-4 py-3 flex items-center gap-2"
-                style={{ borderBottom: "1px solid rgba(234,179,8,0.20)" }}>
-                <div className="w-7 h-7 rounded-xl flex items-center justify-center flex-shrink-0"
-                  style={{ background: "rgba(234,179,8,0.18)" }}>
-                  <Zap size={13} color="#EAB308" />
-                </div>
-                <p className="text-[13px] font-bold" style={{ color: "var(--tone-warning)" }}>Confirmer les présences</p>
-              </div>
-              <div className="p-4 space-y-5">
-                {pendingFeedback.map(id => {
-                  const a = athletes.find(x => x.id === id);
-                  const v = session.validations?.find(val => val.athleteId === id);
-                  if (!a) return null;
-                  return (
-                    <div key={id}>
-                      <div className="flex items-center gap-2 mb-2.5">
-                        <div className="w-7 h-7 rounded-full flex items-center justify-center text-[12px] font-bold flex-shrink-0"
-                          style={{ background: c.border, color: "#0A150F" }}>
-                          {a.avatar?.slice(0,1) ?? "?"}
-                        </div>
-                        <p className="text-[12.5px] font-bold" style={{ color: "var(--tone-warning)" }}>{a.name.split(" ")[0]}</p>
-                      </div>
-                      <div className="flex gap-2 mb-2">
-                        {[
-                          { id: "done",    label: "✅ Réalisée",  bg: "rgba(61,190,139,0.16)", border: "#3DBE8B", color: "var(--tone-success)" },
-                          { id: "partial", label: "🟡 Partielle", bg: "rgba(234,179,8,0.16)",  border: "#EAB308", color: "var(--tone-warning)" },
-                          { id: "none",    label: "❌ Absent",    bg: "rgba(239,107,107,0.16)",border: "#EF6B6B", color: "var(--tone-danger)" },
-                        ].map(opt => {
-                          const sel = v?.status === opt.id;
-                          return (
-                            <button key={opt.id}
-                              onClick={() => onSetStatus(session.id, id, opt.id)}
-                              className="flex-1 py-2.5 rounded-xl text-[12px] font-bold border-2 transition-all tap-feedback"
-                              style={sel
-                                ? { background: opt.bg, borderColor: opt.border, color: opt.color }
-                                : { background: "var(--c-surface-2)", borderColor: "var(--c-border)", color: "var(--c-text-3)" }}
-                            >
-                              {opt.label}
-                            </button>
-                          );
-                        })}
-                      </div>
-                      {v?.status && v.status !== "none" && (
-                        <div>
-                          <label className="meta-text font-bold uppercase tracking-wide mb-1.5 block" htmlFor={`duration-${id}`}>
-                            Durée réellement effectuée
-                          </label>
-                          <div className="flex items-center gap-2 mb-3">
-                            <input
-                              id={`duration-${id}`}
-                              type="number"
-                              min="1"
-                              max="1440"
-                              inputMode="numeric"
-                              value={durationDrafts[id] ?? ""}
-                              onChange={event => {
-                                setDurationDrafts(previous => ({ ...previous, [id]: event.target.value }));
-                                setLoadErrors(previous => ({ ...previous, [id]: "" }));
-                              }}
-                              placeholder={session.durationMinutes ? String(session.durationMinutes) : "Minutes"}
-                              className="input-premium"
-                              style={{ width: 120 }}
-                            />
-                            <span className="text-[12px]" style={{ color: "var(--c-text-2)" }}>
-                              min{session.durationMinutes ? ` · prévu ${session.durationMinutes}` : ""}
-                            </span>
-                          </div>
-                          <p className="meta-text font-bold uppercase tracking-wide mb-1.5">RPE</p>
-                          <div className="flex gap-1 flex-wrap">
-                            {Array.from({ length: 11 }, (_, i) => {
-                              const sel = v?.rpe === i;
-                              const rpeColor = i <= 3 ? "#3DBE8B" : i <= 6 ? "#EAB308" : "#EF6B6B";
-                              return (
-                                <button key={i} onClick={() => submitRpe(id, i)}
-                                  className="w-9 h-9 rounded-xl text-[12px] font-bold border-2 transition-all tap-feedback"
-                                  style={sel
-                                    ? { background: rpeColor, borderColor: rpeColor, color: "#0A150F" }
-                                    : { background: "var(--c-surface-2)", borderColor: "var(--c-border)", color: "var(--c-text-3)" }}
-                                >{i}</button>
-                              );
-                            })}
-                          </div>
-                          {loadErrors[id] && <p role="alert" className="text-[12px] mt-2" style={{ color: "var(--tone-danger)" }}>{loadErrors[id]}</p>}
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
 
           {/* Description */}
           {session.description && (

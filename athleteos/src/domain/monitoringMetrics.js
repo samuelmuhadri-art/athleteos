@@ -148,7 +148,6 @@ export function getMonitoringReading(key, metrics = {}) {
     } else missingReason = "Le questionnaire AthleteOS du jour n'a pas encore été complété.";
   } else if (key === "load7" || key === "load28") {
     value = metrics[key];
-    unit = "u";
     if (value != null) {
       displayValue = formatNumber(value);
       interpretation = key === "load7"
@@ -157,7 +156,6 @@ export function getMonitoringReading(key, metrics = {}) {
     } else missingReason = `La fenêtre de ${key === "load7" ? 7 : 28} jours contient au moins un jour inconnu.`;
   } else if (key === "ewmaAcute" || key === "ewmaChronic") {
     value = key === "ewmaAcute" ? metrics.acute : metrics.chronic;
-    unit = "u";
     if (value != null) {
       displayValue = formatNumber(value);
       interpretation = key === "ewmaAcute"

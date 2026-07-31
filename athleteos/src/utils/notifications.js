@@ -40,18 +40,6 @@ export async function checkAndAlertACWR(clubId, athletes, weeklyCharge, currentW
   void currentWeek;
 }
 
-export async function alertSessionAbsence(clubId, athlete, session) {
-  const dateStr = session.sessionDate
-    ? new Date(session.sessionDate).toLocaleDateString("fr-BE", { weekday:"long", day:"numeric", month:"long" })
-    : session.day ?? "";
-  await supabase.from("alerts").insert({
-    club_id: clubId, athlete_id: athlete.id, type: "absence",
-    title: `❌ Absence — ${athlete.name}`,
-    description: `${athlete.name} n'a pas réalisé "${session.title}" du ${dateStr}.`,
-    severity: "modérée", is_read: false,
-  });
-}
-
 export async function alertNewInjury(clubId, athlete, injury) {
   await supabase.from("alerts").insert({
     club_id: clubId, athlete_id: athlete.id, type: "blessure",
