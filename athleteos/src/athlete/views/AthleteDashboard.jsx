@@ -9,10 +9,10 @@
 //   - fond #F5F5F2, cards #FDFDFB — contraste visible mais doux
 // ============================================================
 
-import { useState, useMemo, useEffect, memo } from "react";
+import { useState, useMemo, memo } from "react";
 import {
-  CalendarDays, TrendingUp, TrendingDown, Zap, CheckCircle,
-  Activity, FileText, HeartPulse, Trophy, ChevronRight, Minus,
+  CalendarDays, TrendingUp, Zap, CheckCircle,
+  Activity, FileText, HeartPulse, Trophy, ChevronRight,
   Star, Clock,
 } from "lucide-react";
 import {
@@ -21,11 +21,13 @@ import {
 import { getAthleteAxisProfile } from "../../utils/loadAxes";
 import {
   getISOWeek, colorsFor, parsePerf, isSameDay, parseLocalDate, toLocalDateStr,
-  initialsFromName, getDiscHib, DISC_TYPE_COLORS, WELLNESS_QUESTIONS, EVIDENCE_LEVELS,
+  initialsFromName, getDiscHib, DISC_TYPE_COLORS, WELLNESS_QUESTIONS,
 } from "../shared";
 import AxisRadarCard from "../../components/ui/AxisRadarCard";
 import FormeDetailPanel from "../components/FormeDetailPanel";
+import TrainingGauge from "../components/TrainingGauge";
 import { getAthleteLoadStory, getMonitoringReading } from "../../domain/monitoringMetrics.js";
+import { TRAINING_GAUGE_KEYS, getTrainingGaugeReading } from "../../domain/trainingGauges.js";
 import { SessionDetailModal } from "./AthletePlanning";
 import { openSessionPdf } from "../../utils/storage";
 import { getTodayFocus } from "../dashboardFocus";
@@ -128,59 +130,6 @@ const BadgeItem = memo(({ badge }) => (
     <p style={{ fontSize: "var(--text-meta)", color: "var(--c-text-3)", lineHeight: "var(--leading-meta)" }}>{badge.desc}</p>
   </div>
 ));
-// Anneau du questionnaire interne : l'absence de réponse reste « — » et
-// n'est jamais transformée en zéro, qui signifierait autre chose.
-const WellnessRing = memo(({ value, color, size = 128 }) => {
-  const hasValue = value != null && Number.isFinite(Number(value));
-  const [animated, setAnimated] = useState(0);
-  const [displayValue, setDisplayValue] = useState(0);
-  useEffect(() => {
-    const t = setTimeout(() => setAnimated(value), 150);
-    return () => clearTimeout(t);
-  }, [value]);
-
-  // Le chiffre compte de 0 à sa valeur, synchronisé avec le remplissage de
-  // l'anneau ci-dessus (même délai, même durée) — effet "réveil Whoop".
-  useEffect(() => {
-    const delay = 150, duration = 1100;
-    let raf;
-    const startedAt = performance.now();
-    const tick = (now) => {
-      const elapsed = now - startedAt - delay;
-      if (elapsed < 0) { raf = requestAnimationFrame(tick); return; }
-      const t = Math.min(1, elapsed / duration);
-      const eased = 1 - Math.pow(1 - t, 3); // ease-out cubic, proche du spring de l'anneau
-      setDisplayValue(Math.round(eased * value));
-      if (t < 1) raf = requestAnimationFrame(tick);
-    };
-    raf = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(raf);
-  }, [value]);
-
-  const stroke = 10;
-  const r = (size - stroke) / 2;
-  const circ = 2 * Math.PI * r;
-  const dash = (Math.max(0, Math.min(100, animated)) / 100) * circ;
-  return (
-    <div style={{ position: "relative", width: size, height: size, flexShrink: 0 }}>
-      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} style={{ filter: `drop-shadow(0 0 14px ${color}40)` }}>
-        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="rgba(255,255,255,0.07)" strokeWidth={stroke} />
-        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke={color} strokeWidth={stroke}
-          strokeDasharray={`${dash} ${circ}`} strokeLinecap="round"
-          transform={`rotate(-90 ${size / 2} ${size / 2})`}
-          style={{ transition: "stroke-dasharray 1.1s cubic-bezier(0.16,1,0.3,1)" }} />
-      </svg>
-      <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
-        <span style={{ fontSize: Math.round(size * 0.27), fontWeight: 700, color, lineHeight: 1, letterSpacing: "-0.03em", fontVariantNumeric: "tabular-nums" }}>
-          {hasValue ? displayValue : "—"}
-        </span>
-        <span style={{ fontSize: "var(--text-meta)", fontWeight: 600, letterSpacing: "0.07em", textTransform: "uppercase", color: "var(--c-text-3)", marginTop: "var(--space-1)" }}>
-          Bien-être
-        </span>
-      </div>
-    </div>
-  );
-});
 
 const DailyFocusCard = memo(({
   focus, todaySessions, nextCompetition,
@@ -364,12 +313,11 @@ export default function AthleteDashboard({
     getAthleteMetricsForWeek(athlete.id, weeklyCharge, currentWeek, wellnessToday ? [wellnessToday] : [], sessions),
   [athlete.id, weeklyCharge, currentWeek, wellnessToday, sessions]);
 
-  // Le ressenti (anneau) et la charge (carte "évolution") ont déjà leur
-  // propre lecture simple plus haut sur ce tableau de bord — les répéter ici
-  // en chiffres bruts n'apportait rien. Seul l'espacement reste sans autre
-  // affichage ; le reste va dans le détail scientifique replié.
-  const spacingReading = useMemo(() => getMonitoringReading("spacing", metrics), [metrics]);
-  const advancedMonitoring = useMemo(() => ["wellness", "load7", "load28", "variation", "dataQuality", "ewmaAcute", "ewmaChronic", "monotony", "acwrExperimental"]
+  // Les 5 jauges circulaires (ressenti, charge, condition physique,
+  // préparation, sollicitation récente) sont l'affichage principal ; les
+  // chiffres scientifiques bruts qui les nourrissent restent disponibles en
+  // second niveau, repliés, pour qui veut aller plus loin.
+  const advancedMonitoring = useMemo(() => ["wellness", "load7", "load28", "variation", "spacing", "dataQuality", "ewmaAcute", "ewmaChronic", "monotony", "acwrExperimental"]
     .map((key) => getMonitoringReading(key, metrics)), [metrics]);
   const loadStory = useMemo(
     () => getAthleteLoadStory(metrics, sessions, athlete.id),
@@ -381,6 +329,10 @@ export default function AthleteDashboard({
     [wellnessHistory, wellnessToday, metrics],
   );
   const status = { label: dailyState.label, color: dailyState.color };
+
+  const trainingGauges = useMemo(() => [...TRAINING_GAUGE_KEYS].map((key) =>
+    getTrainingGaugeReading(key, { metrics, dailyState, sessions, athleteId: athlete.id, currentWeek }),
+  ), [metrics, dailyState, sessions, athlete.id, currentWeek]);
 
   const nextComp = competitions
     .filter(c => c.athleteIds.includes(athlete.id) && new Date(c.date) >= today)
@@ -405,22 +357,6 @@ export default function AthleteDashboard({
   const topRecords     = Object.entries(athlete.records ?? {}).slice(0, 4);
   const activeInjuries = (athlete.injuries ?? []).filter(i => i.status !== "résolu");
 
-  const chargeHistory = useMemo(() => {
-    const myCharge = weeklyCharge.filter(w => w.athleteId === athlete.id);
-    if (!myCharge.length) return [];
-    return [...myCharge].sort((a, b) => a.week - b.week).slice(-8).map(w => ({
-      label: `S${w.week}`, charge: w.rawLoad,
-      color: "#4B7BDB",
-    }));
-  }, [weeklyCharge, athlete.id]);
-
-  const chargeTrend = useMemo(() => {
-    const myCharge = weeklyCharge.filter(w => w.athleteId === athlete.id);
-    const curr = myCharge.find(w => w.week === currentWeek)?.rawLoad ?? 0;
-    const prev = myCharge.find(w => w.week === currentWeek - 1)?.rawLoad ?? 0;
-    return prev > 0 ? Math.round(((curr - prev) / prev) * 100) : null;
-  }, [weeklyCharge, athlete.id, currentWeek]);
-
   const streak = useMemo(() => {
     let s = 0;
     for (let w = currentWeek; w >= currentWeek - 20; w--) {
@@ -431,7 +367,6 @@ export default function AthleteDashboard({
     return s;
   }, [sessions, athlete.id, currentWeek]);
 
-  const hasCharge = weeklyCharge.some(w => w.athleteId === athlete.id);
 
   const axisProfile = useMemo(
     () => getAthleteAxisProfile(athlete.id, sessions, currentWeek),
@@ -489,7 +424,7 @@ export default function AthleteDashboard({
           onOpenPlanning={() => onNavigate("planning")}
           onConfirmRestDay={() => onConfirmRestDay?.(toLocalDateStr(today))}
           onOpenDailyState={() => setShowDailyState(true)}
-          onOpenLoadDetail={() => setActiveMetric("variation")}
+          onOpenLoadDetail={() => setActiveMetric("weeklyLoad")}
         />
 
         <div className="xl:col-span-2" style={{ paddingTop: "var(--space-2)" }}>
@@ -539,52 +474,15 @@ export default function AthleteDashboard({
             </div>
           </div>
 
-          {/* Le questionnaire reste visible, mais n'est jamais présenté comme
-              une readiness physiologique ou une autorisation de s'entraîner. */}
-          <div style={{ display: "flex", alignItems: "center", gap: 18, flexWrap: "wrap" }}>
-            <button type="button" onClick={() => setShowDailyState(true)} className="tap-feedback rounded-full" aria-label="Comprendre mon état du jour">
-              <WellnessRing value={dailyState.score} color={statusColor} />
-            </button>
-
-            <div style={{ flex: 1, minWidth: 190 }}>
-              <p style={{ fontSize: "var(--text-body)", color: "var(--c-text-2)", lineHeight: "var(--leading-body)", marginBottom: "var(--space-4)" }}>
-                {dailyState.plainSummary ?? dailyState.summary}
-              </p>
-              <button type="button" onClick={() => setShowDailyState(true)} className="btn-ghost mb-3" style={{ minHeight: 34, paddingInline: 0, color: statusColor }}>
-                Voir ce qui t'aide et ce qui pèse <ChevronRight size={14} />
-              </button>
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 8 }}>
-                {[
-                  { key: "load7", label: "Cette semaine", value: metrics.load7 ?? "—", unit: "", pct: metrics.load7 && metrics.load28 ? Math.min(100,(metrics.load7/metrics.load28)*100) : 0, danger: false },
-                  { key: "load28", label: "Dernier mois", value: metrics.load28 ?? "—", unit: "", pct: metrics.load28 ? 100 : 0, danger: false },
-                  { key: "streak",  label: "Régularité",  value: streak,                  unit: " sem", pct: Math.min(100,streak*10), danger: false },
-                ].map(s => {
-                  const col = s.key === "streak" ? "#1D9E75" : "#5B8DEF";
-                  return (
-                    <button type="button" key={s.key}
-                      onClick={() => s.key !== "streak" && setActiveMetric(s.key)}
-                      aria-label={s.key === "streak" ? `Série de ${s.value} semaines` : `Voir l'explication de ${s.label}`}
-                      className={s.danger ? "pulse-danger-card" : "tap-feedback"} style={{
-                      background: "rgba(255,255,255,0.03)", border: "0.5px solid rgba(255,255,255,0.055)",
-                      borderRadius: 10, padding: "10px 8px", textAlign: "center", cursor: s.key === "streak" ? "default" : "pointer",
-                    }}>
-                      <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "center", gap: 2, marginBottom: 4 }}>
-                        <span style={{ fontSize: 17, fontWeight: 600, color: col, fontVariantNumeric: "tabular-nums", letterSpacing: "-0.03em", lineHeight: 1 }}>
-                          {s.value}
-                        </span>
-                        {s.unit && <span style={{ fontSize: "var(--text-meta)", color: "var(--c-text-3)", fontWeight: 400, marginBottom: 1 }}>{s.unit}</span>}
-                      </div>
-                      <p style={{ fontSize: "var(--text-meta)", fontWeight: 600, letterSpacing: "0.06em", textTransform: "uppercase", color: "var(--c-text-3)" }}>
-                        {s.label}
-                      </p>
-                      <div style={{ height: 1.5, background: "rgba(255,255,255,0.05)", borderRadius: 99, marginTop: 6, overflow: "hidden" }}>
-                        <div style={{ height: "100%", width: `${Math.max(3,s.pct)}%`, background: col, borderRadius: 99, opacity: 0.65, transition: "width 0.8s cubic-bezier(0.16,1,0.3,1)" }} />
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
+          {/* 5 jauges : un mot de statut simple, jamais un chiffre brut en
+              face avant. Le détail scientifique complet reste à un tap. */}
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
+            {trainingGauges.map((gauge) => (
+              <TrainingGauge key={gauge.key}
+                value={gauge.fillPercent} color={gauge.color} statusWord={gauge.statusWord}
+                label={gauge.shortLabel}
+                onClick={() => (gauge.key === "form" ? setShowDailyState(true) : setActiveMetric(gauge.key))} />
+            ))}
           </div>
           </div>
         </section>
@@ -652,154 +550,12 @@ export default function AthleteDashboard({
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 md:gap-5">
         <div className="lg:col-span-2 space-y-4 md:space-y-5">
 
-          {/* ── Charge d'entraînement ───────────────────────────────────────── */}
-          {hasCharge && chargeHistory.length > 0 && (
-            <div className="card" style={{ overflow: "hidden" }}>
-              {/* Header */}
-              <div style={{ padding: "14px 16px 12px", display: "flex", alignItems: "flex-start", justifyContent: "space-between", borderBottom: "1px solid var(--c-border)" }}>
-                <div>
-                  <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
-                    <p className="card-title">Charge d'entraînement</p>
-                    <span className={`chip ${EVIDENCE_LEVELS.statistical.chip}`}>session-RPE</span>
-                  </div>
-                  <p className="card-subtitle">Ce que tes séances ont représenté sur les 8 dernières semaines</p>
-                </div>
-                {chargeTrend !== null && (
-                  <div style={{ display: "flex", alignItems: "center", gap: 4, padding: "3px 9px", borderRadius: 8, flexShrink: 0,
-                    background: chargeTrend > 15 ? "rgba(224,82,82,0.15)" : chargeTrend > 0 ? "rgba(232,160,32,0.15)" : "rgba(29,158,117,0.15)",
-                    color: chargeTrend > 15 ? "#E05252" : chargeTrend > 0 ? "#E8A020" : "#4DC9A0",
-                    fontSize: "var(--text-meta)", fontWeight: 600,
-                  }}>
-                    {chargeTrend > 0 ? <TrendingUp size={10} /> : chargeTrend < 0 ? <TrendingDown size={10} /> : <Minus size={10} />}
-                    {chargeTrend > 10 ? "Plus que la semaine passée" : chargeTrend < -10 ? "Moins que la semaine passée" : "Proche de la semaine passée"}
-                  </div>
-                )}
-              </div>
-
-              <button
-                type="button"
-                onClick={() => setActiveMetric("variation")}
-                className="tap-feedback"
-                aria-label="Comprendre l’évolution de ta charge"
-                style={{
-                  display: "block", width: "calc(100% - 32px)", margin: "14px 16px 0", padding: 14,
-                  textAlign: "left", borderRadius: 14, border: "1px solid rgba(91,141,239,0.2)",
-                  background: "linear-gradient(135deg, rgba(91,141,239,0.12), rgba(20,184,166,0.055))",
-                }}
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <p style={{ fontSize: 15, fontWeight: 600, color: "var(--c-text-1)", lineHeight: 1.35 }}>{loadStory.headline}</p>
-                    <p className="secondary-text mt-1" style={{ lineHeight: 1.55 }}>{loadStory.summary}</p>
-                  </div>
-                  <ChevronRight size={17} style={{ color: "var(--tone-info)", flexShrink: 0, marginTop: 2 }} />
-                </div>
-                <p className="mt-3 rounded-xl px-3 py-2 text-[12px] leading-5" style={{ background: "rgba(2,7,12,0.2)", color: "var(--c-text-2)" }}>
-                  {loadStory.cause}
-                </p>
-              </button>
-
-              {/* Graphique en colonnes — flex-1 = colonnes qui occupent tout l'espace */}
-              <div style={{ padding: "16px 16px 0" }}>
-                <div style={{ display: "flex", alignItems: "flex-end", gap: 4, height: 100 }}>
-                  {chargeHistory.map((w, i) => {
-                    const max       = Math.max(...chargeHistory.map(x => x.charge), 1);
-                    const pct       = Math.max((w.charge / max) * 100, 4);
-                    const isCurrent = i === chargeHistory.length - 1;
-                    return (
-                      <div key={i} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 0, height: "100%" }}>
-                        {/* Zone haute : valeur + espace */}
-                        <div style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "flex-end", width: "100%", paddingBottom: 4 }}>
-                          {/* Valeur uniquement sur barre courante */}
-                          {isCurrent && (
-                            <span style={{ fontSize: "var(--text-meta)", fontWeight: 600, color: w.color, textAlign: "center", display: "block", marginBottom: 4, fontVariantNumeric: "tabular-nums" }}>
-                              {Math.round(w.charge)}
-                            </span>
-                          )}
-                          {/* Colonne */}
-                          <div style={{
-                            width: "100%",
-                            height: `${pct}%`,
-                            minHeight: 4,
-                            borderRadius: "4px 4px 2px 2px",
-                            // Passé : fond très léger, couleur en bg + bordure top colorée
-                            background: isCurrent
-                              ? w.color
-                              : "rgba(255,255,255,0.07)",
-                            // Barre de couleur en haut pour les passées — indique la zone
-                            borderTop: isCurrent ? "none" : `2px solid ${w.color}55`,
-                            transition: "height 0.6s cubic-bezier(0.16,1,0.3,1)",
-                            boxShadow: isCurrent ? `0 2px 8px ${w.color}30` : "none",
-                          }} />
-                        </div>
-                        {/* Label semaine */}
-                        <span style={{
-                          fontSize: "var(--text-meta)", lineHeight: "var(--leading-meta)", paddingTop: 5, paddingBottom: 2,
-                          color: isCurrent ? "var(--c-text-2)" : "var(--c-text-3)",
-                          fontWeight: isCurrent ? 500 : 400,
-                          textAlign: "center", display: "block",
-                        }}>
-                          {w.label}
-                        </span>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-
-              {/* Métriques inline sous le graphe — pas de cards séparées */}
-              <div style={{ padding: "12px 16px", display: "flex", alignItems: "center", gap: 0, borderTop: "1px solid var(--c-border)", marginTop: 4 }}>
-                {[
-                  { label: "Ta semaine", value: metrics.load7 ?? "—", color: "#4B7BDB", sub: "efforts des 7 derniers jours" },
-                  { label: "Ton habitude", value: metrics.load28 ?? "—", color: "#14B8A6", sub: "repère des 4 dernières semaines" },
-                  { label: "Ce qui change", value: metrics.variationPercent == null ? "—" : `${metrics.variationPercent >= 0 ? "+" : ""}${metrics.variationPercent}%`, color: "var(--c-text-2)", sub: "écart avec ton rythme habituel" },
-                ].map((s, idx) => (
-                  <div key={s.label} style={{
-                    flex: 1, textAlign: "center", paddingTop: 2, paddingBottom: 2,
-                    borderRight: idx < 2 ? "1px solid var(--c-border)" : "none",
-                  }}>
-                    <p style={{ fontSize: 17, fontWeight: 600, color: s.color, fontVariantNumeric: "tabular-nums", letterSpacing: "-0.025em", lineHeight: 1 }}>
-                      {s.value}
-                    </p>
-                    <p style={{ fontSize: "var(--text-meta)", fontWeight: 600, letterSpacing: "0.06em", textTransform: "uppercase", color: "var(--c-text-3)", marginTop: 4 }}>
-                      {s.label}
-                    </p>
-                    <p style={{ fontSize: "var(--text-meta)", color: "var(--c-text-3)", marginTop: 2 }}>{s.sub}</p>
-                  </div>
-                ))}
-              </div>
-
-              {/* Information méthodologique */}
-              <div style={{ padding: "0 16px 14px" }}>
-                <p style={{ fontSize: "var(--text-meta)", color: "var(--c-text-2)", lineHeight: 1.5 }}>Appuie sur le résumé pour voir les séances prises en compte, le calcul exact et ses limites.</p>
-              </div>
-            </div>
-          )}
-
           {/* ── Profil de charge (6 axes) ───────────────────────────────────── */}
           <AxisRadarCard
             profile={axisProfile} title="Ce que tes séances ont surtout sollicité"
             subtitle="Une lecture simple de tes objectifs de séance ; ouvre une ligne pour voir la méthode."
             sessions={sessions} athleteId={athlete.id} currentWeek={currentWeek}
           />
-
-          {/* ── Espacement : seule mesure qui n'a pas déjà sa carte plus haut
-              (le ressenti a son anneau, la charge a sa carte "évolution") ─── */}
-          <button type="button" onClick={() => setActiveMetric("spacing")} className="card p-4 tap-feedback w-full text-left">
-            <div className="flex items-start gap-3">
-              <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
-                style={{ background: `${spacingReading.color}18`, color: spacingReading.color }}>
-                <Clock size={16} />
-              </div>
-              <div className="min-w-0 flex-1">
-                <div className="flex items-center justify-between gap-2">
-                  <p className="card-title">{spacingReading.shortLabel}</p>
-                  <ChevronRight size={14} style={{ color: "var(--c-text-3)", flexShrink: 0 }} />
-                </div>
-                <p className="secondary-text mt-1" style={{ lineHeight: 1.5 }}>{spacingReading.interpretation}</p>
-              </div>
-            </div>
-          </button>
 
           <details className="card p-4">
             <summary className="tap-feedback" style={{ cursor: "pointer", color: "var(--c-text-2)", fontSize: 13, fontWeight: 600 }}>
@@ -1123,6 +879,7 @@ export default function AthleteDashboard({
         <FormeDetailPanel
           metricKey={activeMetric}
           metrics={metrics}
+          dailyState={dailyState}
           sessions={sessions}
           weeklyCharge={weeklyCharge}
           athlete={athlete}

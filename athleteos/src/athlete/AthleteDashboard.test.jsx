@@ -83,4 +83,15 @@ describe("AthleteDashboard — plan du jour", () => {
     expect(screen.getByText("Complète ton historique de charge")).toBeTruthy();
     expect(screen.queryByText("Tendances & progression")).toBeNull();
   });
+
+  it("affiche les 5 jauges de charge d'entraînement et ouvre le détail au tap", () => {
+    renderDashboard();
+
+    ["Charge semaine", "Forme", "Condition physique", "Préparation", "Fatigue"].forEach((label) => {
+      expect(screen.getByText(label)).toBeTruthy();
+    });
+    expect(screen.queryByTestId("metric-panel")).toBeNull();
+    fireEvent.click(screen.getByText("Fatigue"));
+    expect(screen.getByTestId("metric-panel")).toBeTruthy();
+  });
 });

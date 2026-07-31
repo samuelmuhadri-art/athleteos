@@ -2,13 +2,16 @@ import { memo, useEffect, useMemo } from "react";
 import { createPortal } from "react-dom";
 import { Activity, AlertCircle, BookOpen, Calculator, CheckCircle2, Database, X } from "lucide-react";
 import { getMonitoringReading } from "../../domain/monitoringMetrics.js";
+import { TRAINING_GAUGE_KEYS, getTrainingGaugeReading } from "../../domain/trainingGauges.js";
 import { getISOWeek } from "../shared";
 
-const LOAD_KEYS = new Set(["load7", "load28", "ewmaAcute", "ewmaChronic", "variation", "monotony", "acwrExperimental"]);
+const LOAD_KEYS = new Set(["load7", "load28", "ewmaAcute", "ewmaChronic", "variation", "monotony", "acwrExperimental", "weeklyLoad", "fatigue"]);
 
-const FormeDetailPanel = memo(({ metricKey, metrics, sessions, weeklyCharge, athlete, onClose }) => {
-  const reading = getMonitoringReading(metricKey, metrics);
+const FormeDetailPanel = memo(({ metricKey, metrics, dailyState, sessions, weeklyCharge, athlete, onClose }) => {
   const currentWeek = getISOWeek(new Date());
+  const reading = TRAINING_GAUGE_KEYS.has(metricKey)
+    ? getTrainingGaugeReading(metricKey, { metrics, dailyState, sessions, athleteId: athlete.id, currentWeek })
+    : getMonitoringReading(metricKey, metrics);
 
   useEffect(() => {
     const closeOnEscape = (event) => { if (event.key === "Escape") onClose(); };
@@ -137,7 +140,7 @@ const FormeDetailPanel = memo(({ metricKey, metrics, sessions, weeklyCharge, ath
             </div>
           </article>
 
-          {metricKey === "spacing" && metrics.recovery?.factors?.length > 0 && (
+          {(metricKey === "spacing" || metricKey === "readiness") && metrics.recovery?.factors?.length > 0 && (
             <article className="card mt-3 p-4">
               <div className="mb-3 flex items-center gap-2" style={{ color }}><Database size={16} /><h3 className="card-title">Paramètre appliqué</h3></div>
               {metrics.recovery.factors.map((factor, index) => (
