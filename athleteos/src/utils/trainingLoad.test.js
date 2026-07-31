@@ -248,6 +248,24 @@ describe("règle d'espacement de programmation", () => {
     const result = estimateRecovery([unknownCategory], 1, null, now);
     expect(result.factors[0].label).toContain("Règle inexistante configurée");
   });
+
+  it("retombe sur 24-48h si même la règle 'technique' est absente du barème fourni", () => {
+    const unknownCategory = { ...session, category: "inexistante" };
+    const result = estimateRecovery([unknownCategory], 1, null, now, {});
+    expect(result.rangeHoursMin).toBe(0);
+    expect(result.rangeHoursMax).toBe(23);
+  });
+
+  it("nomme la règle « générale » quand la séance n'a pas de catégorie", () => {
+    const noCategory = { ...session, category: null };
+    const result = estimateRecovery([noCategory], 1, null, now);
+    expect(result.factors[0].label).toContain("Règle générale configurée");
+  });
+
+  it("ignore une séance dont la date ne peut pas être interprétée", () => {
+    const garbageDate = { ...session, sessionDate: "not-a-date" };
+    expect(estimateRecovery([garbageDate], 1, null, now).status).toBe("insufficient_data");
+  });
 });
 
 describe("libellé RPE", () => {
