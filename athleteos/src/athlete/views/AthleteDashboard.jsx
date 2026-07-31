@@ -476,7 +476,8 @@ export default function AthleteDashboard({
 
           {/* 5 jauges : un mot de statut simple, jamais un chiffre brut en
               face avant. Le détail scientifique complet reste à un tap. */}
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
+          <div className="flex gap-2.5 overflow-x-auto -mx-1 px-1 pb-1 sm:grid sm:grid-cols-5 sm:gap-3 sm:overflow-visible sm:mx-0 sm:px-0"
+            style={{ scrollSnapType: "x proximity" }}>
             {trainingGauges.map((gauge) => (
               <TrainingGauge key={gauge.key}
                 value={gauge.fillPercent} color={gauge.color} statusWord={gauge.statusWord}
