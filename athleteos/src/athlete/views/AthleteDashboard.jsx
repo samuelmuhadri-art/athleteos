@@ -364,9 +364,12 @@ export default function AthleteDashboard({
     getAthleteMetricsForWeek(athlete.id, weeklyCharge, currentWeek, wellnessToday ? [wellnessToday] : [], sessions),
   [athlete.id, weeklyCharge, currentWeek, wellnessToday, sessions]);
 
-  const athleteMonitoring = useMemo(() => ["wellness", "load7", "load28", "variation", "spacing"]
-    .map((key) => getMonitoringReading(key, metrics)), [metrics]);
-  const advancedMonitoring = useMemo(() => ["dataQuality", "ewmaAcute", "ewmaChronic", "monotony", "acwrExperimental"]
+  // Le ressenti (anneau) et la charge (carte "évolution") ont déjà leur
+  // propre lecture simple plus haut sur ce tableau de bord — les répéter ici
+  // en chiffres bruts n'apportait rien. Seul l'espacement reste sans autre
+  // affichage ; le reste va dans le détail scientifique replié.
+  const spacingReading = useMemo(() => getMonitoringReading("spacing", metrics), [metrics]);
+  const advancedMonitoring = useMemo(() => ["wellness", "load7", "load28", "variation", "dataQuality", "ewmaAcute", "ewmaChronic", "monotony", "acwrExperimental"]
     .map((key) => getMonitoringReading(key, metrics)), [metrics]);
   const loadStory = useMemo(
     () => getAthleteLoadStory(metrics, sessions, athlete.id),
@@ -780,59 +783,44 @@ export default function AthleteDashboard({
             sessions={sessions} athleteId={athlete.id} currentWeek={currentWeek}
           />
 
-          {/* ── Repères du jour : lecture simple, détails scientifiques au clic */}
-          <div className="card p-4">
-              <div className="flex items-center justify-between mb-1">
-                <p className="card-title">Tes données expliquées simplement</p>
-                <span className="chip chip-neutral">Appuie pour comprendre</span>
+          {/* ── Espacement : seule mesure qui n'a pas déjà sa carte plus haut
+              (le ressenti a son anneau, la charge a sa carte "évolution") ─── */}
+          <button type="button" onClick={() => setActiveMetric("spacing")} className="card p-4 tap-feedback w-full text-left">
+            <div className="flex items-start gap-3">
+              <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
+                style={{ background: `${spacingReading.color}18`, color: spacingReading.color }}>
+                <Clock size={16} />
               </div>
-              <p className="card-subtitle mb-4">Chaque ligne commence par ce que cela signifie pour toi. La formule et les limites restent accessibles au toucher.</p>
-              <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                {athleteMonitoring.map(s => {
-                  const val = s.displayValue;
-                  const col = s.color;
-                  return (
-                    <button type="button" key={s.key}
-                      onClick={() => setActiveMetric(s.key)}
-                      aria-label={`Expliquer ${s.label}`}
-                      className="tap-feedback"
-                      style={{ background: "var(--c-surface-2)", borderRadius: 10, padding: "11px 12px", textAlign: "left", border: "1px solid var(--c-border)", transition: "background 0.15s ease", width: "100%" }}>
-                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: 7 }}>
-                        <span style={{ fontSize: 13, fontWeight: 600, color: "var(--c-text-1)" }}>{s.shortLabel}</span>
-                        <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
-                          <span style={{ fontSize: 14, fontWeight: 600, color: col, fontVariantNumeric: "tabular-nums", letterSpacing: "-0.02em" }}>{val}{s.unit ? ` ${s.unit}` : ""}</span>
-                          <ChevronRight size={14} style={{ color: "var(--c-text-3)" }} />
-                        </div>
-                      </div>
-                      <p className="meta-text" style={{ marginBottom: 7 }}>{s.athleteMeaning}</p>
-                      {/* Barre 3px */}
-                      <div style={{ height: 3, background: "rgba(255,255,255,0.07)", borderRadius: 99, overflow: "hidden" }}>
-                        <div style={{ height: "100%", width: s.available ? "100%" : "28%", background: col, opacity: s.available ? 0.72 : 0.28, borderRadius: 99, transition: "width 0.8s cubic-bezier(0.16,1,0.3,1)" }} />
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
-              <details style={{ marginTop: "var(--space-3)" }}>
-                <summary className="tap-feedback" style={{ cursor: "pointer", color: "var(--c-text-2)", fontSize: 13, fontWeight: 600, padding: "10px 2px" }}>
-                  Voir les mesures avancées
-                </summary>
-                <div style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: 4 }}>
-                  {advancedMonitoring.map((reading) => (
-                    <button type="button" key={reading.key} onClick={() => setActiveMetric(reading.key)} className="tap-feedback"
-                      style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, width: "100%", padding: "11px 12px", textAlign: "left", borderRadius: 10, border: "1px solid var(--c-border)", background: "var(--c-surface-2)" }}>
-                      <span>
-                        <span style={{ display: "block", fontSize: 13, fontWeight: 600, color: "var(--c-text-1)" }}>{reading.shortLabel}</span>
-                        <span className="meta-text">{reading.athleteMeaning}</span>
-                      </span>
-                      <span className="flex items-center gap-1.5" style={{ color: reading.color, fontSize: 13, fontWeight: 600, flexShrink: 0 }}>
-                        {reading.displayValue}{reading.unit ? ` ${reading.unit}` : ""}<ChevronRight size={14} />
-                      </span>
-                    </button>
-                  ))}
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center justify-between gap-2">
+                  <p className="card-title">{spacingReading.shortLabel}</p>
+                  <ChevronRight size={14} style={{ color: "var(--c-text-3)", flexShrink: 0 }} />
                 </div>
-              </details>
-          </div>
+                <p className="secondary-text mt-1" style={{ lineHeight: 1.5 }}>{spacingReading.interpretation}</p>
+              </div>
+            </div>
+          </button>
+
+          <details className="card p-4">
+            <summary className="tap-feedback" style={{ cursor: "pointer", color: "var(--c-text-2)", fontSize: 13, fontWeight: 600 }}>
+              Voir le détail scientifique de chaque mesure
+            </summary>
+            <p className="card-subtitle mt-2 mb-3">La formule et les limites de chaque mesure restent accessibles au toucher.</p>
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              {advancedMonitoring.map((reading) => (
+                <button type="button" key={reading.key} onClick={() => setActiveMetric(reading.key)} className="tap-feedback"
+                  style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, width: "100%", padding: "11px 12px", textAlign: "left", borderRadius: 10, border: "1px solid var(--c-border)", background: "var(--c-surface-2)" }}>
+                  <span>
+                    <span style={{ display: "block", fontSize: 13, fontWeight: 600, color: "var(--c-text-1)" }}>{reading.shortLabel}</span>
+                    <span className="meta-text">{reading.athleteMeaning}</span>
+                  </span>
+                  <span className="flex items-center gap-1.5" style={{ color: reading.color, fontSize: 13, fontWeight: 600, flexShrink: 0 }}>
+                    {reading.displayValue}{reading.unit ? ` ${reading.unit}` : ""}<ChevronRight size={14} />
+                  </span>
+                </button>
+              ))}
+            </div>
+          </details>
 
           {/* ── Séances cette semaine ───────────────────────────────────────── */}
           <div className="card overflow-hidden">
