@@ -11,6 +11,7 @@
    ═══════════════════════════════════════════════════════════════════════════════ */
 
 :root {
+  color-scheme: dark;
   /* AthleteOS v6 — canonical semantic palette. Legacy --c-* tokens below
      remain aliases so every existing screen keeps working during migration. */
   --color-bg:                  #07120C;
@@ -104,6 +105,14 @@
   --glass-bg:    rgba(15,32,23,0.88);
   --glass-blur:  20px;
 
+  /* ── Chrome / surfaces recessées — theme-aware, voir override [data-theme="light"] ── */
+  --surface-chrome:          rgba(9,21,14,0.90);
+  --surface-chrome-strong:   rgba(9,21,14,0.94);
+  --surface-recessed:        rgba(14,30,21,0.72);
+  --surface-recessed-strong: rgba(5,13,8,0.46);
+  --surface-auth-card:       rgba(14,30,21,0.94);
+  --scrollbar-thumb:         rgba(255,255,255,0.10);
+
   /* ── Radius — 4 valeurs fixes ── */
   --r-sm:   8px;
   --r-md:   12px;
@@ -131,6 +140,51 @@
   --dur-base: 220ms;
   --dur-slow: 350ms;
 
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════════
+   AthleteOS — Design System v5 LIGHT (override)
+   Même hiérarchie sémantique, palette claire — activé via [data-theme="light"]
+   sur <html>, piloté par le hook useTheme.
+   ═══════════════════════════════════════════════════════════════════════════════ */
+:root[data-theme="light"] {
+  color-scheme: light;
+  --color-bg:                  #F3F6F4;
+  --color-surface:             #FFFFFF;
+  --color-surface-raised:      #F6F9F7;
+  --color-surface-interactive: #ECF2EE;
+  --color-surface-sunken:      #E6EDE9;
+
+  --color-border:        rgba(14,30,21,0.10);
+  --color-border-strong: rgba(14,30,21,0.18);
+
+  --color-text:           #0E1B14;
+  --color-text-secondary: #414F47;
+  --color-text-muted:     #64726B;
+  --color-text-subtle:    #7C8880;
+  --color-text-disabled:  #A6B0AA;
+
+  --color-accent:        #1C8F6C;
+  --color-accent-strong: #146F55;
+  --color-success:       #1C9A73;
+  --color-warning:       #B87309;
+  --color-danger:        #C6403F;
+  --color-info:          #3B67C4;
+
+  --shadow-xs: 0 1px 2px rgba(14,30,21,0.06);
+  --shadow-sm: 0 1px 3px rgba(14,30,21,0.05), 0 4px 12px rgba(14,30,21,0.05);
+  --shadow-md: 0 2px 8px rgba(14,30,21,0.06), 0 8px 24px rgba(14,30,21,0.06);
+  --shadow-lg: 0 4px 16px rgba(14,30,21,0.07), 0 16px 40px rgba(14,30,21,0.07);
+  --shadow-xl: 0 8px 32px rgba(14,30,21,0.09), 0 24px 64px rgba(14,30,21,0.08);
+
+  --glass-bg: rgba(255,255,255,0.88);
+
+  --surface-chrome:          rgba(255,255,255,0.90);
+  --surface-chrome-strong:   rgba(255,255,255,0.94);
+  --surface-recessed:        rgba(230,238,233,0.75);
+  --surface-recessed-strong: rgba(219,229,223,0.65);
+  --surface-auth-card:       rgba(255,255,255,0.94);
+  --scrollbar-thumb:         rgba(14,30,21,0.16);
 }
 
 /* ─── Reset ─────────────────────────────────────────────────────────────────── */
@@ -164,8 +218,8 @@ body {
 /* ─── Scrollbar ──────────────────────────────────────────────────────────────── */
 ::-webkit-scrollbar { width: 3px; height: 3px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.10); border-radius: 99px; }
-* { scrollbar-width: thin; scrollbar-color: rgba(255,255,255,0.10) transparent; }
+::-webkit-scrollbar-thumb { background: var(--scrollbar-thumb); border-radius: 99px; }
+* { scrollbar-width: thin; scrollbar-color: var(--scrollbar-thumb) transparent; }
 
 /* ─── Sélection ─────────────────────────────────────────────────────────────── */
 ::selection { background: rgba(29,158,117,0.25); color: #fff; }
@@ -336,7 +390,7 @@ body {
    ═══════════════════════════════════════════════════════════════════════════════ */
 
 .bottom-nav {
-  background: rgba(9,21,14,0.94);
+  background: var(--surface-chrome-strong);
   backdrop-filter: blur(24px) saturate(160%);
   -webkit-backdrop-filter: blur(24px) saturate(160%);
   border-top: 1px solid var(--c-border);
@@ -416,7 +470,7 @@ body {
    ═══════════════════════════════════════════════════════════════════════════════ */
 
 .header-glass {
-  background: rgba(9,21,14,0.90);
+  background: var(--surface-chrome);
   backdrop-filter: blur(24px) saturate(160%);
   -webkit-backdrop-filter: blur(24px) saturate(160%);
   border-bottom: 1px solid var(--c-border);
@@ -538,7 +592,7 @@ body {
   padding: 24px 20px; border: 1px solid var(--c-border-strong); border-top-color: rgba(255,255,255,0.14);
   border-radius: var(--r-xl); background:
     linear-gradient(180deg, rgba(255,255,255,0.025), transparent 38%),
-    rgba(14,30,21,0.94);
+    var(--surface-auth-card);
   box-shadow: var(--shadow-xl); backdrop-filter: blur(24px); -webkit-backdrop-filter: blur(24px);
 }
 .auth-card-header { margin-bottom: 24px; }

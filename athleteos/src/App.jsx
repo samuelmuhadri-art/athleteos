@@ -18,6 +18,7 @@ import ResetPasswordPage from "./pages/ResetPasswordPage";
 import AccountSettingsModal from "./components/ui/AccountSettingsModal";
 import { AthleteOSBadge, AthleteOSWordmark } from "./components/brand/AthleteOSLogo";
 import { usePushNotifications, PushToggleButton } from "./hooks/usePushNotifications";
+import { useTheme, ThemeToggleButton } from "./hooks/useTheme";
 import { useUrlView } from "./hooks/useUrlView";
 import { initialsFromName } from "./utils/helpers.js";
 import MobileBottomNav from "./components/navigation/MobileBottomNav";
@@ -138,6 +139,7 @@ function CoachShell({ user, profile, clubId, signOut, club, clubLoading, refresh
   const [showDemo, setShowDemo] = useState(false);
   const moreButtonRef = useRef(null);
 
+  const { theme, toggleTheme } = useTheme();
   const { subscribed, subscribe, permissionState } = usePushNotifications(
     null,
     clubId,
@@ -401,6 +403,9 @@ function CoachShell({ user, profile, clubId, signOut, club, clubLoading, refresh
             <UserPlus size={13} />
             <span className="hidden sm:inline">Inviter</span>
           </button>
+
+          {/* Thème clair / sombre */}
+          <ThemeToggleButton theme={theme} onToggle={toggleTheme} compact />
 
           {/* Push toggle */}
           <div className="md:hidden">

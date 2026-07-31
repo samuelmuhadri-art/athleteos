@@ -12,7 +12,7 @@ import CoachSessionDayPanel from "../components/session/CoachSessionDayPanel";
 
 const SessionModal = memo(({
   session, athletes, onClose, onSetRpe, onSetStatus, onEditRequest, onDeleteSession,
-  onSetAttendance, onSetCoachNote, onSetLifecycle, onRemindFeedback,
+  onSetCoachNote, onSetLifecycle, onRemindFeedback,
 }) => {
   const [deleting,    setDeleting]    = useState(false);
   const [deleteError, setDeleteError] = useState(null);
@@ -121,7 +121,6 @@ const SessionModal = memo(({
           <CoachSessionDayPanel
             session={session}
             athletes={athletes}
-            onSetAttendance={onSetAttendance}
             onSetCoachNote={onSetCoachNote}
             onSetLifecycle={onSetLifecycle}
             onRemindFeedback={onRemindFeedback}

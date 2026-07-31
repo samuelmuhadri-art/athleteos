@@ -143,7 +143,7 @@
 
 .aos-filter-bar {
   display: flex; align-items: center; min-width: 0; gap: var(--space-3); padding: var(--space-2);
-  border: 1px solid var(--c-border); border-radius: var(--r-lg); background: rgba(14,30,21,0.72);
+  border: 1px solid var(--c-border); border-radius: var(--r-lg); background: var(--surface-recessed);
 }
 .aos-filter-bar__label { flex: 0 0 auto; padding-left: var(--space-2); color: var(--c-text-2); font-size: var(--text-meta); line-height: var(--leading-meta); font-weight: 700; }
 .aos-filter-bar__controls { display: flex; align-items: center; min-width: 0; flex: 1; gap: var(--space-2); overflow-x: auto; overscroll-behavior-inline: contain; scrollbar-width: none; }
@@ -246,7 +246,7 @@
 .aos-confirm-dialog__close { margin: -10px -10px 0 0; }
 .aos-confirm-dialog__close:disabled { opacity: 0.35; cursor: not-allowed; }
 .aos-confirm-dialog__content { padding: 0 var(--space-5) var(--space-5); color: var(--c-text-2); font-size: var(--text-body); line-height: var(--leading-body); }
-.aos-confirm-dialog__actions { display: flex; align-items: center; justify-content: flex-end; gap: var(--space-2); padding: var(--space-4) var(--space-5); border-top: 1px solid var(--c-border); background: rgba(5,13,8,0.40); }
+.aos-confirm-dialog__actions { display: flex; align-items: center; justify-content: flex-end; gap: var(--space-2); padding: var(--space-4) var(--space-5); border-top: 1px solid var(--c-border); background: var(--surface-recessed-strong); }
 .aos-dialog-button {
   display: inline-flex; align-items: center; justify-content: center; gap: var(--space-2); min-height: var(--touch); padding: 0 var(--space-4);
   border-radius: var(--r-md); font: inherit; font-size: 14px; font-weight: 650; cursor: pointer;
@@ -293,7 +293,7 @@
 .aos-bottom-sheet__footer {
   display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: var(--space-2);
   padding: var(--space-4) var(--space-5) max(var(--space-4), var(--safe-bottom));
-  border-top: 1px solid var(--c-border); background: rgba(5,13,8,0.52);
+  border-top: 1px solid var(--c-border); background: var(--surface-recessed-strong);
 }
 .aos-bottom-sheet__footer > button,
 .aos-bottom-sheet__footer > a { min-height: var(--touch); }

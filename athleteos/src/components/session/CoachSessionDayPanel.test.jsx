@@ -8,7 +8,7 @@ const session = {
   lifecycleStatus: "live",
   athleteIds: [1, 2],
   validations: [
-    { athleteId: 1, attendanceStatus: "present", status: "done", rpe: 8, actualDurationMinutes: 60, durationSource: "reported" },
+    { athleteId: 1, status: "done", rpe: 8, actualDurationMinutes: 60, durationSource: "reported" },
     { athleteId: 2, rsvpStatus: "unavailable", rsvpNote: "J’ai un rendez-vous médical." },
   ],
 };
@@ -20,23 +20,20 @@ const athletes = [
 afterEach(cleanup);
 
 describe("CoachSessionDayPanel", () => {
-  it("résume la séance et enregistre une présence réelle", async () => {
-    const onSetAttendance = vi.fn().mockResolvedValue(undefined);
+  it("résume la séance et affiche les réponses de présence des athlètes", () => {
     render(<CoachSessionDayPanel session={session} athletes={athletes}
-      onSetAttendance={onSetAttendance} onSetCoachNote={vi.fn()} onSetLifecycle={vi.fn()} onRemindFeedback={vi.fn()} />);
+      onSetCoachNote={vi.fn()} onSetLifecycle={vi.fn()} onRemindFeedback={vi.fn()} />);
 
     expect(screen.getByText("Séance en cours")).toBeTruthy();
     expect(screen.getByText("480")).toBeTruthy();
     expect(screen.getByText("« J’ai un rendez-vous médical. »")).toBeTruthy();
-    fireEvent.click(screen.getAllByRole("button", { name: "Absent" })[1]);
-    await waitFor(() => expect(onSetAttendance).toHaveBeenCalledWith(12, 2, "absent"));
   });
 
   it("clôture la séance et permet de rappeler les retours manquants", async () => {
     const onSetLifecycle = vi.fn().mockResolvedValue(undefined);
     const onRemindFeedback = vi.fn().mockResolvedValue(undefined);
     render(<CoachSessionDayPanel session={session} athletes={athletes}
-      onSetAttendance={vi.fn()} onSetCoachNote={vi.fn()} onSetLifecycle={onSetLifecycle} onRemindFeedback={onRemindFeedback} />);
+      onSetCoachNote={vi.fn()} onSetLifecycle={onSetLifecycle} onRemindFeedback={onRemindFeedback} />);
 
     fireEvent.click(screen.getByRole("button", { name: /Clôturer/ }));
     await waitFor(() => expect(onSetLifecycle).toHaveBeenCalledWith(12, "completed"));

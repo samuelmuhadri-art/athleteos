@@ -1,15 +1,9 @@
 import { useMemo, useState } from "react";
 import { BellRing, CheckCircle2, CircleDot, ClipboardCheck, Play, RotateCcw, Users } from "lucide-react";
-import { ATTENDANCE_OPTIONS, getSessionDayMessage, getSessionDaySummary } from "../../domain/sessionDay";
-
-const TONES = {
-  success: { color: "#7BD8B4", background: "rgba(29,158,117,0.12)", border: "rgba(29,158,117,0.28)" },
-  warning: { color: "#F2C46D", background: "rgba(232,160,32,0.12)", border: "rgba(232,160,32,0.28)" },
-  danger: { color: "#F29B9A", background: "rgba(226,75,74,0.10)", border: "rgba(226,75,74,0.26)" },
-};
+import { getSessionDayMessage, getSessionDaySummary } from "../../domain/sessionDay";
 
 export default function CoachSessionDayPanel({
-  session, athletes, onSetAttendance, onSetCoachNote, onSetLifecycle, onRemindFeedback,
+  session, athletes, onSetCoachNote, onSetLifecycle, onRemindFeedback,
 }) {
   const summary = useMemo(() => getSessionDaySummary(session), [session]);
   const [busyKeys, setBusyKeys] = useState(() => new Set());
@@ -35,8 +29,7 @@ export default function CoachSessionDayPanel({
 
   const metrics = [
     { label: "Convoqués", value: summary.total, Icon: Users },
-    { label: "Présents", value: summary.present + summary.late, Icon: ClipboardCheck },
-    { label: "Retours reçus", value: `${summary.feedbackComplete}/${summary.total}`, Icon: CheckCircle2 },
+    { label: "Retours reçus", value: `${summary.feedbackComplete}/${summary.total}`, Icon: ClipboardCheck },
     { label: "Charge totale", value: summary.totalLoad || "—", Icon: CircleDot },
   ];
 
@@ -79,9 +72,9 @@ export default function CoachSessionDayPanel({
           </div>
         </div>
 
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-4">
+        <div className="grid grid-cols-3 gap-2 mt-4">
           {metrics.map(({ label, value, Icon }) => (
-            <div key={label} className="rounded-xl border p-3" style={{ borderColor: "var(--c-border)", background: "rgba(10,21,15,0.28)" }}>
+            <div key={label} className="rounded-xl border p-3" style={{ borderColor: "var(--c-border)", background: "var(--surface-recessed)" }}>
               <Icon size={14} style={{ color: "#7BD8B4" }} />
               <p className="mt-2 text-[17px] font-bold" style={{ color: "var(--c-text-1)" }}>{value}</p>
               <p className="meta-text mt-0.5">{label}</p>
@@ -91,10 +84,7 @@ export default function CoachSessionDayPanel({
       </div>
 
       <div className="p-4 space-y-3">
-        <div className="flex items-center justify-between gap-3">
-          <h4 className="text-[14px] font-bold" style={{ color: "var(--c-text-1)" }}>Présences réelles</h4>
-          {summary.pendingAttendance > 0 && <span className="chip-warning">{summary.pendingAttendance} à confirmer</span>}
-        </div>
+        <h4 className="text-[14px] font-bold" style={{ color: "var(--c-text-1)" }}>Athlètes convoqués</h4>
         {session.athleteIds.map((athleteId) => {
           const athlete = athletes.find((item) => item.id === athleteId);
           const validation = session.validations?.find((item) => item.athleteId === athleteId) ?? {};
@@ -112,18 +102,6 @@ export default function CoachSessionDayPanel({
                   « {validation.rsvpNote} »
                 </p>
               )}
-              <div className="grid grid-cols-4 gap-1.5">
-                {ATTENDANCE_OPTIONS.map((option) => {
-                  const selected = validation.attendanceStatus === option.id;
-                  const tone = TONES[option.tone];
-                  return <button key={option.id} type="button" aria-pressed={selected} disabled={busyKeys.has(`attendance-${athleteId}`)}
-                    onClick={() => run(`attendance-${athleteId}`, () => onSetAttendance(session.id, athleteId, option.id))}
-                    className="min-h-11 rounded-xl border px-1 text-[12px] leading-tight font-semibold tap-feedback"
-                    style={selected ? { color: tone.color, background: tone.background, borderColor: tone.border } : { color: "var(--c-text-2)", background: "transparent", borderColor: "var(--c-border)" }}>
-                    {option.label}
-                  </button>;
-                })}
-              </div>
               <textarea defaultValue={validation.coachNote ?? ""} rows={1} maxLength={1000}
                 aria-label={`Observation coach pour ${athlete?.name ?? athleteId}`}
                 onBlur={(event) => {

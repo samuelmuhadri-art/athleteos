@@ -70,19 +70,6 @@ export function buildCoachFeed({
     });
   }
 
-  const incompleteSessions = weekSessions.filter(session => {
-    const dateKey = localDateKey(session.sessionDate);
-    if (!dateKey || dateKey > todayKey) return false;
-    if (dateKey === todayKey && session.lifecycleStatus !== "completed") return false;
-    return (session.validations ?? []).some(validation => !validation.attendanceStatus);
-  });
-  if (incompleteSessions.length > 0) {
-    items.push({
-      id: "incomplete-sessions", priority: "warning", order: 30, icon: "activity", color: "#F59E0B", route: "planning", label: "Séances à compléter",
-      sentence: `${incompleteSessions.length} séance${incompleteSessions.length > 1 ? "s" : ""} passée${incompleteSessions.length > 1 ? "s" : ""} doi${incompleteSessions.length > 1 ? "vent" : "t"} encore recevoir les présences réelles.`,
-    });
-  }
-
   const pendingAthleteSessions = sessions.filter(session => session.createdByAthlete);
   if (pendingAthleteSessions.length > 0) {
     items.push({

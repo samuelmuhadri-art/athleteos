@@ -100,8 +100,6 @@ function Planning() {
             comment: v.comment, rpe: v.rpe,
             actualDurationMinutes: v.actual_duration_minutes,
             durationSource: v.duration_source,
-            attendanceStatus: v.attendance_status,
-            attendanceMarkedAt: v.attendance_marked_at,
             rsvpStatus: v.rsvp_status,
             rsvpNote: v.rsvp_note,
             rsvpUpdatedAt: v.rsvp_updated_at,
@@ -213,26 +211,6 @@ function Planning() {
     }
   }, [fetchAll, sessionList, athletes, clubId]);
 
-  const setAttendance = useCallback(async (sessionId, athleteId, attendanceStatus) => {
-    const markedAt = new Date().toISOString();
-    setSessionList(previous => previous.map(session => session.id !== sessionId ? session : {
-      ...session,
-      validations: session.validations.map(validation => validation.athleteId === athleteId
-        ? { ...validation, attendanceStatus, attendanceMarkedAt: markedAt, ...((attendanceStatus === "absent" || attendanceStatus === "injured") ? { status: "none" } : {}) }
-        : validation),
-    }));
-    const updates = { attendance_status: attendanceStatus, attendance_marked_at: markedAt };
-    if (attendanceStatus === "absent" || attendanceStatus === "injured") updates.status = "none";
-    const { error: updateError } = await supabase.from("session_athletes").update(updates)
-      .eq("session_id", sessionId).eq("athlete_id", athleteId);
-    if (updateError) { await fetchAll(); throw updateError; }
-    if (attendanceStatus === "absent") {
-      const session = sessionList.find(item => item.id === sessionId);
-      const athlete = athletes.find(item => item.id === athleteId);
-      if (session && athlete) await alertSessionAbsence(clubId, athlete, session);
-    }
-  }, [athletes, clubId, fetchAll, sessionList]);
-
   const setCoachNote = useCallback(async (sessionId, athleteId, coachNote) => {
     const { error: updateError } = await supabase.from("session_athletes").update({ coach_note: coachNote || null })
       .eq("session_id", sessionId).eq("athlete_id", athleteId);
@@ -245,7 +223,7 @@ function Planning() {
 
   const remindFeedback = useCallback(async (session) => {
     const targetIds = session.validations.filter(validation => (
-      validation.attendanceStatus !== "absent" && validation.attendanceStatus !== "injured"
+      validation.status !== "none"
       && (validation.rpe == null || validation.durationSource !== "reported")
     )).map(validation => validation.athleteId);
     await notifyAthleteFeedbackReminder(clubId, targetIds, session);
@@ -872,7 +850,6 @@ function Planning() {
           onSetStatus={setStatus}
           onEditRequest={s => { setSessionModalTarget(s); setActiveSession(null); }}
           onDeleteSession={deleteSession}
-          onSetAttendance={setAttendance}
           onSetCoachNote={setCoachNote}
           onSetLifecycle={setLifecycle}
           onRemindFeedback={remindFeedback}

@@ -397,7 +397,7 @@ function Dashboard({
           lifecycleStatus: s.lifecycle_status ?? "planned",
           createdByAthlete: s.created_by != null && athletesRes.data.some(a => a.user_id === s.created_by),
           athleteIds:   rows.map(v => v.athlete_id),
-          validations:  rows.map(v => ({ athleteId: v.athlete_id, status: v.status, feeling: v.feeling, rpe: v.rpe, comment: v.comment, actualDurationMinutes: v.actual_duration_minutes, durationSource: v.duration_source, attendanceStatus: v.attendance_status, rsvpStatus: v.rsvp_status, rsvpNote: v.rsvp_note, coachNote: v.coach_note })),
+          validations:  rows.map(v => ({ athleteId: v.athlete_id, status: v.status, feeling: v.feeling, rpe: v.rpe, comment: v.comment, actualDurationMinutes: v.actual_duration_minutes, durationSource: v.duration_source, rsvpStatus: v.rsvp_status, rsvpNote: v.rsvp_note, coachNote: v.coach_note })),
         };
       });
 

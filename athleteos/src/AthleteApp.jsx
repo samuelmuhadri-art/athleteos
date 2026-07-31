@@ -12,6 +12,7 @@ import {
 import { supabase }  from "./utils/supabaseClient";
 import { useAuth }   from "./context/AuthContext";
 import { usePushNotifications, PushToggleButton } from "./hooks/usePushNotifications";
+import { useTheme, ThemeToggleButton } from "./hooks/useTheme";
 import { initialsFromName, toLocalDateStr, getISOWeek } from "./athlete/shared";
 import { notifyAthleteWeeklyRecap, notifyAthleteWeeklyReport, notifyCoachSessionResponse } from "./utils/notifications";
 import { useUrlView } from "./hooks/useUrlView";
@@ -84,6 +85,7 @@ export default function AthleteApp({ clubBrand, themeStyle }) {
   const [showInjuryReport, setShowInjuryReport] = useState(false);
   const [showSettings,   setShowSettings]   = useState(false);
 
+  const { theme, toggleTheme } = useTheme();
   const { subscribed, subscribe, permissionState, swReady } = usePushNotifications(
     athlete?.id ?? null, clubId
   );
@@ -171,7 +173,6 @@ export default function AthleteApp({ clubBrand, themeStyle }) {
             athleteId:v.athlete_id,status:v.status,feeling:v.feeling,fatigue:v.fatigue,
             comment:v.comment,rpe:v.rpe,actualDurationMinutes:v.actual_duration_minutes,
             durationSource:v.duration_source,
-            attendanceStatus:v.attendance_status,attendanceMarkedAt:v.attendance_marked_at,
             rsvpStatus:v.rsvp_status,rsvpNote:v.rsvp_note,rsvpUpdatedAt:v.rsvp_updated_at,
             coachNote:v.coach_note,feedbackSubmittedAt:v.feedback_submitted_at,
           })),
@@ -508,6 +509,7 @@ export default function AthleteApp({ clubBrand, themeStyle }) {
             </h1>
           </div>
           <div className="flex-1" />
+          <ThemeToggleButton theme={theme} onToggle={toggleTheme} compact />
           <button
             type="button"
             onClick={() => setShowNotifs(true)}
