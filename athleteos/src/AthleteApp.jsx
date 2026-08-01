@@ -33,6 +33,7 @@ import { AthleteOSBadge, AthleteOSWordmark } from "./components/brand/AthleteOSL
 import { getNotificationPresentation, mergeIncomingNotification } from "./athlete/notificationPresentation";
 import MobileBottomNav from "./components/navigation/MobileBottomNav";
 import { ATHLETE_MOBILE_ITEM_IDS } from "./navigation/mobileNavigation";
+import { PwaInstallButton } from "./components/pwa/PwaAccess";
 
 const NAV_ITEMS = [
   { id: "dashboard",    label: "Tableau de bord", shortLabel: "Accueil",  icon: LayoutDashboard },
@@ -431,6 +432,10 @@ export default function AthleteApp({ clubBrand, themeStyle }) {
             );
           })}
         </nav>
+
+        <div className="flex-shrink-0 px-3 pb-2">
+          <PwaInstallButton />
+        </div>
 
         {/* Footer sidebar */}
         <div className="flex-shrink-0 px-3 py-3"

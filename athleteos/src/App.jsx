@@ -27,6 +27,7 @@ import InviteClubModal from "./components/club/InviteClubModal";
 import ClubDemoPreview from "./components/club/ClubDemoPreview";
 import { useClubBranding } from "./hooks/useClubBranding";
 import { getClubThemeVariables, normalizeInviteCode } from "./utils/clubBranding";
+import { PwaInstallButton } from "./components/pwa/PwaAccess";
 import {
   COACH_MOBILE_MORE_ITEMS,
   COACH_MOBILE_PRIMARY_ITEMS,
@@ -279,6 +280,10 @@ function CoachShell({ user, profile, clubId, signOut, club, clubLoading, refresh
             );
           })}
         </nav>
+
+        <div className="flex-shrink-0 px-3 pb-2">
+          <PwaInstallButton expanded={sidebarOpen} />
+        </div>
 
         {/* ── Profil coach ── */}
         <div className="flex-shrink-0" style={{ borderTop: "1px solid var(--c-border)" }}>

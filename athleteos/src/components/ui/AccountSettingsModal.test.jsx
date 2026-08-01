@@ -1,12 +1,21 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import AccountSettingsModal from "./AccountSettingsModal";
+import { PwaInstallProvider } from "../../context/PwaInstallContext";
 
 const mocks = vi.hoisted(() => ({
   invoke: vi.fn(),
   from: vi.fn(),
   updateUser: vi.fn(),
 }));
+
+function renderSettings(props = {}) {
+  return render(
+    <PwaInstallProvider>
+      <AccountSettingsModal onClose={vi.fn()} {...props} />
+    </PwaInstallProvider>,
+  );
+}
 
 vi.mock("../../context/AuthContext", () => ({
   useAuth: () => ({
@@ -51,7 +60,7 @@ afterEach(() => {
 describe("AccountSettingsModal", () => {
   it("ouvre directement l’identité du club et enregistre une couleur contrôlée", async () => {
     const onClubUpdated = vi.fn();
-    render(<AccountSettingsModal onClose={vi.fn()} initialSection="club" onClubUpdated={onClubUpdated} />);
+    renderSettings({ initialSection: "club", onClubUpdated });
 
     expect(screen.getByRole("tab", { name: "Club" }).getAttribute("aria-selected")).toBe("true");
     await screen.findByText("Identité visuelle");
@@ -65,7 +74,7 @@ describe("AccountSettingsModal", () => {
   });
 
   it("sépare Compte et Club et confirme avant d'invalider le code", async () => {
-    render(<AccountSettingsModal onClose={vi.fn()} />);
+    renderSettings();
     expect(screen.getByRole("dialog", { name: "Réglages" })).toBeTruthy();
     expect(screen.getByRole("tab", { name: "Compte" }).getAttribute("aria-selected")).toBe("true");
 
@@ -89,7 +98,7 @@ describe("AccountSettingsModal", () => {
       }
       return { data: { success: true }, error: null };
     });
-    render(<AccountSettingsModal onClose={vi.fn()} initialSection="club" />);
+    renderSettings({ initialSection: "club" });
     await screen.findByText("Identité visuelle");
 
     const file = new File(["logo"], "logo.webp", { type: "image/webp" });
@@ -113,7 +122,7 @@ describe("AccountSettingsModal", () => {
       error: null,
     });
 
-    render(<AccountSettingsModal onClose={vi.fn()} initialSection="club" />);
+    renderSettings({ initialSection: "club" });
 
     expect((await screen.findByRole("alert")).textContent).toContain("La création de l’invitation a échoué.");
     expect(screen.queryByText("[object Object]")).toBeNull();

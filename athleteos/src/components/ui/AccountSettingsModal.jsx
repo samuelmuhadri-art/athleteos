@@ -25,6 +25,7 @@ import { translateAuthError } from "../auth/authFormUtils";
 import { loadClubBranding } from "../../hooks/useClubBranding";
 import { CLUB_ACCENT_PRESETS, DEFAULT_CLUB_ACCENT } from "../../utils/clubBranding";
 import ClubInvitationCenter from "../club/ClubInvitationCenter";
+import PwaAccessCard from "../pwa/PwaAccess";
 
 const FOCUSABLE_SELECTOR = [
   "button:not([disabled])",
@@ -477,6 +478,8 @@ export default function AccountSettingsModal({ onClose, initialSection = "accoun
                   showStrength
                 />
               </ActionRow>
+
+              <PwaAccessCard />
             </div>
           ) : (
             <div
