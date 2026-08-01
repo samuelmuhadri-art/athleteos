@@ -55,6 +55,7 @@ const BRAND_IMAGE_TYPES: Record<string, string> = {
   "image/webp": "webp",
 };
 const MAX_BRAND_IMAGE_SIZE = 5 * 1024 * 1024;
+const MAX_BODY_BYTES = 7_500_000;
 
 function ok(body: Record<string, unknown>) {
   return new Response(JSON.stringify({ success: true, ...body }), {
@@ -84,6 +85,7 @@ function readableErrorMessage(error: unknown): string {
 // métier) — distincte d'une exception inattendue, pour choisir le bon
 // `result` ('denied' vs 'error') dans le journal d'audit.
 class DeniedError extends Error {}
+class PayloadTooLargeError extends DeniedError {}
 
 function requireString(value: unknown, label: string, { max = 200 } = {}): string {
   if (typeof value !== "string" || !value.trim()) throw new DeniedError(`${label} manquant.`);
@@ -165,9 +167,31 @@ async function ensureBrandingBucket(admin: ReturnType<typeof createClient>) {
 
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
+  if (req.method !== "POST") {
+    return new Response(JSON.stringify({ success: false, error: "Méthode non autorisée." }), {
+      status: 405,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+  const declaredLength = Number(req.headers.get("content-length"));
+  if (Number.isFinite(declaredLength) && declaredLength > MAX_BODY_BYTES) {
+    return new Response(JSON.stringify({ success: false, error: "Payload trop volumineux." }), {
+      status: 413,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
 
-  const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
-  const admin = createClient(SUPABASE_URL, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
+  const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
+  const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  const anonKey = Deno.env.get("SUPABASE_ANON_KEY");
+  if (!SUPABASE_URL || !serviceRoleKey || !anonKey) {
+    console.error("admin-actions: configuration Supabase manquante");
+    return new Response(JSON.stringify({ success: false, error: "Service temporairement indisponible." }), {
+      status: 503,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+  const admin = createClient(SUPABASE_URL, serviceRoleKey);
 
   // ── Contexte mutable rempli au fil de l'exécution, utilisé par le SEUL
   //    site d'écriture du journal d'audit (succès en fin de bloc try, ou
@@ -205,13 +229,14 @@ serve(async (req) => {
   // 20260729010000 (unique seulement sur les lignes result='success').
   async function findCachedSuccess(): Promise<Record<string, unknown> | null> {
     if (!idempotencyKey || !currentAction) return null;
-    const { data } = await admin
+    const { data, error } = await admin
       .from("audit_logs")
       .select("payload")
       .eq("action", currentAction)
       .eq("idempotency_key", idempotencyKey)
       .eq("result", "success")
       .maybeSingle();
+    if (error) throw error;
     return (data?.payload as Record<string, unknown>) ?? null;
   }
 
@@ -220,11 +245,11 @@ serve(async (req) => {
     // supabase.functions.invoke) — jamais faire confiance à un id envoyé
     // dans le corps de la requête pour savoir "qui appelle".
     const authHeader = req.headers.get("Authorization") ?? "";
-    const callerClient = createClient(SUPABASE_URL, Deno.env.get("SUPABASE_ANON_KEY")!, {
+    const callerClient = createClient(SUPABASE_URL, anonKey, {
       global: { headers: { Authorization: authHeader } },
     });
-    const { data: { user: authUser } } = await callerClient.auth.getUser();
-    if (!authUser) throw new DeniedError("Non authentifié.");
+    const { data: { user: authUser }, error: authError } = await callerClient.auth.getUser();
+    if (authError || !authUser) throw new DeniedError("Non authentifié.");
 
     const { data: callerRow, error: callerErr } = await admin
       .from("users").select("id, club_id, role, email").eq("auth_uid", authUser.id).single();
@@ -232,7 +257,13 @@ serve(async (req) => {
     caller = callerRow;
     const isHeadCoach = caller.role === "head_coach";
 
-    const body = await req.json().catch(() => { throw new DeniedError("Corps de requête invalide."); });
+    const rawBody = await req.text();
+    if (new TextEncoder().encode(rawBody).byteLength > MAX_BODY_BYTES) {
+      throw new PayloadTooLargeError("Payload trop volumineux.");
+    }
+    let body: Record<string, unknown>;
+    try { body = JSON.parse(rawBody || "{}"); }
+    catch { throw new DeniedError("Corps de requête invalide."); }
     currentAction = typeof body.action === "string" ? body.action : null;
     if (!currentAction) throw new DeniedError("Action manquante.");
     idempotencyKey =
@@ -260,36 +291,25 @@ serve(async (req) => {
       }
       const { data: individualInvitation, error: individualError } = await admin
         .from("club_invitations")
-        .select("id, club_id, status, expires_at, accepted_at, accepted_user_id, recipient_email")
+        .select("id")
         .ilike("code", inviteCode)
         .maybeSingle();
       if (individualError && individualError.code !== "42P01") throw individualError;
 
       if (individualInvitation) {
-        if (individualInvitation.status === "revoked") throw new DeniedError("Cette invitation a été révoquée. Demande un nouveau lien à ton coach.");
-        if (individualInvitation.expires_at && new Date(individualInvitation.expires_at) <= new Date()) {
-          throw new DeniedError("Cette invitation a expiré. Demande un nouveau lien à ton coach.");
-        }
-        if (individualInvitation.recipient_email && individualInvitation.recipient_email.toLowerCase() !== caller.email?.toLowerCase()) {
-          throw new DeniedError("Cette invitation a été préparée pour une autre adresse email.");
-        }
-        if (Number(individualInvitation.club_id) !== Number(caller.club_id)) {
-          throw new DeniedError("Ton compte appartient déjà à un autre club. Aucun transfert n’a été effectué ; contacte ton coach pour conserver tes données.");
-        }
-        if (individualInvitation.accepted_at && Number(individualInvitation.accepted_user_id) !== Number(caller.id)) {
-          throw new DeniedError("Cette invitation a déjà été utilisée.");
-        }
-        if (!individualInvitation.accepted_at) {
-          const { error: acceptError } = await admin.from("club_invitations").update({
-            accepted_at: new Date().toISOString(),
-            accepted_user_id: caller.id,
-            reservation_token: null,
-            reserved_until: null,
-          }).eq("id", individualInvitation.id).is("accepted_at", null);
-          if (acceptError) throw acceptError;
-        }
-        const { data: club } = await admin.from("clubs").select("name").eq("id", caller.club_id).single();
-        return ok({ alreadyMember: true, clubName: club?.name ?? "Ton club" });
+        const { data: acceptance, error: acceptError } = await admin.rpc(
+          "accept_existing_member_club_invitation",
+          { p_invitation_id: individualInvitation.id, p_user_id: caller.id, p_email: caller.email ?? "" },
+        );
+        if (acceptError) throw acceptError;
+        const status = typeof acceptance?.status === "string" ? acceptance.status : "invalid";
+        if (status === "revoked") throw new DeniedError("Cette invitation a été révoquée. Demande un nouveau lien à ton coach.");
+        if (status === "expired") throw new DeniedError("Cette invitation a expiré. Demande un nouveau lien à ton coach.");
+        if (status === "email_mismatch") throw new DeniedError("Cette invitation a été préparée pour une autre adresse email.");
+        if (status === "different_club") throw new DeniedError("Ton compte appartient déjà à un autre club. Aucun transfert n’a été effectué ; contacte ton coach pour conserver tes données.");
+        if (status === "accepted") throw new DeniedError("Cette invitation a déjà été utilisée.");
+        if (status !== "accepted_by_caller") throw new DeniedError("Cette invitation n’est plus active. Demande un nouveau lien à ton coach.");
+        return ok({ alreadyMember: true, clubName: acceptance.clubName ?? "Ton club" });
       }
 
       let { data: invitedClub, error: inviteError } = await admin
@@ -366,10 +386,14 @@ serve(async (req) => {
       let code = "";
       for (let attempt = 0; attempt < 10; attempt++) {
         code = genCode();
-        const [{ data: clubMatch }, { data: invitationMatch }] = await Promise.all([
+        const [clubLookup, invitationLookup] = await Promise.all([
           admin.from("clubs").select("id").eq("invite_code", code).maybeSingle(),
           admin.from("club_invitations").select("id").eq("code", code).maybeSingle(),
         ]);
+        if (clubLookup.error) throw clubLookup.error;
+        if (invitationLookup.error) throw invitationLookup.error;
+        const clubMatch = clubLookup.data;
+        const invitationMatch = invitationLookup.data;
         if (!clubMatch && !invitationMatch) break;
       }
       const { data: invitation, error } = await admin.from("club_invitations").insert({
@@ -399,16 +423,20 @@ serve(async (req) => {
       targetClubId = caller.club_id;
       const invitationId = requireString(body.invitationId, "Invitation", { max: 36 });
       if (!UUID_PATTERN.test(invitationId)) throw new DeniedError("Invitation invalide.");
-      const { data: invitation } = await admin.from("club_invitations")
+      const { data: invitation, error: invitationError } = await admin.from("club_invitations")
         .select("id, status, accepted_at")
         .eq("id", invitationId).eq("club_id", caller.club_id).maybeSingle();
+      if (invitationError) throw invitationError;
       if (!invitation) throw new DeniedError("Invitation introuvable.");
       if (invitation.accepted_at) throw new DeniedError("Une invitation acceptée ne peut plus être révoquée.");
       if (invitation.status === "revoked") return ok({});
       const revokedAt = new Date().toISOString();
-      const { error } = await admin.from("club_invitations").update({ status: "revoked", revoked_at: revokedAt })
-        .eq("id", invitationId).eq("club_id", caller.club_id);
+      const { data: revoked, error } = await admin.from("club_invitations").update({ status: "revoked", revoked_at: revokedAt })
+        .eq("id", invitationId).eq("club_id", caller.club_id)
+        .eq("status", "active").is("accepted_at", null)
+        .select("id").maybeSingle();
       if (error) throw error;
+      if (!revoked) throw new DeniedError("L’invitation a changé d’état. Recharge la liste avant de réessayer.");
       auditPayload = { invitationId, revokedAt };
       await logAudit("success", null);
       return ok({});
@@ -508,8 +536,13 @@ serve(async (req) => {
       let code = "";
       for (let attempt = 0; attempt < 6; attempt++) {
         code = genCode();
-        const { data: exists } = await admin.from("clubs").select("id").eq("invite_code", code).maybeSingle();
-        if (!exists) break;
+        const [clubLookup, invitationLookup] = await Promise.all([
+          admin.from("clubs").select("id").eq("invite_code", code).maybeSingle(),
+          admin.from("club_invitations").select("id").eq("code", code).maybeSingle(),
+        ]);
+        if (clubLookup.error && clubLookup.error.code !== "42P01") throw clubLookup.error;
+        if (invitationLookup.error && invitationLookup.error.code !== "42P01") throw invitationLookup.error;
+        if (!clubLookup.data && !invitationLookup.data) break;
       }
       let { error } = await admin.from("clubs").update({
         invite_code: code,
@@ -563,9 +596,19 @@ serve(async (req) => {
       // de clé étrangère) — on garde l'essentiel dans `payload`.
       auditPayload = { targetUserId: targetRow.id, targetName: targetRow.name, targetEmail: targetRow.email, targetRole: targetRow.role };
 
-      await admin.from("athletes").delete().eq("user_id", targetRow.id);
-      await admin.from("users").delete().eq("id", targetRow.id);
-      if (targetRow.auth_uid) await admin.auth.admin.deleteUser(targetRow.auth_uid).catch(() => {});
+      const { data: deletion, error: deletionError } = await admin.rpc("remove_club_user_transactional", {
+        p_actor_user_id: caller.id,
+        p_target_user_id: targetRow.id,
+      });
+      if (deletionError) throw deletionError;
+      const authUid = deletion?.authUid ?? targetRow.auth_uid;
+      if (authUid) {
+        const { error: authDeleteError } = await admin.auth.admin.deleteUser(authUid);
+        if (authDeleteError) {
+          auditPayload = { ...auditPayload, authCleanupPending: true };
+          console.error("Auth user cleanup failed:", authDeleteError.message);
+        }
+      }
 
       await logAudit("success", null);
       return ok({});
@@ -611,10 +654,17 @@ serve(async (req) => {
 
     throw new DeniedError("Action inconnue.");
   } catch (err) {
-    const message = readableErrorMessage(err);
-    await logAudit(err instanceof DeniedError ? "denied" : "error", message).catch(() => {});
-    console.error("admin-actions error:", message);
-    return new Response(JSON.stringify({ success: false, error: message }), {
+    const internalMessage = readableErrorMessage(err);
+    const denied = err instanceof DeniedError;
+    const clientMessage = denied ? internalMessage : "Une erreur technique est survenue. Réessaie dans un instant.";
+    await logAudit(denied ? "denied" : "error", internalMessage).catch((auditError) => {
+      console.error(
+        "admin-actions audit failure:",
+        auditError instanceof Error ? auditError.message : auditError,
+      );
+    });
+    console.error("admin-actions error:", internalMessage);
+    return new Response(JSON.stringify({ success: false, error: clientMessage }), {
       status: 200,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });

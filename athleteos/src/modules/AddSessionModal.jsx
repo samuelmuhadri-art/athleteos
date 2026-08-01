@@ -11,6 +11,7 @@ import { useAuth }   from "../context/AuthContext";
 import { CATEGORIES, SESSION_COLORS, EMPTY_FORM, dateToISOWeek, dateToDayName, toLocalDateStr } from "./planningShared";
 import TrainingFocusField from "../components/session/TrainingFocusField";
 import { getDefaultTrainingFocus, isTrainingFocusCompatible } from "../domain/trainingFocus";
+import { useAccessibleDialog } from "../hooks/useAccessibleDialog";
 
 const PDF_MAX_BYTES = 30 * 1024 * 1024; // aligné sur file_size_limit du bucket session-pdfs
 
@@ -31,6 +32,7 @@ const AddSessionModal = memo(({ athletes, initialData, onClose, onAdd }) => {
   const [pdfFile, setPdfFile]       = useState(null);
   const [pdfError, setPdfError]     = useState(null);
   const [uploadingPdf, setUploadingPdf] = useState(false);
+  const { dialogRef, titleId } = useAccessibleDialog({ onClose, closeDisabled: saving });
 
   const set = useCallback((key, val) => setForm(f => ({ ...f, [key]: val })), []);
   const pickPdf = useCallback(file => {
@@ -93,7 +95,8 @@ const AddSessionModal = memo(({ athletes, initialData, onClose, onAdd }) => {
       className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4 modal-backdrop"
       onClick={e => e.target === e.currentTarget && !saving && onClose()}
     >
-      <div className="rounded-t-3xl sm:rounded-3xl shadow-2xl w-full sm:max-w-lg max-h-[95vh] sm:max-h-[90vh] flex flex-col overflow-hidden modal-content"
+      <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby={titleId} tabIndex={-1}
+        className="rounded-t-3xl sm:rounded-3xl shadow-2xl w-full sm:max-w-lg max-h-[95vh] sm:max-h-[90vh] flex flex-col overflow-hidden modal-content"
         style={{ background: "var(--c-surface)" }}>
 
         <div className="flex justify-center pt-3 pb-1 sm:hidden flex-shrink-0">
@@ -105,7 +108,7 @@ const AddSessionModal = memo(({ athletes, initialData, onClose, onAdd }) => {
           style={{ background: `${selCat.border}14`, borderBottom: `1px solid ${selCat.border}40` }}
         >
           <div>
-            <h2 className="text-[17px] font-bold" style={{ color: selCat.text }}>
+            <h2 id={titleId} className="text-[17px] font-bold" style={{ color: selCat.text }}>
               {isEdit ? "Modifier la séance" : "Nouvelle séance"}
             </h2>
             <p className="text-[13px] mt-0.5" style={{ color: "var(--c-text-2)" }}>

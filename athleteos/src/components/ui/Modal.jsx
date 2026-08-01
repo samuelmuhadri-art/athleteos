@@ -20,8 +20,17 @@
 //   </Modal>
 // ============================================================
 
-import { memo } from "react";
+import { memo, useEffect, useId, useRef } from "react";
 import { X } from "lucide-react";
+
+const FOCUSABLE_SELECTOR = [
+  "button:not([disabled])",
+  "input:not([disabled])",
+  "select:not([disabled])",
+  "textarea:not([disabled])",
+  "[href]",
+  "[tabindex]:not([tabindex='-1'])",
+].join(",");
 
 function Modal({
   title,
@@ -34,6 +43,45 @@ function Modal({
   disabled      = false,
   children,
 }) {
+  const dialogRef = useRef(null);
+  const titleId = useId();
+
+  useEffect(() => {
+    const previouslyFocused = document.activeElement;
+    const focusTimer = window.setTimeout(() => dialogRef.current?.focus(), 0);
+    return () => {
+      window.clearTimeout(focusTimer);
+      if (previouslyFocused instanceof HTMLElement && previouslyFocused.isConnected) previouslyFocused.focus();
+    };
+  }, []);
+
+  useEffect(() => {
+    const handleKeyDown = (event) => {
+      if (event.key === "Escape") {
+        if (!disabled) onClose();
+        return;
+      }
+      if (event.key !== "Tab" || !dialogRef.current) return;
+      const focusable = [...dialogRef.current.querySelectorAll(FOCUSABLE_SELECTOR)];
+      if (!focusable.length) {
+        event.preventDefault();
+        dialogRef.current.focus();
+        return;
+      }
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && (document.activeElement === first || document.activeElement === dialogRef.current)) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [disabled, onClose]);
+
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center p-4"
@@ -41,6 +89,11 @@ function Modal({
       onClick={(e) => e.target === e.currentTarget && !disabled && onClose()}
     >
       <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        tabIndex={-1}
         className="rounded-2xl shadow-2xl w-full max-w-md max-h-[90vh] flex flex-col overflow-hidden"
         style={{ background: "var(--c-surface)", border: "1px solid var(--c-border)" }}
       >
@@ -50,10 +103,12 @@ function Modal({
           className="px-6 py-5 flex items-center justify-between flex-shrink-0"
           style={{ borderBottom: "1px solid var(--c-border)" }}
         >
-          <h3 className="text-[16px] font-bold" style={{ color: "var(--c-text-1)" }}>{title}</h3>
+          <h3 id={titleId} className="text-[16px] font-bold" style={{ color: "var(--c-text-1)" }}>{title}</h3>
           <button
+            type="button"
             onClick={onClose}
             disabled={disabled}
+            aria-label={`Fermer — ${title}`}
             className="p-1.5 rounded-lg transition-colors disabled:opacity-40 hover:bg-[var(--c-surface-3)]"
           >
             <X size={18} style={{ color: "var(--c-text-3)" }} />
@@ -72,6 +127,7 @@ function Modal({
             style={{ borderTop: "1px solid var(--c-border)" }}
           >
             <button
+              type="button"
               onClick={onClose}
               disabled={disabled}
               className="px-4 py-2 rounded-lg text-[13px] font-medium transition-colors disabled:opacity-40 hover:bg-[var(--c-surface-3)]"
@@ -80,14 +136,15 @@ function Modal({
               Annuler
             </button>
             <button
+              type="button"
               onClick={onConfirm}
-              disabled={confirmDisabled}
+              disabled={confirmDisabled || disabled}
               className="flex items-center gap-2 px-5 py-2 rounded-lg text-white text-[13px] font-semibold transition-all disabled:opacity-40 disabled:cursor-not-allowed"
               style={{ background: "#1D9E75" }}
             >
               {loading ? (
                 <>
-                  <div className="w-3.5 h-3.5 border-2 border-white/40 border-t-white rounded-full animate-spin" />
+                  <div aria-hidden="true" className="w-3.5 h-3.5 border-2 border-white/40 border-t-white rounded-full animate-spin" />
                   {loadingLabel}
                 </>
               ) : (

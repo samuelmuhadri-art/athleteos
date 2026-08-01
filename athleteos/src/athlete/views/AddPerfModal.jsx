@@ -7,8 +7,10 @@ import { createPortal } from "react-dom";
 import { Plus, TrendingUp, X } from "lucide-react";
 import { COMBINE_EVENTS, discColor } from "./perfsShared";
 import PerformanceMetadataFields from "../../components/performance/PerformanceMetadataFields.jsx";
+import { useAccessibleDialog } from "../../hooks/useAccessibleDialog";
 
 export default function AddPerfModal({ disciplines, perfForm, setPerfForm, onClose, onSubmit, saving, error }) {
+  const { dialogRef } = useAccessibleDialog({ onClose, closeDisabled: saving });
   const labelStyle = { display: "block", fontSize: 12, fontWeight: 700, color: "var(--c-text-2)", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 8 };
   // Portal sur document.body — AthletePerfs.jsx est rendu à l'intérieur du
   // <main> scrollable d'AthleteApp.jsx ; sans portal ce position:fixed dérive
@@ -17,7 +19,7 @@ export default function AddPerfModal({ disciplines, perfForm, setPerfForm, onClo
   return createPortal(
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4 modal-backdrop"
       onClick={e => e.target === e.currentTarget && !saving && onClose()}>
-      <form onSubmit={event => { event.preventDefault(); onSubmit(); }} role="dialog" aria-modal="true" aria-labelledby="add-perf-title"
+      <form ref={dialogRef} tabIndex={-1} onSubmit={event => { event.preventDefault(); onSubmit(); }} role="dialog" aria-modal="true" aria-labelledby="add-perf-title"
         className="rounded-t-3xl sm:rounded-3xl shadow-2xl w-full sm:max-w-sm max-h-[90vh] flex flex-col overflow-hidden modal-content"
         style={{ background: "var(--c-surface)" }}>
 

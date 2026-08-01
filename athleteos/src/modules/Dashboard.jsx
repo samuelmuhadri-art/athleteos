@@ -31,7 +31,7 @@ import {
 } from "../utils/chargeCalculations";
 import { checkUpcomingCompetitions, checkAndAlertACWR, notifyAthleteCompetitionReminder, checkWeeklyRecap, checkWeeklyReports } from "../utils/notifications";
 import { buildCoachFeed } from "../utils/coachFeed";
-import { getISOWeek, initialsFromName } from "../utils/helpers.js";
+import { getISOWeek, getISOWeekYear, initialsFromName, matchesISOWeek } from "../utils/helpers.js";
 import ClubOnboardingCard from "../components/club/ClubOnboardingCard";
 import { PageHeader } from "../components/ui/premium";
 import { buildDailyState, buildGroupDailyState } from "../domain/dailyState";
@@ -144,7 +144,7 @@ const MiniSparkline = memo(({ data, color }) => {
   );
 });
 
-function AthleteStatusCard({ athlete, weeklyCharge, currentWeek, injuries, sessions, wellnessToday, onNavigate }) {
+function AthleteStatusCard({ athlete, weeklyCharge, currentWeek, currentYear, injuries, sessions, wellnessToday, onNavigate }) {
   const metrics   = useMemo(
     () => getAthleteMetricsForWeek(athlete.id, weeklyCharge, currentWeek, wellnessToday ? [wellnessToday] : [], sessions),
     [athlete.id, weeklyCharge, currentWeek, wellnessToday, sessions]
@@ -154,9 +154,13 @@ function AthleteStatusCard({ athlete, weeklyCharge, currentWeek, injuries, sessi
     [wellnessToday, metrics]
   );
   const activeInj = (injuries ?? []).filter(i => i.athleteId === athlete.id && i.status !== "résolu");
-  const weekSess  = sessions.filter(s => s.week === currentWeek && s.athleteIds?.includes(athlete.id));
+  const weekSess = sessions.filter(s =>
+    matchesISOWeek(s, currentWeek, currentYear) && s.athleteIds?.includes(athlete.id)
+  );
   const doneCount = weekSess.filter(s => s.validations?.find(v => v.athleteId === athlete.id && v.status === "done")).length;
-  const hasCharge = weeklyCharge.some(w => w.athleteId === athlete.id);
+  const hasCharge = weeklyCharge.some(row =>
+    row.athleteId === athlete.id && matchesISOWeek(row, currentWeek, currentYear)
+  );
   const isAtRisk  = false;
 
   const readColor = status.color;
@@ -357,6 +361,11 @@ function Dashboard({
   const { clubId, profile } = useAuth();
   const today       = new Date();
   const currentWeek = getISOWeek(today);
+  const currentYear = getISOWeekYear(today);
+  const previousWeekDate = new Date(today);
+  previousWeekDate.setDate(previousWeekDate.getDate() - 7);
+  const previousWeek = getISOWeek(previousWeekDate);
+  const previousYear = getISOWeekYear(previousWeekDate);
 
   const [athletes,     setAthletes]     = useState([]);
   const [weeklyCharge, setWeeklyCharge] = useState([]);
@@ -409,7 +418,7 @@ function Dashboard({
       });
 
       const charge = (chargeRes.data ?? []).map(c => ({
-        athleteId: c.athlete_id, week: c.week, rawLoad: c.raw_load,
+        athleteId: c.athlete_id, week: c.week, isoYear: c.iso_year, rawLoad: c.raw_load,
         dailyLoads: c.daily_loads ?? [], knownDays: c.known_days ?? 0,
         unknownDays: c.unknown_days ?? 0, estimatedDays: c.estimated_days ?? 0,
       }));
@@ -456,42 +465,42 @@ function Dashboard({
         await checkAndAlertACWR(clubId, mappedAthletes, charge, currentWeek);
       }
       if (mappedAthletes.length > 0) {
-        await checkWeeklyRecap(clubId, mappedAthletes, mappedSessions, currentWeek, profile?.id ?? null);
-        await checkWeeklyReports(clubId, mappedAthletes, currentWeek, profile?.id ?? null);
+        await checkWeeklyRecap(clubId, mappedAthletes, mappedSessions, currentWeek, profile?.id ?? null, currentYear);
+        await checkWeeklyReports(clubId, mappedAthletes, currentWeek, profile?.id ?? null, currentYear);
       }
     } catch (err) {
       setError(err.message ?? "Erreur inconnue");
     } finally { setLoading(false); }
-  }, [clubId, currentWeek, profile?.id]);
+  }, [clubId, currentWeek, currentYear, profile?.id]);
 
   useEffect(() => { fetchAll(); }, [fetchAll]);
 
   // ═══ Métriques (identique à l'original) ════════════════════════════════════
   const metrics = useMemo(() => {
-    const currentCharges = weeklyCharge.filter(w => w.week === currentWeek);
+    const currentCharges = weeklyCharge.filter(row => matchesISOWeek(row, currentWeek, currentYear));
     const avgCharge = currentCharges.length > 0
       ? Math.round(currentCharges.reduce((s, w) => s + w.rawLoad, 0) / currentCharges.length)
       : null;
-    const prevCharges = weeklyCharge.filter(w => w.week === currentWeek - 1);
+    const prevCharges = weeklyCharge.filter(row => matchesISOWeek(row, previousWeek, previousYear));
     const prevAvg = prevCharges.length > 0
       ? Math.round(prevCharges.reduce((s, w) => s + w.rawLoad, 0) / prevCharges.length)
       : null;
     const trend = avgCharge && prevAvg ? Math.round(((avgCharge - prevAvg) / prevAvg) * 100) : null;
     const actifs = currentCharges.length;
     const unreadAlerts = alerts.filter(a => !a.is_read).length;
-    const weekSessions = sessions.filter(s => s.week === currentWeek);
+    const weekSessions = sessions.filter(session => matchesISOWeek(session, currentWeek, currentYear));
     const totalExpected = weekSessions.reduce((s, sess) => s + sess.athleteIds.length, 0);
     const totalDone = weekSessions.reduce((s, sess) => s + (sess.validations?.filter(v => v.status === "done").length ?? 0), 0);
     const validationRate = totalExpected > 0 ? Math.round((totalDone / totalExpected) * 100) : null;
     const pendingAthleteSession = sessions.filter(s => s.createdByAthlete).length;
     return { avgCharge, trend, actifs, unreadAlerts, validationRate, pendingAthleteSession };
-  }, [weeklyCharge, sessions, alerts, currentWeek]);
+  }, [weeklyCharge, sessions, alerts, currentWeek, currentYear, previousWeek, previousYear]);
 
   // Les anciens blocs "surcharge"/"blessés" (chiffres bruts) sont remplacés
   // par ce fil narrativisé et priorisé — voir src/utils/coachFeed.js.
   const coachFeed = useMemo(
-    () => buildCoachFeed({ athletes, weeklyCharge, sessions, injuries, competitions, alerts, currentWeek }),
-    [athletes, weeklyCharge, sessions, injuries, competitions, alerts, currentWeek]
+    () => buildCoachFeed({ athletes, weeklyCharge, sessions, injuries, competitions, alerts, currentWeek, currentYear }),
+    [athletes, weeklyCharge, sessions, injuries, competitions, alerts, currentWeek, currentYear]
   );
 
   const groupDailyState = useMemo(
@@ -721,6 +730,7 @@ function Dashboard({
                   athlete={a}
                   weeklyCharge={weeklyCharge}
                   currentWeek={currentWeek}
+                  currentYear={currentYear}
                   injuries={injuries}
                   sessions={sessions}
                   wellnessToday={wellnessRows.find(row => row.athleteId === a.id)}

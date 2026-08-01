@@ -1,22 +1,18 @@
-import { useEffect } from "react";
 import { createPortal } from "react-dom";
 import { Activity, BookOpen, Calculator, ChevronRight, Database, HeartHandshake, Info, Sparkles, X } from "lucide-react";
+import { useAccessibleDialog } from "../../hooks/useAccessibleDialog";
 
 const FACTOR_COLORS = { positive: "#7BD8B4", neutral: "#A9CBFB", attention: "#F2C46D", unknown: "#8A9B90" };
 
 export default function DailyStateDetailPanel({ state, onClose, onOpenMetric }) {
-  useEffect(() => {
-    const close = event => { if (event.key === "Escape") onClose(); };
-    window.addEventListener("keydown", close);
-    return () => window.removeEventListener("keydown", close);
-  }, [onClose]);
+  const { dialogRef } = useAccessibleDialog({ onClose });
 
   const helps = state.helps ?? state.factors?.filter(item => item.tone === "positive").map(item => item.meaning) ?? [];
   const watch = state.watch ?? state.factors?.filter(item => item.tone === "attention").map(item => item.meaning) ?? [];
 
   return createPortal(
     <div className="fixed inset-0 z-[110] flex items-end justify-center modal-backdrop" style={{ background: "rgba(2,7,12,0.78)", backdropFilter: "blur(14px)" }} onClick={event => event.target === event.currentTarget && onClose()}>
-      <section role="dialog" aria-modal="true" aria-labelledby="daily-state-title" className="w-full max-w-2xl overflow-hidden rounded-t-3xl border modal-content" style={{ maxHeight: "92dvh", background: "linear-gradient(180deg, var(--c-surface), var(--c-bg))", borderColor: "var(--c-border-strong)", animation: "sheet-up 0.34s cubic-bezier(0.16,1,0.3,1) both" }}>
+      <section ref={dialogRef} tabIndex={-1} role="dialog" aria-modal="true" aria-labelledby="daily-state-title" className="w-full max-w-2xl overflow-hidden rounded-t-3xl border modal-content" style={{ maxHeight: "92dvh", background: "linear-gradient(180deg, var(--c-surface), var(--c-bg))", borderColor: "var(--c-border-strong)", animation: "sheet-up 0.34s cubic-bezier(0.16,1,0.3,1) both" }}>
         <div className="flex justify-center pt-3"><div className="h-1 w-10 rounded-full" style={{ background: "var(--c-border-strong)" }} /></div>
         <header className="relative overflow-hidden px-5 pb-5 pt-3 sm:px-6">
           <div className="absolute inset-0 pointer-events-none" style={{ background: `radial-gradient(circle at 15% 20%, ${state.color}2B, transparent 43%)` }} />

@@ -5,6 +5,7 @@ import {
   buildGroupLoadOverview,
   buildGroupLoadStory,
   describeLoadVariation,
+  getWeeklyLoadRow,
   getWeeklyLoadState,
 } from "./coachLoadPresentation.js";
 
@@ -63,5 +64,15 @@ describe("présentation de la charge coach", () => {
     expect(athleteSeriesKey(11)).not.toBe(athleteSeriesKey(12));
     expect(series[0]).toHaveProperty("athlete_11");
     expect(series[0]).toHaveProperty("athlete_12");
+  });
+
+  it("ne mélange pas la charge d'une même semaine entre deux années", () => {
+    const rows = [
+      { athleteId: 11, week: 1, isoYear: 2029, rawLoad: 900 },
+      { athleteId: 11, week: 1, isoYear: 2030, rawLoad: 300 },
+    ];
+    expect(getWeeklyLoadRow(rows, 11, 1, 2030)?.rawLoad).toBe(300);
+    expect(buildExperimentalAcwrSeries([{ id: 11 }], rows).map((point) => point.label))
+      .toEqual(["S1 · 2029", "S1 · 2030"]);
   });
 });

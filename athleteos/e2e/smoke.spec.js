@@ -17,6 +17,13 @@ test("l'app démarre et affiche l'écran de connexion", async ({ page }) => {
   await expect(page.getByRole("button", { name: "Se connecter" })).toBeVisible();
 });
 
+test("le viewport mobile laisse l’utilisateur zoomer", async ({ page }) => {
+  await page.goto("/");
+  const viewport = await page.locator('meta[name="viewport"]').getAttribute("content");
+  expect(viewport).not.toMatch(/user-scalable\s*=\s*no/i);
+  expect(viewport).not.toMatch(/maximum-scale\s*=\s*1(?:\.0)?/i);
+});
+
 test("le lien vers l'inscription est visible et navigue", async ({ page }) => {
   await page.goto("/");
   await page.getByText("Pas encore de compte ?").click();

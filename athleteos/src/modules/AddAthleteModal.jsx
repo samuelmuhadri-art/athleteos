@@ -7,6 +7,7 @@ import { memo, useState } from "react";
 import { createPortal } from "react-dom";
 import { Plus, X } from "lucide-react";
 import { inputCls, labelCls, RADAR_KEYS, scoreColor } from "./athleteListShared";
+import { useAccessibleDialog } from "../hooks/useAccessibleDialog";
 
 const AddAthleteModal = memo(({ onClose, onCreate, initialData = null }) => {
   const isEdit = initialData != null;
@@ -18,6 +19,7 @@ const AddAthleteModal = memo(({ onClose, onCreate, initialData = null }) => {
   const [showProfile, setShowProfile] = useState(isEdit);
   const [saving, setSaving]           = useState(false);
   const [err, setErr]                 = useState(null);
+  const { dialogRef, titleId } = useAccessibleDialog({ onClose, closeDisabled: saving });
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
   const handleSubmit = async () => {
@@ -30,12 +32,13 @@ const AddAthleteModal = memo(({ onClose, onCreate, initialData = null }) => {
   return createPortal(
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4 modal-backdrop"
       onClick={e => e.target === e.currentTarget && !saving && onClose()}>
-      <div className="rounded-t-3xl sm:rounded-3xl shadow-2xl w-full max-w-lg max-h-[95vh] sm:max-h-[90vh] flex flex-col overflow-hidden modal-content"
+      <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby={titleId} tabIndex={-1}
+           className="rounded-t-3xl sm:rounded-3xl shadow-2xl w-full max-w-lg max-h-[95vh] sm:max-h-[90vh] flex flex-col overflow-hidden modal-content"
            style={{ background: "var(--c-surface)" }}>
         <div className="flex justify-center pt-3 pb-1 sm:hidden flex-shrink-0"><div className="w-10 h-1 rounded-full" style={{ background: "var(--c-border-strong)" }} /></div>
         <div className="px-6 py-5 flex items-center justify-between flex-shrink-0" style={{ borderBottom: "1px solid var(--c-border)" }}>
           <div>
-            <h2 className="text-[17px] font-bold" style={{ color: "var(--c-text-1)" }}>
+            <h2 id={titleId} className="text-[17px] font-bold" style={{ color: "var(--c-text-1)" }}>
               {isEdit ? "Modifier le profil" : "Inscrire un athlète"}
             </h2>
             <p className="text-[13px] mt-0.5" style={{ color: "var(--c-text-2)" }}>

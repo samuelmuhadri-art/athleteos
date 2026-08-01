@@ -17,7 +17,7 @@ import { useAuth }   from "../context/AuthContext";
 import LoadingState  from "../components/ui/LoadingState";
 import ErrorState    from "../components/ui/ErrorState";
 import { EmptyState, PageHeader, SegmentedTabs, StatCard } from "../components/ui/premium";
-import { getISOWeek, initialsFromName } from "../utils/helpers.js";
+import { getISOWeek, getISOWeekYear, initialsFromName } from "../utils/helpers.js";
 import { CATEGORIES, colorsFor } from "../athlete/shared";
 import { getSessionTrainingFocus } from "../domain/trainingFocus";
 import { getRPELabel } from "../utils/chargeCalculations";
@@ -26,6 +26,7 @@ import {
   buildWeeklyReport, buildMonthlyAggregate,
 } from "../utils/weeklyReports";
 import { checkWeeklyReports } from "../utils/notifications";
+import { useAccessibleDialog } from "../hooks/useAccessibleDialog";
 
 // ─── Sous-composants ──────────────────────────────────────────────────────
 
@@ -114,12 +115,13 @@ function AthleteWeekRow({ athlete, report, onClick }) {
 
 // ─── Panneau détail — rapport complet d'un athlète pour une semaine ───────
 function AthleteWeekDetail({ athlete, report, onClose }) {
+  const { dialogRef } = useAccessibleDialog({ onClose });
   const { stats, metrics, categoriesWorked, categoriesAbsent, wellnessAvg, summary, sessions, dateRange, week } = report;
 
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4 modal-backdrop"
       onClick={e => e.target === e.currentTarget && onClose()}>
-      <div role="dialog" aria-modal="true" aria-labelledby="athlete-report-title" className="rounded-t-3xl sm:rounded-3xl shadow-2xl w-full sm:max-w-lg max-h-[92vh] flex flex-col overflow-hidden modal-content border border-[var(--c-border)]"
+      <div ref={dialogRef} tabIndex={-1} role="dialog" aria-modal="true" aria-labelledby="athlete-report-title" className="rounded-t-3xl sm:rounded-3xl shadow-2xl w-full sm:max-w-lg max-h-[92vh] flex flex-col overflow-hidden modal-content border border-[var(--c-border)]"
         style={{ background: "var(--c-surface)" }}>
 
         <div className="px-4 sm:px-5 py-4 border-b border-[var(--c-border)] flex items-center gap-3" style={{ background: "rgba(29,158,117,0.06)" }}>
@@ -273,7 +275,9 @@ function AthleteMonthCard({ athlete, aggregate }) {
 // ─── Composant principal ───────────────────────────────────────────────────
 export default function Rapports() {
   const { clubId, profile } = useAuth();
-  const currentWeek = getISOWeek(new Date());
+  const now = useMemo(() => new Date(), []);
+  const currentWeek = getISOWeek(now);
+  const currentYear = getISOWeekYear(now);
 
   const [athletes,     setAthletes]     = useState([]);
   const [sessions,     setSessions]     = useState([]);
@@ -321,7 +325,7 @@ export default function Rapports() {
       });
 
       const mappedCharge = (chargeRes.data ?? [])
-        .map(c => ({ athleteId: c.athlete_id, week: c.week, rawLoad: c.raw_load, dailyLoads: c.daily_loads ?? [], knownDays: c.known_days ?? 0, unknownDays: c.unknown_days ?? 0, estimatedDays: c.estimated_days ?? 0 }));
+        .map(c => ({ athleteId: c.athlete_id, week: c.week, isoYear: c.iso_year, rawLoad: c.raw_load, dailyLoads: c.daily_loads ?? [], knownDays: c.known_days ?? 0, unknownDays: c.unknown_days ?? 0, estimatedDays: c.estimated_days ?? 0 }));
 
       const mappedWellness = (wellnessRes.data ?? []).map(w => ({
         athleteId: w.athlete_id, date: w.date, sleep: w.sleep, energy: w.energy,
@@ -335,7 +339,7 @@ export default function Rapports() {
 
       if (mappedAthletes.length > 0) {
         try {
-          await checkWeeklyReports(clubId, mappedAthletes, currentWeek, profile?.id ?? null);
+          await checkWeeklyReports(clubId, mappedAthletes, currentWeek, profile?.id ?? null, currentYear);
         } catch (notificationError) {
           console.error("Rapports — notifications hebdomadaires :", notificationError);
         }
@@ -343,7 +347,7 @@ export default function Rapports() {
     } catch (err) {
       setError(err.message ?? "Erreur inconnue");
     } finally { setLoading(false); }
-  }, [clubId, currentWeek, profile?.id]);
+  }, [clubId, currentWeek, currentYear, profile?.id]);
 
   useEffect(() => { fetchAll(); }, [fetchAll]);
 
@@ -353,11 +357,11 @@ export default function Rapports() {
     if (selectedWeek == null) return [];
     return athletes.map(athlete => ({
       athlete,
-      report: buildWeeklyReport({ athleteId: athlete.id, week: selectedWeek, sessions, weeklyCharge, wellnessRows }),
+      report: buildWeeklyReport({ athleteId: athlete.id, week: selectedWeek.week, isoYear: selectedWeek.isoYear, sessions, weeklyCharge, wellnessRows }),
     })).sort((a, b) => b.report.stats.total - a.report.stats.total);
   }, [selectedWeek, athletes, sessions, weeklyCharge, wellnessRows]);
 
-  const last4Weeks = useMemo(() => weeks.slice(0, 4).map(w => w.week), [weeks]);
+  const last4Weeks = useMemo(() => weeks.slice(0, 4), [weeks]);
 
   const monthAggregates = useMemo(() => {
     if (viewMode !== "month" || last4Weeks.length === 0) return [];
@@ -368,17 +372,19 @@ export default function Rapports() {
   }, [viewMode, last4Weeks, athletes, sessions, weeklyCharge, wellnessRows]);
 
   const latestWeekOverview = useMemo(() => {
-    const latestWeek = weeks[0]?.week;
-    if (latestWeek == null) return null;
+    const latestWeek = weeks[0];
+    if (!latestWeek) return null;
     const reports = athletes.map(athlete => buildWeeklyReport({
       athleteId: athlete.id,
-      week: latestWeek,
+      week: latestWeek.week,
+      isoYear: latestWeek.isoYear,
       sessions,
       weeklyCharge,
       wellnessRows,
     }));
     return {
-      week: latestWeek,
+      week: latestWeek.week,
+      isoYear: latestWeek.isoYear,
       planned: reports.reduce((sum, report) => sum + report.stats.total, 0),
       done: reports.reduce((sum, report) => sum + report.stats.done, 0),
       totalLoad: reports.reduce((sum, report) => sum + report.stats.totalLoad, 0),
@@ -388,7 +394,7 @@ export default function Rapports() {
   if (loading) return <LoadingState message="Chargement des rapports…" />;
   if (error)   return <ErrorState  message={error} onRetry={fetchAll} />;
 
-  const selectedWeekMeta = weeks.find(w => w.week === selectedWeek);
+  const selectedWeekMeta = weeks.find(w => w.key === selectedWeek?.key);
   const selectedAthleteReport = selectedAthlete != null
     ? weekReports.find(r => r.athlete.id === selectedAthlete)
     : null;
@@ -413,7 +419,7 @@ export default function Rapports() {
       {latestWeekOverview && (
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 md:gap-4">
           {[
-            { label: "Dernier rapport", value: `S${latestWeekOverview.week}`, detail: "semaine la plus récente" },
+            { label: "Dernier rapport", value: `S${latestWeekOverview.week} · ${latestWeekOverview.isoYear}`, detail: "semaine la plus récente" },
             { label: "Séances réalisées", value: `${latestWeekOverview.done}/${latestWeekOverview.planned}`, detail: "cumul du groupe" },
             { label: "Charge cumulée", value: latestWeekOverview.totalLoad, detail: "unités arbitraires" },
           ].map(item => (
@@ -433,8 +439,8 @@ export default function Rapports() {
         ) : (
           <div className="space-y-2.5">
             {weeks.map(w => (
-              <WeekCard key={w.week} week={w.week} dateRange={w.dateRange} sessionCount={w.sessionCount}
-                onClick={() => setSelectedWeek(w.week)} />
+              <WeekCard key={w.key} week={w.week} dateRange={w.dateRange} sessionCount={w.sessionCount}
+                onClick={() => setSelectedWeek(w)} />
             ))}
           </div>
         )
@@ -447,7 +453,7 @@ export default function Rapports() {
           </button>
           <div className="card" style={{ overflow: "hidden" }}>
             <div style={{ padding: "14px 16px", borderBottom: "1px solid var(--c-border)" }}>
-              <p className="card-title">{formatWeekLabel(selectedWeek, selectedWeekMeta?.dateRange)}</p>
+              <p className="card-title">{formatWeekLabel(selectedWeek.week, selectedWeekMeta?.dateRange, selectedWeek.isoYear)}</p>
             </div>
             {weekReports.map(({ athlete, report }) => (
               <AthleteWeekRow key={athlete.id} athlete={athlete} report={report} onClick={() => setSelectedAthlete(athlete.id)} />

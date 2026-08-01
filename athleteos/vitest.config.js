@@ -9,6 +9,10 @@ export default defineConfig({
   test: {
     environment: 'jsdom',
     globals: false,
+    // Sur Windows/OneDrive, trop de workers jsdom en parallèle saturent le
+    // disque et provoquent de faux timeouts sur des tests qui passent seuls.
+    pool: 'threads',
+    maxWorkers: 2,
     include: ['src/**/*.test.{js,jsx}'],
     // Les tests unitaires qui importent un composant utilisant Supabase
     // remplacent ensuite ses appels par des mocks. Le SDK exige toutefois

@@ -1,5 +1,5 @@
-import { useEffect } from "react";
 import { X } from "lucide-react";
+import { useAccessibleDialog } from "../../hooks/useAccessibleDialog";
 
 function SheetBadge({ count }) {
   if (!count || count < 1) return null;
@@ -12,18 +12,14 @@ function SheetBadge({ count }) {
 }
 
 export default function MobileMoreSheet({ items, activeId, onSelect, onClose }) {
-  useEffect(() => {
-    const closeOnEscape = (event) => {
-      if (event.key === "Escape") onClose();
-    };
-    window.addEventListener("keydown", closeOnEscape);
-    return () => window.removeEventListener("keydown", closeOnEscape);
-  }, [onClose]);
+  const { dialogRef } = useAccessibleDialog({ onClose });
 
   return (
     <>
       <div className="bottom-sheet-backdrop md:hidden" aria-hidden="true" onClick={onClose} />
       <section
+        ref={dialogRef}
+        tabIndex={-1}
         className="bottom-sheet md:hidden coach-more-sheet"
         role="dialog"
         aria-modal="true"

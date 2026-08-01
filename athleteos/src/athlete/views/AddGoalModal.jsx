@@ -5,13 +5,15 @@
 
 import { createPortal } from "react-dom";
 import { Plus, Target, X } from "lucide-react";
+import { useAccessibleDialog } from "../../hooks/useAccessibleDialog";
 
 export default function AddGoalModal({ disciplines, goalForm, setGoalForm, onClose, onSubmit, saving }) {
+  const { dialogRef } = useAccessibleDialog({ onClose, closeDisabled: saving });
   const labelStyle = { display: "block", fontSize: 12, fontWeight: 700, color: "var(--c-text-2)", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 8 };
   return createPortal(
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4 modal-backdrop"
       onClick={e => e.target === e.currentTarget && !saving && onClose()}>
-      <form onSubmit={event => { event.preventDefault(); onSubmit(); }} role="dialog" aria-modal="true" aria-labelledby="add-goal-title"
+      <form ref={dialogRef} tabIndex={-1} onSubmit={event => { event.preventDefault(); onSubmit(); }} role="dialog" aria-modal="true" aria-labelledby="add-goal-title"
         className="rounded-t-3xl sm:rounded-3xl shadow-2xl w-full sm:max-w-sm max-h-[90vh] flex flex-col overflow-hidden modal-content"
         style={{ background: "var(--c-surface)" }}>
 

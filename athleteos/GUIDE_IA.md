@@ -52,19 +52,26 @@ Pour vous connecter en local :
    (SQL Editor de Studio, ou `psql` sur `DB_URL` donné par `supabase status`.)
 5. Connectez-vous dans l'app avec l'email/mot de passe créés à l'étape 2 — vous arrivez sur le compte head coach du club de démo.
 
-## 4. Lancer la suite de tests RLS en local
+## 4. Lancer les suites locales
 
 ```bash
-supabase status -o env | sed 's/"//g' | grep -E '^[A-Z_]+=' > /tmp/supa.env
-export $(cat /tmp/supa.env | xargs)
-node test_rls_regression.mjs
+supabase status -o env
+npm run test:rls
+npm run test:integration
+E2E_WITH_AUTH=1 npm run test:e2e
 ```
 
-(C'est exactement ce que fait `.github/workflows/rls-check.yml` en CI — voir ce fichier pour la version pas-à-pas.)
+Sous PowerShell, exporter les valeurs retournées par `supabase status -o env`
+dans la session courante puis utiliser `$env:E2E_WITH_AUTH='1'` pour les E2E.
+La CI exécute la suite RLS deux fois afin de vérifier son déterminisme.
 
 ## 5. Régénérer les types TypeScript du schéma
 
-Le projet est en JavaScript pur (pas de TypeScript, aucun `tsconfig.json`) — le fichier généré (`src/types/database.types.ts`) sert de référence/autocomplétion IDE via JSDoc (`@type {import('./types/database.types').Database}`), pas à une étape de build. À régénérer après tout changement de schéma :
+Le frontend reste principalement en JavaScript/JSX, mais le dépôt contient un
+`tsconfig.json` et un contrôle progressif `npm run typecheck`. `checkJs` reste
+volontairement désactivé globalement ; les fichiers `.ts` et les fichiers JS
+opt-in avec `// @ts-check` sont contrôlés. Le fichier généré
+`src/types/database.types.ts` doit être régénéré après tout changement de schéma :
 
 ```bash
 # Depuis le schéma distant (production) — ne nécessite pas Docker :
@@ -99,4 +106,7 @@ Toujours créer une **nouvelle** migration plutôt que modifier un fichier déj�
 
 ## 8. CI
 
-`.github/workflows/rls-check.yml` reconstruit une base Supabase locale et jetable à chaque push/PR sur `main` (mêmes étapes que la section 1 ci-dessus, en automatique) et lance la suite RLS deux fois de suite contre elle. Ne touche jamais la production — c'est le test qui valide que ce guide fonctionne réellement, pas seulement en théorie.
+`.github/workflows/ci.yml` reconstruit une base Supabase locale et jetable à
+chaque push/PR sur `main`. Il lance `npm run check`, la suite RLS deux fois,
+toutes les intégrations et les parcours Playwright authentifiés contre cette
+instance locale. Il ne touche jamais la production.

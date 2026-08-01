@@ -15,6 +15,9 @@ import { initialsFromName, colorsFor, getISOWeek } from "../shared";
 import { notifyClubNewPost, notifyCoachClubPost } from "../../utils/notifications";
 import { filterClubPosts, validateSocialImage } from "./clubFeed";
 import { EmptyState, SegmentedTabs } from "../../components/ui/premium";
+import { getISOWeekInfo, matchesISOWeek } from "../../utils/helpers";
+import { captureError } from "../../utils/sentry";
+import { useAccessibleDialog } from "../../hooks/useAccessibleDialog";
 
 const AVATAR_COLORS = ["#1D9E75","#5B8DEF","#9B84F0","#E8A020","#E05252","#14B8A6","#F97316","#EC4899"];
 const QUICK_REACTIONS = ["🔥","💪","👏","⚡","🎯","❤️"];
@@ -55,6 +58,7 @@ const CommentsModal = memo(({ post, athlete, allAthletes, onClose, onCommentAdde
   const [sending, setSending]   = useState(false);
   const [error, setError]       = useState(null);
   const endRef = useRef(null);
+  const { dialogRef } = useAccessibleDialog({ onClose });
 
   useEffect(() => {
     supabase.from("social_comments").select("*").eq("post_id", post.id).order("created_at", { ascending:true })
@@ -97,7 +101,7 @@ const CommentsModal = memo(({ post, athlete, allAthletes, onClose, onCommentAdde
   return createPortal(
     <div style={{ position:"fixed", inset:0, zIndex:9999, display:"flex", flexDirection:"column", background:"rgba(0,0,0,0.75)", backdropFilter:"blur(12px)" }}
       onClick={e => e.target===e.currentTarget && onClose()}>
-      <div role="dialog" aria-modal="true" aria-labelledby="comments-title" style={{ marginTop:"auto", width:"100%", maxWidth:640, alignSelf:"center", background:"var(--c-surface)", borderRadius:"24px 24px 0 0", border:"1px solid var(--c-border)", display:"flex", flexDirection:"column", maxHeight:"88dvh" }}>
+      <div ref={dialogRef} tabIndex={-1} role="dialog" aria-modal="true" aria-labelledby="comments-title" style={{ marginTop:"auto", width:"100%", maxWidth:640, alignSelf:"center", background:"var(--c-surface)", borderRadius:"24px 24px 0 0", border:"1px solid var(--c-border)", display:"flex", flexDirection:"column", maxHeight:"88dvh" }}>
         {/* Handle */}
         <div style={{ display:"flex", justifyContent:"center", padding:"10px 0 4px" }}>
           <div style={{ width:32, height:3, borderRadius:99, background:"var(--c-border-strong)" }}/>
@@ -190,6 +194,7 @@ const QuickPostModal = memo(({ session, athlete, allAthletes, clubId, coachUserI
   const [caption,  setCaption]  = useState(session ? `Séance "${session.title}" ✅` : "");
   const [posting,  setPosting]  = useState(false);
   const [err,      setErr]      = useState(null);
+  const { dialogRef } = useAccessibleDialog({ onClose, closeDisabled: posting });
   const pickImage = e => {
     const f = e.target.files?.[0]; if (!f) return;
     const validationError = validateSocialImage(f);
@@ -275,7 +280,7 @@ const QuickPostModal = memo(({ session, athlete, allAthletes, clubId, coachUserI
 
       {preview ? (
         /* Mode plein écran photo */
-        <div role="dialog" aria-modal="true" aria-label="Prévisualiser la publication" style={{ flex:1, display:"flex", flexDirection:"column" }}>
+        <div ref={dialogRef} tabIndex={-1} role="dialog" aria-modal="true" aria-label="Prévisualiser la publication" style={{ flex:1, display:"flex", flexDirection:"column" }}>
           {/* Image plein écran */}
           <div style={{ flex:1, position:"relative", overflow:"hidden" }}>
             <img src={preview} alt="" style={{ width:"100%", height:"100%", objectFit:"cover" }}/>
@@ -321,7 +326,7 @@ const QuickPostModal = memo(({ session, athlete, allAthletes, clubId, coachUserI
         </div>
       ) : (
         /* Mode choix photo */
-        <div role="dialog" aria-modal="true" aria-labelledby="quick-post-title" style={{ marginTop:"auto", width:"100%", maxWidth:560, alignSelf:"center", background:"var(--c-surface)", borderRadius:"24px 24px 0 0", border:"1px solid var(--c-border)", display:"flex", flexDirection:"column", overflow:"hidden", maxHeight:"82dvh" }}>
+        <div ref={dialogRef} tabIndex={-1} role="dialog" aria-modal="true" aria-labelledby="quick-post-title" style={{ marginTop:"auto", width:"100%", maxWidth:560, alignSelf:"center", background:"var(--c-surface)", borderRadius:"24px 24px 0 0", border:"1px solid var(--c-border)", display:"flex", flexDirection:"column", overflow:"hidden", maxHeight:"82dvh" }}>
           <div style={{ display:"flex", justifyContent:"center", padding:"10px 0 4px" }}>
             <div style={{ width:32, height:3, borderRadius:99, background:"var(--c-border-strong)" }}/>
           </div>
@@ -557,6 +562,7 @@ export default function AthleteClub({ athlete, allAthletes, clubId, coachUserId,
   const postsCountRef = useRef(0);
 
   const currentWeek  = getISOWeek(new Date());
+  const currentWeekInfo = getISOWeekInfo(new Date());
   const sevenDaysAgo = useMemo(() => { const d=new Date(); d.setDate(d.getDate()-7); return d.toISOString(); }, []);
   const [squadStats, setSquadStats] = useState(null);
 
@@ -567,13 +573,27 @@ export default function AthleteClub({ athlete, allAthletes, clubId, coachUserId,
     if (!clubId || allAthletes.length === 0) return;
     let cancelled = false;
     (async () => {
-      const { data: sess } = await supabase.from("sessions").select("id, day").eq("club_id", clubId).eq("week", currentWeek);
-      const ids = (sess ?? []).filter(s => s.day !== "Dimanche").map(s => s.id);
+      const { data: sess, error: sessionsError } = await supabase.from("sessions")
+        .select("id")
+        .eq("club_id", clubId)
+        .gte("session_date", currentWeekInfo.startDate)
+        .lte("session_date", currentWeekInfo.endDate)
+        .neq("lifecycle_status", "cancelled");
+      if (sessionsError) {
+        captureError(sessionsError, { operation: "load_club_weekly_sessions" });
+        return;
+      }
+      const ids = (sess ?? []).map(s => s.id);
       const perAthlete = {};
       allAthletes.forEach(a => { perAthlete[a.id] = { done: 0, total: 0 }; });
       let total = 0, done = 0;
       if (ids.length > 0) {
-        const { data: rows } = await supabase.from("session_athletes").select("session_id, athlete_id, status").in("session_id", ids);
+        const { data: rows, error: rowsError } = await supabase.from("session_athletes")
+          .select("session_id, athlete_id, status").in("session_id", ids);
+        if (rowsError) {
+          captureError(rowsError, { operation: "load_club_weekly_participation" });
+          return;
+        }
         (rows ?? []).forEach(r => {
           if (!perAthlete[r.athlete_id]) return;
           perAthlete[r.athlete_id].total++; total++;
@@ -589,7 +609,7 @@ export default function AthleteClub({ athlete, allAthletes, clubId, coachUserId,
       setSquadStats({ total, done, pct: total > 0 ? Math.round((done / total) * 100) : null, ranking });
     })();
     return () => { cancelled = true; };
-  }, [clubId, currentWeek, allAthletes]);
+  }, [clubId, currentWeekInfo.endDate, currentWeekInfo.startDate, allAthletes]);
 
   // ── Fetch posts ────────────────────────────────────────────────────────────
   // Pagination par page de POSTS_PAGE_SIZE (au lieu d'un .limit(50) fixe qui
@@ -697,9 +717,12 @@ export default function AthleteClub({ athlete, allAthletes, clubId, coachUserId,
 
   // Séance validée la plus récente pour le bouton rapide
   const lastValidatedSession = useMemo(() =>
-    sessions.filter(s => s.week===currentWeek && s.validations?.find(v => v.athleteId===athlete.id && v.status==="done"))
+    sessions.filter(s =>
+      matchesISOWeek(s, currentWeek, currentWeekInfo.year)
+      && s.validations?.find(v => v.athleteId===athlete.id && v.status==="done")
+    )
       .sort((a,b) => (b.sessionDate??b.week).localeCompare(a.sessionDate??a.week))[0] ?? null,
-  [sessions, athlete.id, currentWeek]);
+  [sessions, athlete.id, currentWeek, currentWeekInfo.year]);
 
   // Est-ce que l'athlète a déjà posté aujourd'hui ?
   const postedToday = posts.some(p => p.athlete_id===athlete.id && (Date.now()-new Date(p.created_at))<86400000);
@@ -758,7 +781,7 @@ export default function AthleteClub({ athlete, allAthletes, clubId, coachUserId,
               </div>
               <div>
                 <p style={{ fontSize:15, fontWeight:700, color:"var(--c-text-1)" }}>Semaine du groupe</p>
-                <p style={{ fontSize:12, color:"var(--c-text-2)", marginTop:3 }}>S{currentWeek} · lundi → samedi</p>
+                <p style={{ fontSize:12, color:"var(--c-text-2)", marginTop:3 }}>S{currentWeek} · semaine complète</p>
               </div>
             </div>
             <div style={{ textAlign:"right", flexShrink:0 }}>

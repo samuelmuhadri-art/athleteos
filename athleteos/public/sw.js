@@ -20,7 +20,10 @@ self.addEventListener("install", (event) => {
       const urls = [...new Set(WB_MANIFEST.map((entry) =>
         typeof entry === "string" ? entry : entry.url
       ))];
-      return cache.addAll(urls).catch(() => {});
+      // En cas d'échec, l'installation doit échouer : le navigateur conserve
+      // alors l'ancien service worker fonctionnel au lieu d'activer un cache
+      // neuf mais incomplet.
+      return cache.addAll(urls);
     })
   );
   self.skipWaiting();
@@ -103,13 +106,18 @@ self.addEventListener("push", (event) => {
 // ── Notification click ────────────────────────────────────────
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
-  const url = event.notification.data?.url ?? "/";
+  let url = "/";
+  try {
+    const target = new URL(event.notification.data?.url ?? "/", self.location.origin);
+    if (target.origin === self.location.origin) url = `${target.pathname}${target.search}${target.hash}`;
+  } catch { /* URL invalide : retour sûr à l'accueil */ }
   event.waitUntil(
     self.clients
       .matchAll({ type: "window", includeUncontrolled: true })
-      .then((clients) => {
+      .then(async (clients) => {
         for (const client of clients) {
-          if ("focus" in client) { client.focus(); return; }
+          if ("navigate" in client) await client.navigate(url).catch(() => {});
+          if ("focus" in client) { await client.focus(); return; }
         }
         if (self.clients.openWindow) return self.clients.openWindow(url);
       })

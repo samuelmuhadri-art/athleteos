@@ -6,6 +6,7 @@
 import { memo, useState } from "react";
 import { X, Plus } from "lucide-react";
 import { TYPE_CONFIG } from "./competitionsShared";
+import { useAccessibleDialog } from "../hooks/useAccessibleDialog";
 
 const CreateCompModal = memo(({ athletes, onClose, onCreate }) => {
   const [form, setForm] = useState({
@@ -13,6 +14,7 @@ const CreateCompModal = memo(({ athletes, onClose, onCreate }) => {
   });
   const [saving,    setSaving]    = useState(false);
   const [saveError, setSaveError] = useState(null);
+  const { dialogRef } = useAccessibleDialog({ onClose, closeDisabled: saving });
 
   const set = (key, val) => setForm((f) => ({ ...f, [key]: val }));
 
@@ -60,7 +62,7 @@ const CreateCompModal = memo(({ athletes, onClose, onCreate }) => {
       className="modal-backdrop fixed inset-0 z-50 flex items-center justify-center p-4"
       onClick={(e) => e.target === e.currentTarget && !saving && onClose()}
     >
-      <div role="dialog" aria-modal="true" aria-labelledby="create-competition-title" className="modal-content bg-[var(--c-surface)] border border-[var(--c-border)] rounded-2xl shadow-2xl w-full max-w-md max-h-[90vh] flex flex-col overflow-hidden">
+      <div ref={dialogRef} tabIndex={-1} role="dialog" aria-modal="true" aria-labelledby="create-competition-title" className="modal-content bg-[var(--c-surface)] border border-[var(--c-border)] rounded-2xl shadow-2xl w-full max-w-md max-h-[90vh] flex flex-col overflow-hidden">
         <div className="px-4 sm:px-6 py-4 border-b border-[var(--c-border)] flex items-center justify-between">
           <h3 id="create-competition-title" className="section-title">Créer une compétition</h3>
           <button type="button" aria-label="Fermer" onClick={onClose} disabled={saving} className="min-w-11 min-h-11 inline-flex items-center justify-center rounded-lg hover:bg-[var(--c-surface-3)] transition-colors disabled:opacity-40">

@@ -1,9 +1,17 @@
 import { getAthleteMetricsForWeek } from "../utils/chargeCalculations.js";
+import { getISOWeekYear, matchesISOWeek } from "../utils/helpers.js";
 
 const finite = (value) => Number.isFinite(Number(value)) && value !== null && value !== "";
 
-export function getWeeklyLoadRow(weeklyCharge, athleteId, week) {
-  return (weeklyCharge ?? []).find((row) => row.athleteId === athleteId && row.week === week) ?? null;
+export function getWeeklyLoadRow(
+  weeklyCharge,
+  athleteId,
+  week,
+  isoYear = getISOWeekYear(new Date()),
+) {
+  return (weeklyCharge ?? []).find((row) =>
+    row.athleteId === athleteId && matchesISOWeek(row, week, isoYear)
+  ) ?? null;
 }
 
 export function getWeeklyLoadState(row) {
@@ -149,11 +157,23 @@ export function athleteSeriesKey(athleteId) {
 }
 
 export function buildExperimentalAcwrSeries(athletes, weeklyCharge) {
-  const allWeeks = [...new Set((weeklyCharge ?? []).map((row) => row.week))].sort((a, b) => a - b);
-  return allWeeks.map((week) => {
-    const point = { label: `S${week}` };
+  const allWeeks = [...new Map((weeklyCharge ?? []).map((row) => {
+    const isoYear = Number.isInteger(Number(row.isoYear)) ? Number(row.isoYear) : null;
+    const key = `${isoYear ?? "legacy"}-${row.week}`;
+    const cutoffDate = (row.dailyLoads ?? []).map((day) => day.date).filter(Boolean).sort().at(-1) ?? null;
+    return [key, { week: row.week, isoYear, cutoffDate }];
+  })).values()].sort((a, b) => (a.isoYear ?? 0) - (b.isoYear ?? 0) || a.week - b.week);
+  return allWeeks.map(({ week, isoYear, cutoffDate }) => {
+    const point = { label: isoYear == null ? `S${week}` : `S${week} · ${isoYear}` };
     (athletes ?? []).forEach((athlete) => {
-      point[athleteSeriesKey(athlete.id)] = getAthleteMetricsForWeek(athlete.id, weeklyCharge, week).acwr;
+      point[athleteSeriesKey(athlete.id)] = getAthleteMetricsForWeek(
+        athlete.id,
+        weeklyCharge,
+        week,
+        [],
+        [],
+        cutoffDate,
+      ).acwr;
     });
     return point;
   });

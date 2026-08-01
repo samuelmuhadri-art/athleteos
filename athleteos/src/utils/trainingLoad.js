@@ -1,4 +1,6 @@
 // ============================================================
+
+import { getISOWeekInfo, parseLocalDate } from "./helpers.js";
 // AthleteOS — trainingLoad.js
 // Calcul de la charge d'entraînement selon la méthode session-RPE
 // ============================================================
@@ -96,8 +98,27 @@ export function computeSessionLoad(durationMinutes, rpe) {
  * a été renseigné (les séances sans RPE ne comptent pas — pas de valeur
  * inventée).
  */
-export function computeWeeklyLoadFromSessions(athleteId, week, sessions) {
-  const weekSessions = sessions.filter((s) => s.week === week && s.athleteIds.includes(athleteId));
+function sessionIsoYear(session) {
+  const explicit = Number(session?.isoYear ?? session?.iso_year);
+  if (Number.isInteger(explicit)) return explicit;
+  const dateValue = session?.sessionDate ?? session?.session_date;
+  if (typeof dateValue === "string" && /^\d{4}-\d{2}-\d{2}/.test(dateValue)) {
+    return getISOWeekInfo(parseLocalDate(dateValue.slice(0, 10))).year;
+  }
+  return null;
+}
+
+function sessionWeekKey(session) {
+  const year = sessionIsoYear(session);
+  return year == null ? `legacy-${session.week}` : `${year}-W${String(session.week).padStart(2, "0")}`;
+}
+
+export function computeWeeklyLoadFromSessions(athleteId, week, sessions, isoYear = null) {
+  const weekSessions = sessions.filter((session) =>
+    session.week === week
+    && (isoYear == null || sessionIsoYear(session) == null || sessionIsoYear(session) === isoYear)
+    && session.athleteIds.includes(athleteId)
+  );
 
   let total = 0;
   let sessionCount = 0;
@@ -126,14 +147,22 @@ export function computeWeeklyLoadFromSessions(athleteId, week, sessions) {
  * semaines présentes dans les séances fournies.
  */
 export function computeAllWeeklyLoads(athletes, sessions) {
-  const allWeeks = [...new Set(sessions.map((s) => s.week))].sort((a, b) => a - b);
+  const allWeeks = [...new Map(sessions.map((session) => [
+    sessionWeekKey(session),
+    { week: session.week, isoYear: sessionIsoYear(session) },
+  ])).values()].sort((a, b) => (a.isoYear ?? 0) - (b.isoYear ?? 0) || a.week - b.week);
   const result = [];
 
   athletes.forEach((a) => {
-    allWeeks.forEach((week) => {
-      const { total, sessionCount } = computeWeeklyLoadFromSessions(a.id, week, sessions);
+    allWeeks.forEach(({ week, isoYear }) => {
+      const { total, sessionCount } = computeWeeklyLoadFromSessions(a.id, week, sessions, isoYear);
       if (sessionCount > 0) {
-        result.push({ athleteId: a.id, week, rawLoad: total });
+        result.push({
+          athleteId: a.id,
+          week,
+          rawLoad: total,
+          ...(isoYear == null ? {} : { isoYear }),
+        });
       }
     });
   });
@@ -145,11 +174,14 @@ export function computeAllWeeklyLoads(athletes, sessions) {
  * Ventile la charge du GROUPE par semaine ET par catégorie de séance.
  */
 export function computeWeeklyLoadByCategory(athletes, sessions) {
-  const allWeeks = [...new Set(sessions.map((s) => s.week))].sort((a, b) => a - b);
+  const allWeeks = [...new Map(sessions.map((session) => [
+    sessionWeekKey(session),
+    { key: sessionWeekKey(session), week: session.week, isoYear: sessionIsoYear(session) },
+  ])).values()].sort((a, b) => (a.isoYear ?? 0) - (b.isoYear ?? 0) || a.week - b.week);
   const result = [];
 
-  allWeeks.forEach((week) => {
-    const weekSessions = sessions.filter((s) => s.week === week);
+  allWeeks.forEach(({ key, week, isoYear }) => {
+    const weekSessions = sessions.filter((session) => sessionWeekKey(session) === key);
     const byCategory = {};
 
     weekSessions.forEach((s) => {
@@ -165,7 +197,7 @@ export function computeWeeklyLoadByCategory(athletes, sessions) {
     });
 
     Object.entries(byCategory).forEach(([category, total]) => {
-      result.push({ week, category, total });
+      result.push({ week, category, total, ...(isoYear == null ? {} : { isoYear }) });
     });
   });
 

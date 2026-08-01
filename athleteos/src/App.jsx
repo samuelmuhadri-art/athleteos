@@ -539,6 +539,9 @@ function CoachShell({ user, profile, clubId, signOut, club, clubLoading, refresh
 // ─── App root ─────────────────────────────────────────────────────────────────
 export default function App() {
   const { user, profile, clubId, loading: authLoading, signOut, passwordRecovery } = useAuth();
+  // Applique le thème dès l'écran public (connexion, inscription et reset),
+  // avant même que les shells coach/athlète soient montés.
+  useTheme();
   const inviteCodeFromUrl = useMemo(() => (
     normalizeInviteCode(new URLSearchParams(globalThis.location?.search ?? "").get("invite") ?? "")
   ), []);

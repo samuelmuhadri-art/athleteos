@@ -1,9 +1,10 @@
-import { memo, useEffect, useMemo } from "react";
+import { memo, useMemo } from "react";
 import { createPortal } from "react-dom";
 import { Activity, AlertCircle, BookOpen, Calculator, CheckCircle2, Database, X } from "lucide-react";
 import { getMonitoringReading } from "../../domain/monitoringMetrics.js";
 import { TRAINING_GAUGE_KEYS, getTrainingGaugeReading } from "../../domain/trainingGauges.js";
 import { getISOWeek } from "../shared";
+import { useAccessibleDialog } from "../../hooks/useAccessibleDialog";
 
 const LOAD_KEYS = new Set(["load7", "load28", "ewmaAcute", "ewmaChronic", "variation", "monotony", "acwrExperimental", "weeklyLoad", "fatigue"]);
 
@@ -13,11 +14,7 @@ const FormeDetailPanel = memo(({ metricKey, metrics, dailyState, sessions, weekl
     ? getTrainingGaugeReading(metricKey, { metrics, dailyState, sessions, athleteId: athlete.id, currentWeek })
     : getMonitoringReading(metricKey, metrics);
 
-  useEffect(() => {
-    const closeOnEscape = (event) => { if (event.key === "Escape") onClose(); };
-    window.addEventListener("keydown", closeOnEscape);
-    return () => window.removeEventListener("keydown", closeOnEscape);
-  }, [onClose]);
+  const { dialogRef } = useAccessibleDialog({ onClose, enabled: Boolean(reading) });
 
   const recentSessions = useMemo(() => (sessions ?? [])
     .filter((session) => session.athleteIds?.includes(athlete.id))
@@ -31,7 +28,7 @@ const FormeDetailPanel = memo(({ metricKey, metrics, dailyState, sessions, weekl
 
   const recentWeeks = useMemo(() => (weeklyCharge ?? [])
     .filter((week) => week.athleteId === athlete.id)
-    .sort((a, b) => a.week - b.week)
+    .sort((a, b) => (a.isoYear ?? 0) - (b.isoYear ?? 0) || a.week - b.week)
     .slice(-4), [athlete.id, weeklyCharge]);
 
   if (!reading) return null;
@@ -44,6 +41,8 @@ const FormeDetailPanel = memo(({ metricKey, metrics, dailyState, sessions, weekl
       onClick={(event) => event.target === event.currentTarget && onClose()}
     >
       <section
+        ref={dialogRef}
+        tabIndex={-1}
         role="dialog"
         aria-modal="true"
         aria-labelledby="monitoring-detail-title"

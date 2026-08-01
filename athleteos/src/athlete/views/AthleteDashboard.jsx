@@ -33,6 +33,7 @@ import { openSessionPdf } from "../../utils/storage";
 import { getTodayFocus } from "../dashboardFocus";
 import { buildDailyState } from "../../domain/dailyState";
 import DailyStateDetailPanel from "../components/DailyStateDetailPanel";
+import { getISOWeekInfo, getISOWeekYear, matchesISOWeek } from "../../utils/helpers";
 import { getSessionTrainingFocus } from "../../domain/trainingFocus";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -302,9 +303,10 @@ export default function AthleteDashboard({
   onOpenInjuryReport, allAthletes, onRpeChange, onStatusChange,
   onFeelingChange, onCommentChange, onRsvpChange,
 }) {
-  // Recalculé à chaque rendu pour rester juste après un changement de date.
-  const today       = new Date();
+  // Une référence stable évite de recalculer tous les indicateurs à chaque rendu.
+  const today       = useMemo(() => new Date(), []);
   const currentWeek = getISOWeek(today);
+  const currentYear = getISOWeekYear(today);
   const [openTodaySessionId, setOpenTodaySessionId] = useState(null);
   const [activeMetric, setActiveMetric] = useState(null);
   const [showDailyState, setShowDailyState] = useState(false);
@@ -339,8 +341,10 @@ export default function AthleteDashboard({
     .sort((a, b) => new Date(a.date) - new Date(b.date))[0] ?? null;
 
   const weekSessions = useMemo(() =>
-    sessions.filter(s => s.week === currentWeek).sort((a, b) => (a.time ?? "").localeCompare(b.time ?? "")),
-  [sessions, currentWeek]);
+    sessions
+      .filter(session => matchesISOWeek(session, currentWeek, currentYear))
+      .sort((a, b) => (a.time ?? "").localeCompare(b.time ?? "")),
+  [sessions, currentWeek, currentYear]);
 
   // Séance(s) du jour — la plus importante info de l'écran, mise en avant
   // juste sous le ring plutôt que noyée dans la liste de la semaine.
@@ -358,19 +362,26 @@ export default function AthleteDashboard({
   const activeInjuries = (athlete.injuries ?? []).filter(i => i.status !== "résolu");
 
   const streak = useMemo(() => {
-    let s = 0;
-    for (let w = currentWeek; w >= currentWeek - 20; w--) {
-      const ok = sessions.filter(se => se.week === w)
-        .some(se => se.validations?.some(v => v.athleteId === athlete.id && v.status === "done"));
-      if (ok) s++; else break;
+    let count = 0;
+    for (let offset = 0; offset <= 20; offset++) {
+      const weekDate = new Date(today);
+      weekDate.setDate(weekDate.getDate() - offset * 7);
+      const info = getISOWeekInfo(weekDate);
+      const completed = sessions
+        .filter(session => matchesISOWeek(session, info.week, info.year))
+        .some(session => session.validations?.some(
+          validation => validation.athleteId === athlete.id && validation.status === "done"
+        ));
+      if (completed) count += 1;
+      else break;
     }
-    return s;
-  }, [sessions, athlete.id, currentWeek]);
+    return count;
+  }, [sessions, athlete.id, today]);
 
 
   const axisProfile = useMemo(
-    () => getAthleteAxisProfile(athlete.id, sessions, currentWeek),
-    [athlete.id, sessions, currentWeek]
+    () => getAthleteAxisProfile(athlete.id, weekSessions, currentWeek),
+    [athlete.id, weekSessions, currentWeek]
   );
 
   const badges = useMemo(() =>

@@ -10,11 +10,13 @@ import { X, AlertTriangle, HeartPulse } from "lucide-react";
 import { supabase } from "../../utils/supabaseClient";
 import { alertNewInjury } from "../../utils/notifications";
 import { toLocalDateStr } from "../shared";
+import { useAccessibleDialog } from "../../hooks/useAccessibleDialog";
 
 const InjuryReportModal = memo(({ athlete, clubId, onClose, onSaved }) => {
   const [form, setForm] = useState({ name: "", location: "", intensity: 5, notes: "" });
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState(null);
+  const { dialogRef } = useAccessibleDialog({ onClose, closeDisabled: saving });
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
@@ -54,7 +56,7 @@ const InjuryReportModal = memo(({ athlete, clubId, onClose, onSaved }) => {
       }}
       onClick={e => e.target === e.currentTarget && !saving && onClose()}
     >
-      <div style={{
+      <div ref={dialogRef} tabIndex={-1} role="dialog" aria-modal="true" aria-labelledby="injury-report-title" style={{
         background: "var(--c-surface)",
         borderRadius: "20px 20px 0 0",
         border: "1px solid var(--c-border)",
@@ -87,7 +89,7 @@ const InjuryReportModal = memo(({ athlete, clubId, onClose, onSaved }) => {
                 <HeartPulse size={17} color="#E8A020" strokeWidth={2} />
               </div>
               <div>
-                <h3 style={{ fontSize: 14, fontWeight: 500, color: "var(--c-text-1)", lineHeight: 1.3 }}>
+                <h3 id="injury-report-title" style={{ fontSize: 14, fontWeight: 500, color: "var(--c-text-1)", lineHeight: 1.3 }}>
                   Signaler une blessure
                 </h3>
                 <p style={{ fontSize: 11, color: "var(--c-text-3)", marginTop: 2 }}>
@@ -95,7 +97,7 @@ const InjuryReportModal = memo(({ athlete, clubId, onClose, onSaved }) => {
                 </p>
               </div>
             </div>
-            <button onClick={onClose} disabled={saving}
+            <button type="button" aria-label="Fermer le signalement" onClick={onClose} disabled={saving}
               style={{ width: 32, height: 32, borderRadius: 9, background: "var(--c-surface-2)", border: "1px solid var(--c-border)", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: "var(--c-text-2)", flexShrink: 0, opacity: saving ? 0.4 : 1 }}>
               <X size={15} />
             </button>

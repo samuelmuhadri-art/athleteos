@@ -8,6 +8,7 @@ import { X, CheckCircle, AlertTriangle, Activity } from "lucide-react";
 import { supabase } from "../../utils/supabaseClient";
 import { computeWellnessScore } from "../../utils/chargeCalculations";
 import { WELLNESS_QUESTIONS, toLocalDateStr } from "../shared";
+import { useAccessibleDialog } from "../../hooks/useAccessibleDialog";
 
 const WellnessModal = memo(({ athlete, clubId, onClose, onSaved }) => {
   const [form, setForm] = useState({
@@ -16,6 +17,7 @@ const WellnessModal = memo(({ athlete, clubId, onClose, onSaved }) => {
   const [notes,  setNotes]  = useState("");
   const [saving, setSaving] = useState(false);
   const [err,    setErr]    = useState(null);
+  const { dialogRef } = useAccessibleDialog({ onClose, closeDisabled: saving });
 
   const allAnswered   = Object.values(form).every(v => v !== null);
   const answeredCount = Object.values(form).filter(v => v !== null).length;
@@ -60,9 +62,6 @@ const WellnessModal = memo(({ athlete, clubId, onClose, onSaved }) => {
 
   return (
     <div
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="wellness-dialog-title"
       style={{
         position: "fixed", inset: 0, zIndex: 9999,
         display: "flex", alignItems: "flex-end", justifyContent: "center",
@@ -72,7 +71,7 @@ const WellnessModal = memo(({ athlete, clubId, onClose, onSaved }) => {
       }}
       onClick={e => e.target === e.currentTarget && onClose()}
     >
-      <div style={{
+      <div ref={dialogRef} tabIndex={-1} role="dialog" aria-modal="true" aria-labelledby="wellness-dialog-title" style={{
         background: "var(--c-surface)",
         borderRadius: "20px 20px 0 0",
         border: "1px solid var(--c-border)",

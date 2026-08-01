@@ -38,6 +38,7 @@ describe("buildWeeklyReport", () => {
     const report = buildWeeklyReport({
       athleteId: 1,
       week: 30,
+      isoYear: 2026,
       sessions: [SESSION_WEEK_30],
       weeklyCharge: [{ athleteId: 1, week: 30, rawLoad: 360 }],
       wellnessRows: [selectedWeekWellness, followingWeekWellness],
@@ -50,6 +51,7 @@ describe("buildWeeklyReport", () => {
     const reportWithFutureCharge = buildWeeklyReport({
       athleteId: 1,
       week: 30,
+      isoYear: 2026,
       sessions: [SESSION_WEEK_30],
       weeklyCharge: [
         { athleteId: 1, week: 30, rawLoad: 360 },
@@ -59,6 +61,7 @@ describe("buildWeeklyReport", () => {
     const reportWithoutFutureCharge = buildWeeklyReport({
       athleteId: 1,
       week: 30,
+      isoYear: 2026,
       sessions: [SESSION_WEEK_30],
       weeklyCharge: [{ athleteId: 1, week: 30, rawLoad: 360 }],
     });
@@ -66,13 +69,26 @@ describe("buildWeeklyReport", () => {
     expect(reportWithFutureCharge.metrics.acute).toBe(reportWithoutFutureCharge.metrics.acute);
     expect(reportWithFutureCharge.metrics.acwr).toBe(reportWithoutFutureCharge.metrics.acwr);
   });
+
+  it("ne mélange pas une même semaine ISO de deux années", () => {
+    const oldSession = { ...SESSION_WEEK_30, id: 2, sessionDate: "2025-07-24" };
+    const report = buildWeeklyReport({
+      athleteId: 1,
+      week: 30,
+      isoYear: 2026,
+      sessions: [oldSession, SESSION_WEEK_30],
+      weeklyCharge: [],
+    });
+
+    expect(report.sessions.map(session => session.id)).toEqual([1]);
+  });
 });
 
 describe("buildMonthlyAggregate", () => {
   it("n'invente pas de tendance avec une seule semaine", () => {
     const aggregate = buildMonthlyAggregate({
       athleteId: 1,
-      weeks: [30],
+      weeks: [{ key: "2026-W30", week: 30, isoYear: 2026 }],
       sessions: [SESSION_WEEK_30],
       weeklyCharge: [{ athleteId: 1, week: 30, rawLoad: 360 }],
     });

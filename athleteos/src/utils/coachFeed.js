@@ -15,6 +15,7 @@
 
 import { getAthleteMetricsForWeek } from "./chargeCalculations";
 import { getAthleteAxisProfile, LOAD_AXES } from "./loadAxes";
+import { getISOWeekYear, matchesISOWeek } from "./helpers";
 
 // Un item "critical" passe toujours avant un "positive", peu importe
 // l'ordre dans lequel les règles ci-dessous ont été évaluées.
@@ -37,14 +38,14 @@ function localDateKey(value) {
 
 export function buildCoachFeed({
   athletes = [], weeklyCharge = [], sessions = [], injuries = [], competitions = [], alerts = [],
-  currentWeek, now = new Date(),
+  currentWeek, now = new Date(), currentYear = getISOWeekYear(now),
 }) {
   const items = [];
   const todayKey = localDateKey(now);
   const inSevenDays = new Date(now);
   inSevenDays.setDate(inSevenDays.getDate() + 7);
   const inSevenDaysKey = localDateKey(inSevenDays);
-  const weekSessions = sessions.filter(session => session.week === currentWeek);
+  const weekSessions = sessions.filter(session => matchesISOWeek(session, currentWeek, currentYear));
 
   const unreadAlerts = alerts.filter(alert => !alert.is_read);
   if (unreadAlerts.length > 0) {
@@ -93,7 +94,9 @@ export function buildCoachFeed({
   }
 
   athletes.forEach(athlete => {
-    const hasCharge = weeklyCharge.some(w => w.athleteId === athlete.id);
+    const hasCharge = weeklyCharge.some(row =>
+      row.athleteId === athlete.id && matchesISOWeek(row, currentWeek, currentYear)
+    );
     const name = firstName(athlete.name);
 
     if (hasCharge) {
@@ -126,7 +129,7 @@ export function buildCoachFeed({
     // plus marqué (évite de noyer le coach si plusieurs axes sortent en
     // même temps). Volontairement pas de chiffre — juste "quel axe" et
     // "ce que ça veut dire", cf. AxisRadarCard.
-    const axisProfile = getAthleteAxisProfile(athlete.id, sessions, currentWeek);
+    const axisProfile = getAthleteAxisProfile(athlete.id, weekSessions, currentWeek);
     if (axisProfile) {
       const worst = Object.entries(axisProfile).sort((a, b) => b[1].score - a[1].score)[0];
       if (worst && worst[1].score >= 75) {
@@ -140,8 +143,8 @@ export function buildCoachFeed({
     }
 
     // Absences répétées cette semaine.
-    const weekSessions = sessions.filter(s => s.week === currentWeek && s.athleteIds?.includes(athlete.id));
-    const missed = weekSessions.filter(s => s.validations?.find(v => v.athleteId === athlete.id && v.status === "none")).length;
+    const athleteWeekSessions = weekSessions.filter(s => s.athleteIds?.includes(athlete.id));
+    const missed = athleteWeekSessions.filter(s => s.validations?.find(v => v.athleteId === athlete.id && v.status === "none")).length;
     if (missed >= 2) {
       items.push({
         id: `absent-${athlete.id}`, priority: "warning", order: 65, icon: "users", color: "var(--tone-danger)", route: "athletes", label: "Absences répétées",

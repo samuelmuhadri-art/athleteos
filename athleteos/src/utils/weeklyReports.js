@@ -15,10 +15,10 @@
 
 import { computeSessionLoad, computeWellnessScore, getAthleteMetricsForWeek } from "./chargeCalculations";
 import { CATEGORIES } from "../athlete/shared";
-import { getISOWeek, parseLocalDate } from "./helpers.js";
+import { getISOWeekInfo, matchesISOWeek, parseLocalDate } from "./helpers.js";
 
 // ─── Semaines disponibles ─────────────────────────────────────────────────
-// Liste triée (desc) des numéros de semaine ISO présents dans les séances,
+// Liste triée (desc) des semaines ISO présentes dans les séances,
 // avec la plage de dates réelle (basée sur session_date, pas un calcul
 // d'arithmétique de calendrier) et le nombre de séances qu'elle contient.
 export function getAvailableWeeks(sessions, athleteId = null) {
@@ -28,25 +28,27 @@ export function getAvailableWeeks(sessions, athleteId = null) {
 
   const byWeek = new Map();
   relevant.forEach(s => {
-    if (s.week == null) return;
-    if (!byWeek.has(s.week)) byWeek.set(s.week, []);
-    byWeek.get(s.week).push(s);
+    if (!s.sessionDate) return;
+    const { week, year } = getISOWeekInfo(parseLocalDate(s.sessionDate));
+    const key = `${year}-W${String(week).padStart(2, "0")}`;
+    if (!byWeek.has(key)) byWeek.set(key, { week, isoYear: year, sessions: [] });
+    byWeek.get(key).sessions.push(s);
   });
 
   return [...byWeek.entries()]
-    .map(([week, weekSessions]) => {
+    .map(([key, { week, isoYear, sessions: weekSessions }]) => {
       const dates = weekSessions.map(s => s.sessionDate).filter(Boolean).sort();
       return {
-        week,
+        key, week, isoYear,
         sessionCount: weekSessions.length,
         dateRange: dates.length ? { start: dates[0], end: dates[dates.length - 1] } : null,
       };
     })
-    .sort((a, b) => b.week - a.week);
+    .sort((a, b) => b.key.localeCompare(a.key));
 }
 
-export function formatWeekLabel(week, dateRange) {
-  if (!dateRange) return `Semaine ${week}`;
+export function formatWeekLabel(week, dateRange, isoYear = null) {
+  if (!dateRange) return `Semaine ${week}${isoYear ? ` · ${isoYear}` : ""}`;
   const opts = { day: "numeric", month: "short" };
   const start = new Date(dateRange.start + "T00:00:00").toLocaleDateString("fr-BE", opts);
   const end   = new Date(dateRange.end   + "T00:00:00").toLocaleDateString("fr-BE", { ...opts, year: "numeric" });
@@ -95,9 +97,9 @@ function buildSummaryText({ total, done, partial, none, totalLoad, categoriesWor
 // @param sessions     séances mappées (voir Dashboard.jsx / AthleteApp.jsx)
 // @param weeklyCharge [{ athleteId, week, rawLoad }]
 // @param wellnessRows [{ athleteId, date, sleep, energy, soreness, mood, stress }] — déjà filtré sur la plage de la semaine par l'appelant
-export function buildWeeklyReport({ athleteId, week, sessions, weeklyCharge, wellnessRows = [] }) {
+export function buildWeeklyReport({ athleteId, week, isoYear, sessions, weeklyCharge, wellnessRows = [] }) {
   const weekSessions = sessions
-    .filter(s => s.week === week && s.athleteIds?.includes(athleteId))
+    .filter(s => matchesISOWeek(s, week, isoYear) && s.athleteIds?.includes(athleteId))
     .map(s => {
       const v = s.validations?.find(x => x.athleteId === athleteId) ?? {};
       const load = v.rpe != null ? computeSessionLoad(v.actualDurationMinutes, v.rpe, s.category) : null;
@@ -127,19 +129,27 @@ export function buildWeeklyReport({ athleteId, week, sessions, weeklyCharge, wel
   const categoriesAbsent = CATEGORIES.filter(c => !workedIds.has(c.id)).map(c => c.id);
 
   const wellnessForAthlete = wellnessRows.filter(w => (
-    w.athleteId === athleteId && w.date && getISOWeek(parseLocalDate(w.date)) === week
+    w.athleteId === athleteId && w.date && matchesISOWeek(w, week, isoYear)
   ));
   const wellnessScores = wellnessForAthlete.map(w => computeWellnessScore(w)).filter(v => v != null);
   const wellnessAvg = wellnessScores.length
     ? Math.round(wellnessScores.reduce((a, b) => a + b, 0) / wellnessScores.length)
     : null;
 
-  const athleteSessions = sessions.filter(s => s.athleteIds?.includes(athleteId) && s.week <= week);
-  const chargeThroughWeek = weeklyCharge.filter(w => w.week <= week);
-  const metrics = getAthleteMetricsForWeek(athleteId, chargeThroughWeek, week, wellnessForAthlete, athleteSessions);
-
   const dates = weekSessions.map(s => s.sessionDate).filter(Boolean).sort();
   const dateRange = dates.length ? { start: dates[0], end: dates[dates.length - 1] } : null;
+  const cutoffDate = dates.length ? getISOWeekInfo(parseLocalDate(dates[0])).endDate : null;
+  const athleteSessions = sessions.filter(s => (
+    s.athleteIds?.includes(athleteId) && (!cutoffDate || !s.sessionDate || s.sessionDate <= cutoffDate)
+  ));
+  const chargeThroughWeek = weeklyCharge.filter(row => {
+    if (row.athleteId !== athleteId) return false;
+    if (row.isoYear == null) return row.week <= week;
+    return row.isoYear < isoYear || (row.isoYear === isoYear && row.week <= week);
+  });
+  const metrics = getAthleteMetricsForWeek(
+    athleteId, chargeThroughWeek, week, wellnessForAthlete, athleteSessions, cutoffDate,
+  );
 
   const summary = buildSummaryText({
     total, done, partial, none, totalLoad, categoriesWorked, categoriesAbsent,
@@ -147,7 +157,7 @@ export function buildWeeklyReport({ athleteId, week, sessions, weeklyCharge, wel
   });
 
   return {
-    week, dateRange, sessions: weekSessions,
+    week, isoYear, dateRange, sessions: weekSessions,
     stats: { total, done, partial, none, totalLoad },
     categoriesWorked, categoriesAbsent, wellnessAvg, metrics, summary,
   };
@@ -155,8 +165,10 @@ export function buildWeeklyReport({ athleteId, week, sessions, weeklyCharge, wel
 
 // ─── Agrégat "Vue Mois" — 4 dernières semaines, par athlète ───────────────
 export function buildMonthlyAggregate({ athleteId, weeks, sessions, weeklyCharge, wellnessRows = [] }) {
-  const sorted = [...weeks].sort((a, b) => a - b); // ascendant : plus ancienne → plus récente
-  const weeklyReports = sorted.map(week => buildWeeklyReport({ athleteId, week, sessions, weeklyCharge, wellnessRows }));
+  const sorted = [...weeks].sort((a, b) => a.key.localeCompare(b.key)); // ascendant : plus ancienne → plus récente
+  const weeklyReports = sorted.map(({ week, isoYear }) => (
+    buildWeeklyReport({ athleteId, week, isoYear, sessions, weeklyCharge, wellnessRows })
+  ));
 
   const totalLoad     = weeklyReports.reduce((s, r) => s + r.stats.totalLoad, 0);
   const sessionsTotal = weeklyReports.reduce((s, r) => s + r.stats.total, 0);

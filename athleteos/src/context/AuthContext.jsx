@@ -17,6 +17,7 @@
 
 import { createContext, useContext, useEffect, useState, useCallback } from "react";
 import { supabase } from "../utils/supabaseClient";
+import { revokeCurrentPushSubscription } from "../utils/pushSubscriptions";
 
 const AuthContext = createContext(null);
 
@@ -37,9 +38,8 @@ export function AuthProvider({ children }) {
       return;
     }
     try {
-      // On récupère la ligne `users` dont l'id correspond à auth.uid().
-      // La colonne users.id DOIT être un UUID égal à auth.uid() — c'est le lien
-      // entre Supabase Auth et ta table métier.
+      // users.id est l'identifiant métier entier. Le lien avec Supabase Auth
+      // passe exclusivement par users.auth_uid = auth.users.id.
       const { data, error } = await supabase
         .from("users")
      .select("id, name, role, club_id")
@@ -92,6 +92,14 @@ export function AuthProvider({ children }) {
   }, []);
 
   const signOut = useCallback(async () => {
+    try {
+      const result = await revokeCurrentPushSubscription(supabase);
+      if (result.databaseError) console.error("Suppression de l’abonnement push :", result.databaseError.message);
+    } catch (error) {
+      // La déconnexion reste possible même si le navigateur refuse la
+      // révocation. L'endpoint sera aussi nettoyé par send-push sur 404/410.
+      console.error("Révocation de l’abonnement push :", error);
+    }
     const { error } = await supabase.auth.signOut();
     if (error) throw error;
     // onAuthStateChange va déclencher setUser(null) + setProfile(null) automatiquement

@@ -23,7 +23,10 @@
 - **Tâche 19** (stratégie de tests et CI) : terminée. Vitest+React Testing Library installés (4 fichiers `src/**/*.test.js`, 87 tests, portage des 4 scripts `test_*.mjs` purs — supprimés après portage — + nouveaux tests golden-dataset sur `computeSessionLoad`/`computeWellnessScore`/`computeEWMA`/`computeMonotonyAndStrain`, jamais testés avant). Seuils de couverture progressifs (pas un chiffre artificiel) sur les 4 fichiers testés. ESLint (flat config) installé — scope volontairement réduit aux règles hooks "classiques" (pas le preset React Compiler, qui aurait fait remonter ~50 erreurs sur un pattern déjà établi partout dans l'app). `typecheck` (tsc) pragmatique : `checkJs` désactivé après mesure réelle (107 erreurs sur l'app JS non annotée) — décision documentée dans `tsconfig.json`. Playwright installé, 9 specs E2E (`e2e/`) : 3 smoke tests (aucune auth, **vérifiés réellement en local, 3/3 OK**) + 6 parcours coach/athlète authentifiés (nécessitent Supabase local via `e2e/global-setup.mjs`, jamais vérifiés en local faute de Docker — écrits pour tourner en CI). Scripts npm : `lint`/`typecheck`/`test`/`test:coverage`/`test:e2e`/`test:integration`/`check`. CI (`.github/workflows/ci.yml`, remplace `rls-check.yml`) : `npm run check` puis Supabase local + **toute** la suite `test_*.mjs` (avant cette tâche, seul `test_rls_regression.mjs` tournait en CI — les 7 autres scripts d'intégration de ce chantier n'avaient JAMAIS tourné automatiquement, gap trouvé en faisant cette tâche) + E2E. Bug trouvé et corrigé au passage : `test_perf_engine.mjs` était cassé silencieusement depuis la tâche 14 (`isNewRecord` supprimé de `competitionsShared.js`, jamais re-testé) — exactement le type de régression que cette tâche doit empêcher désormais. Un `eslint-disable` documenté (pas corrigé) sur un vrai bug trouvé dans `AthletePlanning.jsx` (`SessionCard` défini via `useCallback`, perd son état de swipe au remount) — corriger proprement demanderait d'extraire le composant, hors périmètre d'une tâche d'installation d'outillage.
 
 ## Tâche active
-Aucune — arrêt après la tâche 19 comme demandé.
+**Audit intégral AthleteOS** — démarré le 1er août 2026 sur la branche
+`audit/athleteos-complete`. Baseline frontend exécutée ; audit sécurité,
+invitations, PWA, accessibilité, documentation et dépendances en cours.
+Supabase local reste à relancer lorsque Docker Desktop répond correctement.
 
 ## État du socle Supabase (repères utiles pour les prochaines tâches)
 - `supabase/config.toml`, `supabase/seed.sql`, `supabase/migrations/20260720000000_*` et `20260720000001_*` (socle + index/event trigger) : base entièrement reproductible depuis zéro via `supabase start`/`db reset`, prouvé par CI.
@@ -34,5 +37,7 @@ Aucune — arrêt après la tâche 19 comme demandé.
 - **Limite connue, jamais vérifiée faute de Docker sur cette machine** : `pg_cron`/`pg_net` (cron hebdomadaire) s'installent et s'enregistrent sans erreur en local, mais leur déclenchement réel n'a jamais pu être observé en local — seule la production l'a réellement exécuté.
 - **Pas de compte de connexion réel dans le seed** (décision assumée, tâche 5) — procédure manuelle documentée dans `GUIDE_IA.md`.
 
-## Prochaine tâche autorisée
-Non déterminée ici — arrêt après la tâche 14 comme demandé.
+## Prochaine étape
+Terminer l’audit intégral, exécuter Supabase local/RLS/intégration/E2E
+authentifiés dès que Docker répond, puis produire les preuves et la checklist
+de déploiement sans lancer de commande contre la production.

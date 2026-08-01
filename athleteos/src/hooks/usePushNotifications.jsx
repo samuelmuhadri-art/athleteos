@@ -4,6 +4,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { supabase } from "../utils/supabaseClient";
+import { persistCurrentPushSubscription } from "../utils/pushSubscriptions";
 
 const VAPID_PUBLIC_KEY = import.meta.env.VITE_VAPID_PUBLIC_KEY;
 
@@ -29,9 +30,11 @@ export function usePushNotifications(athleteId, clubId, userId = null) {
         setRegistration(reg);
         setSwReady(true);
         setPermissionState(Notification.permission);
-        return reg.pushManager.getSubscription();
+        // La présence d'un abonnement dans le navigateur ne prouve pas qu'il
+        // appartient au compte courant. L'effet d'identité ci-dessous fait la
+        // vérification avant d'afficher l'état actif.
+        setSubscribed(false);
       })
-      .then((sub) => { setSubscribed(!!sub); })
       .catch(console.error);
   }, []);
 
@@ -45,7 +48,10 @@ export function usePushNotifications(athleteId, clubId, userId = null) {
 
     const fixSubscription = async () => {
       const sub = await registration.pushManager.getSubscription();
-      if (!sub) return;
+      if (!sub) {
+        setSubscribed(false);
+        return;
+      }
 
       const subJson = sub.toJSON();
 
@@ -66,22 +72,18 @@ export function usePushNotifications(athleteId, clubId, userId = null) {
         }
       }
 
-      // Sinon on supprime l'ancienne et on réinsère avec les bons ids
-      await supabase.from("push_subscriptions").delete().eq("endpoint", subJson.endpoint);
-      const { error } = await supabase.from("push_subscriptions").insert({
-        club_id:    clubId,
-        endpoint:   subJson.endpoint,
-        p256dh:     subJson.keys?.p256dh,
-        auth:       subJson.keys?.auth,
-        user_agent: navigator.userAgent.slice(0, 200),
-        athlete_id: athleteId ?? null,
-        user_id:    userId    ?? null,
+      const applicationServerKey = VAPID_PUBLIC_KEY ? urlBase64ToUint8Array(VAPID_PUBLIC_KEY) : null;
+      const { error } = await persistCurrentPushSubscription({
+        supabaseClient: supabase,
+        registration,
+        subscription: sub,
+        applicationServerKey,
+        clubId,
+        athleteId,
+        userId,
       });
-
-      if (!error) {
-        console.log("Push subscription corrigée en base ✅");
-        setSubscribed(true);
-      }
+      if (error) throw error;
+      setSubscribed(true);
     };
 
     fixSubscription().catch(console.error);
@@ -103,19 +105,15 @@ export function usePushNotifications(athleteId, clubId, userId = null) {
           applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY),
         });
       }
-      const subJson = sub.toJSON();
-
-      await supabase.from("push_subscriptions").delete().eq("endpoint", subJson.endpoint);
-      const { error } = await supabase.from("push_subscriptions").insert({
-        club_id:    clubId,
-        endpoint:   subJson.endpoint,
-        p256dh:     subJson.keys?.p256dh,
-        auth:       subJson.keys?.auth,
-        user_agent: navigator.userAgent.slice(0, 200),
-        athlete_id: athleteId ?? null,
-        user_id:    userId    ?? null,
+      const { error } = await persistCurrentPushSubscription({
+        supabaseClient: supabase,
+        registration,
+        subscription: sub,
+        applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY),
+        clubId,
+        athleteId,
+        userId,
       });
-
       if (error) throw error;
       setSubscribed(true);
     } catch (err) {

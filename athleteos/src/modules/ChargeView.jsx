@@ -23,7 +23,7 @@ import LoadingState          from "../components/ui/LoadingState";
 import ErrorState            from "../components/ui/ErrorState";
 import { getAthleteMetricsForWeek } from "../utils/chargeCalculations";
 import { computeWeeklyLoadByCategory } from "../utils/trainingLoad";
-import { getISOWeek, initialsFromName } from "../utils/helpers.js";
+import { getISOWeek, getISOWeekYear, initialsFromName } from "../utils/helpers.js";
 import {
   athleteSeriesKey,
   buildExperimentalAcwrSeries,
@@ -325,9 +325,11 @@ const MethodologyPanel = memo(() => {
 function ChargeView() {
   const { clubId } = useAuth();
   const CURRENT_WEEK = getISOWeek(new Date());
+  const CURRENT_YEAR = getISOWeekYear(new Date());
   const previousWeekDate = new Date();
   previousWeekDate.setDate(previousWeekDate.getDate() - 7);
   const PREVIOUS_WEEK = getISOWeek(previousWeekDate);
+  const PREVIOUS_YEAR = getISOWeekYear(previousWeekDate);
 
   const [athletes,             setAthletes]             = useState([]);
   const [weeklyCharge,         setWeeklyCharge]         = useState([]);
@@ -354,7 +356,7 @@ function ChargeView() {
           .eq("club_id", clubId),
         supabase
           .from("sessions")
-          .select("id, week, category, training_focus, duration_minutes")
+          .select("id, week, session_date, category, training_focus, duration_minutes")
           .eq("club_id", clubId),
         supabase
           .from("athlete_wellness")
@@ -396,6 +398,7 @@ function ChargeView() {
         return {
           id:              s.id,
           week:            s.week,
+          sessionDate:     s.session_date,
           category:        s.category,
           trainingFocus:   s.training_focus,
           durationMinutes: s.duration_minutes,
@@ -406,7 +409,7 @@ function ChargeView() {
 
       setAthletes(remappedAthletes);
       setWeeklyCharge((weeklyChargeRes.data ?? []).map((c) => ({
-        athleteId: c.athlete_id, week: c.week, rawLoad: c.raw_load,
+        athleteId: c.athlete_id, week: c.week, isoYear: c.iso_year, rawLoad: c.raw_load,
         dailyLoads: c.daily_loads ?? [], knownDays: c.known_days ?? 0,
         unknownDays: c.unknown_days ?? 0, estimatedDays: c.estimated_days ?? 0,
       })));
@@ -434,8 +437,8 @@ function ChargeView() {
   // ═══ Calculs dérivés ══════════════════════════════════════════════════════
   const allMetrics = useMemo(() =>
     athletes.map((athlete) => {
-      const currentRow = getWeeklyLoadRow(weeklyCharge, athlete.id, CURRENT_WEEK);
-      const previousRow = getWeeklyLoadRow(weeklyCharge, athlete.id, PREVIOUS_WEEK);
+      const currentRow = getWeeklyLoadRow(weeklyCharge, athlete.id, CURRENT_WEEK, CURRENT_YEAR);
+      const previousRow = getWeeklyLoadRow(weeklyCharge, athlete.id, PREVIOUS_WEEK, PREVIOUS_YEAR);
       const loadState = getWeeklyLoadState(currentRow);
       return {
         athlete,
@@ -446,7 +449,7 @@ function ChargeView() {
         previousRawLoad: getWeeklyLoadState(previousRow).value,
       };
     }),
-  [athletes, weeklyCharge, wellnessRows, CURRENT_WEEK, PREVIOUS_WEEK]);
+  [athletes, weeklyCharge, wellnessRows, CURRENT_WEEK, CURRENT_YEAR, PREVIOUS_WEEK, PREVIOUS_YEAR]);
 
   const hasAnyCharge = weeklyCharge.length > 0;
 
@@ -468,12 +471,19 @@ function ChargeView() {
 
   const chargeBreakdown = useMemo(() => {
     const byCategory  = computeWeeklyLoadByCategory(athletes, sessionsForBreakdown);
-    const allWeeks    = [...new Set(byCategory.map((b) => b.week))].sort((a, b) => a - b).slice(-6);
+    const allWeeks = [...new Map(byCategory.map((item) => [
+      `${item.isoYear ?? "legacy"}-${item.week}`,
+      { week: item.week, isoYear: item.isoYear ?? null },
+    ])).values()]
+      .sort((a, b) => (a.isoYear ?? 0) - (b.isoYear ?? 0) || a.week - b.week)
+      .slice(-6);
     const allCategories = [...new Set(byCategory.map((b) => b.category))];
-    return allWeeks.map((week) => {
-      const point = { label: `S${week}` };
+    return allWeeks.map(({ week, isoYear }) => {
+      const point = { label: isoYear == null ? `S${week}` : `S${week} · ${isoYear}` };
       allCategories.forEach((cat) => {
-        point[cat] = byCategory.find((b) => b.week === week && b.category === cat)?.total ?? 0;
+        point[cat] = byCategory.find((item) =>
+          item.week === week && (item.isoYear ?? null) === isoYear && item.category === cat
+        )?.total ?? 0;
       });
       return point;
     });

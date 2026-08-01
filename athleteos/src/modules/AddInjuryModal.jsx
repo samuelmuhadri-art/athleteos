@@ -7,12 +7,14 @@ import { memo, useState } from "react";
 import { createPortal } from "react-dom";
 import { Plus, X } from "lucide-react";
 import { inputCls, labelCls, INJURY_STATUS_OPTIONS } from "./athleteListShared";
+import { useAccessibleDialog } from "../hooks/useAccessibleDialog";
 
 const AddInjuryModal = memo(({ athleteName, initialData, onClose, onSave }) => {
   const isEdit = initialData != null;
   const [form, setForm]     = useState(initialData ?? { name: "", location: "", intensity: 5, status: "actif", startDate: "", notes: "" });
   const [saving, setSaving] = useState(false);
   const [err, setErr]       = useState(null);
+  const { dialogRef, titleId } = useAccessibleDialog({ onClose, closeDisabled: saving });
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
   const intColor = form.intensity <= 3 ? "#1D9E75" : form.intensity <= 6 ? "#EF9F27" : "#E24B4A";
@@ -27,13 +29,14 @@ const AddInjuryModal = memo(({ athleteName, initialData, onClose, onSave }) => {
   return createPortal(
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4 modal-backdrop"
       onClick={e => e.target === e.currentTarget && !saving && onClose()}>
-      <div className="rounded-t-3xl sm:rounded-3xl shadow-2xl w-full max-w-sm max-h-[95vh] sm:max-h-[90vh] flex flex-col overflow-hidden modal-content"
+      <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby={titleId} tabIndex={-1}
+           className="rounded-t-3xl sm:rounded-3xl shadow-2xl w-full max-w-sm max-h-[95vh] sm:max-h-[90vh] flex flex-col overflow-hidden modal-content"
            style={{ background: "var(--c-surface)" }}>
         <div className="flex justify-center pt-3 pb-1 sm:hidden flex-shrink-0"><div className="w-10 h-1 rounded-full" style={{ background: "var(--c-border-strong)" }} /></div>
         <div className="px-6 py-5 flex items-center justify-between flex-shrink-0"
           style={{ background: "rgba(226,75,74,0.08)", borderBottom: "2px solid rgba(226,75,74,0.2)" }}>
           <div>
-            <h2 className="text-[17px] font-bold" style={{ color: "var(--tone-danger)" }}>{isEdit ? "Modifier la blessure" : "Signaler une blessure"}</h2>
+            <h2 id={titleId} className="text-[17px] font-bold" style={{ color: "var(--tone-danger)" }}>{isEdit ? "Modifier la blessure" : "Signaler une blessure"}</h2>
             <p className="text-[12px] mt-0.5" style={{ color: "var(--tone-danger)" }}>{athleteName}</p>
           </div>
           <button type="button" aria-label="Fermer" onClick={onClose} disabled={saving} className="p-2 rounded-xl transition-colors disabled:opacity-40"

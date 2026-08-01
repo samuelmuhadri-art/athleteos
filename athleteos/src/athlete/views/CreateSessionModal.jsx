@@ -12,6 +12,7 @@ import { CATEGORIES, dateToISOWeek, dateToDayName, toLocalDateStr } from "../sha
 import { cat } from "./planningShared";
 import TrainingFocusField from "../../components/session/TrainingFocusField";
 import { getDefaultTrainingFocus } from "../../domain/trainingFocus";
+import { useAccessibleDialog } from "../../hooks/useAccessibleDialog";
 
 const PDF_MAX_BYTES = 30 * 1024 * 1024; // aligné sur file_size_limit du bucket session-pdfs
 
@@ -24,6 +25,7 @@ const CreateSessionModal = memo(({ athlete, allAthletes, clubId, createdBy, coac
   const [pdfFile, setPdfFile] = useState(null);
   const [saving,  setSaving]  = useState(false);
   const [err,     setErr]     = useState(null);
+  const { dialogRef } = useAccessibleDialog({ onClose, closeDisabled: saving });
 
   const set       = (k, v) => setForm(f => ({ ...f, [k]: v }));
   const pickPdf = file => {
@@ -69,9 +71,10 @@ const CreateSessionModal = memo(({ athlete, allAthletes, clubId, createdBy, coac
       if (se) throw se;
 
       const allIds = [athlete.id, ...form.invitedAthletes];
-      await supabase.from("session_athletes").insert(
+      const { error: assignmentError } = await supabase.from("session_athletes").insert(
         allIds.map(id => ({ session_id: ns.id, athlete_id: id, status: null }))
       );
+      if (assignmentError) throw assignmentError;
       await notifyCoachAthleteSession(clubId, coachUserId, athlete, {
         id: ns.id, title: form.title, sessionDate: form.sessionDate,
       });
@@ -88,7 +91,7 @@ const CreateSessionModal = memo(({ athlete, allAthletes, clubId, createdBy, coac
   return createPortal(
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4 modal-backdrop"
       onClick={e => e.target === e.currentTarget && !saving && onClose()}>
-      <form onSubmit={handleSubmit} role="dialog" aria-modal="true" aria-labelledby="create-session-title"
+      <form ref={dialogRef} tabIndex={-1} onSubmit={handleSubmit} role="dialog" aria-modal="true" aria-labelledby="create-session-title"
         className="rounded-t-3xl sm:rounded-3xl shadow-2xl w-full sm:max-w-md max-h-[95vh] flex flex-col overflow-hidden modal-content"
         style={{ background: "var(--c-surface)" }}>
 

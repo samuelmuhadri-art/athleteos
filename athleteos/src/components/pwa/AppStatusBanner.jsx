@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { RefreshCw, WifiOff, X } from "lucide-react";
+import { captureError } from "../../utils/sentry";
 
 export default function AppStatusBanner() {
   const [online, setOnline] = useState(() => navigator.onLine !== false);
@@ -31,8 +32,12 @@ export default function AppStatusBanner() {
       };
       registration.addEventListener?.("updatefound", handleUpdateFound);
       removeRegistrationListener = () => registration.removeEventListener?.("updatefound", handleUpdateFound);
-      registration.update?.().catch(() => {});
-    }).catch(() => {});
+      registration.update?.().catch((error) => {
+        captureError(error, { operation: "service_worker_update" });
+      });
+    }).catch((error) => {
+      captureError(error, { operation: "service_worker_ready" });
+    });
 
     return () => {
       window.removeEventListener("online", handleOnline);

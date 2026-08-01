@@ -3,6 +3,8 @@
 // ============================================================
 
 import { supabase } from "./supabaseClient";
+import { captureError } from "./sentry";
+import { getISOWeekYear } from "./helpers";
 
 // ── Envoi push générique ──────────────────────────────────────
 // Supporte athleteIds (pour les athlètes) ET userIds (pour les coaches)
@@ -11,9 +13,8 @@ async function sendWebPush(athleteIds, payload, userIds = []) {
   const hasUsers    = userIds?.length > 0;
   if (!hasAthletes && !hasUsers) return;
 
-  console.log("sendWebPush appelé — athleteIds:", athleteIds, "userIds:", userIds, payload.title);
   try {
-    const { data, error } = await supabase.functions.invoke("send-push", {
+    const { error } = await supabase.functions.invoke("send-push", {
       body: {
         athleteIds: athleteIds ?? [],
         userIds:    userIds    ?? [],
@@ -23,10 +24,17 @@ async function sendWebPush(athleteIds, payload, userIds = []) {
         tag:   payload.tag ?? "athleteos",
       },
     });
-    console.log("send-push response:", data, error);
-    if (error) console.warn("Web Push error:", error.message);
+    if (error) captureError(error, {
+      operation: "send_web_push",
+      athleteCount: athleteIds?.length ?? 0,
+      userCount: userIds?.length ?? 0,
+    });
   } catch (err) {
-    console.warn("Web Push non disponible:", err.message);
+    captureError(err, {
+      operation: "send_web_push",
+      athleteCount: athleteIds?.length ?? 0,
+      userCount: userIds?.length ?? 0,
+    });
   }
 }
 
@@ -303,7 +311,9 @@ function isRecapWindow() {
 }
 
 function computeWeeklyStats(athleteId, sessions) {
-  const relevant = (sessions ?? []).filter(s => s.athleteIds?.includes(athleteId) && s.day !== "Dimanche");
+  const relevant = (sessions ?? []).filter(s =>
+    s.athleteIds?.includes(athleteId) && s.lifecycleStatus !== "cancelled"
+  );
   let done = 0, partial = 0, none = 0;
   relevant.forEach(s => {
     const v = s.validations?.find(x => x.athleteId === athleteId);
@@ -317,60 +327,72 @@ function computeWeeklyStats(athleteId, sessions) {
 // Notif individuelle — utilisée à la fois par le récap coach (en boucle,
 // un par athlète) et par l'appli athlète elle-même (au cas où le coach n'a
 // pas ouvert son dashboard le samedi soir).
-export async function notifyAthleteWeeklyRecap(clubId, athlete, sessions, currentWeek) {
+export async function notifyAthleteWeeklyRecap(
+  clubId,
+  athlete,
+  sessions,
+  currentWeek,
+  isoYear = getISOWeekYear(new Date()),
+) {
   if (!isRecapWindow()) return;
   const stats = computeWeeklyStats(athlete.id, sessions);
   if (stats.total === 0) return;
 
-  const { data: existing } = await supabase.from("athlete_notifications").select("id")
-    .eq("athlete_id", athlete.id).eq("type", "weekly_recap")
-    .ilike("title", `%S${currentWeek}%`).limit(1);
-  if (existing?.length) return;
-
-  const title = `📊 Ta semaine — S${currentWeek}`;
+  const weekKey = `${isoYear}-W${String(currentWeek).padStart(2, "0")}`;
+  const title = `📊 Ta semaine — S${currentWeek} · ${isoYear}`;
   const description = `${stats.done}/${stats.total} séance${stats.total > 1 ? "s" : ""} réalisée${stats.done > 1 ? "s" : ""}` +
     (stats.partial ? `, ${stats.partial} partielle${stats.partial > 1 ? "s" : ""}` : "") +
     (stats.none ? `, ${stats.none} manquée${stats.none > 1 ? "s" : ""}` : "") + ".";
-
-  await supabase.from("athlete_notifications").insert({
-    athlete_id: athlete.id, club_id: clubId, type: "weekly_recap", title, description, is_read: false,
-  });
-  await sendWebPush([athlete.id], { title, body: description, tag: `recap-${currentWeek}` });
+  const dedupeKey = `athlete-recap-${weekKey}`;
+  const { data: inserted, error } = await supabase.from("athlete_notifications").upsert({
+    athlete_id: athlete.id, club_id: clubId, type: "weekly_recap", title, description,
+    is_read: false, dedupe_key: dedupeKey,
+  }, { onConflict: "athlete_id,type,dedupe_key", ignoreDuplicates: true }).select("id");
+  if (error) throw error;
+  if (inserted?.length) await sendWebPush([athlete.id], { title, body: description, tag: dedupeKey });
 }
 
 // Récap squad-wide pour le coach — une alerte + push, plus le récap
 // individuel de chaque athlète (déjà en boucle ici, pas besoin que chacun
 // ouvre son appli pour recevoir le sien).
-export async function checkWeeklyRecap(clubId, athletes, sessions, currentWeek, coachUserId) {
+export async function checkWeeklyRecap(
+  clubId,
+  athletes,
+  sessions,
+  currentWeek,
+  coachUserId,
+  isoYear = getISOWeekYear(new Date()),
+) {
   if (!isRecapWindow()) return;
 
-  const { data: existing } = await supabase.from("alerts").select("id")
-    .eq("club_id", clubId).eq("type", "recap")
-    .ilike("title", `%semaine ${currentWeek}%`).limit(1);
-
-  if (!existing?.length) {
-    let totalAll = 0, doneAll = 0;
-    const concerns = [];
-    athletes.forEach(a => {
-      const s = computeWeeklyStats(a.id, sessions);
-      totalAll += s.total; doneAll += s.done;
-      if (s.total > 0 && (s.partial > 0 || s.none > 0)) concerns.push(`${a.name.split(" ")[0]} (${s.done}/${s.total})`);
-    });
-    if (totalAll > 0) {
-      const pct   = Math.round((doneAll / totalAll) * 100);
-      const title = `📊 Récap semaine ${currentWeek}`;
-      const description = `${doneAll}/${totalAll} séances réalisées (${pct}%).` +
-        (concerns.length ? ` À suivre : ${concerns.join(", ")}.` : " Toute l'équipe est à jour.");
-      await supabase.from("alerts").insert({
-        club_id: clubId, athlete_id: null, type: "recap", title, description,
-        severity: concerns.length ? "modérée" : "info", is_read: false,
-      });
-      if (coachUserId) await sendWebPush([], { title, body: description, tag: `recap-${currentWeek}` }, [coachUserId]);
+  let totalAll = 0, doneAll = 0;
+  const concerns = [];
+  athletes.forEach(a => {
+    const stats = computeWeeklyStats(a.id, sessions);
+    totalAll += stats.total; doneAll += stats.done;
+    if (stats.total > 0 && (stats.partial > 0 || stats.none > 0)) {
+      concerns.push(`${a.name.split(" ")[0]} (${stats.done}/${stats.total})`);
+    }
+  });
+  if (totalAll > 0) {
+    const weekKey = `${isoYear}-W${String(currentWeek).padStart(2, "0")}`;
+    const pct = Math.round((doneAll / totalAll) * 100);
+    const title = `📊 Récap S${currentWeek} · ${isoYear}`;
+    const description = `${doneAll}/${totalAll} séances réalisées (${pct}%).` +
+      (concerns.length ? ` À suivre : ${concerns.join(", ")}.` : " Toute l'équipe est à jour.");
+    const dedupeKey = `coach-recap-${weekKey}`;
+    const { data: inserted, error } = await supabase.from("alerts").upsert({
+      club_id: clubId, athlete_id: null, type: "recap", title, description,
+      severity: concerns.length ? "modérée" : "info", is_read: false, dedupe_key: dedupeKey,
+    }, { onConflict: "club_id,type,dedupe_key", ignoreDuplicates: true }).select("id");
+    if (error) throw error;
+    if (inserted?.length && coachUserId) {
+      await sendWebPush([], { title, body: description, tag: dedupeKey }, [coachUserId]);
     }
   }
 
-  for (const a of athletes) {
-    await notifyAthleteWeeklyRecap(clubId, a, sessions, currentWeek);
+  for (const athlete of athletes) {
+    await notifyAthleteWeeklyRecap(clubId, athlete, sessions, currentWeek, isoYear);
   }
 }
 
@@ -385,42 +407,53 @@ function isReportWindow() {
   return (day === 0 && now.getHours() >= 18) || (day === 1 && now.getHours() < 6);
 }
 
-export async function notifyAthleteWeeklyReport(clubId, athlete, currentWeek) {
+export async function notifyAthleteWeeklyReport(
+  clubId,
+  athlete,
+  currentWeek,
+  isoYear = getISOWeekYear(new Date()),
+) {
   if (!isReportWindow()) return;
 
-  const { data: existing } = await supabase.from("athlete_notifications").select("id")
-    .eq("athlete_id", athlete.id).eq("type", "weekly_report")
-    .ilike("title", `%S${currentWeek}%`).limit(1);
-  if (existing?.length) return;
-
-  const title       = `📄 Ton rapport de la semaine — S${currentWeek}`;
+  const weekKey = `${isoYear}-W${String(currentWeek).padStart(2, "0")}`;
+  const title = `📄 Ton rapport de la semaine — S${currentWeek} · ${isoYear}`;
   const description = "Ton rapport de la semaine est disponible dans Mes performances.";
-  await supabase.from("athlete_notifications").insert({
-    athlete_id: athlete.id, club_id: clubId, type: "weekly_report", title, description, is_read: false,
-  });
-  await sendWebPush([athlete.id], { title, body: description, tag: `report-${currentWeek}` });
+  const dedupeKey = `athlete-report-${weekKey}`;
+  const { data: inserted, error } = await supabase.from("athlete_notifications").upsert({
+    athlete_id: athlete.id, club_id: clubId, type: "weekly_report", title, description,
+    is_read: false, dedupe_key: dedupeKey,
+  }, { onConflict: "athlete_id,type,dedupe_key", ignoreDuplicates: true }).select("id");
+  if (error) throw error;
+  if (inserted?.length) await sendWebPush([athlete.id], { title, body: description, tag: dedupeKey });
 }
 
 // Déclenché côté coach (boucle sur tous les athlètes du club + push perso).
-export async function checkWeeklyReports(clubId, athletes, currentWeek, coachUserId) {
+export async function checkWeeklyReports(
+  clubId,
+  athletes,
+  currentWeek,
+  coachUserId,
+  isoYear = getISOWeekYear(new Date()),
+) {
   if (!isReportWindow()) return;
 
-  const { data: existing } = await supabase.from("alerts").select("id")
-    .eq("club_id", clubId).eq("type", "weekly_report")
-    .ilike("title", `%semaine ${currentWeek}%`).limit(1);
-
-  if (!existing?.length && athletes.length > 0) {
-    const title       = `📄 Rapports semaine ${currentWeek} disponibles — ${athletes.length} athlète${athletes.length > 1 ? "s" : ""}`;
+  if (athletes.length > 0) {
+    const weekKey = `${isoYear}-W${String(currentWeek).padStart(2, "0")}`;
+    const title = `📄 Rapports S${currentWeek} · ${isoYear} disponibles — ${athletes.length} athlète${athletes.length > 1 ? "s" : ""}`;
     const description = "Les rapports hebdomadaires de tous les athlètes sont prêts dans le module Rapports.";
-    await supabase.from("alerts").insert({
+    const dedupeKey = `coach-report-${weekKey}`;
+    const { data: inserted, error } = await supabase.from("alerts").upsert({
       club_id: clubId, athlete_id: null, type: "weekly_report", title, description,
-      severity: "info", is_read: false,
-    });
-    if (coachUserId) await sendWebPush([], { title, body: description, tag: `report-${currentWeek}` }, [coachUserId]);
+      severity: "info", is_read: false, dedupe_key: dedupeKey,
+    }, { onConflict: "club_id,type,dedupe_key", ignoreDuplicates: true }).select("id");
+    if (error) throw error;
+    if (inserted?.length && coachUserId) {
+      await sendWebPush([], { title, body: description, tag: dedupeKey }, [coachUserId]);
+    }
   }
 
-  for (const a of athletes) {
-    await notifyAthleteWeeklyReport(clubId, a, currentWeek);
+  for (const athlete of athletes) {
+    await notifyAthleteWeeklyReport(clubId, athlete, currentWeek, isoYear);
   }
 }
 

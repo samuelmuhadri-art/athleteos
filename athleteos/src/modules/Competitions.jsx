@@ -107,6 +107,7 @@ function Competitions() {
       const remappedCharge = chargeRes.data.map((c) => ({
         athleteId: c.athlete_id,
         week:      c.week,
+        isoYear:   c.iso_year,
         rawLoad:   c.raw_load,
         dailyLoads: c.daily_loads ?? [],
         knownDays: c.known_days ?? 0,

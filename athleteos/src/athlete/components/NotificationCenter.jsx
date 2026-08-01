@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { ArrowRight, Bell, CheckCheck, Heart, Sparkles, X } from "lucide-react";
 import { PushToggleButton } from "../../hooks/usePushNotifications";
 import {
@@ -8,6 +8,7 @@ import {
   getNotificationPresentation,
 } from "../notificationPresentation";
 import { NotificationDecor, NotificationIcon } from "./NotificationIcon";
+import { useAccessibleDialog } from "../../hooks/useAccessibleDialog";
 
 export default function NotificationCenter({
   notifications,
@@ -18,6 +19,7 @@ export default function NotificationCenter({
   onOpen,
   onMarkAllRead,
 }) {
+  const { dialogRef } = useAccessibleDialog({ onClose });
   const [activeFilter, setActiveFilter] = useState("all");
   const [markingAll, setMarkingAll] = useState(false);
   const [actionError, setActionError] = useState(null);
@@ -34,12 +36,6 @@ export default function NotificationCenter({
     club:filterNotificationItems(notifications, "club").length,
   }), [notifications, unreadCount]);
 
-  useEffect(() => {
-    const closeOnEscape = event => { if (event.key === "Escape") onClose(); };
-    window.addEventListener("keydown", closeOnEscape);
-    return () => window.removeEventListener("keydown", closeOnEscape);
-  }, [onClose]);
-
   const markAllRead = async () => {
     setMarkingAll(true);
     setActionError(null);
@@ -50,7 +46,7 @@ export default function NotificationCenter({
 
   return (
     <div className="fixed inset-0 z-40 bottom-sheet-backdrop" onClick={onClose}>
-      <section role="dialog" aria-modal="true" aria-labelledby="notification-center-title"
+      <section ref={dialogRef} tabIndex={-1} role="dialog" aria-modal="true" aria-labelledby="notification-center-title"
         className="bottom-sheet md:mx-auto md:my-auto md:rounded-[24px] md:max-w-[580px] md:max-h-[82vh]"
         style={{ bottom:"calc(60px + env(safe-area-inset-bottom))", height:"min(760px, 82dvh)", display:"flex", flexDirection:"column", overflow:"hidden", background:"var(--c-surface)" }}
         onClick={event => event.stopPropagation()}>

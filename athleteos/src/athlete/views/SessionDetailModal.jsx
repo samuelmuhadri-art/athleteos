@@ -14,8 +14,10 @@ import { cat, StatusBadge, rpeColor } from "./planningShared";
 import { openSessionPdf } from "../../utils/storage";
 import { parseLocalDate } from "../../utils/helpers";
 import { RSVP_OPTIONS } from "../../domain/sessionDay";
+import { useAccessibleDialog } from "../../hooks/useAccessibleDialog";
 
 const SessionDetailModal = memo(({ session, athlete, allAthletes, onClose, onSetStatus, onSetRpe, onSetFeeling, onSetComment, onSetRsvp }) => {
+  const { dialogRef } = useAccessibleDialog({ onClose });
   const c   = cat(session.category);
   const trainingFocus = getSessionTrainingFocus(session);
   const val = session.validations?.find(v => v.athleteId === athlete.id);
@@ -79,7 +81,7 @@ const SessionDetailModal = memo(({ session, athlete, allAthletes, onClose, onSet
   return createPortal(
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4 modal-backdrop"
       onClick={e => e.target === e.currentTarget && onClose()}>
-      <div role="dialog" aria-modal="true" aria-labelledby="session-detail-title"
+      <div ref={dialogRef} tabIndex={-1} role="dialog" aria-modal="true" aria-labelledby="session-detail-title"
         className="rounded-t-3xl sm:rounded-3xl shadow-2xl w-full max-w-lg max-h-[95vh] flex flex-col overflow-hidden modal-content"
         style={{ background: "var(--c-surface)" }}>
 

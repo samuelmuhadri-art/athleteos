@@ -16,6 +16,7 @@ import { useTheme, ThemeToggleButton } from "./hooks/useTheme";
 import { initialsFromName, toLocalDateStr, getISOWeek } from "./athlete/shared";
 import { notifyAthleteWeeklyRecap, notifyAthleteWeeklyReport, notifyCoachSessionResponse } from "./utils/notifications";
 import { useUrlView } from "./hooks/useUrlView";
+import { getISOWeekYear, matchesISOWeek } from "./utils/helpers";
 
 // Une vue par chunk (même pattern que CoachShell dans App.jsx) : seule la vue
 // active est téléchargée, pas les cinq d'un coup au premier chargement.
@@ -189,7 +190,7 @@ export default function AthleteApp({ clubBrand, themeStyle }) {
       })).filter(c=>c.athleteIds.includes(athleteId));
 
       const charge = (weeklyChargeRes.data??[]).map(c=>({
-        athleteId:c.athlete_id,week:c.week,rawLoad:c.raw_load,
+        athleteId:c.athlete_id,week:c.week,isoYear:c.iso_year,rawLoad:c.raw_load,
         dailyLoads:c.daily_loads??[],knownDays:c.known_days??0,
         unknownDays:c.unknown_days??0,estimatedDays:c.estimated_days??0,
       }));
@@ -200,18 +201,29 @@ export default function AthleteApp({ clubBrand, themeStyle }) {
 
       // Récap perso samedi soir — au cas où le coach n'a pas encore ouvert
       // son dashboard (qui envoie aussi celui-ci en boucle sur tout le club).
-      await notifyAthleteWeeklyRecap(clubId, { id: athleteId, name: a.name }, allSessions, getISOWeek(new Date()));
+      await notifyAthleteWeeklyRecap(
+        clubId,
+        { id: athleteId, name: a.name },
+        allSessions,
+        getISOWeek(new Date()),
+        getISOWeekYear(new Date()),
+      );
       // Rapport hebdomadaire — même fallback, au cas où le coach n'a pas
       // encore ouvert son Dashboard (qui envoie aussi celui-ci pour tout
       // le club via checkWeeklyReports).
-      await notifyAthleteWeeklyReport(clubId, { id: athleteId, name: a.name }, getISOWeek(new Date()));
+      await notifyAthleteWeeklyReport(
+        clubId,
+        { id: athleteId, name: a.name },
+        getISOWeek(new Date()),
+        getISOWeekYear(new Date()),
+      );
     } catch(err) {
       console.error("AthleteApp:", err);
       setError(err.message ?? "Erreur inconnue");
     } finally { setLoading(false); }
   }, [clubId, profile?.id]);
 
-  useEffect(() => { fetchAll(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { fetchAll(); }, [fetchAll]);
 
   const wellnessShownRef = useRef(false);
   useEffect(() => {
@@ -303,10 +315,13 @@ export default function AthleteApp({ clubBrand, themeStyle }) {
     }
     setConfirmedRestDays(previous => previous.includes(date) ? previous : [...previous, date]);
     const week = getISOWeek(new Date(`${date}T00:00:00`));
+    const isoYear = getISOWeekYear(new Date(`${date}T00:00:00`));
     setWeeklyCharge(previous => {
-      const index = previous.findIndex(row => row.athleteId === athlete.id && row.week === week);
+      const index = previous.findIndex(row =>
+        row.athleteId === athlete.id && matchesISOWeek(row, week, isoYear)
+      );
       const point = { date, load: 0, estimated: false, complete: true };
-      if (index < 0) return [...previous, { athleteId: athlete.id, week, rawLoad: 0, dailyLoads: [point], knownDays: 1, unknownDays: 0, estimatedDays: 0 }];
+      if (index < 0) return [...previous, { athleteId: athlete.id, week, isoYear, rawLoad: 0, dailyLoads: [point], knownDays: 1, unknownDays: 0, estimatedDays: 0 }];
       const next = [...previous];
       const row = next[index];
       const alreadyPresent = (row.dailyLoads ?? []).some(day => day.date === date);

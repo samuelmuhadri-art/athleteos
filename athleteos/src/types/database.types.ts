@@ -19,6 +19,7 @@ export type Database = {
           athlete_id: number | null
           club_id: number | null
           created_at: string | null
+          dedupe_key: string | null
           description: string | null
           id: number
           is_read: boolean | null
@@ -30,6 +31,7 @@ export type Database = {
           athlete_id?: number | null
           club_id?: number | null
           created_at?: string | null
+          dedupe_key?: string | null
           description?: string | null
           id?: number
           is_read?: boolean | null
@@ -41,6 +43,7 @@ export type Database = {
           athlete_id?: number | null
           club_id?: number | null
           created_at?: string | null
+          dedupe_key?: string | null
           description?: string | null
           id?: number
           is_read?: boolean | null
@@ -124,6 +127,7 @@ export type Database = {
           athlete_id: number
           club_id: number
           created_at: string | null
+          dedupe_key: string | null
           description: string | null
           id: number
           is_read: boolean | null
@@ -134,6 +138,7 @@ export type Database = {
           athlete_id: number
           club_id: number
           created_at?: string | null
+          dedupe_key?: string | null
           description?: string | null
           id?: number
           is_read?: boolean | null
@@ -144,6 +149,7 @@ export type Database = {
           athlete_id?: number
           club_id?: number
           created_at?: string | null
+          dedupe_key?: string | null
           description?: string | null
           id?: number
           is_read?: boolean | null
@@ -1199,6 +1205,7 @@ export type Database = {
           athlete_id: number | null
           is_complete: boolean | null
           is_estimated: boolean | null
+          iso_year: number | null
           load_date: string | null
           raw_load: number | null
           unknown_session_count: number | null
@@ -1211,6 +1218,7 @@ export type Database = {
           athlete_id: number | null
           daily_loads: Json | null
           estimated_days: number | null
+          iso_year: number | null
           known_days: number | null
           raw_load: number | null
           unknown_days: number | null

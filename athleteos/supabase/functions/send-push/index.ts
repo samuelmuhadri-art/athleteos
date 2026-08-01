@@ -34,6 +34,8 @@ const MAX_MESSAGE_LEN         = 500;
 const MAX_TAG_LEN             = 100;
 const MAX_URL_LEN             = 200;
 const MAX_REQUESTED_RECIPIENTS = 300; // largement au-dessus de la taille d'un club réel
+const MAX_USER_REQUESTS_PER_MINUTE = 20;
+const MAX_USER_REQUESTS_PER_DAY = 200;
 
 // Origines autorisées pour les appels navigateur (CORS). Domaine de
 // production connu inclus par défaut (URL publique, pas un secret) + ports
@@ -45,6 +47,8 @@ const DEFAULT_ALLOWED_ORIGINS = [
   "https://athleteos-by-samuelmuhadri.vercel.app",
   "http://localhost:5173",
   "http://localhost:4173",
+  "http://127.0.0.1:5173",
+  "http://127.0.0.1:4173",
 ];
 const configuredOrigins = (Deno.env.get("ALLOWED_ORIGINS") ?? "")
   .split(",")
@@ -101,15 +105,19 @@ serve(async (req) => {
     return json(403, origin, { error: "Origine non autorisée." });
   }
 
-  const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-  const serviceKey  = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-  const anonKey     = Deno.env.get("SUPABASE_ANON_KEY")!;
+  const supabaseUrl = Deno.env.get("SUPABASE_URL");
+  const serviceKey  = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  const anonKey     = Deno.env.get("SUPABASE_ANON_KEY");
+  if (!supabaseUrl || !serviceKey || !anonKey) {
+    console.error("send-push: configuration Supabase manquante");
+    return json(503, origin, { error: "Service indisponible." });
+  }
   const admin = createClient(supabaseUrl, serviceKey);
 
   try {
     // ── Taille du payload brut, avant tout parsing ──────────────────
     const rawBody = await req.text();
-    if (rawBody.length > MAX_BODY_BYTES) {
+    if (new TextEncoder().encode(rawBody).byteLength > MAX_BODY_BYTES) {
       return json(413, origin, { error: "Payload trop volumineux." });
     }
     let body: Record<string, unknown>;
@@ -121,8 +129,10 @@ serve(async (req) => {
 
     const requestedAthleteIds = toPositiveIntArray(body.athleteIds);
     const requestedUserIds    = toPositiveIntArray(body.userIds);
+    const requestedRecipientCount = requestedAthleteIds.length + requestedUserIds.length;
 
-    if (requestedAthleteIds.length + requestedUserIds.length > MAX_REQUESTED_RECIPIENTS) {
+    if (!requestedRecipientCount) return json(400, origin, { error: "Aucun destinataire." });
+    if (requestedRecipientCount > MAX_REQUESTED_RECIPIENTS) {
       return json(413, origin, { error: "Trop de destinataires." });
     }
 
@@ -144,13 +154,13 @@ serve(async (req) => {
       const callerClient = createClient(supabaseUrl, anonKey, {
         global: { headers: { Authorization: authHeader } },
       });
-      const { data: { user: caller } } = await callerClient.auth.getUser();
-      if (!caller) return json(401, origin, { error: "Non authentifié." });
+      const { data: { user: caller }, error: authError } = await callerClient.auth.getUser();
+      if (authError || !caller) return json(401, origin, { error: "Non authentifié." });
 
-      const { data: callerRow } = await admin
+      const { data: callerRow, error: callerError } = await admin
         .from("users").select("id, club_id, role").eq("auth_uid", caller.id).maybeSingle();
-      if (!callerRow) return json(401, origin, { error: "Profil introuvable." });
-      logCaller = `user:${callerRow.id}(${callerRow.role})`;
+      if (callerError || !callerRow) return json(401, origin, { error: "Profil introuvable." });
+      logCaller = `role:${callerRow.role}`;
 
       const isCoach = callerRow.role === "head_coach" || callerRow.role === "coach";
       const isAthlete = callerRow.role === "athlete";
@@ -158,12 +168,33 @@ serve(async (req) => {
         return json(403, origin, { error: "Rôle non autorisé." });
       }
 
+      // Une requête peut cibler tout un groupe, elle compte donc comme une
+      // seule action utilisateur. Les crons service_role ne passent pas ici.
+      const minuteAgo = new Date(Date.now() - 60_000).toISOString();
+      const dayAgo = new Date(Date.now() - 86_400_000).toISOString();
+      const [minuteCount, dayCount] = await Promise.all([
+        admin.from("push_delivery_attempts").select("id", { count: "exact", head: true })
+          .eq("user_id", callerRow.id).gte("created_at", minuteAgo),
+        admin.from("push_delivery_attempts").select("id", { count: "exact", head: true })
+          .eq("user_id", callerRow.id).gte("created_at", dayAgo),
+      ]);
+      if (minuteCount.error || dayCount.error) throw minuteCount.error ?? dayCount.error;
+      if ((minuteCount.count ?? 0) >= MAX_USER_REQUESTS_PER_MINUTE || (dayCount.count ?? 0) >= MAX_USER_REQUESTS_PER_DAY) {
+        return json(429, origin, { error: "Trop de notifications envoyées. Réessaie plus tard." });
+      }
+      const { error: attemptError } = await admin.from("push_delivery_attempts").insert({
+        user_id: callerRow.id,
+        recipient_count: requestedRecipientCount,
+      });
+      if (attemptError) throw attemptError;
+
       // athleteIds : toujours limité au club de l'appelant, coach ET athlete
       // (un athlète a des usages légitimes vers ses coéquipiers — post club,
       // messagerie inter-athlètes — et vers lui-même).
       if (requestedAthleteIds.length) {
-        const { data } = await admin.from("athletes").select("id")
+        const { data, error } = await admin.from("athletes").select("id")
           .eq("club_id", callerRow.club_id).in("id", requestedAthleteIds);
+        if (error) throw error;
         athleteIds = (data ?? []).map((r: { id: number }) => r.id);
       }
 
@@ -173,7 +204,8 @@ serve(async (req) => {
         let query = admin.from("users").select("id")
           .eq("club_id", callerRow.club_id).in("id", requestedUserIds);
         if (isAthlete) query = query.in("role", ["head_coach", "coach"]);
-        const { data } = await query;
+        const { data, error } = await query;
+        if (error) throw error;
         userIds = (data ?? []).map((r: { id: number }) => r.id);
       }
 
@@ -197,10 +229,16 @@ serve(async (req) => {
     if (!url.startsWith("/") || url.length > MAX_URL_LEN) return json(400, origin, { error: "URL invalide." });
     if (tag.length > MAX_TAG_LEN)                    return json(400, origin, { error: "Tag invalide." });
 
+    const vapidPublicKey = Deno.env.get("VAPID_PUBLIC_KEY");
+    const vapidPrivateKey = Deno.env.get("VAPID_PRIVATE_KEY");
+    if (!vapidPublicKey || !vapidPrivateKey) {
+      console.error("send-push: configuration VAPID manquante");
+      return json(503, origin, { error: "Notifications indisponibles." });
+    }
     webpush.setVapidDetails(
       "mailto:contact@athleteos.app",
-      Deno.env.get("VAPID_PUBLIC_KEY")!,
-      Deno.env.get("VAPID_PRIVATE_KEY")!
+      vapidPublicKey,
+      vapidPrivateKey,
     );
 
     // Bug trouvé en construisant le cron serveur : userIds (notifs coach)
@@ -210,11 +248,15 @@ serve(async (req) => {
     // push, silencieusement.
     let subs: { endpoint: string; p256dh: string; auth: string }[] = [];
     if (athleteIds.length) {
-      const { data } = await admin.from("push_subscriptions").select("*").in("athlete_id", athleteIds);
+      const { data, error } = await admin.from("push_subscriptions")
+        .select("endpoint, p256dh, auth").in("athlete_id", athleteIds);
+      if (error) throw error;
       subs = subs.concat(data ?? []);
     }
     if (userIds.length) {
-      const { data } = await admin.from("push_subscriptions").select("*").in("user_id", userIds);
+      const { data, error } = await admin.from("push_subscriptions")
+        .select("endpoint, p256dh, auth").in("user_id", userIds);
+      if (error) throw error;
       subs = subs.concat(data ?? []);
     }
 
@@ -250,8 +292,16 @@ serve(async (req) => {
       .filter(Boolean) as string[];
 
     if (deadEndpoints.length) {
-      await admin.from("push_subscriptions").delete().in("endpoint", deadEndpoints);
+      const { error: cleanupError } = await admin.from("push_subscriptions").delete().in("endpoint", deadEndpoints);
+      if (cleanupError) throw cleanupError;
       console.log("Abonnements expirés supprimés:", deadEndpoints.length);
+    }
+
+    // Nettoyage borné et non critique de l'historique de quota.
+    if (isCronCall) {
+      const cutoff = new Date(Date.now() - 2 * 86_400_000).toISOString();
+      const { error: pruneError } = await admin.from("push_delivery_attempts").delete().lt("created_at", cutoff);
+      if (pruneError) console.error("send-push quota cleanup:", pruneError.message);
     }
 
     return json(200, origin, { sent, failed, cleaned: deadEndpoints.length });

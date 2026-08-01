@@ -19,9 +19,17 @@ function getFocusableElements(container) {
  * Cycle de vie accessible commun aux dialogues AthleteOS : focus initial,
  * focus piégé, fermeture par Échap, verrouillage du fond et restauration.
  */
-export function useModalAccessibility({ dialogRef, initialFocusRef, onClose, enabled = true }) {
+export function useModalAccessibility({
+  dialogRef,
+  initialFocusRef,
+  onClose,
+  enabled = true,
+  closeDisabled = false,
+}) {
   const onCloseRef = useRef(onClose);
+  const closeDisabledRef = useRef(closeDisabled);
   onCloseRef.current = onClose;
+  closeDisabledRef.current = closeDisabled;
 
   useEffect(() => {
     if (!enabled || typeof document === "undefined") return undefined;
@@ -38,7 +46,7 @@ export function useModalAccessibility({ dialogRef, initialFocusRef, onClose, ena
     const handleKeyDown = (event) => {
       if (event.key === "Escape") {
         event.preventDefault();
-        onCloseRef.current?.();
+        if (!closeDisabledRef.current) onCloseRef.current?.();
         return;
       }
       if (event.key !== "Tab") return;

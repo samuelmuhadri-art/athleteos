@@ -9,6 +9,7 @@ import { CATEGORIES, colors, sessionStatus, ValidationBadge, StatusIcon } from "
 import { getSessionTrainingFocus } from "../domain/trainingFocus";
 import { openSessionPdf } from "../utils/storage";
 import CoachSessionDayPanel from "../components/session/CoachSessionDayPanel";
+import { useAccessibleDialog } from "../hooks/useAccessibleDialog";
 
 const SessionModal = memo(({
   session, athletes, onClose, onEditRequest, onDeleteSession,
@@ -17,6 +18,7 @@ const SessionModal = memo(({
   const [deleting,    setDeleting]    = useState(false);
   const [deleteError, setDeleteError] = useState(null);
   const [confirmDel,  setConfirmDel]  = useState(false);
+  const { dialogRef, titleId } = useAccessibleDialog({ onClose, closeDisabled: deleting });
   const c      = colors(session.category);
   const trainingFocus = getSessionTrainingFocus(session);
   const status = sessionStatus(session);
@@ -34,9 +36,10 @@ const SessionModal = memo(({
   return (
     <div
       className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4 modal-backdrop"
-      onClick={e => e.target === e.currentTarget && onClose()}
+      onClick={e => e.target === e.currentTarget && !deleting && onClose()}
     >
-      <div className="rounded-t-3xl sm:rounded-3xl shadow-2xl w-full sm:max-w-lg max-h-[95vh] sm:max-h-[90vh] flex flex-col overflow-hidden modal-content"
+      <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby={titleId} tabIndex={-1}
+        className="rounded-t-3xl sm:rounded-3xl shadow-2xl w-full sm:max-w-lg max-h-[95vh] sm:max-h-[90vh] flex flex-col overflow-hidden modal-content"
         style={{ background: "var(--c-surface)" }}>
 
         {/* Handle mobile */}
@@ -68,7 +71,7 @@ const SessionModal = memo(({
               )}
               <StatusIcon status={status} size={14} />
             </div>
-            <h2 className="text-[20px] font-bold leading-tight" style={{ color: c.text }}>
+            <h2 id={titleId} className="text-[20px] font-bold leading-tight" style={{ color: c.text }}>
               {session.title}
             </h2>
             <p className="text-[12px] mt-1.5 font-medium" style={{ color: "var(--c-text-2)" }}>
@@ -81,6 +84,7 @@ const SessionModal = memo(({
             type="button"
             aria-label="Fermer"
             onClick={onClose}
+            disabled={deleting}
             className="p-2 rounded-xl flex-shrink-0 transition-colors"
             style={{ background: "transparent" }}
             onMouseEnter={e => e.currentTarget.style.background = "rgba(255,255,255,0.08)"}
@@ -212,7 +216,7 @@ const SessionModal = memo(({
               </span>
             )}
           </div>
-          <button onClick={() => onEditRequest(session)} className="btn-primary">
+          <button onClick={() => onEditRequest(session)} disabled={deleting} className="btn-primary">
             ✏️ Modifier
           </button>
         </div>

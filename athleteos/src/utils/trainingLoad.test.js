@@ -84,6 +84,27 @@ describe("agrégation hebdomadaire depuis les séances", () => {
     expect(result).toContainEqual({ week: 10, category: "force", total: 200 });
     expect(result).toContainEqual({ week: 11, category: "sprint", total: 300 });
   });
+
+  it("sépare une même semaine ISO entre deux années", () => {
+    const crossYearSessions = [
+      {
+        id: 10, week: 1, sessionDate: "2029-01-02", category: "sprint", athleteIds: [1],
+        validations: [{ athleteId: 1, rpe: 5, actualDurationMinutes: 20 }],
+      },
+      {
+        id: 11, week: 1, sessionDate: "2029-12-31", category: "sprint", athleteIds: [1],
+        validations: [{ athleteId: 1, rpe: 5, actualDurationMinutes: 40 }],
+      },
+    ];
+    expect(computeAllWeeklyLoads([{ id: 1 }], crossYearSessions)).toEqual([
+      { athleteId: 1, week: 1, isoYear: 2029, rawLoad: 100 },
+      { athleteId: 1, week: 1, isoYear: 2030, rawLoad: 200 },
+    ]);
+    expect(computeWeeklyLoadByCategory([{ id: 1 }], crossYearSessions)).toEqual([
+      { week: 1, isoYear: 2029, category: "sprint", total: 100 },
+      { week: 1, isoYear: 2030, category: "sprint", total: 200 },
+    ]);
+  });
 });
 
 describe("série quotidienne continue", () => {

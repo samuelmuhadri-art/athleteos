@@ -1,23 +1,22 @@
 # AthleteOS
 
-**AthleteOS** is an innovative web application engineered to centralize athletic performance, training analytics, and comprehensive sports data tracking. 
+AthleteOS est une plateforme web de suivi d’entraînement et de performance pour les clubs, entraîneurs et athlètes. Elle réunit planning, réponses aux séances, charge déclarée, bien-être, performances, compétitions, rapports, messagerie et notifications dans une PWA responsive.
 
-## Author & Developer
-This platform is conceptualized, designed, and developed entirely by **Samuel Muhadri**. 
+Le code applicatif se trouve dans [`athleteos/`](athleteos/). La documentation technique complète — installation, variables d’environnement, Supabase local, tests et déploiement — est disponible dans [`athleteos/README.md`](athleteos/README.md).
 
----
+## Démarrage rapide
 
-## Project Overview
-AthleteOS serves as a digital ecosystem for high-level training tracking. It integrates modern web technologies to monitor performance metrics across multiple disciplines, dynamic scheduling, and workload optimization. 
+```bash
+cd athleteos
+npm ci
+cp .env.example .env
+npm run dev
+```
 
-- **Frontend:** Built with robust modern web technologies (HTML5, CSS3, JavaScript).
-- **Backend & Database:** Secured and powered by Supabase for real-time synchronization and data persistence.
+Le frontend nécessite une URL Supabase et une clé publique `anon`. Pour un environnement reproductible avec base locale, Docker Desktop et le CLI Supabase sont requis ; voir le guide détaillé.
 
-## Intellectual Property & Copyright
-This repository is public for portfolio presentation, academic evaluation, and search engine indexing purposes only. 
+## Propriété intellectuelle
 
-- **All Rights Reserved © 2026 Samuel Muhadri.**
-- Unauthorized copying, modification, redistribution, or commercial use of this source code is strictly prohibited under standard international copyright laws.
+AthleteOS est conçu et développé par **Samuel Muhadri**.
 
----
-*For inquiries or professional contact, please review the repository author profile.*
+**Tous droits réservés © 2026 Samuel Muhadri.** Ce dépôt est publié pour présentation de portfolio, évaluation académique et référencement. Toute copie, modification, redistribution ou exploitation commerciale non autorisée est interdite.

@@ -59,6 +59,8 @@ const DEFAULT_ALLOWED_ORIGINS = [
   "https://athleteos-by-samuelmuhadri.vercel.app",
   "http://localhost:5173",
   "http://localhost:4173",
+  "http://127.0.0.1:5173",
+  "http://127.0.0.1:4173",
 ];
 const configuredOrigins = (Deno.env.get("ALLOWED_ORIGINS") ?? "")
   .split(",").map((o) => o.trim()).filter(Boolean);
@@ -109,10 +111,20 @@ serve(async (req) => {
     });
   }
 
-  const admin = createClient(
-    Deno.env.get("SUPABASE_URL")!,
-    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
-  );
+  const supabaseUrl = Deno.env.get("SUPABASE_URL");
+  const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  if (!supabaseUrl || !serviceRoleKey) {
+    console.error(`signup[${correlationId}] configuration Supabase manquante`);
+    return new Response(JSON.stringify({
+      success: false,
+      error: "Service temporairement indisponible.",
+      correlationId,
+    }), {
+      status: 503,
+      headers: { ...corsHeaders(origin), "Content-Type": "application/json" },
+    });
+  }
+  const admin = createClient(supabaseUrl, serviceRoleKey);
 
   function fail(status: number, error: string) {
     console.error(`signup[${correlationId}] ${status} — ${error}`);
@@ -132,9 +144,21 @@ serve(async (req) => {
   let reservedInvitationId: string | null = null;
   let reservationToken: string | null = null;
 
+  async function cleanupAuthUser(authUserId: string, reason: string) {
+    try {
+      const { error } = await admin.auth.admin.deleteUser(authUserId);
+      if (error) console.error(`signup[${correlationId}] auth cleanup (${reason}):`, error.message);
+    } catch (error) {
+      console.error(
+        `signup[${correlationId}] auth cleanup (${reason}):`,
+        error instanceof Error ? error.message : error,
+      );
+    }
+  }
+
   try {
     const rawBody = await req.text();
-    if (rawBody.length > MAX_BODY_BYTES) return fail(413, "Payload trop volumineux.");
+    if (new TextEncoder().encode(rawBody).byteLength > MAX_BODY_BYTES) return fail(413, "Payload trop volumineux.");
     let body: Record<string, unknown>;
     try { body = JSON.parse(rawBody || "{}"); } catch { return fail(400, "JSON invalide."); }
 
@@ -297,7 +321,7 @@ serve(async (req) => {
         .select("id")
         .maybeSingle();
       if (reserveError || !reserved) {
-        await admin.auth.admin.deleteUser(createdAuthUserId).catch(() => {});
+        await cleanupAuthUser(createdAuthUserId, "reservation refusée");
         createdAuthUserId = null;
         return fail(409, "Cette invitation est déjà utilisée ou en cours d’utilisation.");
       }
@@ -313,20 +337,17 @@ serve(async (req) => {
     }
 
     // ── club + users + athletes, atomique (migration 20260727030000) ────
-    const { data: rpcData, error: rpcErr } = await admin.rpc("signup_create_account", {
+    const { data: rpcData, error: rpcErr } = await admin.rpc("signup_create_account_with_invitation", {
       p_mode: mode, p_club_name: clubName, p_invite_code: inviteCode,
       p_auth_uid: authData.user.id, p_name: name, p_email: emailRaw,
+      p_individual_invitation_id: individualInvitationId,
+      p_reservation_token: reservationToken,
     });
     if (rpcErr) throw rpcErr;
 
-    if (mode === "join_club" && individualInvitationId && reservationToken) {
-      const { error: trackingError } = await admin.from("club_invitations").update({
-        accepted_at: new Date().toISOString(),
-        accepted_user_id: rpcData?.userId ?? null,
-        reservation_token: null,
-        reserved_until: null,
-      }).eq("id", individualInvitationId).eq("reservation_token", reservationToken).eq("status", "active").is("accepted_at", null);
-      if (trackingError) console.error(`signup[${correlationId}] individual invitation tracking:`, trackingError.message);
+    if (individualInvitationId) {
+      // La nouvelle RPC a consommé l'invitation dans la même transaction que
+      // la création métier. On désarme donc la compensation locale.
       reservedInvitationId = null;
       reservationToken = null;
     } else if (mode === "join_club") {
@@ -345,10 +366,14 @@ serve(async (req) => {
     // Compensation : le compte Auth ne doit jamais survivre seul, sans les
     // lignes club/users/athletes qui vont avec (club+users+athletes eux-
     // mêmes sont déjà tout-ou-rien grâce au RPC).
-    if (createdAuthUserId) await admin.auth.admin.deleteUser(createdAuthUserId).catch(() => {});
+    if (createdAuthUserId) await cleanupAuthUser(createdAuthUserId, "transaction métier");
     if (reservedInvitationId && reservationToken) {
-      await admin.from("club_invitations").update({ reservation_token: null, reserved_until: null })
+      const { error: releaseError } = await admin.from("club_invitations")
+        .update({ reservation_token: null, reserved_until: null })
         .eq("id", reservedInvitationId).eq("reservation_token", reservationToken);
+      if (releaseError) {
+        console.error(`signup[${correlationId}] invitation release:`, releaseError.message);
+      }
     }
     console.error(`signup[${correlationId}] error:`, err instanceof Error ? err.message : err);
     return fail(500, "Erreur serveur.");

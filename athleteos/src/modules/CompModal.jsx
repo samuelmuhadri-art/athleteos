@@ -10,8 +10,10 @@ import { getTypeConfig, daysUntil, formatDate, dateToWeek, athleteColor, generat
 import { parsePerf } from "../athlete/shared.js";
 import AddResultInline from "./AddResultInline";
 import PerformanceContextChips from "../components/performance/PerformanceContextChips.jsx";
+import { useAccessibleDialog } from "../hooks/useAccessibleDialog";
 
 const CompModal = memo(({ competition, athletes, weeklyCharge, records, onClose, onAddResult }) => {
+  const { dialogRef } = useAccessibleDialog({ onClose, enabled: Boolean(competition) });
   if (!competition) return null;
 
   const cfg            = getTypeConfig(competition.type);
@@ -24,7 +26,7 @@ const CompModal = memo(({ competition, athletes, weeklyCharge, records, onClose,
       className="modal-backdrop fixed inset-0 z-50 flex items-center justify-center p-4"
       onClick={(e) => e.target === e.currentTarget && onClose()}
     >
-      <div role="dialog" aria-modal="true" aria-labelledby="competition-detail-title" className="modal-content bg-[var(--c-surface)] border border-[var(--c-border)] rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden">
+      <div ref={dialogRef} tabIndex={-1} role="dialog" aria-modal="true" aria-labelledby="competition-detail-title" className="modal-content bg-[var(--c-surface)] border border-[var(--c-border)] rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden">
 
         <div
           className="px-4 sm:px-6 py-5 flex items-start justify-between gap-4 flex-shrink-0"
