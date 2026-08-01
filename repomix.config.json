@@ -1,0 +1,55 @@
+{
+  "$schema": "https://repomix.com/schemas/latest/schema.json",
+  "output": {
+    "filePath": "repomix-output.xml",
+    "style": "xml",
+    "filePathStyle": "target-relative",
+    "parsableStyle": true,
+    "showLineNumbers": true,
+    "truncateBase64": true,
+    "git": {
+      "sortByChanges": true,
+      "includeDiffs": false,
+      "includeLogs": true,
+      "includeLogsCount": 30
+    }
+  },
+  "ignore": {
+    "useGitignore": false,
+    "useDotIgnore": false,
+    "useDefaultPatterns": true,
+    "customPatterns": [
+      "repomix-output.xml",
+      "**/repomix-output.xml",
+      ".env",
+      ".env.*",
+      "**/.env",
+      "**/.env.*",
+      "athleteos/.env.example",
+      "**/node_modules/**",
+      "**/dist/**",
+      "**/build/**",
+      "**/coverage/**",
+      "**/playwright-report/**",
+      "**/test-results/**",
+      "**/e2e/.auth-fixtures.json",
+      "**/supabase/.temp/**",
+      "**/supabase/.branches/**",
+      "**/.claude/settings.local.json",
+      "*.pdf",
+      "**/*.pdf",
+      "*.log",
+      "**/*.log",
+      ".DS_Store",
+      "**/.DS_Store",
+      "Thumbs.db",
+      "**/Thumbs.db"
+    ]
+  },
+  "security": {
+    "enableSecurityCheck": true
+  },
+  "tokenCount": {
+    "encoding": "o200k_base"
+  }
+}
