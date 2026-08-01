@@ -94,6 +94,13 @@ describe("AccountSettingsModal", () => {
     expect(await screen.findByText("NEWCODE1")).toBeTruthy();
   });
 
+  it("ouvre directement les options d’installation de l’application", () => {
+    renderSettings({ initialSection: "application" });
+
+    expect(screen.getByRole("tab", { name: "Application" }).getAttribute("aria-selected")).toBe("true");
+    expect(screen.getByRole("heading", { name: "AthleteOS sur ton appareil" })).toBeTruthy();
+  });
+
   it("envoie le logo via l'action serveur avant de sauvegarder son chemin", async () => {
     mocks.invoke.mockImplementation(async (_functionName, { body }) => {
       if (body.action === "upload_club_branding") {

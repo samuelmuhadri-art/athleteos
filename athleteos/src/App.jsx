@@ -284,7 +284,7 @@ function CoachShell({ user, profile, clubId, signOut, club, clubLoading, refresh
         <div className="flex-shrink-0 px-3 pb-2">
           <PwaInstallButton
             expanded={sidebarOpen}
-            onOpenHelp={() => { setSettingsSection("account"); setShowSettings(true); }}
+            onOpenHelp={() => { setSettingsSection("application"); setShowSettings(true); }}
           />
         </div>
 
@@ -415,7 +415,7 @@ function CoachShell({ user, profile, clubId, signOut, club, clubLoading, refresh
           <div className="md:hidden">
             <PwaInstallButton
               expanded={false}
-              onOpenHelp={() => { setSettingsSection("account"); setShowSettings(true); }}
+              onOpenHelp={() => { setSettingsSection("application"); setShowSettings(true); }}
             />
           </div>
 

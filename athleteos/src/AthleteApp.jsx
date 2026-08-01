@@ -85,6 +85,7 @@ export default function AthleteApp({ clubBrand, themeStyle }) {
   const [showWellness,   setShowWellness]   = useState(false);
   const [showInjuryReport, setShowInjuryReport] = useState(false);
   const [showSettings,   setShowSettings]   = useState(false);
+  const [settingsSection, setSettingsSection] = useState("account");
 
   const { theme, toggleTheme } = useTheme();
   const { subscribed, subscribe, permissionState, swReady } = usePushNotifications(
@@ -434,7 +435,7 @@ export default function AthleteApp({ clubBrand, themeStyle }) {
         </nav>
 
         <div className="flex-shrink-0 px-3 pb-2">
-          <PwaInstallButton onOpenHelp={() => setShowSettings(true)} />
+          <PwaInstallButton onOpenHelp={() => { setSettingsSection("application"); setShowSettings(true); }} />
         </div>
 
         {/* Footer sidebar */}
@@ -465,7 +466,7 @@ export default function AthleteApp({ clubBrand, themeStyle }) {
                 </span>
               )}
             </button>
-            <button onClick={() => setShowSettings(true)}
+            <button onClick={() => { setSettingsSection("account"); setShowSettings(true); }}
               className="tap-feedback"
               style={{ padding: 6, borderRadius: 8, background: "none", border: "none", cursor: "pointer", color: "var(--c-text-3)", flexShrink: 0 }}>
               <Settings size={13} />
@@ -515,7 +516,7 @@ export default function AthleteApp({ clubBrand, themeStyle }) {
           </div>
           <div className="flex-1" />
           <div className="md:hidden">
-            <PwaInstallButton expanded={false} onOpenHelp={() => setShowSettings(true)} />
+            <PwaInstallButton expanded={false} onOpenHelp={() => { setSettingsSection("application"); setShowSettings(true); }} />
           </div>
           <ThemeToggleButton theme={theme} onToggle={toggleTheme} compact />
           <button
@@ -535,7 +536,7 @@ export default function AthleteApp({ clubBrand, themeStyle }) {
           </button>
           <button
             type="button"
-            onClick={() => setShowSettings(true)}
+            onClick={() => { setSettingsSection("account"); setShowSettings(true); }}
             className="mobile-account-action md:hidden"
             aria-label="Ouvrir les réglages du compte"
           >
@@ -641,7 +642,7 @@ export default function AthleteApp({ clubBrand, themeStyle }) {
         />
       )}
 
-      {showSettings && <AccountSettingsModal onClose={() => setShowSettings(false)} />}
+      {showSettings && <AccountSettingsModal initialSection={settingsSection} onClose={() => setShowSettings(false)} />}
     </div>
   );
 }

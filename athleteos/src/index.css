@@ -227,7 +227,7 @@ body {
 }
 
 @media (min-width: 768px) {
-  body { font-size: 14px; line-height: 20px; }
+  :root { --page-gutter: var(--space-6); --card-padding: var(--space-5); --card-padding-comfortable: var(--space-6); }
 }
 
 /* ─── Scrollbar ──────────────────────────────────────────────────────────────── */
@@ -1014,9 +1014,42 @@ select.input-premium {
 
 .chip {
   display: inline-flex; align-items: center; gap: 4px;
-  padding: 2px 8px; border-radius: var(--r-full);
-  font-size: 10px; font-weight: 500;
-  letter-spacing: 0.01em; line-height: 1.5; white-space: nowrap;
+  min-height: 24px; padding: 3px 9px; border-radius: var(--r-full);
+  font-size: var(--text-meta); font-weight: 600;
+  letter-spacing: 0.01em; line-height: var(--leading-meta); white-space: nowrap;
+}
+
+.app-status-banner {
+  position: fixed; left: 50%; bottom: calc(76px + var(--safe-bottom)); z-index: 116;
+  width: min(calc(100% - 24px), 620px); min-height: 64px; padding: 12px;
+  display: flex; align-items: center; gap: 12px; transform: translateX(-50%);
+  border: 1px solid var(--c-border-strong); border-radius: var(--r-lg);
+  background: var(--surface-chrome-strong); box-shadow: var(--shadow-xl);
+  backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+  animation: slide-up var(--dur-slow) var(--spring) both;
+}
+.app-status-banner.offline { border-color: rgba(240,180,77,0.30); }
+.app-status-banner.update { border-color: rgba(var(--club-accent-rgb, 36,168,125),0.30); }
+.app-status-icon {
+  width: 38px; height: 38px; flex: 0 0 auto; display: grid; place-items: center;
+  border-radius: var(--r-md); color: var(--c-accent); background: var(--c-accent-light);
+}
+.app-status-banner.offline .app-status-icon { color: var(--color-warning); background: rgba(240,180,77,0.12); }
+.app-status-banner > span:nth-child(2) { min-width: 0; flex: 1; display: grid; }
+.app-status-banner strong { color: var(--c-text-1); font-size: var(--text-secondary); line-height: var(--leading-small); }
+.app-status-banner small { margin-top: 2px; color: var(--c-text-2); font-size: var(--text-meta); line-height: var(--leading-meta); }
+.app-status-banner .btn-primary { min-height: 38px; padding-inline: 14px; }
+.app-status-dismiss { width: 36px; height: 36px; display: grid; place-items: center; flex: 0 0 auto; border: 0; border-radius: var(--r-md); background: transparent; color: var(--c-text-3); cursor: pointer; }
+.app-status-dismiss:hover { color: var(--c-text-1); background: var(--c-surface-2); }
+
+@media (min-width: 768px) {
+  .app-status-banner { bottom: 24px; }
+}
+
+@media (max-width: 520px) {
+  .app-status-banner.update { align-items: flex-start; flex-wrap: wrap; }
+  .app-status-banner.update .btn-primary { width: calc(100% - 48px); margin-left: 48px; }
+  .app-status-banner.update .app-status-dismiss { position: absolute; top: 6px; right: 6px; }
 }
 .chip-success { background: rgba(29,158,117,0.15);  color: #4DC9A0; }
 .chip-warning { background: rgba(232,160,32,0.15);  color: #E8A020; }

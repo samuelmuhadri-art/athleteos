@@ -7,6 +7,7 @@ import {
   Lock,
   Mail,
   Image as ImageIcon,
+  MonitorDown,
   Palette,
   RefreshCw,
   Settings,
@@ -91,7 +92,10 @@ function ActionRow({ children, action }) {
 export default function AccountSettingsModal({ onClose, initialSection = "account", onClubUpdated }) {
   const { user, profile, clubId, signOut } = useAuth();
   const isHeadCoach = profile?.role === "head_coach";
-  const [activeSection, setActiveSection] = useState(initialSection === "club" && isHeadCoach ? "club" : "account");
+  const initialActiveSection = initialSection === "application"
+    ? "application"
+    : initialSection === "club" && isHeadCoach ? "club" : "account";
+  const [activeSection, setActiveSection] = useState(initialActiveSection);
   const [name, setName] = useState(profile?.name ?? "");
   const [email, setEmail] = useState(user?.email ?? "");
   const [password, setPassword] = useState("");
@@ -396,8 +400,12 @@ export default function AccountSettingsModal({ onClose, initialSection = "accoun
           </button>
         </header>
 
-        {isHeadCoach && (
-          <nav className="account-settings-tabs" role="tablist" aria-label="Sections des réglages">
+        <nav
+          className="account-settings-tabs"
+          role="tablist"
+          aria-label="Sections des réglages"
+          style={{ gridTemplateColumns: `repeat(${isHeadCoach ? 3 : 2}, minmax(0, 1fr))` }}
+        >
             <button
               type="button"
               role="tab"
@@ -412,6 +420,17 @@ export default function AccountSettingsModal({ onClose, initialSection = "accoun
             <button
               type="button"
               role="tab"
+              id="settings-application-tab"
+              aria-selected={activeSection === "application"}
+              aria-controls="settings-application-panel"
+              className={activeSection === "application" ? "active" : ""}
+              onClick={() => switchSection("application")}
+            >
+              <MonitorDown size={16} aria-hidden="true" /> Application
+            </button>
+            {isHeadCoach && <button
+              type="button"
+              role="tab"
               id="settings-club-tab"
               aria-selected={activeSection === "club"}
               aria-controls="settings-club-panel"
@@ -419,9 +438,8 @@ export default function AccountSettingsModal({ onClose, initialSection = "accoun
               onClick={() => switchSection("club")}
             >
               <Building2 size={16} aria-hidden="true" /> Club
-            </button>
-          </nav>
-        )}
+            </button>}
+        </nav>
 
         <div className="account-settings-content">
           {message && <AuthFeedback type={message.type}>{message.text}</AuthFeedback>}
@@ -495,8 +513,6 @@ export default function AccountSettingsModal({ onClose, initialSection = "accoun
                 />
               </ActionRow>
 
-              <PwaAccessCard />
-
               <section className="settings-signout-card" aria-labelledby="settings-signout-title">
                 <div>
                   <h3 id="settings-signout-title">Fin de session</h3>
@@ -511,6 +527,20 @@ export default function AccountSettingsModal({ onClose, initialSection = "accoun
                   <LogOut size={16} aria-hidden="true" /> Se déconnecter
                 </button>
               </section>
+            </div>
+          ) : activeSection === "application" ? (
+            <div
+              id="settings-application-panel"
+              role="tabpanel"
+              aria-labelledby="settings-application-tab"
+              className="settings-panel"
+            >
+              <SettingsSectionHeader
+                icon={MonitorDown}
+                title="Installer AthleteOS"
+                description="Ajoute l’application à cet appareil ou partage son lien."
+              />
+              <PwaAccessCard />
             </div>
           ) : (
             <div

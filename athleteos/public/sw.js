@@ -8,14 +8,18 @@
 // Workbox injecte ici la liste des fichiers à précacher
 // Ne pas toucher cette ligne — elle est remplacée au build
 const WB_MANIFEST = self.__WB_MANIFEST || [];
+const PRECACHE_NAME = "athleteos-v2";
+const RUNTIME_NAME = "athleteos-runtime-v1";
 
 // Précache manuel sans import ES Module
 self.addEventListener("install", (event) => {
   event.waitUntil(
-    caches.open("athleteos-v1").then((cache) => {
-      const urls = WB_MANIFEST.map((entry) =>
+    caches.open(PRECACHE_NAME).then((cache) => {
+      // Vite peut injecter certaines icônes deux fois (assets publics + manifeste).
+      // Cache.addAll rejette alors tout le préchargement : on déduplique d'abord.
+      const urls = [...new Set(WB_MANIFEST.map((entry) =>
         typeof entry === "string" ? entry : entry.url
-      );
+      ))];
       return cache.addAll(urls).catch(() => {});
     })
   );
@@ -23,7 +27,56 @@ self.addEventListener("install", (event) => {
 });
 
 self.addEventListener("activate", (event) => {
-  event.waitUntil(self.clients.claim());
+  event.waitUntil(
+    caches.keys()
+      .then((keys) => Promise.all(keys
+        .filter((key) => key.startsWith("athleteos-") && ![PRECACHE_NAME, RUNTIME_NAME].includes(key))
+        .map((key) => caches.delete(key))))
+      .then(() => self.clients.claim())
+  );
+});
+
+// L'interface et ses ressources restent disponibles hors connexion. Les appels
+// Supabase ne sont jamais mis en cache ici afin d'éviter d'afficher des données
+// métier périmées comme si elles venaient du serveur.
+self.addEventListener("fetch", (event) => {
+  const { request } = event;
+  if (request.method !== "GET") return;
+
+  const requestUrl = new URL(request.url);
+  if (requestUrl.origin !== self.location.origin) return;
+
+  if (request.mode === "navigate") {
+    event.respondWith(
+      fetch(request)
+        .then((response) => {
+          if (response.ok) {
+            const copy = response.clone();
+            caches.open(RUNTIME_NAME).then((cache) => cache.put(request, copy));
+          }
+          return response;
+        })
+        .catch(async () => (
+          await caches.match(request)
+          || await caches.match("/index.html")
+          || await caches.match("index.html")
+          || Response.error()
+        ))
+    );
+    return;
+  }
+
+  if (["script", "style", "image", "font"].includes(request.destination)) {
+    event.respondWith(
+      caches.match(request).then((cached) => cached || fetch(request).then((response) => {
+        if (response.ok) {
+          const copy = response.clone();
+          caches.open(RUNTIME_NAME).then((cache) => cache.put(request, copy));
+        }
+        return response;
+      }))
+    );
+  }
 });
 
 // ── Push ──────────────────────────────────────────────────────

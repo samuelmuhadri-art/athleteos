@@ -8,7 +8,12 @@ export function PwaInstallButton({ expanded = true, onOpenHelp }) {
 
   const handleClick = async () => {
     if (canInstall) {
-      await install();
+      try {
+        const result = await install();
+        if (result?.outcome === "unavailable") onOpenHelp?.();
+      } catch {
+        onOpenHelp?.();
+      }
       return;
     }
     onOpenHelp?.();
@@ -34,8 +39,14 @@ export default function PwaAccessCard() {
 
   const runInstall = async () => {
     setFeedback("");
-    const result = await install();
-    if (result?.outcome === "accepted") setFeedback("AthleteOS a bien été ajouté à ton appareil.");
+    try {
+      const result = await install();
+      if (result?.outcome === "accepted") setFeedback("AthleteOS a bien été ajouté à ton appareil.");
+      else if (result?.outcome === "dismissed") setFeedback("Installation annulée. Tu peux réessayer quand tu veux.");
+      else if (result?.outcome === "unavailable") setFeedback("Ce navigateur ne permet pas de lancer l’installation automatiquement.");
+    } catch {
+      setFeedback("L’installation n’a pas pu être ouverte. Utilise le menu de ton navigateur.");
+    }
   };
 
   const runShare = async () => {
