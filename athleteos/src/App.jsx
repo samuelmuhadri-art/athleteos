@@ -282,7 +282,10 @@ function CoachShell({ user, profile, clubId, signOut, club, clubLoading, refresh
         </nav>
 
         <div className="flex-shrink-0 px-3 pb-2">
-          <PwaInstallButton expanded={sidebarOpen} />
+          <PwaInstallButton
+            expanded={sidebarOpen}
+            onOpenHelp={() => { setSettingsSection("account"); setShowSettings(true); }}
+          />
         </div>
 
         {/* ── Profil coach ── */}
@@ -408,6 +411,13 @@ function CoachShell({ user, profile, clubId, signOut, club, clubLoading, refresh
             <UserPlus size={13} />
             <span className="hidden sm:inline">Inviter</span>
           </button>
+
+          <div className="md:hidden">
+            <PwaInstallButton
+              expanded={false}
+              onOpenHelp={() => { setSettingsSection("account"); setShowSettings(true); }}
+            />
+          </div>
 
           {/* Thème clair / sombre */}
           <ThemeToggleButton theme={theme} onToggle={toggleTheme} compact />

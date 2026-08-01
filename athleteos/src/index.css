@@ -851,6 +851,7 @@ body {
   color: var(--c-accent); font: inherit; font-size: var(--text-meta); font-weight: 700; cursor: pointer;
 }
 .pwa-install-quick:hover { background: rgba(var(--club-accent-rgb, 29, 158, 117), 0.16); }
+.pwa-install-quick.compact { width: 40px; min-width: 40px; padding: 0; }
 .pwa-access-card {
   padding: 18px; display: flex; flex-direction: column; gap: 16px;
   border: 1px solid rgba(var(--club-accent-rgb, 29, 158, 117), 0.24); border-radius: var(--r-lg);

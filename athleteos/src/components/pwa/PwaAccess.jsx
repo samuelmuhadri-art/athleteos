@@ -2,19 +2,28 @@ import { useState } from "react";
 import { Check, Copy, Download, ExternalLink, MonitorDown, Share2, Smartphone } from "lucide-react";
 import { usePwaInstall } from "../../context/pwaInstallState";
 
-export function PwaInstallButton({ expanded = true }) {
-  const { canInstall, install } = usePwaInstall();
-  if (!canInstall) return null;
+export function PwaInstallButton({ expanded = true, onOpenHelp }) {
+  const { canInstall, installed, install } = usePwaInstall();
+  if (installed) return null;
+
+  const handleClick = async () => {
+    if (canInstall) {
+      await install();
+      return;
+    }
+    onOpenHelp?.();
+  };
 
   return (
     <button
       type="button"
-      className="pwa-install-quick"
-      onClick={install}
-      title="Installer AthleteOS sur cet appareil"
+      className={["pwa-install-quick", expanded ? "" : "compact"].join(" ")}
+      onClick={handleClick}
+      title={canInstall ? "Installer AthleteOS sur cet appareil" : "Afficher les options d’installation"}
+      aria-label={expanded ? undefined : "Installer AthleteOS"}
     >
       <Download size={17} aria-hidden="true" />
-      {expanded && <span>Installer l’application</span>}
+      {expanded && <span>Installer AthleteOS</span>}
     </button>
   );
 }

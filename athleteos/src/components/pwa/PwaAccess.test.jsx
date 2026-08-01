@@ -46,4 +46,17 @@ describe("PwaAccess", () => {
     await waitFor(() => expect(writeText).toHaveBeenCalledWith(window.location.origin));
     expect(screen.getByText("Le lien AthleteOS a été copié.")).toBeTruthy();
   });
+
+  it("garde un bouton visible et ouvre l’aide quand l’installation native est indisponible", () => {
+    const onOpenHelp = vi.fn();
+    render(
+      <PwaInstallProvider>
+        <PwaInstallButton onOpenHelp={onOpenHelp} />
+      </PwaInstallProvider>,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Installer AthleteOS" }));
+
+    expect(onOpenHelp).toHaveBeenCalledOnce();
+  });
 });

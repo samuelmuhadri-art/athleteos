@@ -434,7 +434,7 @@ export default function AthleteApp({ clubBrand, themeStyle }) {
         </nav>
 
         <div className="flex-shrink-0 px-3 pb-2">
-          <PwaInstallButton />
+          <PwaInstallButton onOpenHelp={() => setShowSettings(true)} />
         </div>
 
         {/* Footer sidebar */}
@@ -514,6 +514,9 @@ export default function AthleteApp({ clubBrand, themeStyle }) {
             </h1>
           </div>
           <div className="flex-1" />
+          <div className="md:hidden">
+            <PwaInstallButton expanded={false} onOpenHelp={() => setShowSettings(true)} />
+          </div>
           <ThemeToggleButton theme={theme} onToggle={toggleTheme} compact />
           <button
             type="button"
