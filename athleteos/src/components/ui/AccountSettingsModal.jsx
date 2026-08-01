@@ -10,6 +10,7 @@ import {
   Palette,
   RefreshCw,
   Settings,
+  LogOut,
   Upload,
   User,
   X,
@@ -26,6 +27,7 @@ import { loadClubBranding } from "../../hooks/useClubBranding";
 import { CLUB_ACCENT_PRESETS, DEFAULT_CLUB_ACCENT } from "../../utils/clubBranding";
 import ClubInvitationCenter from "../club/ClubInvitationCenter";
 import PwaAccessCard from "../pwa/PwaAccess";
+import { ConfirmDialog } from "./premium";
 
 const FOCUSABLE_SELECTOR = [
   "button:not([disabled])",
@@ -87,7 +89,7 @@ function ActionRow({ children, action }) {
 }
 
 export default function AccountSettingsModal({ onClose, initialSection = "account", onClubUpdated }) {
-  const { user, profile, clubId } = useAuth();
+  const { user, profile, clubId, signOut } = useAuth();
   const isHeadCoach = profile?.role === "head_coach";
   const [activeSection, setActiveSection] = useState(initialSection === "club" && isHeadCoach ? "club" : "account");
   const [name, setName] = useState(profile?.name ?? "");
@@ -107,6 +109,7 @@ export default function AccountSettingsModal({ onClose, initialSection = "accoun
   const [clubLoading, setClubLoading] = useState(Boolean(clubId));
   const [copied, setCopied] = useState(false);
   const [confirmRegeneration, setConfirmRegeneration] = useState(false);
+  const [confirmSignOut, setConfirmSignOut] = useState(false);
   const [message, setMessage] = useState(null);
   const [busy, setBusy] = useState(null);
   const dialogRef = useRef(null);
@@ -345,6 +348,19 @@ export default function AccountSettingsModal({ onClose, initialSection = "accoun
     setConfirmRegeneration(false);
   };
 
+  const handleSignOut = async () => {
+    setBusy("signout");
+    setMessage(null);
+    try {
+      await signOut();
+      setConfirmSignOut(false);
+      onClose();
+    } catch (signOutError) {
+      setMessage({ type: "error", text: translateAuthError(signOutError) });
+      setBusy(null);
+    }
+  };
+
   return (
     <div
       className="account-settings-backdrop modal-backdrop"
@@ -480,6 +496,21 @@ export default function AccountSettingsModal({ onClose, initialSection = "accoun
               </ActionRow>
 
               <PwaAccessCard />
+
+              <section className="settings-signout-card" aria-labelledby="settings-signout-title">
+                <div>
+                  <h3 id="settings-signout-title">Fin de session</h3>
+                  <p>Déconnecte ce compte d’AthleteOS sur cet appareil.</p>
+                </div>
+                <button
+                  type="button"
+                  className="btn-secondary settings-signout-button"
+                  onClick={() => setConfirmSignOut(true)}
+                  disabled={Boolean(busy)}
+                >
+                  <LogOut size={16} aria-hidden="true" /> Se déconnecter
+                </button>
+              </section>
             </div>
           ) : (
             <div
@@ -658,6 +689,18 @@ export default function AccountSettingsModal({ onClose, initialSection = "accoun
           )}
         </div>
       </section>
+
+      <ConfirmDialog
+        open={confirmSignOut}
+        title="Se déconnecter d’AthleteOS ?"
+        description="Tu devras saisir à nouveau ton adresse email et ton mot de passe pour revenir."
+        confirmLabel="Se déconnecter"
+        loadingLabel="Déconnexion…"
+        loading={busy === "signout"}
+        icon={LogOut}
+        onConfirm={handleSignOut}
+        onClose={() => setConfirmSignOut(false)}
+      />
     </div>
   );
 }

@@ -7,6 +7,7 @@ const mocks = vi.hoisted(() => ({
   invoke: vi.fn(),
   from: vi.fn(),
   updateUser: vi.fn(),
+  signOut: vi.fn(),
 }));
 
 function renderSettings(props = {}) {
@@ -22,6 +23,7 @@ vi.mock("../../context/AuthContext", () => ({
     user: { id: "coach-1", email: "coach@club.be" },
     profile: { id: "coach-1", name: "Coach Martin", role: "head_coach" },
     clubId: "club-1",
+    signOut: mocks.signOut,
   }),
 }));
 
@@ -38,6 +40,7 @@ beforeEach(() => {
   vi.stubGlobal("URL", { createObjectURL: vi.fn(() => "blob:club-logo"), revokeObjectURL: vi.fn() });
   mocks.invoke.mockResolvedValue({ data: { success: true, inviteCode: "NEWCODE1" }, error: null });
   mocks.updateUser.mockResolvedValue({ error: null });
+  mocks.signOut.mockResolvedValue(undefined);
   mocks.from.mockImplementation((table) => {
     if (table === "clubs") {
       return {
@@ -126,5 +129,19 @@ describe("AccountSettingsModal", () => {
 
     expect((await screen.findByRole("alert")).textContent).toContain("La création de l’invitation a échoué.");
     expect(screen.queryByText("[object Object]")).toBeNull();
+  });
+
+  it("confirme puis déconnecte le compte depuis les réglages", async () => {
+    const onClose = vi.fn();
+    renderSettings({ onClose });
+
+    fireEvent.click(screen.getByRole("button", { name: "Se déconnecter" }));
+    expect(screen.getByRole("dialog", { name: "Se déconnecter d’AthleteOS ?" })).toBeTruthy();
+
+    const confirmButtons = screen.getAllByRole("button", { name: "Se déconnecter" });
+    fireEvent.click(confirmButtons.at(-1));
+
+    await waitFor(() => expect(mocks.signOut).toHaveBeenCalledOnce());
+    expect(onClose).toHaveBeenCalledOnce();
   });
 });

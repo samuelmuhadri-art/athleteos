@@ -35,6 +35,7 @@ import { getISOWeek, initialsFromName } from "../utils/helpers.js";
 import ClubOnboardingCard from "../components/club/ClubOnboardingCard";
 import { PageHeader } from "../components/ui/premium";
 import { buildDailyState, buildGroupDailyState } from "../domain/dailyState";
+import { buildClubSetupSteps, getClubSetupProgress } from "../utils/clubBranding";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -279,13 +280,14 @@ function CoachFeedIcon({ icon, color }) {
   return <Bell {...props} />;
 }
 
-function CoachFeedSection({ items, onNavigate }) {
-  const shown = items.slice(0, 8);
+function CoachFeedSection({ items, onNavigate, limit = 4 }) {
+  const [expanded, setExpanded] = useState(false);
+  const shown = expanded ? items : items.slice(0, limit);
   return (
     <div className="card overflow-hidden">
       <div className="px-5 py-4 border-b border-[color:var(--c-border)] flex items-center justify-between">
         <div>
-          <h2 className="card-title">Tes actions prioritaires</h2>
+          <h2 className="card-title">À faire maintenant</h2>
           <p className="card-subtitle mt-0.5">
             {items.length > 0 ? "Commence par le haut : chaque ligne ouvre directement le bon écran." : "Aucune action urgente pour le moment"}
           </p>
@@ -327,12 +329,17 @@ function CoachFeedSection({ items, onNavigate }) {
           ))}
         </div>
       )}
-      {items.length > shown.length && (
-        <div className="px-5 py-2.5 text-center border-t border-[color:var(--c-border)]">
-          <span className="meta-text">
-            +{items.length - shown.length} autre{items.length - shown.length > 1 ? "s" : ""} action{items.length - shown.length > 1 ? "s" : ""}
-          </span>
-        </div>
+      {items.length > limit && (
+        <button
+          type="button"
+          className="w-full px-5 py-2.5 text-center border-t border-[color:var(--c-border)] meta-text font-semibold hover:bg-[var(--c-surface-2)] transition-colors"
+          onClick={() => setExpanded((current) => !current)}
+          aria-expanded={expanded}
+        >
+          {expanded
+            ? "Réduire la liste"
+            : `Voir ${items.length - limit} autre${items.length - limit > 1 ? "s" : ""} action${items.length - limit > 1 ? "s" : ""}`}
+        </button>
       )}
     </div>
   );
@@ -492,6 +499,15 @@ function Dashboard({
     [athletes, wellnessRows]
   );
 
+  const setupProgress = useMemo(() => getClubSetupProgress(buildClubSetupSteps({
+    club,
+    athleteCount: athletes.length,
+    sessionCount: sessions.length,
+  })), [athletes.length, club, sessions.length]);
+
+  const visibleAthletes = useMemo(() => athletes.slice(0, 6), [athletes]);
+  const hiddenAthleteCount = Math.max(0, athletes.length - visibleAthletes.length);
+
   const recentFeedbacks = useMemo(() => {
     const results = [];
     sessions.forEach(s => {
@@ -524,7 +540,7 @@ function Dashboard({
         )}
       />
 
-      {profile?.role === "head_coach" && !clubLoading && (
+      {profile?.role === "head_coach" && !clubLoading && setupProgress < 100 && (
         <ClubOnboardingCard
           club={club}
           athleteCount={athletes.length}
@@ -538,10 +554,6 @@ function Dashboard({
 
       {/* Le coach voit d'abord ce qui demande une action. Les statistiques
           restent entièrement disponibles juste après. */}
-      <div data-dashboard-priority-queue>
-        <CoachFeedSection items={coachFeed} onNavigate={onNavigate} />
-      </div>
-
       {/* ── Synthèse de la semaine ────────────────────────────────────────── */}
       <div
         className="rounded-3xl overflow-hidden relative"
@@ -640,6 +652,10 @@ function Dashboard({
 
       {/* ── Priorités coach ──────────────────────────────────────────────── */}
       {/* ── KPIs — icône + liseré + glow au survol ────────────────────────── */}
+      <div data-dashboard-priority-queue>
+        <CoachFeedSection items={coachFeed} onNavigate={onNavigate} limit={4} />
+      </div>
+
       <section className="space-y-3" aria-labelledby="overview-title">
         <div>
           <h2 id="overview-title" className="section-title">Vue d'ensemble</h2>
@@ -699,7 +715,7 @@ function Dashboard({
             </div>
           ) : (
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-              {athletes.map(a => (
+              {visibleAthletes.map(a => (
                 <AthleteStatusCard
                   key={a.id}
                   athlete={a}
@@ -712,6 +728,16 @@ function Dashboard({
                 />
               ))}
             </div>
+          )}
+          {hiddenAthleteCount > 0 && (
+            <button
+              type="button"
+              onClick={() => onNavigate("athletes")}
+              className="btn-secondary w-full sm:w-auto justify-center"
+            >
+              Voir les {athletes.length} athlètes
+              <ArrowUpRight size={14} aria-hidden="true" />
+            </button>
           )}
         </div>
 

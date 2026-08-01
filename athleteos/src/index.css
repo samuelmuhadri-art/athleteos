@@ -876,6 +876,13 @@ body {
 .pwa-access-actions { display: grid; gap: 8px; }
 .pwa-access-actions > button, .pwa-access-card > .btn-primary { width: 100%; justify-content: center; }
 .pwa-access-feedback { margin: -4px 0 0; color: var(--c-accent); font-size: var(--text-meta); line-height: var(--leading-meta); }
+.settings-signout-card {
+  padding: 16px; display: flex; flex-direction: column; align-items: stretch; gap: 14px;
+  border: 1px solid rgba(224,82,82,0.20); border-radius: var(--r-lg); background: rgba(224,82,82,0.055);
+}
+.settings-signout-card h3 { color: var(--c-text-1); font-size: var(--text-card-title); line-height: var(--leading-card); font-weight: 700; }
+.settings-signout-card p { margin-top: 4px; color: var(--c-text-3); font-size: var(--text-meta); line-height: var(--leading-meta); }
+.settings-signout-button { justify-content: center; color: var(--tone-danger); border-color: rgba(224,82,82,0.25); }
 .settings-loading {
   min-height: 160px; display: flex; align-items: center; justify-content: center; gap: 10px;
   color: var(--c-text-3); font-size: var(--text-secondary); line-height: var(--leading-small);
@@ -920,6 +927,8 @@ body {
   .settings-action-row { grid-template-columns: minmax(0, 1fr) auto; align-items: end; padding: 18px; }
   .settings-action-row > .btn-secondary { width: auto; margin-bottom: 2px; }
   .pwa-access-actions { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .settings-signout-card { flex-direction: row; align-items: center; justify-content: space-between; }
+  .settings-signout-button { flex-shrink: 0; }
   .settings-confirm { flex-direction: row; align-items: center; justify-content: space-between; }
   .settings-confirm > div:last-child { flex-direction: row; flex-shrink: 0; }
 }

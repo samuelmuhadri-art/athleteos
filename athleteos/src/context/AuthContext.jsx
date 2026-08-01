@@ -92,7 +92,8 @@ export function AuthProvider({ children }) {
   }, []);
 
   const signOut = useCallback(async () => {
-    await supabase.auth.signOut();
+    const { error } = await supabase.auth.signOut();
+    if (error) throw error;
     // onAuthStateChange va déclencher setUser(null) + setProfile(null) automatiquement
   }, []);
 
