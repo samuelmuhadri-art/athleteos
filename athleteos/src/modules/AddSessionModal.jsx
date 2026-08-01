@@ -6,14 +6,12 @@
 
 import { memo, useState, useCallback } from "react";
 import { X, Plus, CheckCircle } from "lucide-react";
-import { supabase }  from "../utils/supabaseClient";
 import { useAuth }   from "../context/AuthContext";
 import { CATEGORIES, SESSION_COLORS, EMPTY_FORM, dateToISOWeek, dateToDayName, toLocalDateStr } from "./planningShared";
 import TrainingFocusField from "../components/session/TrainingFocusField";
 import { getDefaultTrainingFocus, isTrainingFocusCompatible } from "../domain/trainingFocus";
 import { useAccessibleDialog } from "../hooks/useAccessibleDialog";
-
-const PDF_MAX_BYTES = 30 * 1024 * 1024; // aligné sur file_size_limit du bucket session-pdfs
+import { SESSION_ATTACHMENT_ACCEPT, uploadSessionAttachment, validateSessionAttachment } from "../utils/storage";
 
 const AddSessionModal = memo(({ athletes, initialData, onClose, onAdd }) => {
   const { clubId } = useAuth();
@@ -35,10 +33,10 @@ const AddSessionModal = memo(({ athletes, initialData, onClose, onAdd }) => {
   const { dialogRef, titleId } = useAccessibleDialog({ onClose, closeDisabled: saving });
 
   const set = useCallback((key, val) => setForm(f => ({ ...f, [key]: val })), []);
-  const pickPdf = useCallback(file => {
+  const pickPdf = useCallback(async file => {
     if (!file) { setPdfFile(null); setPdfError(null); return; }
-    if (file.type !== "application/pdf") { setPdfFile(null); setPdfError("Le fichier doit être un PDF."); return; }
-    if (file.size > PDF_MAX_BYTES) { setPdfFile(null); setPdfError("PDF trop volumineux (30 Mo max)."); return; }
+    const validationError = await validateSessionAttachment(file);
+    if (validationError) { setPdfFile(null); setPdfError(validationError); return; }
     setPdfError(null); setPdfFile(file);
   }, []);
   const toggleAthlete = useCallback(id => {
@@ -57,16 +55,9 @@ const AddSessionModal = memo(({ athletes, initialData, onClose, onAdd }) => {
       let pdfUrl = form.pdfUrl ?? null;
       if (pdfFile) {
         setUploadingPdf(true);
-        // Préfixé par club_id — requis par les policies storage scopées par
-        // club (sinon l'upload est rejeté par RLS). Extension forcée en
-        // .pdf (le bucket n'accepte que application/pdf côté serveur) et le
-        // chemin (pas d'URL publique) est ce qui est stocké en base — le
-        // bucket est privé, l'ouverture se fait via une URL signée générée
-        // à la volée (voir src/utils/storage.js).
-        const path = `${clubId}/${Date.now()}.pdf`;
-        const { error: uploadErr } = await supabase.storage.from("session-pdfs").upload(path, pdfFile);
-        if (uploadErr) throw uploadErr;
-        pdfUrl = path;
+        // Préfixé par club_id pour les policies RLS. Le chemin privé reste
+        // stocké dans la colonne historique pdf_url, quel que soit le format.
+        pdfUrl = await uploadSessionAttachment(clubId, pdfFile);
         setUploadingPdf(false);
       }
       const chosenDate = form.sessionDate || today;
@@ -189,11 +180,11 @@ const AddSessionModal = memo(({ athletes, initialData, onClose, onAdd }) => {
           </div>
 
           <div>
-            <label className={labelCls} style={labelStyle}>PDF (optionnel)</label>
+            <label className={labelCls} style={labelStyle}>Pièce jointe (optionnelle)</label>
             {isEdit && form.pdfUrl && !pdfFile && (
-              <p className="text-[12px] mb-1.5" style={{ color: "var(--tone-success)" }}>📎 PDF déjà joint</p>
+              <p className="text-[12px] mb-1.5" style={{ color: "var(--tone-success)" }}>📎 Fichier déjà joint</p>
             )}
-            <input type="file" accept="application/pdf"
+            <input type="file" accept={SESSION_ATTACHMENT_ACCEPT}
               onChange={e => pickPdf(e.target.files?.[0] ?? null)}
               className="w-full text-[12px] file:mr-3 file:py-2 file:px-3 file:rounded-xl file:border-0 file:text-[12px] file:font-semibold"
               style={{ color: "var(--c-text-3)" }} />
@@ -240,7 +231,7 @@ const AddSessionModal = memo(({ athletes, initialData, onClose, onAdd }) => {
             className="btn-primary">
             {saving ? (
               <><div className="w-3.5 h-3.5 border-2 border-white/40 border-t-white rounded-full animate-spin" />
-              {uploadingPdf ? "Envoi PDF…" : "Enregistrement…"}</>
+              {uploadingPdf ? "Envoi du fichier…" : "Enregistrement…"}</>
             ) : (
               <><Plus size={15} />{isEdit ? "Enregistrer" : "Ajouter"}</>
             )}

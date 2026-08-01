@@ -175,9 +175,9 @@ function Planning() {
     if (assignmentsError) throw assignmentsError;
     const { error: e } = await supabase.from("sessions").delete().eq("id", sessionId);
     if (e) throw e;
-    // Évite d'orpheliner le fichier storage privé une fois la séance
+    // Évite d'orpheliner la pièce jointe privée une fois la séance
     // supprimée (échec d'écriture ici non bloquant : la séance est déjà
-    // supprimée, le PDF orphelin est un problème mineur, pas une erreur
+    // supprimée, le fichier orphelin est un problème mineur, pas une erreur
     // utilisateur à faire remonter).
     if (existing?.pdfUrl) {
       const { error: pdfDeleteError } = await supabase.storage.from("session-pdfs").remove([existing.pdfUrl]);

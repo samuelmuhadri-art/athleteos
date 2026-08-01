@@ -13,8 +13,7 @@ import { cat } from "./planningShared";
 import TrainingFocusField from "../../components/session/TrainingFocusField";
 import { getDefaultTrainingFocus } from "../../domain/trainingFocus";
 import { useAccessibleDialog } from "../../hooks/useAccessibleDialog";
-
-const PDF_MAX_BYTES = 30 * 1024 * 1024; // aligné sur file_size_limit du bucket session-pdfs
+import { SESSION_ATTACHMENT_ACCEPT, uploadSessionAttachment, validateSessionAttachment } from "../../utils/storage";
 
 const CreateSessionModal = memo(({ athlete, allAthletes, clubId, createdBy, coachUserId, onClose, onCreated }) => {
   const today = toLocalDateStr(new Date());
@@ -28,10 +27,10 @@ const CreateSessionModal = memo(({ athlete, allAthletes, clubId, createdBy, coac
   const { dialogRef } = useAccessibleDialog({ onClose, closeDisabled: saving });
 
   const set       = (k, v) => setForm(f => ({ ...f, [k]: v }));
-  const pickPdf = file => {
+  const pickPdf = async file => {
     if (!file) { setPdfFile(null); return; }
-    if (file.type !== "application/pdf") { setPdfFile(null); setErr("Le fichier doit être un PDF."); return; }
-    if (file.size > PDF_MAX_BYTES) { setPdfFile(null); setErr("PDF trop volumineux (30 Mo max)."); return; }
+    const validationError = await validateSessionAttachment(file);
+    if (validationError) { setPdfFile(null); setErr(validationError); return; }
     setErr(null); setPdfFile(file);
   };
   const toggleInv = id => setForm(f => ({
@@ -51,14 +50,9 @@ const CreateSessionModal = memo(({ athlete, allAthletes, clubId, createdBy, coac
     try {
       let pdfUrl = null;
       if (pdfFile) {
-        // Préfixé par club_id — requis par les policies storage scopées par
-        // club (sinon l'upload est rejeté par RLS). Extension forcée en
-        // .pdf et chemin (pas d'URL publique) stocké en base — le bucket
-        // est privé, ouverture via URL signée à la volée (src/utils/storage.js).
-        const path = `${clubId}/${Date.now()}.pdf`;
-        const { error: ue } = await supabase.storage.from("session-pdfs").upload(path, pdfFile);
-        if (ue) throw ue;
-        pdfUrl = path;
+        // Préfixé par club_id pour les policies RLS. Le chemin privé reste
+        // stocké dans la colonne historique pdf_url, quel que soit le format.
+        pdfUrl = await uploadSessionAttachment(clubId, pdfFile);
       }
       const catLabel = CATEGORIES.find(x => x.id === form.category)?.label ?? form.category;
       const { data: ns, error: se } = await supabase.from("sessions").insert({
@@ -199,9 +193,9 @@ const CreateSessionModal = memo(({ athlete, allAthletes, clubId, createdBy, coac
               value={form.description} onChange={e => set("description", e.target.value)} />
           </div>
 
-          {/* PDF */}
+          {/* Pièce jointe */}
           <div>
-            <label style={labelStyle}>PDF (optionnel)</label>
+            <label style={labelStyle}>Pièce jointe (optionnelle)</label>
             <label style={{ display: "flex", alignItems: "center", gap: 12, padding: 12, borderRadius: 14, border: "2px dashed var(--c-border-strong)", cursor: "pointer" }}>
               <div style={{ width: 32, height: 32, borderRadius: 10, background: "rgba(91,158,245,0.14)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
                 <FileText size={14} color="#5B9EF5" />
@@ -209,9 +203,9 @@ const CreateSessionModal = memo(({ athlete, allAthletes, clubId, createdBy, coac
               <div style={{ flex: 1, minWidth: 0 }}>
                 {pdfFile
                   ? <p style={{ fontSize: 13, fontWeight: 600, color: "var(--c-text-1)" }} className="truncate">{pdfFile.name}</p>
-                  : <p style={{ fontSize: 13, color: "var(--c-text-2)" }}>Appuie pour joindre un PDF</p>}
+                  : <p style={{ fontSize: 13, color: "var(--c-text-2)" }}>Photo, PDF, Word, Excel… (30 Mo max)</p>}
               </div>
-              <input type="file" accept="application/pdf" className="sr-only"
+              <input type="file" accept={SESSION_ATTACHMENT_ACCEPT} className="sr-only"
                 onChange={e => pickPdf(e.target.files?.[0] ?? null)} />
             </label>
           </div>

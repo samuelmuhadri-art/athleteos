@@ -10,8 +10,8 @@
 //   3. Téléchargement par un autre club refusé : ni createSignedUrl(),
 //      ni .list(), ni l'ancienne URL publique (le bucket n'est plus public).
 //   4. Une URL signée expire (TTL 1s) et devient inutilisable après.
-//   5. Un fichier dont le Content-Type déclaré n'est pas application/pdf
-//      est rejeté par le bucket (allowed_mime_types, contrôle serveur).
+//   5. Les pièces jointes usuelles (PDF et images) sont acceptées, tandis
+//      qu'un Content-Type hors liste est rejeté par le bucket.
 //   + Limite de taille (file_size_limit) appliquée côté serveur.
 //   + Round-trip complet : upload → createSignedUrl → fetch → 200.
 //   6. club-branding : seul un head coach peut écrire/supprimer ; tous les
@@ -20,9 +20,9 @@
 //
 // Note honnête : Supabase Storage ne fait PAS de sniffing du contenu
 // réel du fichier, seulement du Content-Type déclaré à l'upload. Un
-// fichier renommé en .pdf avec un Content-Type mensonger "application/pdf"
-// passerait ce contrôle — une vraie inspection de contenu demanderait une
-// Edge Function dédiée (magic bytes), disproportionné ici : les uploads
+// fichier renommé avec un Content-Type mensonger passerait le contrôle serveur.
+// Le client vérifie désormais les signatures usuelles avant l'envoi ; une
+// inspection incontestable demanderait une Edge Function dédiée. Les uploads
 // viennent de comptes authentifiés du club (coach/athlète), pas d'un
 // dépôt public anonyme (cf. tâche 8 : quarantaine/antivirus seulement
 // "si des documents externes sont acceptés à grande échelle" — non le cas).
@@ -121,6 +121,13 @@ async function main() {
       record("upload athlète autorisé (dossier de son club)", !error, error?.message);
     }
 
+    const imagePath = `${clubA.id}/${RUN_ID}-training.png`;
+    {
+      const { error } = await coachA.client.storage.from("session-pdfs").upload(imagePath, PNG_BYTES, { contentType: "image/png" });
+      if (!error) uploadedPaths.push(imagePath);
+      record("upload image de séance autorisé", !error, error?.message);
+    }
+
     // ── upload dans le dossier d'un AUTRE club refusé (déjà couvert par la
     //    tâche antérieure sur les policies, revérifié ici car directement
     //    lié à la même surface : écrit dans le dossier club A en étant du
@@ -171,7 +178,7 @@ async function main() {
       }
     }
 
-    // ── 5. MIME trompeur refusé côté serveur ────────────────────────────────
+    // ── 5. MIME hors liste refusé côté serveur ──────────────────────────────
     {
       const { error } = await coachA.client.storage.from("session-pdfs").upload(
         `${clubA.id}/${RUN_ID}-fake.pdf`, Buffer.from("<html>pas un pdf</html>"), { contentType: "text/html" }

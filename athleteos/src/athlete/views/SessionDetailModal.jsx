@@ -11,7 +11,7 @@ import { X, ChevronRight, Users, FileText, Star } from "lucide-react";
 import { CATEGORIES } from "../shared";
 import { getSessionTrainingFocus } from "../../domain/trainingFocus";
 import { cat, StatusBadge, rpeColor } from "./planningShared";
-import { openSessionPdf } from "../../utils/storage";
+import { openSessionAttachment } from "../../utils/storage";
 import { parseLocalDate } from "../../utils/helpers";
 import { RSVP_OPTIONS } from "../../domain/sessionDay";
 import { useAccessibleDialog } from "../../hooks/useAccessibleDialog";
@@ -141,9 +141,9 @@ const SessionDetailModal = memo(({ session, athlete, allAthletes, onClose, onSet
             </div>
           )}
 
-          {/* PDF */}
+        {/* Pièce jointe */}
           {session.pdfUrl && (
-            <button type="button" onClick={() => openSessionPdf(session.pdfUrl)}
+          <button type="button" onClick={() => openSessionAttachment(session.pdfUrl)}
               style={{
                 display: "flex", alignItems: "center", gap: 12, padding: "14px 16px", borderRadius: 16,
                 background: "rgba(91,158,245,0.10)", border: "1px solid rgba(91,158,245,0.25)",
@@ -153,7 +153,7 @@ const SessionDetailModal = memo(({ session, athlete, allAthletes, onClose, onSet
               <div style={{ width: 32, height: 32, borderRadius: 10, background: "rgba(91,158,245,0.18)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
                 <FileText size={14} color="#5B9EF5" />
               </div>
-              Voir le PDF de séance
+            Voir la pièce jointe
               <ChevronRight size={14} style={{ marginLeft: "auto", color: "#5B9EF5", opacity: 0.6 }} />
             </button>
           )}

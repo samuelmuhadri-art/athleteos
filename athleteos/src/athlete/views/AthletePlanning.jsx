@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import { MONTHS_FR, CATEGORIES, isSameDay, toLocalDateStr } from "../shared";
 import { getSessionTrainingFocus } from "../../domain/trainingFocus";
+import { isSessionArchived } from "../../domain/sessionArchive";
 import { parseLocalDate } from "../../utils/helpers";
 import { cat, StatusBadge, rpeColor } from "./planningShared";
 import CreateSessionModal from "./CreateSessionModal";
@@ -140,7 +141,7 @@ function SessionCard({ session, athleteId, isPast = false, compact = false, onOp
             <span className="chip chip-neutral">{getSessionTrainingFocus(session).shortLabel}</span>
             {session.pdfUrl && (
               <span style={{ fontSize: 12, fontWeight: 700, padding: "3px 8px", borderRadius: 99, background: "rgba(91,158,245,0.16)", color: "var(--tone-info)" }}>
-                PDF
+                Fichier
               </span>
             )}
           </div>
@@ -177,7 +178,8 @@ export default function AthletePlanning({
   athlete, sessions, allAthletes, clubId, createdBy, coachUserId,
   onRpeChange, onStatusChange, onFeelingChange, onCommentChange, onRsvpChange, onRefresh,
 }) {
-  const today    = new Date();
+  const todayKey = toLocalDateStr(new Date());
+  const today    = useMemo(() => parseLocalDate(todayKey), [todayKey]);
   const isMobile = typeof window !== "undefined" && window.innerWidth < 768;
 
   const [viewYear,      setViewYear]      = useState(today.getFullYear());
@@ -221,7 +223,7 @@ export default function AthletePlanning({
   }, [selectedDate]);
 
   const groupedAgenda = useMemo(() => {
-    const sorted = [...sessions].filter(s => s.sessionDate).sort((a, b) => a.sessionDate.localeCompare(b.sessionDate));
+    const sorted = [...sessions].filter(s => s.sessionDate && !isSessionArchived(s, today)).sort((a, b) => a.sessionDate.localeCompare(b.sessionDate));
     const groups = []; const seen = new Set();
     sorted.forEach(s => {
       const key = s.sessionDate.slice(0, 10);
@@ -229,7 +231,21 @@ export default function AthletePlanning({
       groups.find(g => g.date === key).sessions.push(s);
     });
     return groups;
-  }, [sessions]);
+  }, [sessions, today]);
+
+  const groupedArchives = useMemo(() => {
+    const sorted = [...sessions].filter(s => s.sessionDate && isSessionArchived(s, today)).sort((a, b) => b.sessionDate.localeCompare(a.sessionDate));
+    const groups = []; const seen = new Set();
+    sorted.forEach(s => {
+      const key = s.sessionDate.slice(0, 10);
+      if (!seen.has(key)) { seen.add(key); groups.push({ date: key, sessions: [] }); }
+      groups.find(g => g.date === key).sessions.push(s);
+    });
+    return groups;
+  }, [sessions, today]);
+
+  const archivedSessionCount = groupedArchives.reduce((total, group) => total + group.sessions.length, 0);
+  const displayedAgenda = viewMode === "archive" ? groupedArchives : groupedAgenda;
 
   const prevMonth = () => { if (viewMonth === 0) { setViewYear(y => y-1); setViewMonth(11); } else setViewMonth(m => m-1); };
   const nextMonth = () => { if (viewMonth === 11) { setViewYear(y => y+1); setViewMonth(0); } else setViewMonth(m => m+1); };
@@ -242,11 +258,12 @@ export default function AthletePlanning({
   const navLabel = useMemo(() => {
     if (viewMode === "month")  return `${MONTHS_FR[viewMonth]} ${viewYear}`;
     if (viewMode === "agenda") return "Mes séances";
+    if (viewMode === "archive") return `Archives · ${archivedSessionCount}`;
     const mon = weekDays[0], sun = weekDays[6];
     if (mon.getMonth() === sun.getMonth())
       return `${mon.getDate()} – ${sun.toLocaleDateString("fr-BE", { day: "numeric", month: "long" })}`;
     return `${mon.toLocaleDateString("fr-BE", { day: "numeric", month: "short" })} – ${sun.toLocaleDateString("fr-BE", { day: "numeric", month: "short" })}`;
-  }, [viewMode, viewMonth, viewYear, weekDays]);
+  }, [viewMode, viewMonth, viewYear, weekDays, archivedSessionCount]);
 
   // ══════════════════════════════════════════════════════════════════════════════
   return (
@@ -268,24 +285,24 @@ export default function AthletePlanning({
 
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
             <div className="flex items-center gap-1 min-w-0">
-              {viewMode !== "agenda" && (
+              {!['agenda', 'archive'].includes(viewMode) && (
                 <button type="button" aria-label="Période précédente" onClick={viewMode === "month" ? prevMonth : prevWeek}
                   className="tap-feedback"
                   style={{ width: 44, height: 44, borderRadius: 12, display: "flex", alignItems: "center", justifyContent: "center", background: "var(--c-surface-2)", border: "1px solid var(--c-border)", cursor: "pointer", color: "var(--c-text-2)", flexShrink: 0 }}>
                   <ChevronLeft size={18} aria-hidden="true" />
                 </button>
               )}
-              <p style={{ fontSize: 15, fontWeight: 800, padding: "0 8px", minWidth: 0, flex: 1, textAlign: viewMode === "agenda" ? "left" : "center", color: "var(--c-text-1)" }} className="truncate">
+              <p style={{ fontSize: 15, fontWeight: 800, padding: "0 8px", minWidth: 0, flex: 1, textAlign: ['agenda', 'archive'].includes(viewMode) ? "left" : "center", color: "var(--c-text-1)" }} className="truncate">
                 {navLabel}
               </p>
-              {viewMode !== "agenda" && (
+              {!['agenda', 'archive'].includes(viewMode) && (
                 <button type="button" aria-label="Période suivante" onClick={viewMode === "month" ? nextMonth : nextWeek}
                   className="tap-feedback"
                   style={{ width: 44, height: 44, borderRadius: 12, display: "flex", alignItems: "center", justifyContent: "center", background: "var(--c-surface-2)", border: "1px solid var(--c-border)", cursor: "pointer", color: "var(--c-text-2)", flexShrink: 0 }}>
                   <ChevronRight size={18} aria-hidden="true" />
                 </button>
               )}
-              {viewMode !== "agenda" && (
+              {!['agenda', 'archive'].includes(viewMode) && (
                 <button type="button" onClick={goToday}
                   style={{ minHeight: 44, padding: "0 12px", borderRadius: 12, fontSize: 12, fontWeight: 700, border: "1px solid var(--c-border-strong)", color: "var(--c-text-2)", background: "var(--c-surface-2)", cursor: "pointer", marginLeft: 4 }}>
                   <span className="hidden sm:inline">Aujourd’hui</span><span className="sm:hidden">Auj.</span>
@@ -293,8 +310,8 @@ export default function AthletePlanning({
               )}
             </div>
 
-            <div role="group" aria-label="Affichage du planning" style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", borderRadius: 12, overflow: "hidden", border: "1px solid var(--c-border-strong)" }}>
-              {[{ id: "agenda", label: "Liste" }, { id: "month", label: "Mois" }, { id: "week", label: "Semaine" }].map(view => (
+            <div role="group" aria-label="Affichage du planning" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", borderRadius: 12, overflow: "hidden", border: "1px solid var(--c-border-strong)" }}>
+              {[{ id: "agenda", label: "Liste" }, { id: "month", label: "Mois" }, { id: "week", label: "Semaine" }, { id: "archive", label: `Archives (${archivedSessionCount})` }].map(view => (
                 <button key={view.id} type="button" onClick={() => setViewMode(view.id)} aria-pressed={viewMode === view.id}
                   style={{
                     minHeight: 44, padding: "0 14px", fontSize: 13, fontWeight: 700, border: "none", cursor: "pointer",
@@ -312,24 +329,26 @@ export default function AthletePlanning({
       {/* ══════════════════════════════════════════════════════════════════════
           VUE AGENDA
          ══════════════════════════════════════════════════════════════════════ */}
-      {viewMode === "agenda" && (
+      {(viewMode === "agenda" || viewMode === "archive") && (
         <div className="flex-1 overflow-y-auto">
-          {groupedAgenda.length === 0 ? (
+          {displayedAgenda.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-full gap-4 p-8">
               <div style={{ width: 64, height: 64, borderRadius: 20, background: "var(--c-surface-2)", display: "flex", alignItems: "center", justifyContent: "center" }}>
                 <CalendarDays size={28} color="var(--c-text-3)" strokeWidth={1.5} />
               </div>
               <div style={{ textAlign: "center" }}>
-                <p style={{ fontSize: 15, fontWeight: 700, color: "var(--c-text-2)" }}>Aucune séance planifiée</p>
-                <p style={{ fontSize: 13, color: "var(--c-text-2)", marginTop: 4 }}>Ton coach ou toi pouvez planifier des séances</p>
+                <p style={{ fontSize: 15, fontWeight: 700, color: "var(--c-text-2)" }}>{viewMode === "archive" ? "Aucune séance archivée" : "Aucune séance planifiée"}</p>
+                <p style={{ fontSize: 13, color: "var(--c-text-2)", marginTop: 4 }}>{viewMode === "archive" ? "Les séances de plus de 7 jours apparaîtront ici." : "Ton coach ou toi pouvez planifier des séances"}</p>
               </div>
-              <button type="button" onClick={() => setShowCreate(true)} className="btn-primary">
-                <Plus size={14} /> Planifier une séance
-              </button>
+              {viewMode !== "archive" && (
+                <button type="button" onClick={() => setShowCreate(true)} className="btn-primary">
+                  <Plus size={14} /> Planifier une séance
+                </button>
+              )}
             </div>
           ) : (
             <div className="p-4 md:p-6 space-y-6">
-              {groupedAgenda.map(({ date, sessions: ds }) => {
+              {displayedAgenda.map(({ date, sessions: ds }) => {
                 const dateObj = parseLocalDate(date);
                 const isToday = isSameDay(dateObj, today);
                 const isPast  = toLocalDateStr(dateObj) < toLocalDateStr(today);

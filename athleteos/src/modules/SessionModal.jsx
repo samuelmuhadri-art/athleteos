@@ -7,7 +7,7 @@ import { memo, useState } from "react";
 import { X, Users, FileText, AlertCircle, Star } from "lucide-react";
 import { CATEGORIES, colors, sessionStatus, ValidationBadge, StatusIcon } from "./planningShared";
 import { getSessionTrainingFocus } from "../domain/trainingFocus";
-import { openSessionPdf } from "../utils/storage";
+import { openSessionAttachment } from "../utils/storage";
 import CoachSessionDayPanel from "../components/session/CoachSessionDayPanel";
 import { useAccessibleDialog } from "../hooks/useAccessibleDialog";
 
@@ -126,13 +126,13 @@ const SessionModal = memo(({
             </div>
           )}
 
-          {/* PDF */}
+      {/* Pièce jointe */}
           {session.pdfUrl && (
-            <button type="button" onClick={() => openSessionPdf(session.pdfUrl)}
+        <button type="button" onClick={() => openSessionAttachment(session.pdfUrl)}
               className="w-full flex items-center gap-3 px-4 py-3.5 rounded-2xl text-[13px] font-semibold transition-colors"
               style={{ background: "rgba(91,158,245,0.10)", border: "1px solid rgba(91,158,245,0.25)", color: "var(--tone-info)" }}>
               <span className="text-[18px]">📄</span>
-              Voir le PDF de séance
+          Voir la pièce jointe
             </button>
           )}
 

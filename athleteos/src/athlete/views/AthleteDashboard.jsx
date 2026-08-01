@@ -29,7 +29,7 @@ import TrainingGauge from "../components/TrainingGauge";
 import { getAthleteLoadStory, getMonitoringReading } from "../../domain/monitoringMetrics.js";
 import { TRAINING_GAUGE_KEYS, getTrainingGaugeReading } from "../../domain/trainingGauges.js";
 import { SessionDetailModal } from "./AthletePlanning";
-import { openSessionPdf } from "../../utils/storage";
+import { openSessionAttachment } from "../../utils/storage";
 import { getTodayFocus } from "../dashboardFocus";
 import { buildDailyState } from "../../domain/dailyState";
 import DailyStateDetailPanel from "../components/DailyStateDetailPanel";
@@ -630,9 +630,9 @@ export default function AthleteDashboard({
                     <p className="meta-text" style={{ marginTop: 2, color: "var(--c-text-2)" }}>Objectif · {getSessionTrainingFocus(s).shortLabel}</p>
                   </div>
                   {s.pdfUrl && (
-                    <button type="button" onClick={() => openSessionPdf(s.pdfUrl)}
+                    <button type="button" onClick={() => openSessionAttachment(s.pdfUrl)}
                       style={{ display: "flex", alignItems: "center", gap: 4, minHeight: 32, padding: "4px 8px", borderRadius: 7, background: "rgba(91,141,239,0.15)", color: "var(--color-info)", fontSize: "var(--text-meta)", fontWeight: 600, flexShrink: 0, border: "none", cursor: "pointer" }}>
-                      <FileText size={12} />PDF
+                      <FileText size={12} />Fichier
                     </button>
                   )}
                   <span style={{ flexShrink: 0, padding: "3px 8px", borderRadius: 6, background: stCfg.bg, color: stCfg.color, fontSize: "var(--text-meta)", fontWeight: 600 }}>
