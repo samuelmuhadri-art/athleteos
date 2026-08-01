@@ -10,7 +10,7 @@
 //   3. Téléchargement par un autre club refusé : ni createSignedUrl(),
 //      ni .list(), ni l'ancienne URL publique (le bucket n'est plus public).
 //   4. Une URL signée expire (TTL 1s) et devient inutilisable après.
-//   5. Les pièces jointes usuelles (PDF et images) sont acceptées, tandis
+//   5. Les pièces jointes usuelles (PDF, images et Word) sont acceptées, tandis
 //      qu'un Content-Type hors liste est rejeté par le bucket.
 //   + Limite de taille (file_size_limit) appliquée côté serveur.
 //   + Round-trip complet : upload → createSignedUrl → fetch → 200.
@@ -88,6 +88,7 @@ async function makeUser(email, password, clubId, role, name) {
 
 const PDF_BYTES = Buffer.from("%PDF-1.4\n%fake-test-pdf\n", "utf8");
 const PNG_BYTES = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+const DOCX_BYTES = Buffer.from([0x50, 0x4b, 0x03, 0x04, 0x14, 0x00, 0x00, 0x00]);
 
 async function main() {
   let clubA, clubB;
@@ -126,6 +127,17 @@ async function main() {
       const { error } = await coachA.client.storage.from("session-pdfs").upload(imagePath, PNG_BYTES, { contentType: "image/png" });
       if (!error) uploadedPaths.push(imagePath);
       record("upload image de séance autorisé", !error, error?.message);
+    }
+
+    const wordPath = `${clubA.id}/${RUN_ID}-training.docx`;
+    {
+      const { error } = await coachA.client.storage.from("session-pdfs").upload(
+        wordPath,
+        DOCX_BYTES,
+        { contentType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document" },
+      );
+      if (!error) uploadedPaths.push(wordPath);
+      record("upload document Word de séance autorisé", !error, error?.message);
     }
 
     // ── upload dans le dossier d'un AUTRE club refusé (déjà couvert par la

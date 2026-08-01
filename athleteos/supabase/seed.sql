@@ -25,7 +25,21 @@ VALUES (
   'session-pdfs',
   false,
   31457280,
-  ARRAY['application/pdf']
+  ARRAY[
+    'application/pdf',
+    'image/jpeg', 'image/png', 'image/webp', 'image/gif',
+    'image/heic', 'image/heif', 'image/avif', 'image/bmp', 'image/tiff',
+    'application/msword',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    'application/vnd.ms-excel',
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    'application/vnd.ms-powerpoint',
+    'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+    'application/vnd.oasis.opendocument.text',
+    'application/vnd.oasis.opendocument.spreadsheet',
+    'application/vnd.oasis.opendocument.presentation',
+    'application/rtf', 'text/plain', 'text/csv'
+  ]
 )
 ON CONFLICT (id) DO UPDATE SET
   public = EXCLUDED.public,
