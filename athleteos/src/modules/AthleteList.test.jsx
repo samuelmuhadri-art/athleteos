@@ -11,7 +11,7 @@ const mocks = vi.hoisted(() => ({
   rpc: vi.fn(),
 }));
 
-vi.mock("../context/AuthContext", () => ({
+vi.mock("../hooks/useAuth", () => ({
   useAuth: () => mocks.auth,
 }));
 

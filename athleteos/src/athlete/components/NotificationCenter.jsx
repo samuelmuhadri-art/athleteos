@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { ArrowRight, Bell, CheckCheck, Heart, Sparkles, X } from "lucide-react";
-import { PushToggleButton } from "../../hooks/usePushNotifications";
+import { PushToggleButton } from "../../components/pwa/PushToggleButton";
 import {
   NOTIFICATION_FILTERS,
   filterNotificationItems,

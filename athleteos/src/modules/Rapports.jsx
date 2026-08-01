@@ -13,7 +13,7 @@ import {
 } from "lucide-react";
 import { LineChart, Line, ResponsiveContainer } from "recharts";
 import { supabase }  from "../utils/supabaseClient";
-import { useAuth }   from "../context/AuthContext";
+import { useAuth }   from "../hooks/useAuth";
 import LoadingState  from "../components/ui/LoadingState";
 import ErrorState    from "../components/ui/ErrorState";
 import { EmptyState, PageHeader, SegmentedTabs, StatCard } from "../components/ui/premium";

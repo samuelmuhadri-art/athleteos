@@ -23,7 +23,7 @@ import {
   BarChart2, ArrowUpRight, AlertTriangle, TrendingUp,
 } from "lucide-react";
 import { supabase }                  from "../utils/supabaseClient";
-import { useAuth }                   from "../context/AuthContext";
+import { useAuth }                   from "../hooks/useAuth";
 import LoadingState                  from "../components/ui/LoadingState";
 import ErrorState                    from "../components/ui/ErrorState";
 import {

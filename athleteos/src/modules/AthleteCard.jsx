@@ -7,7 +7,7 @@ import { memo, useMemo } from "react";
 import { ChevronRight, HeartPulse } from "lucide-react";
 import { getAthleteMetricsForWeek, getWellnessStatus } from "../utils/chargeCalculations";
 import { getISOWeek } from "../utils/helpers.js";
-import { scoreColor } from "./athleteListShared";
+import { scoreColor } from "./athleteListUtils";
 
 const AthleteCard = memo(({ athlete, weeklyCharge, onClick }) => {
   const metrics        = useMemo(() => getAthleteMetricsForWeek(athlete.id, weeklyCharge, getISOWeek(new Date())), [athlete.id, weeklyCharge]);

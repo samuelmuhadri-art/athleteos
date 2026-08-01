@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { ArrowLeft, Lock, Mail } from "lucide-react";
-import { useAuth } from "../context/AuthContext";
+import { useAuth } from "../hooks/useAuth";
 import AuthShell from "../components/auth/AuthShell";
 import {
   AuthFeedback,

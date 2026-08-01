@@ -10,9 +10,11 @@ import {
   LogOut, Users, Bell, Settings
 } from "lucide-react";
 import { supabase }  from "./utils/supabaseClient";
-import { useAuth }   from "./context/AuthContext";
-import { usePushNotifications, PushToggleButton } from "./hooks/usePushNotifications";
-import { useTheme, ThemeToggleButton } from "./hooks/useTheme";
+import { useAuth }   from "./hooks/useAuth";
+import { usePushNotifications } from "./hooks/usePushNotifications";
+import { PushToggleButton } from "./components/pwa/PushToggleButton";
+import { useTheme } from "./hooks/useTheme";
+import { ThemeToggleButton } from "./components/ui/ThemeToggleButton";
 import { initialsFromName, toLocalDateStr, getISOWeek } from "./athlete/shared";
 import { notifyAthleteWeeklyRecap, notifyAthleteWeeklyReport, notifyCoachSessionResponse } from "./utils/notifications";
 import { useUrlView } from "./hooks/useUrlView";

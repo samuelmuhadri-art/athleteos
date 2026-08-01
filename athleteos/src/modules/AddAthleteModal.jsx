@@ -6,7 +6,7 @@
 import { memo, useState } from "react";
 import { createPortal } from "react-dom";
 import { Plus, X } from "lucide-react";
-import { inputCls, labelCls, RADAR_KEYS, scoreColor } from "./athleteListShared";
+import { inputCls, labelCls, RADAR_KEYS, scoreColor } from "./athleteListUtils";
 import { useAccessibleDialog } from "../hooks/useAccessibleDialog";
 
 const AddAthleteModal = memo(({ onClose, onCreate, initialData = null }) => {

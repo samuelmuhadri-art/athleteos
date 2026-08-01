@@ -19,9 +19,9 @@ import { getAthleteAxisProfile } from "../utils/loadAxes";
 import { getISOWeek } from "../utils/helpers.js";
 import { parsePerf, pctOfReference } from "../athlete/shared.js";
 import {
-  RADAR_KEYS, scoreColor,
   ValidationBadge, StarRow, EmptySection, ChartTooltip, ScoreRing,
 } from "./athleteListShared";
+import { RADAR_KEYS, scoreColor } from "./athleteListUtils";
 import AddRecordModal from "./AddRecordModal";
 import AddInjuryModal from "./AddInjuryModal";
 import AxisRadarCard from "../components/ui/AxisRadarCard";

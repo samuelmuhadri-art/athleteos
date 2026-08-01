@@ -15,7 +15,7 @@ import {
 import { Send, Search, MessageSquare, Check, CheckCheck, Users, User } from "lucide-react";
 import { supabase }              from "../utils/supabaseClient";
 import { notifyAthleteMessage }  from "../utils/notifications";
-import { useAuth }               from "../context/AuthContext";
+import { useAuth }               from "../hooks/useAuth";
 import LoadingState              from "../components/ui/LoadingState";
 import ErrorState                from "../components/ui/ErrorState";
 import { SegmentedTabs }         from "../components/ui/premium";

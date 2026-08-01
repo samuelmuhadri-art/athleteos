@@ -6,8 +6,8 @@
 
 import { memo, useState, useCallback } from "react";
 import { X, Plus, CheckCircle } from "lucide-react";
-import { useAuth }   from "../context/AuthContext";
-import { CATEGORIES, SESSION_COLORS, EMPTY_FORM, dateToISOWeek, dateToDayName, toLocalDateStr } from "./planningShared";
+import { useAuth }   from "../hooks/useAuth";
+import { CATEGORIES, SESSION_COLORS, EMPTY_FORM, dateToISOWeek, dateToDayName, toLocalDateStr } from "./planningUtils";
 import TrainingFocusField from "../components/session/TrainingFocusField";
 import { getDefaultTrainingFocus, isTrainingFocusCompatible } from "../domain/trainingFocus";
 import { useAccessibleDialog } from "../hooks/useAccessibleDialog";

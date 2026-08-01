@@ -18,7 +18,7 @@ import {
   AlertTriangle, Zap, BarChart2, BookOpen, ChevronDown, CheckCircle, Info,
 } from "lucide-react";
 import { supabase }          from "../utils/supabaseClient";
-import { useAuth }           from "../context/AuthContext";
+import { useAuth }           from "../hooks/useAuth";
 import LoadingState          from "../components/ui/LoadingState";
 import ErrorState            from "../components/ui/ErrorState";
 import { getAthleteMetricsForWeek } from "../utils/chargeCalculations";

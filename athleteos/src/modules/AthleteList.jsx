@@ -6,7 +6,7 @@
 import { memo, useState, useCallback, useEffect } from "react";
 import { FileSpreadsheet, Plus, Users as UsersIcon } from "lucide-react";
 import { supabase }  from "../utils/supabaseClient";
-import { useAuth }   from "../context/AuthContext";
+import { useAuth }   from "../hooks/useAuth";
 import LoadingState  from "../components/ui/LoadingState";
 import ErrorState    from "../components/ui/ErrorState";
 import { initialsFromName } from "../utils/helpers.js";

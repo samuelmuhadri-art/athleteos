@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, cleanup, fireEvent, render, renderHook, screen } from "@testing-library/react";
-import { useTheme, ThemeToggleButton } from "./useTheme";
+import { useTheme } from "./useTheme";
+import { ThemeToggleButton } from "../components/ui/ThemeToggleButton";
 
 beforeEach(() => {
   localStorage.clear();

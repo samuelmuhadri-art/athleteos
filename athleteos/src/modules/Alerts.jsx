@@ -13,7 +13,7 @@ import {
   TrendingUp, CheckCheck, Filter, Plus, Trash2, Trophy, BarChart2,
 } from "lucide-react";
 import { supabase }    from "../utils/supabaseClient";
-import { useAuth }     from "../context/AuthContext";
+import { useAuth }     from "../hooks/useAuth";
 import LoadingState    from "../components/ui/LoadingState";
 import ErrorState      from "../components/ui/ErrorState";
 import Modal           from "../components/ui/Modal";

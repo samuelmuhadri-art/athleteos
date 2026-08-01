@@ -12,7 +12,7 @@ import {
   Clock, CalendarDays,
 } from "lucide-react";
 import { supabase }  from "../utils/supabaseClient";
-import { useAuth }   from "../context/AuthContext";
+import { useAuth }   from "../hooks/useAuth";
 import LoadingState  from "../components/ui/LoadingState";
 import ErrorState    from "../components/ui/ErrorState";
 import { SegmentedTabs } from "../components/ui/premium";
@@ -25,8 +25,9 @@ import {
 } from "../utils/notifications";
 import {
   DAYS_FR, DAYS_SHORT, MONTHS_FR, CATEGORIES,
-  toLocalDateStr, isSameDay, sessionStatus, colors, getCalendarDays, StatusIcon,
-} from "./planningShared";
+  toLocalDateStr, isSameDay, sessionStatus, colors, getCalendarDays,
+} from "./planningUtils";
+import { StatusIcon } from "./planningShared";
 import { getSessionTrainingFocus } from "../domain/trainingFocus";
 import SessionModal from "./SessionModal";
 import AddSessionModal from "./AddSessionModal";

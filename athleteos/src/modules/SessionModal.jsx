@@ -5,7 +5,8 @@
 
 import { memo, useState } from "react";
 import { X, Users, FileText, AlertCircle, Star } from "lucide-react";
-import { CATEGORIES, colors, sessionStatus, ValidationBadge, StatusIcon } from "./planningShared";
+import { CATEGORIES, colors, sessionStatus } from "./planningUtils";
+import { ValidationBadge, StatusIcon } from "./planningShared";
 import { getSessionTrainingFocus } from "../domain/trainingFocus";
 import { openSessionAttachment } from "../utils/storage";
 import CoachSessionDayPanel from "../components/session/CoachSessionDayPanel";

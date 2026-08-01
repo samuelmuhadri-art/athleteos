@@ -18,7 +18,7 @@ function renderSettings(props = {}) {
   );
 }
 
-vi.mock("../../context/AuthContext", () => ({
+vi.mock("../../hooks/useAuth", () => ({
   useAuth: () => ({
     user: { id: "coach-1", email: "coach@club.be" },
     profile: { id: "coach-1", name: "Coach Martin", role: "head_coach" },

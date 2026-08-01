@@ -6,7 +6,7 @@
 import { memo, useState } from "react";
 import { createPortal } from "react-dom";
 import { Plus, X } from "lucide-react";
-import { inputCls, labelCls, INJURY_STATUS_OPTIONS } from "./athleteListShared";
+import { inputCls, labelCls, INJURY_STATUS_OPTIONS } from "./athleteListUtils";
 import { useAccessibleDialog } from "../hooks/useAccessibleDialog";
 
 const AddInjuryModal = memo(({ athleteName, initialData, onClose, onSave }) => {

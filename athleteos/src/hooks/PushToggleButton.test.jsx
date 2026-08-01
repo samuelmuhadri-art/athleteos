@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
-import { PushToggleButton } from "./usePushNotifications";
+import { PushToggleButton } from "../components/pwa/PushToggleButton";
 
 beforeEach(() => {
   Object.defineProperty(navigator, "serviceWorker", { configurable: true, value: {} });

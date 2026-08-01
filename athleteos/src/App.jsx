@@ -11,14 +11,16 @@ import {
 } from "lucide-react";
 
 import { supabase }   from "./utils/supabaseClient";
-import { useAuth }    from "./context/AuthContext";
+import { useAuth }    from "./hooks/useAuth";
 import LoginPage      from "./pages/LoginPage";
 import SignupPage     from "./pages/SignupPage";
 import ResetPasswordPage from "./pages/ResetPasswordPage";
 import AccountSettingsModal from "./components/ui/AccountSettingsModal";
 import { AthleteOSBadge, AthleteOSWordmark } from "./components/brand/AthleteOSLogo";
-import { usePushNotifications, PushToggleButton } from "./hooks/usePushNotifications";
-import { useTheme, ThemeToggleButton } from "./hooks/useTheme";
+import { usePushNotifications } from "./hooks/usePushNotifications";
+import { PushToggleButton } from "./components/pwa/PushToggleButton";
+import { useTheme } from "./hooks/useTheme";
+import { ThemeToggleButton } from "./components/ui/ThemeToggleButton";
 import { useUrlView } from "./hooks/useUrlView";
 import { initialsFromName } from "./utils/helpers.js";
 import MobileBottomNav from "./components/navigation/MobileBottomNav";

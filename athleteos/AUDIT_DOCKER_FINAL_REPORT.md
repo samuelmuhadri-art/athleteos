@@ -28,7 +28,7 @@ Aucune action de production n'a été effectuée : aucun `db push`, aucun reset 
 | Playwright | 37/37 scénarios |
 | PWA hors ligne | 2/2 scénarios |
 | TypeScript | réussi |
-| ESLint | 0 erreur ; 23 avertissements Fast Refresh connus |
+| ESLint | 0 erreur ; 0 avertissement |
 | Build Vite | réussi, 2 804 modules transformés |
 | Audit npm production + complet | 0 vulnérabilité |
 | Secrets versionnés | aucun détecté |
@@ -84,6 +84,13 @@ Le premier test hors ligne a échoué car le `dist/sw.js` suivi par Git référe
 
 Correction : régénération depuis `public/sw.js` et le build actuel.  
 Preuve : manifeste installable, 67 ressources précachées (~1,72 Mio) et rechargement du shell avec Chromium totalement hors connexion.
+
+### 8. Modules JSX incompatibles avec Fast Refresh
+
+Six fichiers mélangeaient composants React, hooks, contextes, constantes et fonctions métier. ESLint remontait donc 23 avertissements `react-refresh/only-export-components`.
+
+Correction : séparation des providers, hooks, boutons, constantes et helpers dans des modules dédiés, sans désactiver la règle ESLint et sans modifier les comportements publics. Les imports et mocks de tests ont été alignés sur les nouveaux points d'entrée.
+Preuve finale : ESLint passe avec 0 erreur et 0 avertissement ; 379/379 tests Vitest, 211/211 contrôles d'intégration, second passage RLS 40/40 et 37/37 scénarios Playwright authentifiés passent après la refactorisation.
 
 ## Validation fonctionnelle et sécurité
 
@@ -155,10 +162,11 @@ Preuve : manifeste installable, 67 ressources précachées (~1,72 Mio) et rechar
 2. Un premier reset a rencontré une course de réinitialisation entre services Supabase ; PostgreSQL est devenu sain quelques secondes plus tard et la relance a appliqué 48/48 migrations.
 3. Un appel concurrent a reçu une fois un 502 pendant la charge cumulée initiale. PostgreSQL n'a signalé ni deadlock ni rollback incohérent. Le test isolé a ensuite passé 21/21 et le passage final complet 211/211.
 4. Vector redémarre sous Windows lorsque le daemon Docker n'est pas exposé sur TCP 2375. L'exposition non authentifiée du daemon n'a pas été activée. DB, Auth, API, Storage, Realtime, Edge, Kong, Studio et Mailpit étaient sains ; Vector n'est pas requis par l'application et est exclu dans la CI.
+5. Un premier rejeu Playwright local a exécuté uniquement les 28 scénarios publics, car `E2E_WITH_AUTH` et les identifiants locaux n'étaient pas injectés. Un second essai avec les comptes locaux mais un bundle construit contre l'environnement configuré a correctement échoué sur les 9 connexions. Le bundle a ensuite été reconstruit explicitement avec `API_URL` et `ANON_KEY` locaux, comme dans la CI : résultat final 37/37.
+6. Juste après un redémarrage avec les clés VAPID de test éphémères, sept appels utilisateur `send-push` ont reçu une réponse amont Auth invalide. Les logs Edge ont confirmé un incident de stabilisation, sans fuite ni contournement d'autorisation. Le test isolé a ensuite passé 11/11, puis la chaîne complète a passé 211/211 et le second RLS 40/40.
 
 ## Dettes non bloquantes
 
-- 23 avertissements `react-refresh/only-export-components` sur des fichiers partagés qui exportent composants et utilitaires. Zéro erreur lint ; une correction propre demanderait de scinder ces modules, pas de masquer la règle.
 - `vite-plugin-pwa` émet un avertissement de dépréciation interne `inlineDynamicImports`; le build et le mode hors ligne sont fonctionnels.
 - Supabase CLI 2.109.1 signale 2.111.0 disponible et deux images locales légèrement différentes du projet lié. Aucun `supabase link` n'a été lancé pour ne pas élargir le périmètre vers le distant.
 
@@ -167,5 +175,5 @@ Preuve : manifeste installable, 67 ressources précachées (~1,72 Mio) et rechar
 - Tous les conteneurs Supabase locaux sont arrêtés.
 - Les données locales jetables sont sauvegardées dans le volume Docker par le CLI ; elles ne sont pas une copie de production.
 - Le fichier temporaire d'identifiants E2E a été supprimé.
-- Le déplacement Repomix préexistant (`athleteos/repomix-output.xml` vers la racine) n'est pas une modification de cet audit et doit rester hors de ses commits.
+- Le déplacement Repomix préexistant (`athleteos/repomix-output.xml` vers la racine) a été conservé. À la demande explicite suivante de l'utilisateur, le Repomix racine est régénéré en dernier, après les validations.
 - La mission source fournie s'arrête au milieu de la phase 0 ; les validations postérieures ont été dérivées des 30 objectifs finaux explicitement listés dans ce document.

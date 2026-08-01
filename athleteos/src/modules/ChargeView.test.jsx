@@ -8,7 +8,7 @@ const mocks = vi.hoisted(() => ({
   rows: {},
 }));
 
-vi.mock("../context/AuthContext", () => ({
+vi.mock("../hooks/useAuth", () => ({
   useAuth: () => ({ clubId: 7 }),
 }));
 

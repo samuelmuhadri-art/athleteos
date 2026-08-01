@@ -14,7 +14,7 @@ const mocks = vi.hoisted(() => ({
   signInWithPassword: vi.fn(),
 }));
 
-vi.mock("../context/AuthContext", () => ({
+vi.mock("../hooks/useAuth", () => ({
   useAuth: () => ({
     signIn: mocks.signIn,
     sendPasswordReset: mocks.sendPasswordReset,

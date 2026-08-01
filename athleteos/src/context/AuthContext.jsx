@@ -15,11 +15,10 @@
 //   3. Tous les modules lisent useAuth() au lieu d'un ID hardcodé.
 // ============================================================
 
-import { createContext, useContext, useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { supabase } from "../utils/supabaseClient";
 import { revokeCurrentPushSubscription } from "../utils/pushSubscriptions";
-
-const AuthContext = createContext(null);
+import { AuthContext } from "./authContextValue";
 
 export function AuthProvider({ children }) {
   const [user,    setUser]    = useState(null);   // objet supabase.auth.user
@@ -137,13 +136,4 @@ export function AuthProvider({ children }) {
       {children}
     </AuthContext.Provider>
   );
-}
-
-// ─── Hook consommateur ────────────────────────────────────────────────────────
-// Usage dans n'importe quel module :
-//   const { user, profile, clubId, signOut } = useAuth();
-export function useAuth() {
-  const ctx = useContext(AuthContext);
-  if (!ctx) throw new Error("useAuth() doit être utilisé à l'intérieur de <AuthProvider>");
-  return ctx;
 }

@@ -7,7 +7,8 @@ import { memo, useState, useMemo } from "react";
 import { ArrowLeft, HeartPulse, Pencil, Trash2 } from "lucide-react";
 import { getAthleteMetricsForWeek } from "../utils/chargeCalculations";
 import { getISOWeek } from "../utils/helpers.js";
-import { TABS, StatusBadge, ScoreRing } from "./athleteListShared";
+import { TABS } from "./athleteListUtils";
+import { StatusBadge, ScoreRing } from "./athleteListShared";
 import { TabPerformances, TabCharge, TabEntrainements, TabBlessures, TabProfil } from "./AthleteProfileTabs";
 import { ConfirmDialog, InlineNotice, SegmentedTabs } from "../components/ui/premium";
 

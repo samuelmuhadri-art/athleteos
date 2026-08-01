@@ -6,7 +6,7 @@
 import { memo, useState } from "react";
 import { createPortal } from "react-dom";
 import { Plus, X } from "lucide-react";
-import { inputCls, labelCls } from "./athleteListShared";
+import { inputCls, labelCls } from "./athleteListUtils";
 import PerformanceMetadataFields from "../components/performance/PerformanceMetadataFields.jsx";
 import { createPerformanceMetadata } from "../domain/disciplines.js";
 import { useAccessibleDialog } from "../hooks/useAccessibleDialog";

@@ -9,7 +9,7 @@ import { Plus, X, FileText, Users, AlertCircle, CheckCircle, Zap } from "lucide-
 import { supabase } from "../../utils/supabaseClient";
 import { notifyCoachAthleteSession } from "../../utils/notifications";
 import { CATEGORIES, dateToISOWeek, dateToDayName, toLocalDateStr } from "../shared";
-import { cat } from "./planningShared";
+import { cat } from "./planningUtils";
 import TrainingFocusField from "../../components/session/TrainingFocusField";
 import { getDefaultTrainingFocus } from "../../domain/trainingFocus";
 import { useAccessibleDialog } from "../../hooks/useAccessibleDialog";

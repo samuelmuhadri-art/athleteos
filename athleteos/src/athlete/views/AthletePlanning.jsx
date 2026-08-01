@@ -21,7 +21,8 @@ import { MONTHS_FR, CATEGORIES, isSameDay, toLocalDateStr } from "../shared";
 import { getSessionTrainingFocus } from "../../domain/trainingFocus";
 import { isSessionArchived } from "../../domain/sessionArchive";
 import { parseLocalDate } from "../../utils/helpers";
-import { cat, StatusBadge, rpeColor } from "./planningShared";
+import { cat, rpeColor } from "./planningUtils";
+import { StatusBadge } from "./planningShared";
 import CreateSessionModal from "./CreateSessionModal";
 import SessionDetailModal from "./SessionDetailModal";
 
