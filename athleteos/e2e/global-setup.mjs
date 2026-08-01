@@ -24,6 +24,22 @@ import path from "node:path";
 const SUPABASE_URL    = process.env.VITE_SUPABASE_URL ?? process.env.API_URL;
 const SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.SERVICE_ROLE_KEY;
 
+function assertLocalSupabase(rawUrl) {
+  let parsed;
+  try {
+    parsed = new URL(rawUrl);
+  } catch {
+    throw new Error("e2e/global-setup.mjs : URL Supabase locale invalide.");
+  }
+
+  const loopbackHosts = new Set(["127.0.0.1", "localhost", "::1"]);
+  if (parsed.protocol !== "http:" || !loopbackHosts.has(parsed.hostname)) {
+    throw new Error(
+      "e2e/global-setup.mjs : refus de créer des fixtures sur une instance Supabase non locale."
+    );
+  }
+}
+
 export default async function globalSetup() {
   if (!SUPABASE_URL || !SERVICE_ROLE_KEY) {
     throw new Error(
@@ -31,6 +47,8 @@ export default async function globalSetup() {
       "requis (instance Supabase locale — voir .github/workflows/ci.yml)."
     );
   }
+
+  assertLocalSupabase(SUPABASE_URL);
 
   const admin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, { auth: { autoRefreshToken: false, persistSession: false } });
   const runId = Date.now();

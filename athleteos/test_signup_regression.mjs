@@ -58,6 +58,11 @@ const admin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, {
 });
 
 const RUN_ID = Date.now();
+// Adresse IPv6 de documentation (RFC 3849), unique à ce run. La pile
+// Supabase locale ajoute ensuite ses propres sauts à X-Forwarded-For ; la
+// fonction utilise volontairement la première valeur. Ainsi, le test peut
+// saturer son quota sans empoisonner les exécutions suivantes sur 127.0.0.1.
+const TEST_IP = `2001:db8::${RUN_ID.toString(16)}`;
 
 // Même alphabet que CODE_CHARS côté serveur (supabase/functions/signup) —
 // sans 0/O/1/I/L pour éviter les confusions. Un code de test qui contient un
@@ -97,6 +102,7 @@ async function callSignup(body) {
       "Content-Type": "application/json",
       apikey: ANON_KEY,
       Authorization: `Bearer ${ANON_KEY}`,
+      "X-Forwarded-For": TEST_IP,
     },
     body: JSON.stringify(body),
   });
@@ -300,6 +306,7 @@ async function main() {
     for (const email of createdEmails) await cleanupByEmail(email);
     await cleanupByEmail(`signup-test-compensation-${RUN_ID}@example.invalid`);
     for (let i = 0; i < 10; i++) await cleanupByEmail(`signup-test-rate-${RUN_ID}-${i}@example.invalid`);
+    await admin.from("signup_attempts").delete().eq("ip", TEST_IP);
     if (existingClub) await admin.from("clubs").delete().eq("id", existingClub.id);
   }
 
