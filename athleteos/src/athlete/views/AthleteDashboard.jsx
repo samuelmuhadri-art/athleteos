@@ -219,7 +219,7 @@ const DailyFocusCard = memo(({
           <div className="progress-fill" style={{ width: `${progress}%`, background: presentation.color }} />
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-[minmax(0,1.2fr)_minmax(260px,0.8fr)] gap-4">
+        <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1.2fr)_minmax(260px,0.8fr)] gap-4">
           <div style={{
             padding: "var(--space-4)", borderRadius: "var(--r-lg)",
             background: `color-mix(in srgb, ${presentation.color} 7%, transparent)`,
@@ -453,8 +453,8 @@ export default function AthleteDashboard({
           }} />
           <div style={{ position: "relative", padding: "var(--card-padding-comfortable)" }}>
           {/* Identité */}
-          <div className="flex items-start justify-between gap-3 mb-5">
-            <div className="flex items-center gap-3">
+          <div className="flex flex-col min-[390px]:flex-row items-start justify-between gap-3 mb-5">
+            <div className="flex min-w-0 items-center gap-3">
               <div style={{
                 width: 40, height: 40, borderRadius: 10, flexShrink: 0,
                 background: "rgba(29,158,117,0.14)", border: "1px solid rgba(29,158,117,0.22)",
@@ -487,7 +487,7 @@ export default function AthleteDashboard({
 
           {/* 5 jauges : un mot de statut simple, jamais un chiffre brut en
               face avant. Le détail scientifique complet reste à un tap. */}
-          <div className="flex gap-2.5 overflow-x-auto -mx-1 px-1 pb-1 sm:grid sm:grid-cols-5 sm:gap-3 sm:overflow-visible sm:mx-0 sm:px-0"
+          <div className="flex gap-2.5 overflow-x-auto -mx-1 px-1 pb-1 lg:grid lg:grid-cols-5 lg:gap-3 lg:overflow-visible lg:mx-0 lg:px-0"
             style={{ scrollSnapType: "x proximity" }}>
             {trainingGauges.map((gauge) => (
               <TrainingGauge key={gauge.key}
@@ -546,7 +546,7 @@ export default function AthleteDashboard({
               {wellnessToday.notes}
             </p>
           )}
-          <button onClick={onOpenWellness} className="btn-ghost" style={{ marginTop: "var(--space-2)", minHeight: 36, paddingInline: 0 }}>
+          <button onClick={onOpenWellness} className="btn-ghost" style={{ marginTop: "var(--space-2)", minHeight: "var(--touch)", paddingInline: 0 }}>
             Modifier
           </button>
         </div>
@@ -597,7 +597,7 @@ export default function AthleteDashboard({
                 <p className="card-title">Cette semaine</p>
                 <p className="card-subtitle">{doneThisWeek}/{weekSessions.length} réalisée{weekSessions.length > 1 ? "s" : ""}</p>
               </div>
-              <button onClick={() => onNavigate("planning")} className="btn-ghost" style={{ minHeight: 36, padding: 0 }}>
+              <button onClick={() => onNavigate("planning")} className="btn-ghost" style={{ minHeight: "var(--touch)", padding: 0 }}>
                 Voir tout
               </button>
             </div>
@@ -631,7 +631,7 @@ export default function AthleteDashboard({
                   </div>
                   {s.pdfUrl && (
                     <button type="button" onClick={() => openSessionAttachment(s.pdfUrl)}
-                      style={{ display: "flex", alignItems: "center", gap: 4, minHeight: 32, padding: "4px 8px", borderRadius: 7, background: "rgba(91,141,239,0.15)", color: "var(--color-info)", fontSize: "var(--text-meta)", fontWeight: 600, flexShrink: 0, border: "none", cursor: "pointer" }}>
+                      style={{ display: "flex", alignItems: "center", gap: 4, minHeight: "var(--touch)", padding: "4px 8px", borderRadius: 7, background: "rgba(91,141,239,0.15)", color: "var(--color-info)", fontSize: "var(--text-meta)", fontWeight: 600, flexShrink: 0, border: "none", cursor: "pointer" }}>
                       <FileText size={12} />Fichier
                     </button>
                   )}
@@ -671,7 +671,7 @@ export default function AthleteDashboard({
             <div className="card overflow-hidden">
               <div style={{ padding: "12px 16px", borderBottom: "1px solid var(--c-border)", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                 <p className="card-title">Mes records</p>
-                <button onClick={() => onNavigate("performances")} className="btn-ghost" style={{ minHeight: 36, padding: 0 }}>
+                <button onClick={() => onNavigate("performances")} className="btn-ghost" style={{ minHeight: "var(--touch)", padding: 0 }}>
                   Tout voir
                 </button>
               </div>
@@ -816,7 +816,7 @@ export default function AthleteDashboard({
                 <p style={{ fontSize: 12.5, fontWeight: 500, color: "var(--c-dim-alerte)" }}>Blessures en cours</p>
               </div>
               {onOpenInjuryReport && (
-                <button onClick={onOpenInjuryReport} className="btn-ghost" style={{ minHeight: 36, padding: 0, color: "var(--color-warning)" }}>
+                <button onClick={onOpenInjuryReport} className="btn-ghost" style={{ minHeight: "var(--touch)", padding: 0, color: "var(--color-warning)" }}>
                   + Signaler
                 </button>
               )}
@@ -859,7 +859,7 @@ export default function AthleteDashboard({
                     <p className="meta-text">Message récent</p>
                   </div>
                 </div>
-                <button onClick={() => onNavigate("messagerie")} className="btn-ghost" style={{ minHeight: 36, padding: 0 }}>
+                <button onClick={() => onNavigate("messagerie")} className="btn-ghost" style={{ minHeight: "var(--touch)", padding: 0 }}>
                   Répondre
                 </button>
               </div>

@@ -542,7 +542,7 @@ function Dashboard({
         title={`${getGreeting()}, ${firstName}`}
         description="Les priorités et l’état de ton groupe en un coup d’œil."
         actions={(
-          <button type="button" className="btn-primary" onClick={() => onNavigate("planning")}>
+          <button type="button" className="btn-primary w-full min-[390px]:w-auto" onClick={() => onNavigate("planning")}>
             Planifier une séance
             <ChevronRight size={16} aria-hidden="true" />
           </button>
@@ -560,6 +560,11 @@ function Dashboard({
           onDemo={onDemo}
         />
       )}
+
+      {/* ── Priorités coach ──────────────────────────────────────────────── */}
+      <div data-dashboard-priority-queue>
+        <CoachFeedSection items={coachFeed} onNavigate={onNavigate} limit={4} />
+      </div>
 
       {/* Le coach voit d'abord ce qui demande une action. Les statistiques
           restent entièrement disponibles juste après. */}
@@ -599,7 +604,7 @@ function Dashboard({
             {metrics.pendingAthleteSession > 0 && (
               <button
                 onClick={() => onNavigate("planning")}
-                className="flex items-center gap-2 px-3 py-2 rounded-xl text-[12px] font-semibold transition-all tap-feedback"
+                className="flex min-h-11 items-center gap-2 px-3 py-2 rounded-xl text-[12px] font-semibold transition-all tap-feedback"
                 style={{
                   background: "rgba(255,255,255,0.07)",
                   border: "0.5px solid rgba(255,255,255,0.12)",
@@ -613,7 +618,7 @@ function Dashboard({
           </div>
 
           {/* 3 stats inline dans le hero */}
-          <div className="grid grid-cols-3 gap-2">
+          <div className="grid grid-cols-1 min-[390px]:grid-cols-2 sm:grid-cols-3 gap-2">
             {[
               {
                 label: "Check-ins du jour",
@@ -635,7 +640,7 @@ function Dashboard({
             ].map(s => (
               <div
                 key={s.label}
-                className="rounded-2xl px-3 py-3 text-center"
+                className="rounded-2xl px-3 py-3 text-center min-[390px]:last:col-span-2 sm:last:col-span-1"
                 style={{
                   background: "rgba(255,255,255,0.04)",
                   border: "0.5px solid rgba(255,255,255,0.07)",
@@ -659,18 +664,13 @@ function Dashboard({
         </div>
       </div>
 
-      {/* ── Priorités coach ──────────────────────────────────────────────── */}
       {/* ── KPIs — icône + liseré + glow au survol ────────────────────────── */}
-      <div data-dashboard-priority-queue>
-        <CoachFeedSection items={coachFeed} onNavigate={onNavigate} limit={4} />
-      </div>
-
       <section className="space-y-3" aria-labelledby="overview-title">
         <div>
           <h2 id="overview-title" className="section-title">Vue d'ensemble</h2>
           <p className="secondary-text mt-0.5">Les indicateurs essentiels de la semaine.</p>
         </div>
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <div className="grid grid-cols-1 min-[390px]:grid-cols-2 xl:grid-cols-4 gap-3">
           <MetricCard
             icon={Users} label="Athlètes actifs" color="#1D9E75"
             value={metrics.actifs} sub={`/${athletes.length} total`}
@@ -711,7 +711,7 @@ function Dashboard({
             </div>
             <button
               onClick={() => onNavigate("charge")}
-              className="flex items-center gap-1 text-[12px] font-semibold text-emerald-600 hover:text-emerald-700 transition-colors"
+              className="flex min-h-11 items-center gap-1 px-2 -mr-2 text-[12px] font-semibold text-emerald-600 hover:text-emerald-700 transition-colors"
             >
               Détail <ArrowUpRight size={13} />
             </button>
@@ -723,7 +723,7 @@ function Dashboard({
               <p className="text-[13px] font-semibold" style={{ color: "var(--c-text-2)" }}>Aucun athlète enregistré</p>
             </div>
           ) : (
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 min-[390px]:grid-cols-2 xl:grid-cols-3 gap-3">
               {visibleAthletes.map(a => (
                 <AthleteStatusCard
                   key={a.id}
@@ -761,7 +761,7 @@ function Dashboard({
                 <h3 className="card-title">Compétitions</h3>
                 <button
                   onClick={() => onNavigate("competitions")}
-                  className="text-[12px] font-semibold text-emerald-600 hover:text-emerald-700 transition-colors flex items-center gap-1"
+                  className="min-h-11 px-2 -mr-2 text-[12px] font-semibold text-emerald-600 hover:text-emerald-700 transition-colors flex items-center gap-1"
                 >
                   Voir tout <ArrowUpRight size={11} />
                 </button>

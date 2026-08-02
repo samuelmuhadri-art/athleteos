@@ -501,6 +501,12 @@ body {
   backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
   animation: fade-in var(--dur-base) ease both;
 }
+.modal-safe-inset {
+  padding-top: max(16px, var(--safe-top));
+  padding-right: max(16px, var(--safe-right));
+  padding-bottom: max(16px, var(--safe-bottom));
+  padding-left: max(16px, var(--safe-left));
+}
 .modal-content { animation: scale-in var(--dur-slow) var(--spring) both; }
 
 .bottom-sheet-backdrop {

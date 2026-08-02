@@ -14,6 +14,7 @@ import ErrorBoundary from "./components/ui/ErrorBoundary";
 import { initSentry, captureError } from "./utils/sentry";
 import { PwaInstallProvider } from "./context/PwaInstallContext";
 import AppStatusBanner from "./components/pwa/AppStatusBanner";
+import ToastProvider from "./components/ui/ToastProvider";
 
 initSentry();
 // Les rejets de promesse non gérés (fetch échoué non catché, etc.) ne
@@ -23,12 +24,14 @@ window.addEventListener("unhandledrejection", (e) => captureError(e.reason));
 createRoot(document.getElementById("root")).render(
   <StrictMode>
     <ErrorBoundary>
-      <AuthProvider>
-        <PwaInstallProvider>
-          <App />
-          <AppStatusBanner />
-        </PwaInstallProvider>
-      </AuthProvider>
+      <ToastProvider>
+        <AuthProvider>
+          <PwaInstallProvider>
+            <App />
+            <AppStatusBanner />
+          </PwaInstallProvider>
+        </AuthProvider>
+      </ToastProvider>
     </ErrorBoundary>
   </StrictMode>
 );

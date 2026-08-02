@@ -200,7 +200,7 @@ function CoachShell({ user, profile, clubId, signOut, club, clubLoading, refresh
   return (
     <div
       className="flex h-screen overflow-hidden w-full"
-      style={{ background: "var(--c-bg)", fontFamily: "'DM Sans', system-ui, sans-serif", ...themeStyle }}
+      style={{ height: "100dvh", background: "var(--c-bg)", fontFamily: "'DM Sans', system-ui, sans-serif", ...themeStyle }}
     >
       {/* ══════════════════════════════════════════════════════════════
          SIDEBAR PREMIUM DARK

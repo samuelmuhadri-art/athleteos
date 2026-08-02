@@ -18,6 +18,7 @@ import { EmptyState, SegmentedTabs } from "../../components/ui/premium";
 import { getISOWeekInfo, matchesISOWeek } from "../../utils/helpers";
 import { captureError } from "../../utils/sentry";
 import { useAccessibleDialog } from "../../hooks/useAccessibleDialog";
+import { useToast } from "../../hooks/useToast";
 
 const AVATAR_COLORS = ["#1D9E75","#5B8DEF","#9B84F0","#E8A020","#E05252","#14B8A6","#F97316","#EC4899"];
 const QUICK_REACTIONS = ["🔥","💪","👏","⚡","🎯","❤️"];
@@ -33,23 +34,6 @@ function isSameCalendarDay(a, b) {
 }
 
 // ─── Toast ────────────────────────────────────────────────────────────────────
-function Toast({ msg, onDismiss }) {
-  useEffect(() => { const t = setTimeout(onDismiss, 4000); return () => clearTimeout(t); }, [onDismiss]);
-  return (
-    <div style={{ position:"fixed", top:16, left:"50%", transform:"translateX(-50%)", zIndex:9999, maxWidth:340, width:"calc(100% - 32px)", animation:"slide-down 0.25s cubic-bezier(0.16,1,0.3,1)" }}>
-      <div style={{ background:"var(--c-surface-3)", border:"1px solid var(--c-border-strong)", borderRadius:14, padding:"12px 14px", display:"flex", alignItems:"center", gap:10, boxShadow:"0 8px 32px rgba(0,0,0,0.50)" }}>
-        <div style={{ width:36, height:36, borderRadius:"50%", background:msg.color??"#1D9E75", display:"flex", alignItems:"center", justifyContent:"center", color:"white", fontSize:12, fontWeight:700, flexShrink:0 }}>
-          {initialsFromName(msg.name)}
-        </div>
-        <p style={{ flex:1, fontSize:13, color:"var(--c-text-1)", lineHeight:1.4 }}>
-          <span style={{ color:"#1D9E75", fontWeight:600 }}>{msg.name.split(" ")[0]}</span> {msg.action}
-        </p>
-        <button type="button" aria-label="Fermer la notification" onClick={onDismiss} style={{ width:44, height:44, display:"flex", alignItems:"center", justifyContent:"center", background:"none", border:"none", cursor:"pointer", color:"var(--c-text-2)", padding:0, flexShrink:0 }}><X size={16}/></button>
-      </div>
-    </div>
-  );
-}
-
 // ─── Modal commentaires ───────────────────────────────────────────────────────
 const CommentsModal = memo(({ post, athlete, allAthletes, onClose, onCommentAdded }) => {
   const [comments, setComments] = useState([]);
@@ -550,13 +534,13 @@ const PostCard = memo(({ post, athlete, allAthletes, sessions, onComment, onReac
 // COMPOSANT PRINCIPAL
 // ═══════════════════════════════════════════════════════════════════════════════
 export default function AthleteClub({ athlete, allAthletes, clubId, coachUserId, sessions, clubBrand }) {
+  const { info: showInfoToast, error: showErrorToast, success: showSuccessToast } = useToast();
   const [posts,          setPosts]          = useState([]);
   const [loading,        setLoading]        = useState(true);
   const [loadingMore,    setLoadingMore]    = useState(false);
   const [hasMorePosts,   setHasMorePosts]   = useState(false);
   const [activeComments, setActiveComments] = useState(null);
   const [quickPost,      setQuickPost]      = useState(null); // session ou true
-  const [toast,          setToast]          = useState(null);
   const [commentCounts,  setCommentCounts]  = useState({});
   const [feedFilter,     setFeedFilter]     = useState("all");
   const postsCountRef = useRef(0);
@@ -654,7 +638,11 @@ export default function AthleteClub({ athlete, allAthletes, clubId, coachUserId,
         fetchPosts();
         if (payload.new.athlete_id !== athlete.id) {
           const { data:a } = await supabase.from("athletes").select("name").eq("id", payload.new.athlete_id).single();
-          setToast({ name:a?.name??"Athlète", action:"a partagé une séance 📸", color:avatarColor(allAthletes, payload.new.athlete_id) });
+          showInfoToast({
+            key: `club-post-${payload.new.id}`,
+            title: a?.name ?? "Athlète",
+            message: "a partagé une nouvelle séance avec le club.",
+          });
         }
       })
       .on("postgres_changes", { event:"DELETE", schema:"public", table:"social_posts" }, fetchPosts)
@@ -663,7 +651,7 @@ export default function AthleteClub({ athlete, allAthletes, clubId, coachUserId,
       .on("postgres_changes", { event:"INSERT", schema:"public", table:"social_comments" }, fetchPosts)
       .subscribe();
     return () => supabase.removeChannel(ch);
-  }, [fetchPosts, athlete.id, clubId, allAthletes]);
+  }, [fetchPosts, athlete.id, clubId, allAthletes, showInfoToast]);
 
   // ── Handlers ───────────────────────────────────────────────────────────────
   const handleReact = async (postId, emoji) => {
@@ -691,7 +679,11 @@ export default function AthleteClub({ athlete, allAthletes, clubId, coachUserId,
     }
     if (operationError) {
       setPosts(prev => prev.map(item => item.id === postId ? post : item));
-      setToast({ name:"AthleteOS", action:"n’a pas pu enregistrer ta réaction. Réessaie.", color:"var(--tone-danger)" });
+      showErrorToast({
+        key: `club-reaction-${postId}`,
+        title: "Réaction non enregistrée",
+        message: "Ta réaction n’a pas pu être enregistrée. Réessaie.",
+      });
     }
   };
 
@@ -705,7 +697,11 @@ export default function AthleteClub({ athlete, allAthletes, clubId, coachUserId,
       .eq("athlete_id", athlete.id);
     if (error) {
       setPosts(prev => [...prev, deletedPost].sort((a,b) => new Date(b.created_at) - new Date(a.created_at)));
-      setToast({ name:"AthleteOS", action:"n’a pas pu supprimer la publication. Elle a été restaurée.", color:"var(--tone-danger)" });
+      showErrorToast({
+        key: `club-delete-${postId}`,
+        title: "Publication non supprimée",
+        message: "La publication a été restaurée. Tu peux réessayer.",
+      });
       return;
     }
     setCommentCounts(prev => {
@@ -737,8 +733,6 @@ export default function AthleteClub({ athlete, allAthletes, clubId, coachUserId,
 
   return (
     <div className="p-4 md:p-6 space-y-5 max-w-4xl mx-auto animate-slide-up">
-      {toast && <Toast msg={toast} onDismiss={() => setToast(null)}/>}
-
       <section className="card athlete-club-hero">
         {clubBrand?.coverUrl && <img className="athlete-club-hero__cover" src={clubBrand.coverUrl} alt="" aria-hidden="true" />}
         <div className="athlete-club-hero__overlay" aria-hidden="true" />
@@ -964,7 +958,15 @@ export default function AthleteClub({ athlete, allAthletes, clubId, coachUserId,
           session={quickPost===true ? null : quickPost}
           athlete={athlete} allAthletes={allAthletes} clubId={clubId} coachUserId={coachUserId}
           onClose={() => setQuickPost(null)}
-          onPosted={() => { setQuickPost(null); fetchPosts(); }}
+          onPosted={() => {
+            setQuickPost(null);
+            fetchPosts();
+            showSuccessToast({
+              key: "club-post-published",
+              title: "Publication partagée",
+              message: "Ton club peut maintenant voir et encourager ta séance.",
+            });
+          }}
         />
       )}
     </div>

@@ -1,0 +1,149 @@
+.aos-toast-viewport {
+  position: fixed;
+  z-index: 130;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: min(408px, calc(100vw - 32px));
+  pointer-events: none;
+}
+
+.aos-toast {
+  --toast-tone: var(--tone-info);
+  position: relative;
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr) 44px;
+  align-items: start;
+  gap: 10px;
+  min-height: 72px;
+  overflow: hidden;
+  padding: 12px 8px 12px 12px;
+  border: 1px solid color-mix(in srgb, var(--toast-tone) 28%, var(--c-border));
+  border-radius: 18px;
+  color: var(--c-text-1);
+  background:
+    linear-gradient(135deg, color-mix(in srgb, var(--toast-tone) 9%, transparent), transparent 48%),
+    color-mix(in srgb, var(--c-surface) 94%, transparent);
+  box-shadow: var(--shadow-xl);
+  backdrop-filter: blur(22px) saturate(1.2);
+  -webkit-backdrop-filter: blur(22px) saturate(1.2);
+  pointer-events: auto;
+  animation: aos-toast-enter 260ms var(--ease-out, cubic-bezier(0.16, 1, 0.3, 1)) both;
+}
+
+.aos-toast--success { --toast-tone: var(--tone-success); }
+.aos-toast--error { --toast-tone: var(--tone-danger); }
+.aos-toast--warning { --toast-tone: var(--tone-warning); }
+.aos-toast--info { --toast-tone: var(--tone-info); }
+
+.aos-toast__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 42px;
+  height: 42px;
+  border: 1px solid color-mix(in srgb, var(--toast-tone) 28%, transparent);
+  border-radius: 13px;
+  color: var(--toast-tone);
+  background: color-mix(in srgb, var(--toast-tone) 12%, transparent);
+}
+
+.aos-toast__content { min-width: 0; padding: 2px 0; }
+.aos-toast__heading { display: flex; align-items: center; gap: 7px; }
+.aos-toast__title { font-size: 14px; line-height: 1.3; font-weight: 760; }
+.aos-toast__message { margin-top: 3px; color: var(--c-text-2); font-size: 13px; line-height: 1.45; }
+.aos-toast__count {
+  flex: 0 0 auto;
+  padding: 1px 6px;
+  border-radius: 999px;
+  color: var(--toast-tone);
+  background: color-mix(in srgb, var(--toast-tone) 13%, transparent);
+  font-size: 11px;
+  line-height: 18px;
+  font-weight: 750;
+}
+
+.aos-toast__close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border: 0;
+  border-radius: 12px;
+  color: var(--c-text-2);
+  background: transparent;
+  cursor: pointer;
+  transition: color 160ms ease, background 160ms ease, transform 160ms ease;
+}
+.aos-toast__close:hover { color: var(--c-text-1); background: var(--c-surface-3); }
+.aos-toast__close:active { transform: scale(0.94); }
+
+.aos-toast__action {
+  min-height: 44px;
+  margin-top: 6px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 10px;
+  color: var(--toast-tone);
+  background: color-mix(in srgb, var(--toast-tone) 12%, transparent);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 750;
+  cursor: pointer;
+}
+.aos-toast__action:hover { background: color-mix(in srgb, var(--toast-tone) 18%, transparent); }
+
+.aos-toast__timer {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  height: 2px;
+  background: var(--toast-tone);
+  transform-origin: left;
+  animation: aos-toast-timer var(--toast-duration) linear both;
+}
+
+@keyframes aos-toast-enter {
+  from { opacity: 0; transform: translateY(10px) scale(0.98); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes aos-toast-timer {
+  from { transform: scaleX(1); }
+  to { transform: scaleX(0); }
+}
+
+@media (max-width: 767px) {
+  .aos-toast-viewport {
+    right: max(12px, var(--safe-right));
+    bottom: calc(76px + var(--safe-bottom));
+    left: max(12px, var(--safe-left));
+    width: auto;
+  }
+
+  .has-app-status-banner .aos-toast-viewport {
+    bottom: calc(220px + var(--safe-bottom));
+  }
+}
+
+@media (min-width: 768px) and (max-width: 1279px) {
+  .aos-toast-viewport {
+    top: calc(144px + var(--safe-top));
+    right: max(24px, var(--safe-right));
+  }
+}
+
+@media (min-width: 1280px) {
+  .aos-toast-viewport {
+    top: calc(24px + var(--safe-top));
+    right: max(24px, var(--safe-right));
+    width: min(360px, calc(100vw - 48px));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .aos-toast,
+  .aos-toast__timer { animation: none; }
+}

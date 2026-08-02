@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { supabase }  from "../utils/supabaseClient";
 import { useAuth }   from "../hooks/useAuth";
+import { useToast }  from "../hooks/useToast";
 import LoadingState  from "../components/ui/LoadingState";
 import ErrorState    from "../components/ui/ErrorState";
 import { SegmentedTabs } from "../components/ui/premium";
@@ -36,6 +37,7 @@ import AddSessionModal from "./AddSessionModal";
 
 function Planning() {
   const { clubId } = useAuth();
+  const { success: showSuccessToast } = useToast();
   const today   = new Date();
   const isMobile = typeof window !== "undefined" && window.innerWidth < 768;
 
@@ -144,7 +146,12 @@ function Planning() {
 
     await notifyAthleteNewSession(clubId, form.athleteIds, { title: form.title, sessionDate: form.sessionDate, day: form.day });
     await fetchAll();
-  }, [clubId, fetchAll]);
+    showSuccessToast({
+      key: `session-created-${newSession.id}`,
+      title: "Séance planifiée",
+      message: "Le planning est à jour et les athlètes assignés ont été prévenus.",
+    });
+  }, [clubId, fetchAll, showSuccessToast]);
 
   const updateSession = useCallback(async (sessionId, form) => {
     const { error: sessionError } = await supabase.from("sessions").update({
@@ -168,7 +175,12 @@ function Planning() {
     if (retainedIds.length) await notifyAthleteSessionUpdated(clubId, retainedIds, { id: sessionId, title: form.title, sessionDate: form.sessionDate, time: form.time });
     if (toAdd.length) await notifyAthleteNewSession(clubId, toAdd, { id: sessionId, title: form.title, sessionDate: form.sessionDate, day: form.day });
     await fetchAll();
-  }, [clubId, fetchAll, sessionList]);
+    showSuccessToast({
+      key: `session-updated-${sessionId}`,
+      title: "Séance mise à jour",
+      message: "Les modifications sont enregistrées dans le planning.",
+    });
+  }, [clubId, fetchAll, sessionList, showSuccessToast]);
 
   const deleteSession = useCallback(async (sessionId) => {
     const existing = sessionList.find(s => s.id === sessionId);
@@ -185,7 +197,12 @@ function Planning() {
       if (pdfDeleteError) captureError(pdfDeleteError, { operation: "delete_session_pdf", sessionId });
     }
     await fetchAll();
-  }, [fetchAll, sessionList]);
+    showSuccessToast({
+      key: `session-deleted-${sessionId}`,
+      title: "Séance supprimée",
+      message: "Elle n’apparaît plus dans le planning.",
+    });
+  }, [fetchAll, sessionList, showSuccessToast]);
 
   const setCoachNote = useCallback(async (sessionId, athleteId, coachNote) => {
     const { error: updateError } = await supabase.from("session_athletes").update({ coach_note: coachNote || null })

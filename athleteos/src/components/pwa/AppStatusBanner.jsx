@@ -5,6 +5,12 @@ import { captureError } from "../../utils/sentry";
 export default function AppStatusBanner() {
   const [online, setOnline] = useState(() => navigator.onLine !== false);
   const [updateAvailable, setUpdateAvailable] = useState(false);
+  const statusVisible = !online || updateAvailable;
+
+  useEffect(() => {
+    document.documentElement.classList.toggle("has-app-status-banner", statusVisible);
+    return () => document.documentElement.classList.remove("has-app-status-banner");
+  }, [statusVisible]);
 
   useEffect(() => {
     const handleOnline = () => setOnline(true);

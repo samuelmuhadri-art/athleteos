@@ -84,8 +84,7 @@ function Modal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4"
-      style={{ background: "rgba(15,23,42,0.45)" }}
+      className="modal-backdrop modal-safe-inset fixed inset-0 z-50 flex items-center justify-center p-4"
       onClick={(e) => e.target === e.currentTarget && !disabled && onClose()}
     >
       <div
@@ -94,13 +93,13 @@ function Modal({
         aria-modal="true"
         aria-labelledby={titleId}
         tabIndex={-1}
-        className="rounded-2xl shadow-2xl w-full max-w-md max-h-[90vh] flex flex-col overflow-hidden"
+        className="modal-content rounded-2xl shadow-2xl w-full max-w-md max-h-[90dvh] flex flex-col overflow-hidden"
         style={{ background: "var(--c-surface)", border: "1px solid var(--c-border)" }}
       >
 
         {/* ── Header ─────────────────────────────────────────────────── */}
         <div
-          className="px-6 py-5 flex items-center justify-between flex-shrink-0"
+          className="px-4 sm:px-6 py-4 sm:py-5 flex items-center justify-between gap-3 flex-shrink-0"
           style={{ borderBottom: "1px solid var(--c-border)" }}
         >
           <h3 id={titleId} className="text-[16px] font-bold" style={{ color: "var(--c-text-1)" }}>{title}</h3>
@@ -109,28 +108,28 @@ function Modal({
             onClick={onClose}
             disabled={disabled}
             aria-label={`Fermer — ${title}`}
-            className="p-1.5 rounded-lg transition-colors disabled:opacity-40 hover:bg-[var(--c-surface-3)]"
+            className="w-11 h-11 -mr-2 inline-flex items-center justify-center flex-shrink-0 rounded-xl transition-colors disabled:opacity-40 hover:bg-[var(--c-surface-3)]"
           >
             <X size={18} style={{ color: "var(--c-text-3)" }} />
           </button>
         </div>
 
         {/* ── Contenu (slot) ─────────────────────────────────────────── */}
-        <div className="flex-1 overflow-y-auto px-6 py-5">
+        <div className="flex-1 overflow-y-auto px-4 sm:px-6 py-5 overscroll-contain">
           {children}
         </div>
 
         {/* ── Footer ─────────────────────────────────────────────────── */}
         {onConfirm && (
           <div
-            className="px-6 py-4 flex items-center justify-between gap-3 flex-shrink-0"
+            className="px-4 sm:px-6 py-4 flex items-center justify-between gap-3 flex-shrink-0"
             style={{ borderTop: "1px solid var(--c-border)" }}
           >
             <button
               type="button"
               onClick={onClose}
               disabled={disabled}
-              className="px-4 py-2 rounded-lg text-[13px] font-medium transition-colors disabled:opacity-40 hover:bg-[var(--c-surface-3)]"
+              className="min-h-11 px-4 py-2 rounded-xl text-[13px] font-medium transition-colors disabled:opacity-40 hover:bg-[var(--c-surface-3)]"
               style={{ background: "var(--c-surface-2)", color: "var(--c-text-2)" }}
             >
               Annuler
@@ -139,7 +138,7 @@ function Modal({
               type="button"
               onClick={onConfirm}
               disabled={confirmDisabled || disabled}
-              className="flex items-center gap-2 px-5 py-2 rounded-lg text-white text-[13px] font-semibold transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+              className="min-h-11 flex items-center gap-2 px-5 py-2 rounded-xl text-white text-[13px] font-semibold transition-all disabled:opacity-40 disabled:cursor-not-allowed"
               style={{ background: "#1D9E75" }}
             >
               {loading ? (

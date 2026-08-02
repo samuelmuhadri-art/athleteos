@@ -14,6 +14,7 @@ describe("AppStatusBanner", () => {
 
     expect(screen.getByText("Mode hors connexion")).toBeTruthy();
     expect(screen.getByText(/certaines données/i)).toBeTruthy();
+    expect(document.documentElement.classList.contains("has-app-status-banner")).toBe(true);
   });
 
   it("disparaît quand la connexion revient", () => {
@@ -23,5 +24,6 @@ describe("AppStatusBanner", () => {
 
     act(() => window.dispatchEvent(new Event("online")));
     expect(screen.queryByText("Mode hors connexion")).toBeNull();
+    expect(document.documentElement.classList.contains("has-app-status-banner")).toBe(false);
   });
 });

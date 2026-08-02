@@ -21,6 +21,7 @@ import { MONTHS_FR, CATEGORIES, isSameDay, toLocalDateStr } from "../shared";
 import { getSessionTrainingFocus } from "../../domain/trainingFocus";
 import { isSessionArchived } from "../../domain/sessionArchive";
 import { parseLocalDate } from "../../utils/helpers";
+import { SegmentedTabs } from "../../components/ui/premium";
 import { cat, rpeColor } from "./planningUtils";
 import { StatusBadge } from "./planningShared";
 import CreateSessionModal from "./CreateSessionModal";
@@ -311,18 +312,18 @@ export default function AthletePlanning({
               )}
             </div>
 
-            <div role="group" aria-label="Affichage du planning" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", borderRadius: 12, overflow: "hidden", border: "1px solid var(--c-border-strong)" }}>
-              {[{ id: "agenda", label: "Liste" }, { id: "month", label: "Mois" }, { id: "week", label: "Semaine" }, { id: "archive", label: `Archives (${archivedSessionCount})` }].map(view => (
-                <button key={view.id} type="button" onClick={() => setViewMode(view.id)} aria-pressed={viewMode === view.id}
-                  style={{
-                    minHeight: 44, padding: "0 14px", fontSize: 13, fontWeight: 700, border: "none", cursor: "pointer",
-                    background: viewMode === view.id ? "var(--c-accent)" : "var(--c-surface-2)",
-                    color: viewMode === view.id ? "#07130F" : "var(--c-text-2)",
-                  }}>
-                  {view.label}
-                </button>
-              ))}
-            </div>
+            <SegmentedTabs
+              ariaLabel="Affichage du planning"
+              className="w-full sm:w-auto"
+              items={[
+                { id: "agenda", label: "Liste" },
+                { id: "month", label: "Mois" },
+                { id: "week", label: "Semaine" },
+                { id: "archive", label: "Archives", badge: archivedSessionCount },
+              ]}
+              value={viewMode}
+              onChange={setViewMode}
+            />
           </div>
         </div>
       </header>

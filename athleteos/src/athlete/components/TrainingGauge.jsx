@@ -24,7 +24,7 @@ const TrainingGauge = memo(({ value, color = "var(--c-text-3)", statusWord, labe
       style={{
         display: "flex", flexDirection: "column", alignItems: "center", gap: 6,
         background: "var(--c-surface-2)", border: "1px solid var(--c-border)", borderRadius: 14,
-        padding: "12px 6px 10px", cursor: "pointer", width: "100%", minWidth: 84, flexShrink: 0,
+        padding: "12px 8px 10px", cursor: "pointer", width: "100%", minWidth: 96, minHeight: "var(--touch)", flexShrink: 0,
         scrollSnapAlign: "start",
       }}>
       <div style={{ position: "relative", width: size, height: size, flexShrink: 0 }}>
@@ -36,12 +36,12 @@ const TrainingGauge = memo(({ value, color = "var(--c-text-3)", statusWord, labe
             style={{ transition: "stroke-dasharray 1.1s cubic-bezier(0.16,1,0.3,1)", opacity: hasValue ? 1 : 0.4 }} />
         </svg>
         <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 10%" }}>
-          <span style={{ fontSize: 9.5, fontWeight: 700, color: hasValue ? color : "var(--c-text-3)", lineHeight: 1.1, textAlign: "center", letterSpacing: "-0.01em" }}>
+          <span style={{ fontSize: 12, fontWeight: 700, color: hasValue ? color : "var(--c-text-3)", lineHeight: 1.1, textAlign: "center", letterSpacing: "-0.01em" }}>
             {hasValue ? statusWord : "—"}
           </span>
         </div>
       </div>
-      <span style={{ fontSize: 10, fontWeight: 600, letterSpacing: "0.04em", textTransform: "uppercase", color: "var(--c-text-3)", textAlign: "center", lineHeight: 1.25 }}>
+      <span style={{ fontSize: 12, fontWeight: 600, letterSpacing: "0.04em", textTransform: "uppercase", color: "var(--c-text-3)", textAlign: "center", lineHeight: 1.25 }}>
         {label}
       </span>
     </button>

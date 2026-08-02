@@ -400,7 +400,7 @@ export default function AthleteApp({ clubBrand, themeStyle }) {
   return (
     <div className="flex h-screen overflow-hidden w-full"
       data-club-name={clubBrand?.name || undefined}
-      style={{ background: "var(--c-bg)", fontFamily: "'DM Sans', system-ui, sans-serif", ...themeStyle }}>
+      style={{ height: "100dvh", background: "var(--c-bg)", fontFamily: "'DM Sans', system-ui, sans-serif", ...themeStyle }}>
 
       {incomingNotification && (
         <NotificationBanner
