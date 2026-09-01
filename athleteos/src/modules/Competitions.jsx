@@ -164,14 +164,14 @@ function Competitions() {
   // participant, sans qu'on ait aucun moyen simple de le voir/réparer.
   // club_id résolu côté serveur (jamais envoyé par le client).
 
-  const createCompetition = useCallback(async (form) => {
+  const createCompetition = useCallback(async (form, idempotencyKey) => {
     const { error } = await supabase.rpc("create_competition_with_athletes", {
       p_name:            form.name,
       p_date:            form.date,
       p_location:        form.location || null,
       p_type:            form.type,
       p_athlete_entries: form.athleteEntries.map((e) => ({ athleteId: e.athleteId, plannedEvent: e.plannedEvent || null })),
-      p_idempotency_key: crypto.randomUUID(),
+      p_idempotency_key: idempotencyKey,
     });
     if (error) throw error;
     await fetchAll();
@@ -187,7 +187,7 @@ function Competitions() {
   // mise à jour du record était juste loguée et n'empêchait pas l'envoi
   // des notifications malgré l'échec.
 
-  const addResult = useCallback(async (competitionId, athleteId, form) => {
+  const addResult = useCallback(async (competitionId, athleteId, form, idempotencyKey) => {
     // Tâche 9 : normalise un alias saisi librement ("100 m" -> "100m") vers
     // l'identifiant canonique du registre avant d'écrire en base.
     const event = resolveDisciplineId(form.event);
@@ -204,7 +204,7 @@ function Competitions() {
       p_result_value:     resultValue,
       p_higher_is_better: metadata.performance_direction === "higher",
       p_context:          form.context || null,
-      p_idempotency_key:  crypto.randomUUID(),
+      p_idempotency_key:  idempotencyKey,
       p_unit:             metadata.unit,
       p_metadata:         metadata,
     });

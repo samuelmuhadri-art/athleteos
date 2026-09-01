@@ -118,6 +118,13 @@ export async function uploadSessionAttachment(clubId, file) {
   return path;
 }
 
+export async function removeSessionAttachment(path) {
+  if (!path) return true;
+  const { error } = await supabase.storage.from("session-pdfs").remove([path]);
+  if (error) throw error;
+  return true;
+}
+
 export async function openSessionAttachment(path) {
   if (!path) return false;
   const win = window.open("about:blank", "_blank");

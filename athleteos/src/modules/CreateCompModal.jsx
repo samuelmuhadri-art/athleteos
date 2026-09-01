@@ -3,7 +3,7 @@
 // Modal de création de compétition — extraite de Competitions.jsx.
 // ============================================================
 
-import { memo, useState } from "react";
+import { memo, useState, useRef } from "react";
 import { X, Plus } from "lucide-react";
 import { TYPE_CONFIG } from "./competitionsShared";
 import { useAccessibleDialog } from "../hooks/useAccessibleDialog";
@@ -14,6 +14,7 @@ const CreateCompModal = memo(({ athletes, onClose, onCreate }) => {
   });
   const [saving,    setSaving]    = useState(false);
   const [saveError, setSaveError] = useState(null);
+  const requestKeyRef = useRef(crypto.randomUUID());
   const { dialogRef } = useAccessibleDialog({ onClose, closeDisabled: saving });
 
   const set = (key, val) => setForm((f) => ({ ...f, [key]: val }));
@@ -45,7 +46,7 @@ const CreateCompModal = memo(({ athletes, onClose, onCreate }) => {
     setSaving(true);
     setSaveError(null);
     try {
-      await onCreate(form);
+      await onCreate(form, requestKeyRef.current);
       onClose();
     } catch (err) {
       setSaveError(err.message ?? "Erreur lors de la création");

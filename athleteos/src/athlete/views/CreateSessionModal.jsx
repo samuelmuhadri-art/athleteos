@@ -3,7 +3,7 @@
 // Modal "Planifier une séance" — extraite d'AthletePlanning.jsx.
 // ============================================================
 
-import { useState, memo } from "react";
+import { useState, memo, useRef } from "react";
 import { createPortal } from "react-dom";
 import { Plus, X, FileText, Users, AlertCircle, CheckCircle, Zap } from "lucide-react";
 import { supabase } from "../../utils/supabaseClient";
@@ -13,9 +13,9 @@ import { cat } from "./planningUtils";
 import TrainingFocusField from "../../components/session/TrainingFocusField";
 import { getDefaultTrainingFocus } from "../../domain/trainingFocus";
 import { useAccessibleDialog } from "../../hooks/useAccessibleDialog";
-import { SESSION_ATTACHMENT_ACCEPT, uploadSessionAttachment, validateSessionAttachment } from "../../utils/storage";
+import { removeSessionAttachment, SESSION_ATTACHMENT_ACCEPT, uploadSessionAttachment, validateSessionAttachment } from "../../utils/storage";
 
-const CreateSessionModal = memo(({ athlete, allAthletes, clubId, createdBy, coachUserId, onClose, onCreated }) => {
+const CreateSessionModal = memo(({ athlete, allAthletes, clubId, coachUserId, onClose, onCreated }) => {
   const today = toLocalDateStr(new Date());
   const [form, setForm] = useState({
     title: "", category: "technique", trainingFocus: "technical_general", time: "10:00", durationMinutes: 60,
@@ -24,6 +24,7 @@ const CreateSessionModal = memo(({ athlete, allAthletes, clubId, createdBy, coac
   const [pdfFile, setPdfFile] = useState(null);
   const [saving,  setSaving]  = useState(false);
   const [err,     setErr]     = useState(null);
+  const requestKeyRef = useRef(crypto.randomUUID());
   const { dialogRef } = useAccessibleDialog({ onClose, closeDisabled: saving });
 
   const set       = (k, v) => setForm(f => ({ ...f, [k]: v }));
@@ -47,33 +48,37 @@ const CreateSessionModal = memo(({ athlete, allAthletes, clubId, createdBy, coac
     event?.preventDefault();
     if (!form.title.trim()) return;
     setSaving(true); setErr(null);
+    let uploadedPath = null;
     try {
       let pdfUrl = null;
       if (pdfFile) {
         // Préfixé par club_id pour les policies RLS. Le chemin privé reste
         // stocké dans la colonne historique pdf_url, quel que soit le format.
         pdfUrl = await uploadSessionAttachment(clubId, pdfFile);
+        uploadedPath = pdfUrl;
       }
       const catLabel = CATEGORIES.find(x => x.id === form.category)?.label ?? form.category;
-      const { data: ns, error: se } = await supabase.from("sessions").insert({
-        club_id: clubId, week: dateToISOWeek(form.sessionDate), day: dateToDayName(form.sessionDate),
-        session_date: form.sessionDate, time: form.time, type: catLabel, category: form.category,
-        title: form.title, description: form.description || null, duration_minutes: form.durationMinutes,
-        training_focus: form.trainingFocus,
-        load_weight: 1.0, pdf_url: pdfUrl, created_by: createdBy,
-      }).select().single();
-      if (se) throw se;
-
       const allIds = [athlete.id, ...form.invitedAthletes];
-      const { error: assignmentError } = await supabase.from("session_athletes").insert(
-        allIds.map(id => ({ session_id: ns.id, athlete_id: id, status: null }))
-      );
-      if (assignmentError) throw assignmentError;
+      const { data, error: se } = await supabase.rpc("create_session_with_athletes", {
+        p_session: {
+          week: dateToISOWeek(form.sessionDate), day: dateToDayName(form.sessionDate),
+          sessionDate: form.sessionDate, time: form.time, type: catLabel, category: form.category,
+          title: form.title, description: form.description || null, durationMinutes: form.durationMinutes,
+          trainingFocus: form.trainingFocus, loadWeight: 1.0, pdfUrl,
+        },
+        p_athlete_ids: allIds,
+        p_idempotency_key: requestKeyRef.current,
+      });
+      if (se) throw se;
+      const ns = { id: data?.sessionId };
       await notifyCoachAthleteSession(clubId, coachUserId, athlete, {
         id: ns.id, title: form.title, sessionDate: form.sessionDate,
       });
       onCreated(); onClose();
-    } catch (e) { setErr(e.message ?? "Erreur"); setSaving(false); }
+    } catch (e) {
+      if (uploadedPath) removeSessionAttachment(uploadedPath).catch(console.warn);
+      setErr(e.message ?? "Erreur"); setSaving(false);
+    }
   };
 
   const others = allAthletes.filter(a => a.id !== athlete.id);

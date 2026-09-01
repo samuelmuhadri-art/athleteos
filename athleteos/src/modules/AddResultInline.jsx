@@ -4,7 +4,7 @@
 // Competitions.jsx (utilisé dans CompModal.jsx).
 // ============================================================
 
-import { memo, useState } from "react";
+import { memo, useState, useRef } from "react";
 import { Plus } from "lucide-react";
 import PerformanceMetadataFields from "../components/performance/PerformanceMetadataFields.jsx";
 import { createPerformanceMetadata } from "../domain/disciplines.js";
@@ -15,6 +15,7 @@ const AddResultInline = memo(({ athlete, competitionId, defaultEvent, onAdd }) =
   const [form,   setForm]   = useState(emptyForm);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState(null);
+  const requestKeyRef = useRef(crypto.randomUUID());
 
   const set = (key, val) => setForm((f) => ({ ...f, [key]: val }));
 
@@ -24,7 +25,7 @@ const AddResultInline = memo(({ athlete, competitionId, defaultEvent, onAdd }) =
     setSaving(true);
     setSaveError(null);
     try {
-      await onAdd(competitionId, athlete.id, form);
+      await onAdd(competitionId, athlete.id, form, requestKeyRef.current);
       setOpen(false);
       setForm(emptyForm());
     } catch (error) {

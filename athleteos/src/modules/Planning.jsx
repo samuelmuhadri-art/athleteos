@@ -136,27 +136,14 @@ function Planning() {
 
   // ═══ Écritures ════════════════════════════════════════════════════════════
 
-  const addSession = useCallback(async (form) => {
-    const { data: newSession, error: sessionError } = await supabase
-      .from("sessions")
-      .insert({
-        club_id: clubId, week: form.week, day: form.day,
-        session_date: form.sessionDate, time: form.time,
-        type: form.type, category: form.category, title: form.title,
-        training_focus: form.trainingFocus,
-        description: form.description || null,
-        instructions: form.instructions || null,
-        duration_minutes: form.durationMinutes,
-        load_weight: 1.0,
-        pdf_url: form.pdfUrl ?? null,
-      })
-      .select().single();
+  const addSession = useCallback(async (form, idempotencyKey) => {
+    const { data, error: sessionError } = await supabase.rpc("create_session_with_athletes", {
+      p_session: form,
+      p_athlete_ids: form.athleteIds,
+      p_idempotency_key: idempotencyKey,
+    });
     if (sessionError) throw sessionError;
-
-    const { error: linkErr } = await supabase.from("session_athletes").insert(
-      form.athleteIds.map(id => ({ session_id: newSession.id, athlete_id: id, status: null, feeling: null, fatigue: null, comment: null }))
-    );
-    if (linkErr) throw linkErr;
+    const newSession = { id: data?.sessionId };
 
     await notifyAthleteNewSession(clubId, form.athleteIds, { title: form.title, sessionDate: form.sessionDate, day: form.day });
     await fetchAll();
@@ -168,23 +155,16 @@ function Planning() {
   }, [clubId, fetchAll, showSuccessToast]);
 
   const updateSession = useCallback(async (sessionId, form) => {
-    const { error: sessionError } = await supabase.from("sessions").update({
-      week: form.week, day: form.day, session_date: form.sessionDate,
-      time: form.time, type: form.type, category: form.category, title: form.title,
-      training_focus: form.trainingFocus,
-      description: form.description || null, instructions: form.instructions || null,
-      duration_minutes: form.durationMinutes,
-      load_weight: 1.0,
-      pdf_url: form.pdfUrl ?? null,
-    }).eq("id", sessionId);
+    const { error: sessionError } = await supabase.rpc("update_session_with_athletes", {
+      p_session_id: sessionId,
+      p_session: form,
+      p_athlete_ids: form.athleteIds,
+    });
     if (sessionError) throw sessionError;
 
     const existing    = sessionList.find(s => s.id === sessionId);
     const previousIds = existing?.athleteIds ?? [];
     const toAdd       = form.athleteIds.filter(id => !previousIds.includes(id));
-    const toRemove    = previousIds.filter(id => !form.athleteIds.includes(id));
-    if (toAdd.length)    { const { error: e } = await supabase.from("session_athletes").insert(toAdd.map(id => ({ session_id: sessionId, athlete_id: id, status: null, feeling: null, fatigue: null, comment: null, rpe: null }))); if (e) throw e; }
-    if (toRemove.length) { const { error: e } = await supabase.from("session_athletes").delete().eq("session_id", sessionId).in("athlete_id", toRemove); if (e) throw e; }
     const retainedIds = form.athleteIds.filter(id => previousIds.includes(id));
     if (retainedIds.length) await notifyAthleteSessionUpdated(clubId, retainedIds, { id: sessionId, title: form.title, sessionDate: form.sessionDate, time: form.time });
     if (toAdd.length) await notifyAthleteNewSession(clubId, toAdd, { id: sessionId, title: form.title, sessionDate: form.sessionDate, day: form.day });
@@ -198,16 +178,17 @@ function Planning() {
 
   const deleteSession = useCallback(async (sessionId) => {
     const existing = sessionList.find(s => s.id === sessionId);
-    const { error: assignmentsError } = await supabase.from("session_athletes").delete().eq("session_id", sessionId);
-    if (assignmentsError) throw assignmentsError;
-    const { error: e } = await supabase.from("sessions").delete().eq("id", sessionId);
+    const { data, error: e } = await supabase.rpc("delete_session_transactional", {
+      p_session_id: sessionId,
+    });
     if (e) throw e;
     // Évite d'orpheliner la pièce jointe privée une fois la séance
     // supprimée (échec d'écriture ici non bloquant : la séance est déjà
     // supprimée, le fichier orphelin est un problème mineur, pas une erreur
     // utilisateur à faire remonter).
-    if (existing?.pdfUrl) {
-      const { error: pdfDeleteError } = await supabase.storage.from("session-pdfs").remove([existing.pdfUrl]);
+    const pdfPath = data?.pdfPath ?? existing?.pdfUrl;
+    if (pdfPath) {
+      const { error: pdfDeleteError } = await supabase.storage.from("session-pdfs").remove([pdfPath]);
       if (pdfDeleteError) captureError(pdfDeleteError, { operation: "delete_session_pdf", sessionId });
     }
     await fetchAll();

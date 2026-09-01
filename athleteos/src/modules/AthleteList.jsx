@@ -55,6 +55,7 @@ function AthleteList() {
       if (athletesRes.error) throw athletesRes.error;
       if (sessionsRes.error) throw sessionsRes.error;
       if (competitionsRes.error) throw competitionsRes.error;
+      if (usersRes.error) throw usersRes.error;
 
       const athleteIds     = athletesRes.data.map(a => a.id);
       const sessionIds     = sessionsRes.data.map(s => s.id);
@@ -83,7 +84,7 @@ function AthleteList() {
         const recs = {};
         (recordsRes.data ?? []).filter(r => r.athlete_id === a.id).forEach(r => { recs[r.discipline] = { ...r, sb: r.sb, pr: r.pr, prDate: r.pr_date }; });
         return {
-          id: a.id, name: a.name, age: a.age, avatar: pd.avatar ?? initialsFromName(a.name),
+          id: a.id, userId: a.user_id, name: a.name, age: a.age, avatar: pd.avatar ?? initialsFromName(a.name),
           mainDiscipline: a.main_discipline, secondaryDisciplines: pd.secondary_disciplines ?? [],
           group: a.group_name, level: pd.level ?? null,
           records: recs,
@@ -153,16 +154,18 @@ function AthleteList() {
   }, [fetchAll]);
 
   const createAthlete = useCallback(async (form) => {
-    let newUserId = null;
-    if (form.email.trim()) {
-      const { data: u, error: ue } = await supabase.from("users").insert({ club_id: clubId, name: form.name, email: form.email, role: "athlete" }).select().single();
-      if (ue) throw ue; newUserId = u.id;
-    }
     const secDisc = form.secondaryDisciplines.split(",").map(s => s.trim()).filter(Boolean);
     const pd = { level: form.level||null, secondary_disciplines:secDisc, profile:{speed:form.speed,strength:form.strength,explosivity:form.explosivity,endurance:form.endurance,technique:form.technique,recoveryRate:form.recoveryRate,volumeTolerance:form.volumeTolerance,intensityTolerance:form.intensityTolerance,psychProfile:form.psychProfile||null} };
-    const { error: ae } = await supabase.from("athletes").insert({ club_id:clubId, name:form.name, age:form.age?Number(form.age):null, main_discipline:form.mainDiscipline||null, group_name:form.group||null, user_id:newUserId, profile_data:pd });
-    if (ae) throw ae; await fetchAll();
-  }, [clubId, fetchAll]);
+    const { error } = await supabase.rpc("create_club_athlete", { p_payload: {
+      name: form.name,
+      email: form.email.trim().toLowerCase() || null,
+      age: form.age ? Number(form.age) : null,
+      mainDiscipline: form.mainDiscipline || null,
+      groupName: form.group || null,
+      profileData: pd,
+    } });
+    if (error) throw error; await fetchAll();
+  }, [fetchAll]);
 
   const importAthletes = useCallback(async (rows, context) => {
     const payload = rows.map((row) => ({
@@ -201,14 +204,36 @@ function AthleteList() {
   const updateAthlete = useCallback(async (athleteId, form) => {
     const secDisc = form.secondaryDisciplines.split(",").map(s => s.trim()).filter(Boolean);
     const pd = { level:form.level||null, secondary_disciplines:secDisc, profile:{speed:form.speed,strength:form.strength,explosivity:form.explosivity,endurance:form.endurance,technique:form.technique,recoveryRate:form.recoveryRate,volumeTolerance:form.volumeTolerance,intensityTolerance:form.intensityTolerance,psychProfile:form.psychProfile||null} };
-    const { error: e } = await supabase.from("athletes").update({ name:form.name, age:form.age?Number(form.age):null, main_discipline:form.mainDiscipline||null, group_name:form.group||null, profile_data:pd }).eq("id", athleteId);
+    const { error: e } = await supabase.rpc("update_club_athlete", {
+      p_athlete_id: athleteId,
+      p_payload: {
+        name: form.name,
+        age: form.age ? Number(form.age) : null,
+        mainDiscipline: form.mainDiscipline || null,
+        groupName: form.group || null,
+        profileData: pd,
+      },
+    });
     if (e) throw e; await fetchAll();
   }, [fetchAll]);
 
   const deleteAthlete = useCallback(async (id) => {
-    const { error: e } = await supabase.from("athletes").delete().eq("id", id);
-    if (e) throw e; await fetchAll();
-  }, [fetchAll]);
+    const athlete = athletes.find(item => item.id === id);
+    if (athlete?.userId) {
+      if (profile?.role !== "head_coach") {
+        throw new Error("Seul le head coach peut supprimer un athlète qui possède un compte.");
+      }
+      const { data, error } = await supabase.functions.invoke("admin-actions", {
+        body: { action: "remove_user", userId: athlete.userId, idempotencyKey: crypto.randomUUID() },
+      });
+      if (error) throw error;
+      if (!data?.success) throw new Error(typeof data?.error === "string" ? data.error : "Suppression impossible.");
+    } else {
+      const { error } = await supabase.rpc("delete_unlinked_club_athlete", { p_athlete_id: id });
+      if (error) throw error;
+    }
+    await fetchAll();
+  }, [athletes, fetchAll, profile?.role]);
 
   const addInjury    = useCallback(async (aid, form) => { const {error:e}=await supabase.from("injuries").insert({athlete_id:aid,name:form.name,location:form.location||null,intensity:form.intensity,status:form.status,start_date:form.startDate||null,notes:form.notes||null}); if(e)throw e; await fetchAll(); }, [fetchAll]);
   const updateInjury = useCallback(async (id,  form) => { const {error:e}=await supabase.from("injuries").update({name:form.name,location:form.location||null,intensity:form.intensity,status:form.status,start_date:form.startDate||null,notes:form.notes||null}).eq("id",id); if(e)throw e; await fetchAll(); }, [fetchAll]);

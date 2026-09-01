@@ -8,7 +8,7 @@
 //   - Objectifs et compétitions : cartes plus lisibles et moins massives
 // ============================================================
 
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import {
   Plus, Trophy, Target, BarChart2, CheckCircle,
   TrendingUp, TrendingDown, Minus, Activity, Flag, FileText, Sparkles,
@@ -52,6 +52,9 @@ export default function AthletePerfs({ athlete, competitions, myPerformances, my
   const [savingComp,   setSavingComp]   = useState(false);
   const [showConfetti, setShowConfetti] = useState(false);
   const [performanceError, setPerformanceError] = useState("");
+  const [actionError, setActionError] = useState("");
+  const performanceRequestKeyRef = useRef(crypto.randomUUID());
+  const competitionRequestKeyRef = useRef(crypto.randomUUID());
   const [compForm,     setCompForm]     = useState({
     name: "", date: toLocalDateStr(new Date()),
     location: "", type: "Régionale", event: "", result: "", context: "", breakdown: {}, metadata: createPerformanceMetadata(""),
@@ -218,7 +221,7 @@ export default function AthletePerfs({ athlete, competitions, myPerformances, my
         p_context: perfForm.context || null,
         p_breakdown: cleanBreakdown && Object.keys(cleanBreakdown).length ? cleanBreakdown : null,
         p_metadata: metadata,
-        p_idempotency_key: crypto.randomUUID(),
+        p_idempotency_key: performanceRequestKeyRef.current,
       });
       if (error) throw error;
       setLocalPerfs(prev => [...prev, {
@@ -244,6 +247,7 @@ export default function AthletePerfs({ athlete, competitions, myPerformances, my
       setSelectedDisc(disc);
 
       setPerfForm({ discipline: disc, value: "", performance_date: toLocalDateStr(today), context: "", breakdown: {}, metadata: createPerformanceMetadata(disc) });
+      performanceRequestKeyRef.current = crypto.randomUUID();
       setShowAddPerf(false);
       onRefresh?.();
     } catch (e) {
@@ -284,8 +288,12 @@ export default function AthletePerfs({ athlete, competitions, myPerformances, my
 
   const handleMarkGoalDone = async (goalId) => {
     const goal = localGoals.find(g => g.id === goalId);
-    setLocalGoals(prev => prev.map(g => g.id === goalId ? { ...g, achieved: true } : g));
-    await supabase.from("athlete_goals").update({ achieved: true }).eq("id", goalId);
+    setActionError("");
+    const achievedAt = toLocalDateStr(new Date());
+    const { error } = await supabase.from("athlete_goals")
+      .update({ achieved: true, achieved_at: achievedAt }).eq("id", goalId);
+    if (error) { setActionError(error.message ?? "Impossible de mettre à jour l’objectif."); return; }
+    setLocalGoals(prev => prev.map(g => g.id === goalId ? { ...g, achieved: true, achieved_at: achievedAt } : g));
     if (goal) {
       notifyGoalAchieved(clubId, athlete.id, goal.discipline, goal.target_value).catch(console.warn);
       postClubCelebration(clubId, athlete.id, "goal",
@@ -295,14 +303,21 @@ export default function AthletePerfs({ athlete, competitions, myPerformances, my
   };
 
   const handleDeleteGoal = async (goalId) => {
+    setActionError("");
+    const { error } = await supabase.from("athlete_goals").delete().eq("id", goalId);
+    if (error) { setActionError(error.message ?? "Impossible de supprimer l’objectif."); return; }
     setLocalGoals(prev => prev.filter(g => g.id !== goalId));
-    await supabase.from("athlete_goals").delete().eq("id", goalId);
     onRefresh?.();
   };
 
   const handleDeletePerf = async (perfId) => {
+    setActionError("");
+    const { error } = await supabase.rpc("delete_athlete_performance", {
+      p_performance_id: perfId,
+    });
+    if (error) { setActionError(error.message ?? "Impossible de supprimer la performance."); return; }
     setLocalPerfs(prev => prev.filter(p => p.id !== perfId));
-    await supabase.from("athlete_performances").delete().eq("id", perfId);
+    onRefresh?.();
   };
 
   // Tâche 14 : un seul appel RPC atomique (create_solo_competition_result)
@@ -339,7 +354,7 @@ export default function AthletePerfs({ athlete, competitions, myPerformances, my
         p_result_value:     normalizedValue,
         p_higher_is_better: metadata.performance_direction === "higher",
         p_context:          compForm.context || null,
-        p_idempotency_key:  crypto.randomUUID(),
+        p_idempotency_key:  competitionRequestKeyRef.current,
         p_breakdown:        cleanBreakdown && Object.keys(cleanBreakdown).length ? cleanBreakdown : null,
         p_unit:             metadata.unit,
         p_metadata:         metadata,
@@ -368,6 +383,7 @@ export default function AthletePerfs({ athlete, competitions, myPerformances, my
       setSelectedDisc(event);
 
       setCompForm({ name: "", date: toLocalDateStr(new Date()), location: "", type: "Régionale", event: "", result: "", context: "", breakdown: {}, metadata: createPerformanceMetadata("") });
+      competitionRequestKeyRef.current = crypto.randomUUID();
       setShowAddComp(false);
       onRefresh?.();
     } catch (e) {
@@ -423,6 +439,13 @@ export default function AthletePerfs({ athlete, competitions, myPerformances, my
       </section>
 
       {/* ── TAB BAR ──────────────────────────────────────────────────────────── */}
+      {actionError && (
+        <p role="alert" className="rounded-xl border px-3 py-2.5 text-[13px]"
+          style={{ color: "var(--color-danger)", borderColor: "rgba(226,75,74,0.28)", background: "rgba(226,75,74,0.08)" }}>
+          {actionError}
+        </p>
+      )}
+
       <SegmentedTabs
         className="aos-segmented-tabs--fill"
         ariaLabel="Sections des performances"

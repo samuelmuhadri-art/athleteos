@@ -4,14 +4,14 @@
 // Planning.jsx.
 // ============================================================
 
-import { memo, useState, useCallback } from "react";
+import { memo, useState, useCallback, useRef } from "react";
 import { X, Plus, CheckCircle } from "lucide-react";
 import { useAuth }   from "../hooks/useAuth";
 import { CATEGORIES, SESSION_COLORS, EMPTY_FORM, dateToISOWeek, dateToDayName, toLocalDateStr } from "./planningUtils";
 import TrainingFocusField from "../components/session/TrainingFocusField";
 import { getDefaultTrainingFocus, isTrainingFocusCompatible } from "../domain/trainingFocus";
 import { useAccessibleDialog } from "../hooks/useAccessibleDialog";
-import { SESSION_ATTACHMENT_ACCEPT, uploadSessionAttachment, validateSessionAttachment } from "../utils/storage";
+import { removeSessionAttachment, SESSION_ATTACHMENT_ACCEPT, uploadSessionAttachment, validateSessionAttachment } from "../utils/storage";
 
 const AddSessionModal = memo(({ athletes, initialData, onClose, onAdd }) => {
   const { clubId } = useAuth();
@@ -30,6 +30,7 @@ const AddSessionModal = memo(({ athletes, initialData, onClose, onAdd }) => {
   const [pdfFile, setPdfFile]       = useState(null);
   const [pdfError, setPdfError]     = useState(null);
   const [uploadingPdf, setUploadingPdf] = useState(false);
+  const requestKeyRef = useRef(crypto.randomUUID());
   const { dialogRef, titleId } = useAccessibleDialog({ onClose, closeDisabled: saving });
 
   const set = useCallback((key, val) => setForm(f => ({ ...f, [key]: val })), []);
@@ -51,6 +52,8 @@ const AddSessionModal = memo(({ athletes, initialData, onClose, onAdd }) => {
   const handleSubmit = async () => {
     if (!form.title.trim() || form.athleteIds.length === 0) return;
     setSaving(true);
+    setPdfError(null);
+    let uploadedPath = null;
     try {
       let pdfUrl = form.pdfUrl ?? null;
       if (pdfFile) {
@@ -58,6 +61,7 @@ const AddSessionModal = memo(({ athletes, initialData, onClose, onAdd }) => {
         // Préfixé par club_id pour les policies RLS. Le chemin privé reste
         // stocké dans la colonne historique pdf_url, quel que soit le format.
         pdfUrl = await uploadSessionAttachment(clubId, pdfFile);
+        uploadedPath = pdfUrl;
         setUploadingPdf(false);
       }
       const chosenDate = form.sessionDate || today;
@@ -68,9 +72,11 @@ const AddSessionModal = memo(({ athletes, initialData, onClose, onAdd }) => {
         type:        CATEGORIES.find(c => c.id === form.category)?.label ?? form.category,
         pdfUrl,
         sessionDate: chosenDate,
-      });
+      }, requestKeyRef.current);
       onClose();
     } catch (err) {
+      if (uploadedPath) removeSessionAttachment(uploadedPath).catch(console.warn);
+      setPdfError(err.message ?? "Impossible d’enregistrer la séance.");
       console.error("Erreur ajout séance :", err);
       setSaving(false);
       setUploadingPdf(false);
