@@ -583,7 +583,7 @@ export default function AthleteApp({ clubBrand, themeStyle }) {
             )}
             {activeView === "planning" && (
               <AthletePlanning
-                athlete={athlete} sessions={sessions} allAthletes={allAthletes}
+                athlete={athlete} sessions={sessions} competitions={competitions} allAthletes={allAthletes}
                 clubId={clubId} createdBy={profile?.id} coachUserId={coachUserId}
                 onRpeChange={handleRpe} onStatusChange={handleStatus}
                 onFeelingChange={handleFeeling} onCommentChange={handleComment} onRsvpChange={handleRsvp}

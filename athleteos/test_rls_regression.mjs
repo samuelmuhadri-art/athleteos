@@ -104,7 +104,7 @@ async function insertOrThrow(table, row) {
 }
 
 async function main() {
-  let clubA, clubB, userA, userB, authA, authB, athleteA, athleteB, sessionB, competitionB;
+  let clubA, clubB, userA, userB, authA, authB, athleteA, athleteB, sessionB, competitionB, competitionX, competitionY;
   let coachAClient;
   // Tâche 6 — comptes athlète intra-club (ownership) :
   let authX, authY, userX, userY, athleteX, athleteY;
@@ -194,6 +194,10 @@ async function main() {
     });
     await insertOrThrow("injuries", { athlete_id: athleteX.id, name: "Test RLS ownership", status: "actif" });
     await insertOrThrow("push_subscriptions", { club_id: clubA.id, athlete_id: athleteX.id, endpoint: `https://example.invalid/push/own-${RUN_ID}` });
+    competitionX = await insertOrThrow("competitions", { club_id: clubA.id, name: "Compétition de X", date: "2026-09-12" });
+    competitionY = await insertOrThrow("competitions", { club_id: clubA.id, name: "Compétition de Y", date: "2026-09-13" });
+    await insertOrThrow("competition_athletes", { competition_id: competitionX.id, athlete_id: athleteX.id, planned_event: "100 m" });
+    await insertOrThrow("competition_athletes", { competition_id: competitionY.id, athlete_id: athleteY.id, planned_event: "Longueur" });
 
     // ── Seed club A : profil "coach" (5e profil, ni head_coach ni athlète) ──
     const emailZ = `rls-test-z-${RUN_ID}@example.invalid`;
@@ -304,6 +308,30 @@ async function main() {
     {
       const { data, error } = await athleteXClient.rpc("get_my_athlete_id");
       record("RPC get_my_athlete_id() renvoie l'athlète X pour X", !error && data === athleteX.id, error?.message ?? `reçu ${data}`);
+    }
+
+    // Le planning compétition est ciblé : le coach voit tout son club, mais
+    // chaque athlète ne reçoit que les compétitions auxquelles il est inscrit.
+    {
+      const { data, error } = await coachAClient.from("competitions").select("id").in("id", [competitionX.id, competitionY.id]);
+      record("SELECT competitions (coach A voit X et Y)", !error && (data ?? []).length === 2, error?.message);
+    }
+    {
+      const { data, error } = await athleteXClient
+        .from("competitions")
+        .select("id, competition_athletes(athlete_id, planned_event)")
+        .in("id", [competitionX.id, competitionY.id]);
+      const onlyOwnCompetition = !error
+        && (data ?? []).length === 1
+        && data[0].id === competitionX.id
+        && data[0].competition_athletes?.length === 1
+        && data[0].competition_athletes[0].athlete_id === athleteX.id;
+      record("SELECT competitions (X ne voit que son inscription)", onlyOwnCompetition, error?.message ?? `${data?.length ?? 0} compétition(s) reçue(s)`);
+    }
+    {
+      const { data, error } = await athleteXClient.from("competitions").update({ name: "Modification interdite" }).eq("id", competitionX.id).select();
+      const affected = !error && (data ?? []).length > 0;
+      record("UPDATE competitions (athlète X, refusé)", !affected, affected ? "compétition modifiée !" : "bloqué, OK");
     }
 
     // ── Contrôles positifs : X doit voir/modifier SES propres données ──────
@@ -480,6 +508,8 @@ async function main() {
     if (athleteY)     await admin.from("athletes").delete().eq("id", athleteY.id);
     if (sessionB)     await admin.from("sessions").delete().eq("id", sessionB.id);
     if (competitionB) await admin.from("competitions").delete().eq("id", competitionB.id);
+    if (competitionX) await admin.from("competitions").delete().eq("id", competitionX.id);
+    if (competitionY) await admin.from("competitions").delete().eq("id", competitionY.id);
     if (userA)        await admin.from("users").delete().eq("id", userA.id);
     if (userB)        await admin.from("users").delete().eq("id", userB.id);
     if (userX)        await admin.from("users").delete().eq("id", userX.id);

@@ -24,6 +24,8 @@ import { parseLocalDate } from "../../utils/helpers";
 import { SegmentedTabs } from "../../components/ui/premium";
 import { cat, rpeColor } from "./planningUtils";
 import { StatusBadge } from "./planningShared";
+import CompetitionPlanningCard from "../../components/planning/CompetitionPlanningCard";
+import { getPlanningCompetitions, groupCompetitionsByDate } from "../../domain/planningCompetitions";
 import CreateSessionModal from "./CreateSessionModal";
 import SessionDetailModal from "./SessionDetailModal";
 
@@ -177,7 +179,7 @@ function SessionCard({ session, athleteId, isPast = false, compact = false, onOp
 // COMPOSANT PRINCIPAL — AthletePlanning
 // ═══════════════════════════════════════════════════════════════════════════════
 export default function AthletePlanning({
-  athlete, sessions, allAthletes, clubId, createdBy, coachUserId,
+  athlete, sessions, competitions = [], allAthletes, clubId, createdBy, coachUserId,
   onRpeChange, onStatusChange, onFeelingChange, onCommentChange, onRsvpChange, onRefresh,
 }) {
   const todayKey = toLocalDateStr(new Date());
@@ -190,6 +192,15 @@ export default function AthletePlanning({
   const [selectedDate,  setSelectedDate]  = useState(today);
   const [activeSession, setActiveSession] = useState(null);
   const [showCreate,    setShowCreate]    = useState(false);
+
+  const planningCompetitions = useMemo(
+    () => getPlanningCompetitions(competitions, athlete.id),
+    [athlete.id, competitions],
+  );
+  const competitionsByDate = useMemo(
+    () => groupCompetitionsByDate(planningCompetitions),
+    [planningCompetitions],
+  );
 
   const sessionsByDate = useMemo(() => {
     const map = {};
@@ -225,28 +236,36 @@ export default function AthletePlanning({
   }, [selectedDate]);
 
   const groupedAgenda = useMemo(() => {
-    const sorted = [...sessions].filter(s => s.sessionDate && !isSessionArchived(s, today)).sort((a, b) => a.sessionDate.localeCompare(b.sessionDate));
-    const groups = []; const seen = new Set();
-    sorted.forEach(s => {
-      const key = s.sessionDate.slice(0, 10);
-      if (!seen.has(key)) { seen.add(key); groups.push({ date: key, sessions: [] }); }
-      groups.find(g => g.date === key).sessions.push(s);
+    const groups = new Map();
+    const ensureGroup = date => {
+      if (!groups.has(date)) groups.set(date, { date, sessions: [], competitions: [] });
+      return groups.get(date);
+    };
+    sessions.filter(s => s.sessionDate && !isSessionArchived(s, today)).forEach(s => {
+      ensureGroup(s.sessionDate.slice(0, 10)).sessions.push(s);
     });
-    return groups;
-  }, [sessions, today]);
+    planningCompetitions.filter(c => !isSessionArchived({ sessionDate: c.date }, today)).forEach(c => {
+      ensureGroup(c.date.slice(0, 10)).competitions.push(c);
+    });
+    return [...groups.values()].sort((a, b) => a.date.localeCompare(b.date));
+  }, [sessions, planningCompetitions, today]);
 
   const groupedArchives = useMemo(() => {
-    const sorted = [...sessions].filter(s => s.sessionDate && isSessionArchived(s, today)).sort((a, b) => b.sessionDate.localeCompare(a.sessionDate));
-    const groups = []; const seen = new Set();
-    sorted.forEach(s => {
-      const key = s.sessionDate.slice(0, 10);
-      if (!seen.has(key)) { seen.add(key); groups.push({ date: key, sessions: [] }); }
-      groups.find(g => g.date === key).sessions.push(s);
+    const groups = new Map();
+    const ensureGroup = date => {
+      if (!groups.has(date)) groups.set(date, { date, sessions: [], competitions: [] });
+      return groups.get(date);
+    };
+    sessions.filter(s => s.sessionDate && isSessionArchived(s, today)).forEach(s => {
+      ensureGroup(s.sessionDate.slice(0, 10)).sessions.push(s);
     });
-    return groups;
-  }, [sessions, today]);
+    planningCompetitions.filter(c => isSessionArchived({ sessionDate: c.date }, today)).forEach(c => {
+      ensureGroup(c.date.slice(0, 10)).competitions.push(c);
+    });
+    return [...groups.values()].sort((a, b) => b.date.localeCompare(a.date));
+  }, [sessions, planningCompetitions, today]);
 
-  const archivedSessionCount = groupedArchives.reduce((total, group) => total + group.sessions.length, 0);
+  const archivedSessionCount = groupedArchives.reduce((total, group) => total + group.sessions.length + group.competitions.length, 0);
   const displayedAgenda = viewMode === "archive" ? groupedArchives : groupedAgenda;
 
   const prevMonth = () => { if (viewMonth === 0) { setViewYear(y => y-1); setViewMonth(11); } else setViewMonth(m => m-1); };
@@ -277,7 +296,7 @@ export default function AthletePlanning({
             <div className="min-w-0">
               <h1 className="page-title">Mon planning</h1>
               <p style={{ fontSize: 13, color: "var(--c-text-2)", marginTop: 4 }}>
-                Consulte et valide tes séances d’entraînement.
+                Consulte tes séances et tes compétitions.
               </p>
             </div>
             <button type="button" onClick={() => setShowCreate(true)} className="btn-primary" style={{ flexShrink: 0 }}>
@@ -350,7 +369,7 @@ export default function AthletePlanning({
             </div>
           ) : (
             <div className="p-4 md:p-6 space-y-6">
-              {displayedAgenda.map(({ date, sessions: ds }) => {
+              {displayedAgenda.map(({ date, sessions: ds, competitions: dc }) => {
                 const dateObj = parseLocalDate(date);
                 const isToday = isSameDay(dateObj, today);
                 const isPast  = toLocalDateStr(dateObj) < toLocalDateStr(today);
@@ -374,11 +393,19 @@ export default function AthletePlanning({
                           {isToday ? "Aujourd'hui" : dateObj.toLocaleDateString("fr-BE", { weekday: "long", day: "numeric", month: "long" })}
                         </p>
                         <p style={{ fontSize: 12, color: "var(--c-text-2)", marginTop: 2 }}>
-                          {ds.length} séance{ds.length > 1 ? "s" : ""}
+                          {ds.length + dc.length} événement{ds.length + dc.length > 1 ? "s" : ""}
                         </p>
                       </div>
                     </div>
                     <div style={{ marginLeft: 16, paddingLeft: 24, borderLeft: "2px solid var(--c-border)" }} className="space-y-3">
+                      {dc.map(competition => (
+                        <CompetitionPlanningCard
+                          key={`competition-${competition.id}`}
+                          competition={competition}
+                          athletes={allAthletes}
+                          athleteId={athlete.id}
+                        />
+                      ))}
                       {ds.sort((a, b) => (a.time ?? "").localeCompare(b.time ?? "")).map(s => (
                         <SessionCard key={s.id} session={s} athleteId={athlete.id} isPast={isPast} onOpen={setActiveSession} onStatusChange={onStatusChange} />
                       ))}
@@ -408,12 +435,17 @@ export default function AthletePlanning({
             {calDays.map(({ date, cur }, idx) => {
               const key     = toLocalDateStr(date);
               const ds      = sessionsByDate[key] ?? [];
+              const dc      = competitionsByDate[key] ?? [];
+              const dayEvents = [
+                ...dc.map(competition => ({ kind: "competition", value: competition })),
+                ...ds.map(session => ({ kind: "session", value: session })),
+              ];
               const isToday = isSameDay(date, today);
               const isSel   = selectedDate && isSameDay(date, selectedDate);
 
               return (
                 <div key={idx} role="button" tabIndex={0}
-                  aria-label={`${date.toLocaleDateString("fr-BE", { weekday: "long", day: "numeric", month: "long" })}, ${ds.length} séance${ds.length > 1 ? "s" : ""}`}
+                  aria-label={`${date.toLocaleDateString("fr-BE", { weekday: "long", day: "numeric", month: "long" })}, ${dayEvents.length} événement${dayEvents.length > 1 ? "s" : ""}`}
                   onClick={() => { setSelectedDate(date); if (window.innerWidth < 768) setViewMode("week"); }}
                   onKeyDown={event => {
                     if (event.key === "Enter" || event.key === " ") {
@@ -437,19 +469,25 @@ export default function AthletePlanning({
                     }}>
                       {date.getDate()}
                     </span>
-                    {ds.length > 0 && (
+                    {dayEvents.length > 0 && (
                       <div className="md:hidden flex flex-wrap gap-0.5 justify-end mt-1">
-                        {ds.slice(0, 3).map(s => (
-                          <button key={s.id} type="button" aria-label={`Ouvrir ${s.title}`} style={{ width: 12, height: 12, borderRadius: "50%", background: cat(s.category).border, border: "none", padding: 0 }}
-                            onClick={e => { e.stopPropagation(); setActiveSession(s); }} />
+                        {dayEvents.slice(0, 3).map(event => event.kind === "competition" ? (
+                          <span key={`competition-${event.value.id}`} aria-label={`Compétition ${event.value.name}`} style={{ width: 12, height: 12, borderRadius: "50%", background: "#A855F7" }} />
+                        ) : (
+                          <button key={`session-${event.value.id}`} type="button" aria-label={`Ouvrir ${event.value.title}`} style={{ width: 12, height: 12, borderRadius: "50%", background: cat(event.value.category).border, border: "none", padding: 0 }}
+                            onClick={e => { e.stopPropagation(); setActiveSession(event.value); }} />
                         ))}
                       </div>
                     )}
                   </div>
                   <div className="hidden md:block space-y-0.5">
-                    {ds.slice(0, 3).map(s => <SessionCard key={s.id} session={s} athleteId={athlete.id} compact onOpen={setActiveSession} onStatusChange={onStatusChange} />)}
-                    {ds.length > 3 && (
-                      <p style={{ fontSize: 12, fontWeight: 700, color: "var(--c-text-2)", padding: "4px" }}>+{ds.length - 3}</p>
+                    {dayEvents.slice(0, 3).map(event => event.kind === "competition" ? (
+                      <CompetitionPlanningCard key={`competition-${event.value.id}`} competition={event.value} athletes={allAthletes} athleteId={athlete.id} compact />
+                    ) : (
+                      <SessionCard key={`session-${event.value.id}`} session={event.value} athleteId={athlete.id} compact onOpen={setActiveSession} onStatusChange={onStatusChange} />
+                    ))}
+                    {dayEvents.length > 3 && (
+                      <p style={{ fontSize: 12, fontWeight: 700, color: "var(--c-text-2)", padding: "4px" }}>+{dayEvents.length - 3}</p>
                     )}
                   </div>
                 </div>
@@ -460,7 +498,8 @@ export default function AthletePlanning({
           {selectedDate && (() => {
             const key = toLocalDateStr(selectedDate);
             const ds  = (sessionsByDate[key] ?? []).sort((a, b) => (a.time ?? "").localeCompare(b.time ?? ""));
-            if (!ds.length) return null;
+            const dc  = competitionsByDate[key] ?? [];
+            if (!ds.length && !dc.length) return null;
             const isPast = toLocalDateStr(selectedDate) < toLocalDateStr(today);
             return (
               <div className="mt-5 space-y-2">
@@ -470,7 +509,8 @@ export default function AthletePlanning({
                   </span>
                   {selectedDate.toLocaleDateString("fr-BE", { weekday: "long", day: "numeric", month: "long" })}
                 </p>
-                {ds.map(s => <SessionCard key={s.id} session={s} athleteId={athlete.id} isPast={isPast} onOpen={setActiveSession} onStatusChange={onStatusChange} />)}
+                {dc.map(competition => <CompetitionPlanningCard key={`competition-${competition.id}`} competition={competition} athletes={allAthletes} athleteId={athlete.id} />)}
+                {ds.map(s => <SessionCard key={`session-${s.id}`} session={s} athleteId={athlete.id} isPast={isPast} onOpen={setActiveSession} onStatusChange={onStatusChange} />)}
               </div>
             );
           })()}
@@ -486,7 +526,8 @@ export default function AthletePlanning({
             {weekDays.map((date, i) => {
               const isToday = isSameDay(date, today);
               const isSel   = isSameDay(date, selectedDate ?? today);
-              const hasSess = (sessionsByDate[toLocalDateStr(date)] ?? []).length > 0;
+              const dateKey = toLocalDateStr(date);
+              const hasEvent = (sessionsByDate[dateKey] ?? []).length > 0 || (competitionsByDate[dateKey] ?? []).length > 0;
               return (
                 <button key={i} onClick={() => setSelectedDate(date)}
                   className="tap-feedback"
@@ -500,7 +541,7 @@ export default function AthletePlanning({
                   <span style={{ fontSize: 18, fontWeight: 800, lineHeight: 1.2, color: (isToday || isSel) ? "white" : "var(--c-text-1)" }}>
                     {date.getDate()}
                   </span>
-                  <div style={{ width: 6, height: 6, borderRadius: "50%", background: hasSess ? ((isToday || isSel) ? "rgba(255,255,255,0.6)" : "#1D9E75") : "transparent" }} />
+                  <div style={{ width: 6, height: 6, borderRadius: "50%", background: hasEvent ? ((isToday || isSel) ? "rgba(255,255,255,0.6)" : "#1D9E75") : "transparent" }} />
                 </button>
               );
             })}
@@ -510,10 +551,11 @@ export default function AthletePlanning({
             {(() => {
               const key     = toLocalDateStr(selectedDate ?? today);
               const ds      = (sessionsByDate[key] ?? []).sort((a, b) => (a.time ?? "").localeCompare(b.time ?? ""));
+              const dc      = competitionsByDate[key] ?? [];
               const dateObj = selectedDate ?? today;
               const isPast  = toLocalDateStr(dateObj) < toLocalDateStr(today);
 
-              if (ds.length === 0) return (
+              if (ds.length === 0 && dc.length === 0) return (
                 <div className="flex flex-col items-center justify-center py-16 gap-3">
                   <div style={{ width: 56, height: 56, borderRadius: 20, background: "var(--c-surface-2)", display: "flex", alignItems: "center", justifyContent: "center" }}>
                     <CalendarDays size={24} color="var(--c-text-3)" strokeWidth={1.5} />
@@ -525,7 +567,12 @@ export default function AthletePlanning({
                 </div>
               );
 
-              return ds.map(s => <SessionCard key={s.id} session={s} athleteId={athlete.id} isPast={isPast} onOpen={setActiveSession} onStatusChange={onStatusChange} />);
+              return (
+                <>
+                  {dc.map(competition => <CompetitionPlanningCard key={`competition-${competition.id}`} competition={competition} athletes={allAthletes} athleteId={athlete.id} />)}
+                  {ds.map(s => <SessionCard key={`session-${s.id}`} session={s} athleteId={athlete.id} isPast={isPast} onOpen={setActiveSession} onStatusChange={onStatusChange} />)}
+                </>
+              );
             })()}
           </div>
         </div>

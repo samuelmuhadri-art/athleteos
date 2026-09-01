@@ -50,4 +50,47 @@ describe("AthletePlanning", () => {
     expect(archives).toHaveAttribute("aria-checked", "true");
     expect(screen.getByText("Séance archivée")).toBeVisible();
   });
+
+  it("affiche uniquement les compétitions auxquelles l'athlète est inscrit", () => {
+    const athlete = { id: "athlete-1", name: "Alice", avatar: "A" };
+    const date = new Date();
+    const dateKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+
+    render(
+      <AthletePlanning
+        athlete={athlete}
+        sessions={[]}
+        competitions={[
+          {
+            id: "competition-visible",
+            name: "Meeting de Bruxelles",
+            date: dateKey,
+            type: "objectif",
+            athleteIds: [athlete.id],
+            plannedEvents: { [athlete.id]: "100 m" },
+          },
+          {
+            id: "competition-hidden",
+            name: "Meeting non concerné",
+            date: dateKey,
+            type: "régional",
+            athleteIds: ["athlete-2"],
+          },
+        ]}
+        allAthletes={[athlete]}
+        clubId="club-1"
+        createdBy="user-1"
+        coachUserId="coach-1"
+        onRpeChange={vi.fn()}
+        onStatusChange={vi.fn()}
+        onFeelingChange={vi.fn()}
+        onCommentChange={vi.fn()}
+        onRsvpChange={vi.fn()}
+        onRefresh={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByRole("group", { name: "Compétition Meeting de Bruxelles" })).toBeVisible();
+    expect(screen.queryByText("Meeting non concerné")).not.toBeInTheDocument();
+  });
 });

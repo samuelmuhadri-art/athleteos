@@ -32,6 +32,8 @@ import { StatusIcon } from "./planningShared";
 import { getSessionTrainingFocus } from "../domain/trainingFocus";
 import SessionModal from "./SessionModal";
 import AddSessionModal from "./AddSessionModal";
+import CompetitionPlanningCard from "../components/planning/CompetitionPlanningCard";
+import { groupCompetitionsByDate } from "../domain/planningCompetitions";
 
 // ─── Composant principal ──────────────────────────────────────────────────────
 
@@ -47,6 +49,7 @@ function Planning() {
 
   const [athletes,           setAthletes]           = useState([]);
   const [sessionList,        setSessionList]         = useState([]);
+  const [competitionList,    setCompetitionList]     = useState([]);
   const [activeSession,      setActiveSession]       = useState(null);
   const [sessionModalTarget, setSessionModalTarget]  = useState(null);
   const [selectedDate,       setSelectedDate]        = useState(null);
@@ -59,12 +62,14 @@ function Planning() {
     if (!clubId) return;
     try {
       setLoading(true); setError(null);
-      const [athletesRes, sessionsRes] = await Promise.all([
+      const [athletesRes, sessionsRes, competitionsRes] = await Promise.all([
         supabase.from("athletes").select("id, name, main_discipline, profile_data, user_id").eq("club_id", clubId),
         supabase.from("sessions").select("*").eq("club_id", clubId),
+        supabase.from("competitions").select("id, name, date, location, type, competition_athletes(athlete_id, planned_event)").eq("club_id", clubId),
       ]);
       if (athletesRes.error) throw athletesRes.error;
       if (sessionsRes.error) throw sessionsRes.error;
+      if (competitionsRes.error) throw competitionsRes.error;
 
       const sessionIds = sessionsRes.data.map(s => s.id);
       const saRes = sessionIds.length
@@ -111,6 +116,15 @@ function Planning() {
           })),
         };
       }));
+      setCompetitionList((competitionsRes.data ?? []).map(competition => ({
+        id: competition.id,
+        name: competition.name,
+        date: competition.date,
+        location: competition.location,
+        type: competition.type,
+        athleteIds: (competition.competition_athletes ?? []).map(row => row.athlete_id),
+        plannedEvents: Object.fromEntries((competition.competition_athletes ?? []).map(row => [row.athlete_id, row.planned_event])),
+      })));
     } catch (err) {
       setError(err.message ?? "Erreur inconnue");
     } finally {
@@ -257,11 +271,21 @@ function Planning() {
     return map;
   }, [filteredSessions]);
 
+  const competitionsByDate = useMemo(
+    () => groupCompetitionsByDate(competitionList),
+    [competitionList],
+  );
+
   const selectedDaySessions = useMemo(() => {
     if (!selectedDate) return [];
     return (sessionsByDate[toLocalDateStr(selectedDate)] ?? [])
       .sort((a, b) => (a.time ?? "").localeCompare(b.time ?? ""));
   }, [selectedDate, sessionsByDate]);
+
+  const selectedDayCompetitions = useMemo(() => {
+    if (!selectedDate) return [];
+    return competitionsByDate[toLocalDateStr(selectedDate)] ?? [];
+  }, [competitionsByDate, selectedDate]);
 
   const weekReference = selectedDate ?? today;
   const weekStart = new Date(weekReference);
@@ -415,6 +439,8 @@ function Planning() {
               {weekDays.map((date, i) => {
                 const key     = toLocalDateStr(date);
                 const ds      = (sessionsByDate[key] ?? []).sort((a, b) => (a.time ?? "").localeCompare(b.time ?? ""));
+                const dc      = competitionsByDate[key] ?? [];
+                const eventCount = ds.length + dc.length;
                 const isToday = isSameDay(date, today);
                 const isPast  = toLocalDateStr(date) < toLocalDateStr(today);
 
@@ -452,12 +478,12 @@ function Planning() {
                       </div>
 
                       <div className="flex items-center gap-2">
-                        {ds.length > 0 && (
+                        {eventCount > 0 && (
                           <span className="text-[12px] font-bold px-2 py-0.5 rounded-full"
                             style={isToday
                               ? { background: "rgba(29,158,117,0.16)", color: "var(--tone-success)" }
                               : { background: "var(--c-surface-2)", color: "var(--c-text-2)" }}>
-                            {ds.length} séance{ds.length > 1 ? "s" : ""}
+                            {eventCount} événement{eventCount > 1 ? "s" : ""}
                           </span>
                         )}
                         <button
@@ -472,9 +498,14 @@ function Planning() {
                       </div>
                     </div>
 
-                    {/* Séances du jour */}
-                    {ds.length > 0 ? (
+                    {/* Événements du jour */}
+                    {eventCount > 0 ? (
                       <div style={{ background: "var(--c-surface)" }}>
+                        {dc.map(competition => (
+                          <div key={`competition-${competition.id}`} className="p-3" style={{ borderTop: "1px solid var(--c-border)" }}>
+                            <CompetitionPlanningCard competition={competition} athletes={athletes} />
+                          </div>
+                        ))}
                         {ds.map((s, idx) => {
                           const c  = colors(s.category);
                           const st = sessionStatus(s);
@@ -488,7 +519,7 @@ function Planning() {
                               key={s.id}
                               onClick={() => setActiveSession(s)}
                               className="flex items-center gap-3 px-4 py-3.5 cursor-pointer transition-colors tap-feedback"
-                              style={{ borderTop: idx > 0 ? "1px solid var(--c-border)" : "none" }}
+                              style={{ borderTop: idx > 0 || dc.length > 0 ? "1px solid var(--c-border)" : "none" }}
                               onMouseEnter={e => e.currentTarget.style.background = "var(--c-surface-2)"}
                               onMouseLeave={e => e.currentTarget.style.background = "transparent"}
                             >
@@ -573,9 +604,14 @@ function Planning() {
                 {calendarDays.map(({ date, isCurrentMonth }, idx) => {
                   const key         = toLocalDateStr(date);
                   const daySessions = sessionsByDate[key] ?? [];
+                  const dayCompetitions = competitionsByDate[key] ?? [];
+                  const dayEvents = [
+                    ...dayCompetitions.map(competition => ({ kind: "competition", value: competition })),
+                    ...daySessions.map(session => ({ kind: "session", value: session })),
+                  ];
                   const isToday     = isSameDay(date, today);
                   const isSelected  = selectedDate && isSameDay(date, selectedDate);
-                  const hasSessions = daySessions.length > 0;
+                  const hasEvents   = dayEvents.length > 0;
 
                   return (
                     <div
@@ -601,14 +637,16 @@ function Planning() {
                         >
                           {date.getDate()}
                         </span>
-                        {hasSessions && (
+                        {hasEvents && (
                           <div className="md:hidden flex gap-0.5 mt-1 flex-wrap justify-end">
-                            {daySessions.slice(0, 3).map(s => (
+                            {dayEvents.slice(0, 3).map(event => event.kind === "competition" ? (
+                              <div key={`competition-${event.value.id}`} aria-label={`Compétition ${event.value.name}`} className="w-1.5 h-1.5 rounded-full" style={{ background: "#A855F7" }} />
+                            ) : (
                               <div
-                                key={s.id}
+                                key={`session-${event.value.id}`}
                                 className="w-1.5 h-1.5 rounded-full"
-                                style={{ background: colors(s.category).border }}
-                                onClick={e => { e.stopPropagation(); setActiveSession(s); }}
+                                style={{ background: colors(event.value.category).border }}
+                                onClick={e => { e.stopPropagation(); setActiveSession(event.value); }}
                               />
                             ))}
                           </div>
@@ -616,7 +654,11 @@ function Planning() {
                       </div>
 
                       <div className="hidden md:block space-y-0.5">
-                        {daySessions.slice(0, 3).map(s => {
+                        {dayEvents.slice(0, 3).map(event => {
+                          if (event.kind === "competition") return (
+                            <CompetitionPlanningCard key={`competition-${event.value.id}`} competition={event.value} athletes={athletes} compact />
+                          );
+                          const s = event.value;
                           const c  = colors(s.category);
                           const st = sessionStatus(s);
                           return (
@@ -632,9 +674,9 @@ function Planning() {
                             </div>
                           );
                         })}
-                        {daySessions.length > 3 && (
+                        {dayEvents.length > 3 && (
                           <p className="meta-text font-semibold px-1">
-                            +{daySessions.length - 3} autre{daySessions.length - 3 > 1 ? "s" : ""}
+                            +{dayEvents.length - 3} autre{dayEvents.length - 3 > 1 ? "s" : ""}
                           </p>
                         )}
                       </div>
@@ -657,7 +699,7 @@ function Planning() {
                     {selectedDate.toLocaleDateString("fr-BE", { weekday: "long", day: "numeric", month: "long" })}
                   </p>
                   <p className="card-subtitle mt-0.5">
-                    {selectedDaySessions.length} séance{selectedDaySessions.length !== 1 ? "s" : ""} planifiée{selectedDaySessions.length !== 1 ? "s" : ""}
+                    {selectedDaySessions.length + selectedDayCompetitions.length} événement{selectedDaySessions.length + selectedDayCompetitions.length !== 1 ? "s" : ""}
                   </p>
                 </div>
                 <button type="button" aria-label="Fermer le détail du jour" onClick={() => setSelectedDate(null)}
@@ -668,10 +710,13 @@ function Planning() {
             </div>
 
             <div className="flex-1 overflow-y-auto p-3 space-y-2">
-              {selectedDaySessions.length === 0 ? (
+              {selectedDayCompetitions.map(competition => (
+                <CompetitionPlanningCard key={`competition-${competition.id}`} competition={competition} athletes={athletes} />
+              ))}
+              {selectedDaySessions.length === 0 && selectedDayCompetitions.length === 0 ? (
                 <div className="flex flex-col items-center justify-center h-full gap-3 py-10" style={{ color: "var(--c-text-3)" }}>
                   <CalendarDays size={32} strokeWidth={1.5} />
-                  <p className="text-[12px] text-center font-medium">Aucune séance ce jour</p>
+                  <p className="text-[12px] text-center font-medium">Aucun événement ce jour</p>
                   <button onClick={() => setSessionModalTarget("create")}
                     className="text-[12px] font-semibold transition-colors" style={{ color: "var(--tone-success)" }}>
                     + Planifier une séance
@@ -783,7 +828,7 @@ function Planning() {
                   {selectedDate.toLocaleDateString("fr-BE", { weekday: "long", day: "numeric", month: "long" })}
                 </p>
                 <p className="card-subtitle mt-0.5">
-                  {selectedDaySessions.length} séance{selectedDaySessions.length !== 1 ? "s" : ""}
+                  {selectedDaySessions.length + selectedDayCompetitions.length} événement{selectedDaySessions.length + selectedDayCompetitions.length !== 1 ? "s" : ""}
                 </p>
               </div>
               <button type="button" aria-label="Fermer le détail du jour" onClick={() => setSelectedDate(null)}
@@ -793,10 +838,13 @@ function Planning() {
             </div>
 
             <div className="flex-1 overflow-y-auto px-4 space-y-2 pb-2">
-              {selectedDaySessions.length === 0 ? (
+              {selectedDayCompetitions.map(competition => (
+                <CompetitionPlanningCard key={`competition-${competition.id}`} competition={competition} athletes={athletes} />
+              ))}
+              {selectedDaySessions.length === 0 && selectedDayCompetitions.length === 0 ? (
                 <div className="text-center py-8" style={{ color: "var(--c-text-3)" }}>
                   <CalendarDays size={28} className="mx-auto mb-2" strokeWidth={1.5} />
-                  <p className="text-[12px]">Aucune séance ce jour</p>
+                  <p className="text-[12px]">Aucun événement ce jour</p>
                 </div>
               ) : selectedDaySessions.map(s => {
                 const c  = colors(s.category);
