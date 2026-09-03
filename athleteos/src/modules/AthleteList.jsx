@@ -4,7 +4,7 @@
 // ============================================================
 
 import { memo, useState, useCallback, useEffect } from "react";
-import { FileSpreadsheet, Plus, Users as UsersIcon } from "lucide-react";
+import { FileSpreadsheet, Plus, SlidersHorizontal, Users as UsersIcon } from "lucide-react";
 import { supabase }  from "../utils/supabaseClient";
 import { useAuth }   from "../hooks/useAuth";
 import LoadingState  from "../components/ui/LoadingState";
@@ -20,12 +20,16 @@ import AthleteCard from "./AthleteCard";
 import AddAthleteModal from "./AddAthleteModal";
 import ImportAthletesCsvModal from "./ImportAthletesCsvModal";
 import { EmptyState, InlineNotice, PageHeader } from "../components/ui/premium";
+import AthleteModulesManager from "../components/modules/AthleteModulesManager";
+import { useModules } from "../hooks/useModules";
 
 // ─── Composant principal ──────────────────────────────────────────────────────
 
 function AthleteList() {
   const { clubId, profile } = useAuth();
   const canImportAthletes = profile?.role === "head_coach";
+  const { club: clubModules, effectiveForAthlete, saveAthletes } = useModules();
+  const availableModuleKeys = Object.entries(clubModules).filter(([, enabled]) => enabled !== false).map(([key]) => key);
 
   const [selectedAthlete,    setSelectedAthlete]    = useState(null);
   const [athleteModalTarget, setAthleteModalTarget] = useState(null);
@@ -38,6 +42,8 @@ function AthleteList() {
   const [existingEmails,     setExistingEmails]     = useState([]);
   const [showImport,         setShowImport]         = useState(false);
   const [importReport,       setImportReport]       = useState(null);
+  const [showModuleManager,  setShowModuleManager]  = useState(false);
+  const [creationNotice,     setCreationNotice]     = useState(null);
 
   // ═══ Chargement (identique) ═══════════════════════════════════════════════
   const fetchAll = useCallback(async () => {
@@ -156,7 +162,7 @@ function AthleteList() {
   const createAthlete = useCallback(async (form) => {
     const secDisc = form.secondaryDisciplines.split(",").map(s => s.trim()).filter(Boolean);
     const pd = { level: form.level||null, secondary_disciplines:secDisc, profile:{speed:form.speed,strength:form.strength,explosivity:form.explosivity,endurance:form.endurance,technique:form.technique,recoveryRate:form.recoveryRate,volumeTolerance:form.volumeTolerance,intensityTolerance:form.intensityTolerance,psychProfile:form.psychProfile||null} };
-    const { error } = await supabase.rpc("create_club_athlete", { p_payload: {
+    const { data, error } = await supabase.rpc("create_club_athlete", { p_payload: {
       name: form.name,
       email: form.email.trim().toLowerCase() || null,
       age: form.age ? Number(form.age) : null,
@@ -164,8 +170,30 @@ function AthleteList() {
       groupName: form.group || null,
       profileData: pd,
     } });
-    if (error) throw error; await fetchAll();
-  }, [fetchAll]);
+    if (error) throw error;
+    if (data?.athleteId) await saveAthletes([data.athleteId], form.moduleKeys);
+    let invitationCreated = false;
+    let invitationFailed = false;
+    let invitationCode = null;
+    if (form.sendInvitation && form.email.trim()) {
+      const { data: inviteData, error: inviteError } = await supabase.functions.invoke("admin-actions", {
+        body: {
+          action: "create_club_invitation",
+          recipientName: form.name.trim(),
+          recipientEmail: form.email.trim().toLowerCase(),
+          expiresInDays: 7,
+          idempotencyKey: crypto.randomUUID(),
+        },
+      });
+      invitationCreated = !inviteError && inviteData?.success;
+      invitationCode = inviteData?.invitation?.code ?? null;
+      invitationFailed = !invitationCreated;
+    }
+    setCreationNotice(invitationFailed
+      ? { tone: "warning", text: "Le profil et ses outils sont créés, mais l’invitation n’a pas pu être préparée. Tu peux la relancer depuis les réglages du club." }
+      : { tone: "success", text: invitationCreated ? `Profil et outils prêts. Code d’invitation : ${invitationCode}.` : "Profil et outils enregistrés.", code: invitationCode });
+    await fetchAll();
+  }, [fetchAll, saveAthletes]);
 
   const importAthletes = useCallback(async (rows, context) => {
     const payload = rows.map((row) => ({
@@ -260,12 +288,14 @@ function AthleteList() {
           onEditRequest={setAthleteModalTarget}
           onDelete={deleteAthlete}
           onAddInjury={addInjury} onUpdateInjury={updateInjury} onDeleteInjury={deleteInjury}
+          modules={effectiveForAthlete(liveSelected.id)}
         />
         {athleteModalTarget && (
           <AddAthleteModal
             onClose={() => setAthleteModalTarget(null)}
             onCreate={athleteModalTarget === "create" ? createAthlete : form => updateAthlete(athleteModalTarget.id, form)}
             initialData={athleteModalTarget === "create" ? null : buildFormFromAthlete(athleteModalTarget)}
+            availableModuleKeys={availableModuleKeys}
           />
         )}
       </>
@@ -287,6 +317,9 @@ function AthleteList() {
                 <FileSpreadsheet size={16} aria-hidden="true" /> Importer un CSV
               </button>
             )}
+            <button type="button" onClick={() => setShowModuleManager(true)} className="btn-secondary">
+              <SlidersHorizontal size={16} aria-hidden="true" /> Configurer les outils
+            </button>
             <button type="button" onClick={() => setAthleteModalTarget("create")} className="btn-primary">
               <Plus size={16} aria-hidden="true" /> Inscrire un athlète
             </button>
@@ -308,6 +341,17 @@ function AthleteList() {
         </InlineNotice>
       )}
 
+      {creationNotice && (
+        <InlineNotice tone={creationNotice.tone} title={creationNotice.tone === "success" ? "Athlète prêt" : "Athlète créé"} onDismiss={() => setCreationNotice(null)}>
+          {creationNotice.text}
+          {creationNotice.code && (
+            <button type="button" className="btn-ghost mt-2" onClick={() => navigator.clipboard?.writeText(`${window.location.origin}${window.location.pathname}?invite=${creationNotice.code}`)}>
+              Copier le lien d’invitation
+            </button>
+          )}
+        </InlineNotice>
+      )}
+
       {athletes.length === 0 ? (
         <EmptyState
           icon={UsersIcon}
@@ -321,7 +365,7 @@ function AthleteList() {
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
           {athletes.map(a => (
-            <AthleteCard key={a.id} athlete={a} weeklyCharge={weeklyCharge} onClick={setSelectedAthlete} />
+            <AthleteCard key={a.id} athlete={a} weeklyCharge={weeklyCharge} modules={effectiveForAthlete(a.id)} onClick={setSelectedAthlete} />
           ))}
         </div>
       )}
@@ -331,6 +375,7 @@ function AthleteList() {
           onClose={() => setAthleteModalTarget(null)}
           onCreate={athleteModalTarget === "create" ? createAthlete : form => updateAthlete(athleteModalTarget.id, form)}
           initialData={athleteModalTarget === "create" ? null : buildFormFromAthlete(athleteModalTarget)}
+          availableModuleKeys={availableModuleKeys}
         />
       )}
 
@@ -341,6 +386,7 @@ function AthleteList() {
           onClose={() => setShowImport(false)}
         />
       )}
+      {showModuleManager && <AthleteModulesManager onClose={() => setShowModuleManager(false)} />}
     </div>
   );
 }

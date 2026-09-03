@@ -22,6 +22,7 @@ async function sendWebPush(athleteIds, payload, userIds = []) {
         body:  payload.body,
         url:   payload.url ?? "/",
         tag:   payload.tag ?? "athleteos",
+        moduleKey: payload.moduleKey ?? null,
       },
     });
     if (error) captureError(error, {
@@ -148,7 +149,7 @@ export async function notifyAthleteNewSession(clubId, athleteIds, session) {
     title, description, is_read: false,
   }));
   await supabase.from("athlete_notifications").insert(rows);
-  await sendWebPush(athleteIds, { title, body: description, url: "/", tag: `session-${session.title}` });
+  await sendWebPush(athleteIds, { title, body: description, url: "/", tag: `session-${session.title}`, moduleKey: "planning" });
 }
 
 export async function notifyAthleteSessionUpdated(clubId, athleteIds, session) {
@@ -168,7 +169,7 @@ export async function notifyAthleteSessionUpdated(clubId, athleteIds, session) {
   await supabase.from("athlete_notifications").insert(targets.map(athleteId => ({
     athlete_id: athleteId, club_id: clubId, type: "session_updated", title, description, is_read: false,
   })));
-  await sendWebPush(targets, { title, body: description, url: "/planning", tag: `session-update-${session.id ?? session.title}` });
+  await sendWebPush(targets, { title, body: description, url: "/planning", tag: `session-update-${session.id ?? session.title}`, moduleKey: "planning" });
 }
 
 export async function notifyAthleteFeedbackReminder(clubId, athleteIds, session) {
@@ -185,7 +186,7 @@ export async function notifyAthleteFeedbackReminder(clubId, athleteIds, session)
   await supabase.from("athlete_notifications").insert(targets.map(athleteId => ({
     athlete_id: athleteId, club_id: clubId, type: "session_feedback_reminder", title, description, is_read: false,
   })));
-  await sendWebPush(targets, { title, body: description, url: "/planning", tag: `session-feedback-${session.id ?? session.title}` });
+  await sendWebPush(targets, { title, body: description, url: "/planning", tag: `session-feedback-${session.id ?? session.title}`, moduleKey: "session_feedback" });
 }
 
 export async function notifyCoachSessionResponse(clubId, coachUserId, athlete, session, response, note = "") {
@@ -203,7 +204,7 @@ export async function notifyCoachSessionResponse(clubId, coachUserId, athlete, s
   };
   if (existing?.id) await supabase.from("alerts").update(alertPayload).eq("id", existing.id);
   else await supabase.from("alerts").insert(alertPayload);
-  if (coachUserId) await sendWebPush([], { title, body: description, url: "/planning", tag: `session-response-${session.id}` }, [coachUserId]);
+  if (coachUserId) await sendWebPush([], { title, body: description, url: "/planning", tag: `session-response-${session.id}`, moduleKey: "planning" }, [coachUserId]);
 }
 
 export async function notifyCoachAthleteSession(clubId, coachUserId, athlete, session) {
@@ -216,7 +217,7 @@ export async function notifyCoachAthleteSession(clubId, coachUserId, athlete, se
     club_id: clubId, athlete_id: athlete.id, session_id: session.id, type: "athlete_session",
     title, description, severity: "info", is_read: false,
   });
-  if (coachUserId) await sendWebPush([], { title, body: description, url: "/planning", tag: `athlete-session-${session.id}` }, [coachUserId]);
+  if (coachUserId) await sendWebPush([], { title, body: description, url: "/planning", tag: `athlete-session-${session.id}`, moduleKey: "planning" }, [coachUserId]);
 }
 
 export async function notifyCoachClubPost(clubId, coachUserId, athlete, { hasPhoto = false, caption = "" } = {}) {
@@ -227,7 +228,7 @@ export async function notifyCoachClubPost(clubId, coachUserId, athlete, { hasPho
     club_id: clubId, athlete_id: athlete.id, type: "social_post",
     title, description, severity: "info", is_read: false,
   });
-  if (coachUserId) await sendWebPush([], { title, body: description, url: "/", tag: `club-post-${athlete.id}` }, [coachUserId]);
+  if (coachUserId) await sendWebPush([], { title, body: description, url: "/", tag: `club-post-${athlete.id}`, moduleKey: "social" }, [coachUserId]);
 }
 
 export async function notifyAthleteResult(clubId, athleteId, discipline, result, compName) {
@@ -237,7 +238,7 @@ export async function notifyAthleteResult(clubId, athleteId, discipline, result,
     athlete_id: athleteId, club_id: clubId, type: "result_added",
     title, description, is_read: false,
   });
-  await sendWebPush([athleteId], { title, body: description, tag: "result" });
+  await sendWebPush([athleteId], { title, body: description, tag: "result", moduleKey: "performances" });
 }
 
 export async function notifyAthleteMessage(clubId, athleteId, coachName, preview) {
@@ -248,7 +249,7 @@ export async function notifyAthleteMessage(clubId, athleteId, coachName, preview
     title, description, is_read: false,
   });
   // Notif push vers l'athlète (par athlete_id)
-  await sendWebPush([athleteId], { title, body: description, url: "/", tag: "message" });
+  await sendWebPush([athleteId], { title, body: description, url: "/", tag: "message", moduleKey: "messaging" });
 }
 
 // ── NOUVEAU : notif push vers le coach quand un athlète envoie un message ──
@@ -259,7 +260,7 @@ export async function notifyCoachMessage(coachUserId, athleteName, preview) {
   const description = preview ? preview.slice(0, 100) : "Tu as reçu un nouveau message.";
   // Pas d'insertion dans athlete_notifications (c'est pour les athlètes)
   // On envoie uniquement la push par user_id
-  await sendWebPush([], { title, body: description, url: "/", tag: "message" }, [coachUserId]);
+  await sendWebPush([], { title, body: description, url: "/", tag: "message", moduleKey: "messaging" }, [coachUserId]);
 }
 
 export async function notifyGoalAchieved(clubId, athleteId, discipline, targetValue) {
@@ -269,7 +270,7 @@ export async function notifyGoalAchieved(clubId, athleteId, discipline, targetVa
     athlete_id: athleteId, club_id: clubId, type: "goal_achieved",
     title, description, is_read: false,
   });
-  await sendWebPush([athleteId], { title, body: description, tag: "goal" });
+  await sendWebPush([athleteId], { title, body: description, tag: "goal", moduleKey: "performances" });
 }
 
 export async function notifyAthleteCompetitionReminder(clubId, competition) {
@@ -296,7 +297,7 @@ export async function notifyAthleteCompetitionReminder(clubId, competition) {
     title, description, is_read: false,
   }));
   await supabase.from("athlete_notifications").insert(rows);
-  await sendWebPush(targetIds, { title, body: description, tag: `comp-${competition.id}` });
+  await sendWebPush(targetIds, { title, body: description, tag: `comp-${competition.id}`, moduleKey: "performances" });
 }
 
 // ── Récap hebdomadaire (lundi → samedi, envoyé le samedi soir) ─────────────
@@ -349,7 +350,7 @@ export async function notifyAthleteWeeklyRecap(
     is_read: false, dedupe_key: dedupeKey,
   }, { onConflict: "athlete_id,type,dedupe_key", ignoreDuplicates: true }).select("id");
   if (error) throw error;
-  if (inserted?.length) await sendWebPush([athlete.id], { title, body: description, tag: dedupeKey });
+  if (inserted?.length) await sendWebPush([athlete.id], { title, body: description, tag: dedupeKey, moduleKey: "session_feedback" });
 }
 
 // Récap squad-wide pour le coach — une alerte + push, plus le récap
@@ -387,7 +388,7 @@ export async function checkWeeklyRecap(
     }, { onConflict: "club_id,type,dedupe_key", ignoreDuplicates: true }).select("id");
     if (error) throw error;
     if (inserted?.length && coachUserId) {
-      await sendWebPush([], { title, body: description, tag: dedupeKey }, [coachUserId]);
+      await sendWebPush([], { title, body: description, tag: dedupeKey, moduleKey: "session_feedback" }, [coachUserId]);
     }
   }
 
@@ -424,7 +425,7 @@ export async function notifyAthleteWeeklyReport(
     is_read: false, dedupe_key: dedupeKey,
   }, { onConflict: "athlete_id,type,dedupe_key", ignoreDuplicates: true }).select("id");
   if (error) throw error;
-  if (inserted?.length) await sendWebPush([athlete.id], { title, body: description, tag: dedupeKey });
+  if (inserted?.length) await sendWebPush([athlete.id], { title, body: description, tag: dedupeKey, moduleKey: "reports" });
 }
 
 // Déclenché côté coach (boucle sur tous les athlètes du club + push perso).
@@ -448,7 +449,7 @@ export async function checkWeeklyReports(
     }, { onConflict: "club_id,type,dedupe_key", ignoreDuplicates: true }).select("id");
     if (error) throw error;
     if (inserted?.length && coachUserId) {
-      await sendWebPush([], { title, body: description, tag: dedupeKey }, [coachUserId]);
+      await sendWebPush([], { title, body: description, tag: dedupeKey, moduleKey: "reports" }, [coachUserId]);
     }
   }
 
@@ -477,6 +478,7 @@ export async function notifyClubNewPost(clubId, authorName, allAthleteIds) {
     title, 
     body: description, 
     url: "/", 
-    tag: "social" 
+    tag: "social",
+    moduleKey: "social",
   });
 }

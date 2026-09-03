@@ -9,11 +9,13 @@ import { getAthleteMetricsForWeek, getWellnessStatus } from "../utils/chargeCalc
 import { getISOWeek } from "../utils/helpers.js";
 import { scoreColor } from "./athleteListUtils";
 
-const AthleteCard = memo(({ athlete, weeklyCharge, onClick }) => {
+const AthleteCard = memo(({ athlete, weeklyCharge, modules = {}, onClick }) => {
   const metrics        = useMemo(() => getAthleteMetricsForWeek(athlete.id, weeklyCharge, getISOWeek(new Date())), [athlete.id, weeklyCharge]);
   const status         = getWellnessStatus(metrics.wellnessScore);
   const activeInjuries = athlete.injuries?.filter(i => i.status !== "résolu") ?? [];
-  const hasCharge      = weeklyCharge.some(w => w.athleteId === athlete.id);
+  const hasCharge      = modules.training_load !== false && weeklyCharge.some(w => w.athleteId === athlete.id);
+  const showWellness   = modules.wellness !== false;
+  const showHealth     = modules.health !== false;
 
   return (
     <button
@@ -49,7 +51,7 @@ const AthleteCard = memo(({ athlete, weeklyCharge, onClick }) => {
         <span className="text-[12px] font-semibold px-2.5 py-1 rounded-full" style={{ background: "var(--c-surface-2)", color: "var(--c-text-2)" }}>
           {athlete.level ?? "Niveau —"}
         </span>
-        {activeInjuries.length > 0 && (
+        {showHealth && activeInjuries.length > 0 && (
           <span className="flex items-center gap-1 text-[12px] font-bold px-2.5 py-1 rounded-full" style={{ background: "rgba(239,159,39,0.15)", color: "var(--tone-warning)", border: "1px solid rgba(239,159,39,0.3)" }}>
             <HeartPulse size={11} /> {activeInjuries.length} blessure{activeInjuries.length > 1 ? "s" : ""}
           </span>
@@ -60,21 +62,21 @@ const AthleteCard = memo(({ athlete, weeklyCharge, onClick }) => {
       {hasCharge ? (
         <div className="grid grid-cols-3 gap-2">
           {[
-            { label: "Bien-être", value: metrics.wellnessScore ?? "—", color: scoreColor(metrics.wellnessScore ?? 0) },
+            showWellness ? { label: "Bien-être", value: metrics.wellnessScore ?? "—", color: scoreColor(metrics.wellnessScore ?? 0) } : null,
             { label: "Charge 7j", value: metrics.load7 ?? "—", color: "#378ADD" },
             { label: "Charge 28j", value: metrics.load28 ?? "—", color: "var(--tone-info)" },
-          ].map(s => (
+          ].filter(Boolean).map(s => (
             <div key={s.label} className="rounded-2xl p-2.5 text-center" style={{ background: "var(--c-surface-2)" }}>
               <p className="text-[18px] font-bold leading-tight" style={{ color: s.color }}>{s.value}</p>
               <p className="meta-text mt-0.5 font-medium">{s.label}</p>
             </div>
           ))}
         </div>
-      ) : (
+      ) : modules.performances !== false ? (
         <div className="rounded-2xl p-3 text-center" style={{ background: "var(--c-surface-2)" }}>
-          <p className="meta-text font-medium">Pas encore de charge enregistrée</p>
+          <p className="meta-text font-medium">{Object.keys(athlete.records ?? {}).length} performance{Object.keys(athlete.records ?? {}).length > 1 ? "s" : ""} suivie{Object.keys(athlete.records ?? {}).length > 1 ? "s" : ""}</p>
         </div>
-      )}
+      ) : null}
 
       <p className="meta-text font-medium">{athlete.group ?? "Groupe —"}</p>
     </button>

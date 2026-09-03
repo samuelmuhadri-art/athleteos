@@ -36,6 +36,8 @@ import ClubOnboardingCard from "../components/club/ClubOnboardingCard";
 import { PageHeader } from "../components/ui/premium";
 import { buildDailyState, buildGroupDailyState } from "../domain/dailyState";
 import { buildClubSetupSteps, getClubSetupProgress } from "../utils/clubBranding";
+import { useModules } from "../hooks/useModules";
+import { moduleKeyForEventType } from "../domain/modules/moduleRegistry";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -144,7 +146,7 @@ const MiniSparkline = memo(({ data, color }) => {
   );
 });
 
-function AthleteStatusCard({ athlete, weeklyCharge, currentWeek, currentYear, injuries, sessions, wellnessToday, onNavigate }) {
+function AthleteStatusCard({ athlete, weeklyCharge, currentWeek, currentYear, injuries, sessions, wellnessToday, onNavigate, modules = {} }) {
   const metrics   = useMemo(
     () => getAthleteMetricsForWeek(athlete.id, weeklyCharge, currentWeek, wellnessToday ? [wellnessToday] : [], sessions),
     [athlete.id, weeklyCharge, currentWeek, wellnessToday, sessions]
@@ -158,7 +160,7 @@ function AthleteStatusCard({ athlete, weeklyCharge, currentWeek, currentYear, in
     matchesISOWeek(s, currentWeek, currentYear) && s.athleteIds?.includes(athlete.id)
   );
   const doneCount = weekSess.filter(s => s.validations?.find(v => v.athleteId === athlete.id && v.status === "done")).length;
-  const hasCharge = weeklyCharge.some(row =>
+  const hasCharge = modules.training_load !== false && weeklyCharge.some(row =>
     row.athleteId === athlete.id && matchesISOWeek(row, currentWeek, currentYear)
   );
   const isAtRisk  = false;
@@ -197,19 +199,19 @@ function AthleteStatusCard({ athlete, weeklyCharge, currentWeek, currentYear, in
         />
       </div>
 
-      <div className="rounded-xl px-3 py-2" style={{ background: `${status.color}0D`, border: `1px solid ${status.color}20` }}>
+      {modules.wellness !== false && <div className="rounded-xl px-3 py-2" style={{ background: `${status.color}0D`, border: `1px solid ${status.color}20` }}>
         <p className="text-[12px] font-semibold leading-5" style={{ color: "var(--c-text-1)" }}>{status.plainHeadline ?? status.label}</p>
         {status.score != null && <p className="mt-0.5 text-[12px] leading-4" style={{ color: "var(--c-text-2)" }}>{status.watch?.[0] ?? status.helps?.[0] ?? "Ressenti renseigné aujourd'hui."}</p>}
-      </div>
+      </div>}
 
       {/* Métriques — 3 valeurs + mini barres */}
-      {(hasCharge || status.score != null) ? (
+      {(hasCharge || (modules.wellness !== false && status.score != null)) ? (
         <div className="grid grid-cols-3 gap-1.5">
           {[
-            { lbl: "Ressenti", val: status.score ?? "—", col: readColor, pct: status.score ?? 0 },
-            { lbl: "Semaine", val: metrics.load7 ?? "—", col: acwrCol, pct: metrics.load7 && metrics.load28 ? Math.min(100, (metrics.load7 / metrics.load28) * 100) : 0 },
-            { lbl: "Habitude", val: metrics.load28 ?? "—", col: fatCol, pct: metrics.load28 ? 100 : 0 },
-          ].map(s => (
+            modules.wellness !== false ? { lbl: "Ressenti", val: status.score ?? "—", col: readColor, pct: status.score ?? 0 } : null,
+            modules.training_load !== false ? { lbl: "Semaine", val: metrics.load7 ?? "—", col: acwrCol, pct: metrics.load7 && metrics.load28 ? Math.min(100, (metrics.load7 / metrics.load28) * 100) : 0 } : null,
+            modules.training_load !== false ? { lbl: "Habitude", val: metrics.load28 ?? "—", col: fatCol, pct: metrics.load28 ? 100 : 0 } : null,
+          ].filter(Boolean).map(s => (
             <div key={s.lbl} className="bg-[var(--c-surface-2)] rounded-xl px-1.5 py-2 text-center">
               <p
                 className="text-[14px] font-bold leading-none"
@@ -235,17 +237,17 @@ function AthleteStatusCard({ athlete, weeklyCharge, currentWeek, currentYear, in
         </div>
       )}
 
-      <p className="text-[12px] font-medium leading-snug" style={{ color: "var(--c-text-2)" }}>
+      {(modules.wellness !== false || modules.training_load !== false) && <p className="text-[12px] font-medium leading-snug" style={{ color: "var(--c-text-2)" }}>
         {status.loadContext ?? status.summary}
-      </p>
+      </p>}
 
       {/* Tendance charge — 6 dernières semaines */}
       {hasCharge && sparkData.length >= 2 && <MiniSparkline data={sparkData} color={acwrCol} />}
 
       {/* Badges blessure / séances */}
-      {(activeInj.length > 0 || weekSess.length > 0) && (
+      {((modules.health !== false && activeInj.length > 0) || (modules.planning !== false && weekSess.length > 0)) && (
         <div className="flex items-center gap-1.5 flex-wrap">
-          {activeInj.length > 0 && (
+          {modules.health !== false && activeInj.length > 0 && (
             <span
               className="flex items-center gap-1 text-[12px] font-bold border px-2 py-0.5 rounded-full"
               style={{ color: "var(--tone-warning)", background: "rgba(239,159,39,0.15)", borderColor: "#EF9F27" }}
@@ -253,7 +255,7 @@ function AthleteStatusCard({ athlete, weeklyCharge, currentWeek, currentYear, in
               <HeartPulse size={8} /> {activeInj.length} blessure{activeInj.length > 1 ? "s" : ""}
             </span>
           )}
-          {weekSess.length > 0 && (
+          {modules.planning !== false && weekSess.length > 0 && (
             <span
               className="flex items-center gap-1 text-[12px] font-semibold border px-2 py-0.5 rounded-full"
               style={{ color: "var(--c-text-2)", background: "var(--c-surface-3)", borderColor: "var(--c-border)" }}
@@ -359,6 +361,7 @@ function Dashboard({
   onDemo,
 }) {
   const { clubId, profile } = useAuth();
+  const { club: enabledModules, effectiveForAthlete, enabledAthleteIds } = useModules();
   const today       = new Date();
   const currentWeek = getISOWeek(today);
   const currentYear = getISOWeekYear(today);
@@ -387,12 +390,12 @@ function Dashboard({
 
       const [athletesRes, sessionsRes, alertsRes, compsRes, injuriesRes, goalsRes, wellnessRes] = await Promise.all([
         supabase.from("athletes").select("id, name, main_discipline, profile_data, group_name, user_id").eq("club_id", clubId),
-        supabase.from("sessions").select("*, session_athletes(*)").eq("club_id", clubId),
-        supabase.from("alerts").select("id, is_read, severity, type").eq("club_id", clubId),
-        supabase.from("competitions").select("id, name, date, competition_athletes(athlete_id)").eq("club_id", clubId).gte("date", toLocalDateStr(requestDate)).order("date").limit(3),
-        supabase.from("injuries").select("id, athlete_id, name, intensity, status, location").eq("status", "actif"),
-        supabase.from("athlete_goals").select("*").eq("club_id", clubId).eq("achieved", false),
-        supabase.from("athlete_wellness").select("athlete_id, date, sleep, energy, soreness, mood, stress, notes").eq("club_id", clubId).eq("date", toLocalDateStr(requestDate)),
+        ["planning", "session_feedback", "training_load"].some((key) => enabledModules[key] !== false) ? supabase.from("sessions").select("*, session_athletes(*)").eq("club_id", clubId) : Promise.resolve({ data: [] }),
+        ["performances", "session_feedback", "wellness", "training_load", "health", "social"].some((key) => enabledModules[key] !== false) ? supabase.from("alerts").select("id, is_read, severity, type").eq("club_id", clubId) : Promise.resolve({ data: [] }),
+        enabledModules.performances !== false ? supabase.from("competitions").select("id, name, date, competition_athletes(athlete_id)").eq("club_id", clubId).gte("date", toLocalDateStr(requestDate)).order("date").limit(3) : Promise.resolve({ data: [] }),
+        enabledModules.health !== false ? supabase.from("injuries").select("id, athlete_id, name, intensity, status, location").eq("status", "actif") : Promise.resolve({ data: [] }),
+        enabledModules.performances !== false ? supabase.from("athlete_goals").select("*").eq("club_id", clubId).eq("achieved", false) : Promise.resolve({ data: [] }),
+        enabledModules.wellness !== false ? supabase.from("athlete_wellness").select("athlete_id, date, sleep, energy, soreness, mood, stress, notes").eq("club_id", clubId).eq("date", toLocalDateStr(requestDate)) : Promise.resolve({ data: [] }),
       ]);
 
       if (athletesRes.error) throw athletesRes.error;
@@ -400,8 +403,10 @@ function Dashboard({
       const athleteIds = athletesRes.data.map(a => a.id);
       // Charge hebdomadaire calculée côté serveur (vue weekly_charge, voir
       // migration 20260726120000) — plus de recalcul JS à partir des séances.
-      const chargeRes  = athleteIds.length
-        ? await supabase.from("weekly_charge").select("*").in("athlete_id", athleteIds)
+      const configuredChargeIds = enabledAthleteIds("training_load");
+      const chargeAthleteIds = configuredChargeIds ? configuredChargeIds.filter((id) => athleteIds.includes(id)) : athleteIds;
+      const chargeRes  = enabledModules.training_load !== false && chargeAthleteIds.length
+        ? await supabase.from("weekly_charge").select("*").in("athlete_id", chargeAthleteIds)
         : { data: [] };
 
       const mappedSessions = (sessionsRes.data ?? []).map(s => {
@@ -431,7 +436,10 @@ function Dashboard({
       setAthletes(mappedAthletes);
       setWeeklyCharge(charge);
       setSessions(mappedSessions);
-      setAlerts(alertsRes.data ?? []);
+      setAlerts((alertsRes.data ?? []).filter((alert) => {
+        const moduleKey = moduleKeyForEventType(alert.type);
+        return !moduleKey || (alert.athlete_id ? effectiveForAthlete(alert.athlete_id)[moduleKey] !== false : enabledModules[moduleKey] !== false);
+      }));
 
       const mappedComps = (compsRes.data ?? []).map(c => ({
         id: c.id, name: c.name, date: c.date,
@@ -452,7 +460,7 @@ function Dashboard({
         athleteId: row.athlete_id,
       })));
 
-      if (mappedComps.length > 0) {
+      if (enabledModules.performances !== false && mappedComps.length > 0) {
         await checkUpcomingCompetitions(clubId, mappedComps);
         const in7days = new Date(Date.now() + 7 * 86400000);
         for (const comp of mappedComps) {
@@ -461,17 +469,19 @@ function Dashboard({
           }
         }
       }
-      if (mappedAthletes.length > 0 && charge.length > 0) {
+      if (enabledModules.training_load !== false && mappedAthletes.length > 0 && charge.length > 0) {
         await checkAndAlertACWR(clubId, mappedAthletes, charge, currentWeek);
       }
-      if (mappedAthletes.length > 0) {
+      if (enabledModules.session_feedback !== false && mappedAthletes.length > 0) {
         await checkWeeklyRecap(clubId, mappedAthletes, mappedSessions, currentWeek, profile?.id ?? null, currentYear);
+      }
+      if (enabledModules.reports !== false && mappedAthletes.length > 0) {
         await checkWeeklyReports(clubId, mappedAthletes, currentWeek, profile?.id ?? null, currentYear);
       }
     } catch (err) {
       setError(err.message ?? "Erreur inconnue");
     } finally { setLoading(false); }
-  }, [clubId, currentWeek, currentYear, profile?.id]);
+  }, [clubId, currentWeek, currentYear, effectiveForAthlete, enabledAthleteIds, enabledModules, profile?.id]);
 
   useEffect(() => { fetchAll(); }, [fetchAll]);
 
@@ -498,10 +508,27 @@ function Dashboard({
 
   // Les anciens blocs "surcharge"/"blessés" (chiffres bruts) sont remplacés
   // par ce fil narrativisé et priorisé — voir src/utils/coachFeed.js.
-  const coachFeed = useMemo(
-    () => buildCoachFeed({ athletes, weeklyCharge, sessions, injuries, competitions, alerts, currentWeek, currentYear }),
-    [athletes, weeklyCharge, sessions, injuries, competitions, alerts, currentWeek, currentYear]
-  );
+  const coachFeed = useMemo(() => {
+    const allowed = (athleteId, moduleKey) => effectiveForAthlete(athleteId)[moduleKey] !== false;
+    const scopedSessions = sessions.map((session) => ({
+      ...session,
+      athleteIds: session.athleteIds.filter((id) => allowed(id, "planning")),
+      validations: session.validations.filter((row) => allowed(row.athleteId, "session_feedback")),
+    }));
+    return buildCoachFeed({
+      athletes,
+      weeklyCharge: weeklyCharge.filter((row) => allowed(row.athleteId, "training_load")),
+      sessions: scopedSessions,
+      injuries: injuries.filter((row) => allowed(row.athleteId, "health")),
+      competitions: competitions.map((competition) => ({
+        ...competition,
+        athleteIds: competition.athleteIds.filter((id) => allowed(id, "performances")),
+      })),
+      alerts,
+      currentWeek,
+      currentYear,
+    });
+  }, [athletes, weeklyCharge, sessions, injuries, competitions, alerts, currentWeek, currentYear, effectiveForAthlete]);
 
   const groupDailyState = useMemo(
     () => buildGroupDailyState(athletes, wellnessRows),
@@ -514,8 +541,13 @@ function Dashboard({
     sessionCount: sessions.length,
   })), [athletes.length, club, sessions.length]);
 
-  const visibleAthletes = useMemo(() => athletes.slice(0, 6), [athletes]);
-  const hiddenAthleteCount = Math.max(0, athletes.length - visibleAthletes.length);
+  const dashboardAthletes = useMemo(
+    () => athletes.filter((athlete) => ["wellness", "training_load", "health", "planning", "performances"]
+      .some((key) => effectiveForAthlete(athlete.id)[key] !== false)),
+    [athletes, effectiveForAthlete],
+  );
+  const visibleAthletes = useMemo(() => dashboardAthletes.slice(0, 6), [dashboardAthletes]);
+  const hiddenAthleteCount = Math.max(0, dashboardAthletes.length - visibleAthletes.length);
 
   const recentFeedbacks = useMemo(() => {
     const results = [];
@@ -541,12 +573,12 @@ function Dashboard({
         eyebrow="VUE COACH"
         title={`${getGreeting()}, ${firstName}`}
         description="Les priorités et l’état de ton groupe en un coup d’œil."
-        actions={(
+        actions={enabledModules.planning !== false ? (
           <button type="button" className="btn-primary w-full min-[390px]:w-auto" onClick={() => onNavigate("planning")}>
             Planifier une séance
             <ChevronRight size={16} aria-hidden="true" />
           </button>
-        )}
+        ) : null}
       />
 
       {profile?.role === "head_coach" && !clubLoading && setupProgress < 100 && (
@@ -562,14 +594,14 @@ function Dashboard({
       )}
 
       {/* ── Priorités coach ──────────────────────────────────────────────── */}
-      <div data-dashboard-priority-queue>
+      {["performances", "session_feedback", "wellness", "training_load", "health", "social"].some((key) => enabledModules[key] !== false) && <div data-dashboard-priority-queue>
         <CoachFeedSection items={coachFeed} onNavigate={onNavigate} limit={4} />
-      </div>
+      </div>}
 
       {/* Le coach voit d'abord ce qui demande une action. Les statistiques
           restent entièrement disponibles juste après. */}
       {/* ── Synthèse de la semaine ────────────────────────────────────────── */}
-      <div
+      {enabledModules.wellness !== false && <div
         className="rounded-3xl overflow-hidden relative"
         style={{ background: "#0A1810" }}
       >
@@ -662,7 +694,7 @@ function Dashboard({
             ))}
           </div>
         </div>
-      </div>
+      </div>}
 
       {/* ── KPIs — icône + liseré + glow au survol ────────────────────────── */}
       <section className="space-y-3" aria-labelledby="overview-title">
@@ -673,25 +705,25 @@ function Dashboard({
         <div className="grid grid-cols-1 min-[390px]:grid-cols-2 xl:grid-cols-4 gap-3">
           <MetricCard
             icon={Users} label="Athlètes actifs" color="#1D9E75"
-            value={metrics.actifs} sub={`/${athletes.length} total`}
+            value={athletes.length} sub="dans l’effectif"
             onClick={() => onNavigate("athletes")}
           />
-          <MetricCard
+          {enabledModules.training_load !== false && <MetricCard
             icon={Zap} label="Effort moyen du groupe" color="#378ADD"
             value={metrics.avgCharge ?? "—"}
             sub={metrics.trend == null ? "Comparaison indisponible" : metrics.trend > 10 ? `Plus que la semaine passée (+${metrics.trend} %)` : metrics.trend < -10 ? `Moins que la semaine passée (${metrics.trend} %)` : "Proche de la semaine passée"}
             badge={metrics.trend > 20 ? { label: "Hausse nette", color: "#D18A24" } : metrics.trend < -20 ? { label: "Baisse nette", color: "#378ADD" } : undefined}
-          />
-          <MetricCard
+          />}
+          {["performances", "session_feedback", "wellness", "training_load", "health", "social"].some((key) => enabledModules[key] !== false) && <MetricCard
             icon={Bell} label="Alertes non lues" color="#E24B4A"
             value={metrics.unreadAlerts} sub="à traiter"
             onClick={() => onNavigate("alerts")}
-          />
-          <MetricCard
+          />}
+          {enabledModules.session_feedback !== false && <MetricCard
             icon={CheckCircle} label="Taux de validation" color="#EF9F27"
             value={metrics.validationRate != null ? `${metrics.validationRate}%` : "—"}
             sub="séances cette semaine"
-          />
+          />}
         </div>
       </section>
 
@@ -699,7 +731,7 @@ function Dashboard({
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
 
         {/* ── État du groupe ─────────────────────────────────────────────── */}
-        <div className="lg:col-span-2 space-y-3">
+        {(enabledModules.training_load !== false || enabledModules.wellness !== false || enabledModules.health !== false) && <div className="lg:col-span-2 space-y-3">
           <div className="flex items-center justify-between">
             <div>
               <h2 className="section-title">
@@ -709,12 +741,12 @@ function Dashboard({
                 Semaine {currentWeek} · données en temps réel
               </p>
             </div>
-            <button
+            {enabledModules.training_load !== false && <button
               onClick={() => onNavigate("charge")}
               className="flex min-h-11 items-center gap-1 px-2 -mr-2 text-[12px] font-semibold text-emerald-600 hover:text-emerald-700 transition-colors"
             >
               Détail <ArrowUpRight size={13} />
-            </button>
+            </button>}
           </div>
 
           {athletes.length === 0 ? (
@@ -735,6 +767,7 @@ function Dashboard({
                   sessions={sessions}
                   wellnessToday={wellnessRows.find(row => row.athleteId === a.id)}
                   onNavigate={onNavigate}
+                  modules={effectiveForAthlete(a.id)}
                 />
               ))}
             </div>
@@ -749,13 +782,13 @@ function Dashboard({
               <ArrowUpRight size={14} aria-hidden="true" />
             </button>
           )}
-        </div>
+        </div>}
 
         {/* ── Colonne droite ─────────────────────────────────────────────── */}
         <div className="space-y-4">
 
           {/* Prochaines compétitions */}
-          {competitions.length > 0 && (
+          {enabledModules.performances !== false && competitions.length > 0 && (
             <div className="card overflow-hidden">
               <div className="px-5 py-4 border-b border-[color:var(--c-border)] flex items-center justify-between">
                 <h3 className="card-title">Compétitions</h3>
@@ -802,7 +835,7 @@ function Dashboard({
           )}
 
           {/* Objectifs saison */}
-          {goals.length > 0 && (
+          {enabledModules.performances !== false && goals.length > 0 && (
             <div className="card overflow-hidden">
               <div className="px-5 py-4 border-b border-[color:var(--c-border)] flex items-center justify-between">
                 <h3 className="card-title">Objectifs saison</h3>
@@ -840,7 +873,7 @@ function Dashboard({
           )}
 
           {/* Feedbacks récents */}
-          {recentFeedbacks.length > 0 && (
+          {enabledModules.session_feedback !== false && recentFeedbacks.length > 0 && (
             <div className="card overflow-hidden">
               <div className="px-5 py-4 border-b border-[color:var(--c-border)]">
                 <h3 className="card-title">Feedbacks récents</h3>
@@ -889,7 +922,7 @@ function Dashboard({
           )}
 
           {/* État vide */}
-          {competitions.length === 0 && goals.length === 0 && recentFeedbacks.length === 0 && (
+          {(["performances", "session_feedback"].some((key) => enabledModules[key] !== false)) && competitions.length === 0 && goals.length === 0 && recentFeedbacks.length === 0 && (
             <div className="card p-8 text-center">
               <BarChart2 size={28} className="mx-auto mb-3" strokeWidth={1.5} style={{ color: "var(--c-text-4)" }} />
               <p className="text-[12px] font-semibold" style={{ color: "var(--c-text-2)" }}>Les données apparaîtront ici</p>

@@ -30,6 +30,10 @@ import ClubDemoPreview from "./components/club/ClubDemoPreview";
 import { useClubBranding } from "./hooks/useClubBranding";
 import { getClubThemeVariables, normalizeInviteCode } from "./utils/clubBranding";
 import { PwaInstallButton } from "./components/pwa/PwaAccess";
+import { ModulesProvider } from "./contexts/ModulesContext";
+import { useModules } from "./hooks/useModules";
+import ModuleOnboardingModal from "./components/modules/ModuleOnboardingModal";
+import { COACH_VIEW_MODULE, filterNavigation, moduleKeyForEventType } from "./domain/modules/moduleRegistry";
 import {
   COACH_MOBILE_MORE_ITEMS,
   COACH_MOBILE_PRIMARY_ITEMS,
@@ -141,6 +145,13 @@ function CoachShell({ user, profile, clubId, signOut, club, clubLoading, refresh
   const [settingsSection, setSettingsSection] = useState("account");
   const [showDemo, setShowDemo] = useState(false);
   const moreButtonRef = useRef(null);
+  const { club: enabledModules, effectiveForAthlete } = useModules();
+  const visibleNavItems = useMemo(() => filterNavigation(NAV_ITEMS, enabledModules, COACH_VIEW_MODULE)
+    .filter((item) => item.id !== "alerts" || ["performances", "session_feedback", "wellness", "training_load", "health", "social"]
+      .some((key) => enabledModules[key] !== false)), [enabledModules]);
+  const visibleIds = useMemo(() => new Set(visibleNavItems.map((item) => item.id)), [visibleNavItems]);
+  const mobileNavItems = useMemo(() => COACH_MOBILE_NAV_ITEMS.filter((item) => visibleIds.has(item.id)), [visibleIds]);
+  const mobileMoreItems = useMemo(() => COACH_MORE_NAV_ITEMS.filter((item) => visibleIds.has(item.id)), [visibleIds]);
 
   const { theme, toggleTheme } = useTheme();
   const { subscribed, subscribe, permissionState } = usePushNotifications(
@@ -151,15 +162,22 @@ function CoachShell({ user, profile, clubId, signOut, club, clubLoading, refresh
 
   const fetchUnreadCount = useCallback(async () => {
     if (!clubId) return;
-    const { count } = await supabase
+    const { data } = await supabase
       .from("alerts")
-      .select("id", { count: "exact", head: true })
+      .select("id, type, athlete_id")
       .eq("club_id", clubId)
       .eq("is_read", false);
-    setUnreadAlerts(count ?? 0);
-  }, [clubId]);
+    setUnreadAlerts((data ?? []).filter((alert) => {
+      const moduleKey = moduleKeyForEventType(alert.type);
+      return !moduleKey || (alert.athlete_id ? effectiveForAthlete(alert.athlete_id)[moduleKey] !== false : enabledModules[moduleKey] !== false);
+    }).length);
+  }, [clubId, effectiveForAthlete, enabledModules]);
 
   useEffect(() => { fetchUnreadCount(); }, [fetchUnreadCount]);
+
+  useEffect(() => {
+    if (!visibleIds.has(activeView)) navigateUrl("dashboard", { replace: true });
+  }, [activeView, navigateUrl, visibleIds]);
 
   useEffect(() => {
     if (!clubId) return undefined;
@@ -183,7 +201,7 @@ function CoachShell({ user, profile, clubId, signOut, club, clubLoading, refresh
     requestAnimationFrame(() => moreButtonRef.current?.focus());
   }, []);
 
-  const currentNav    = NAV_ITEMS.find((n) => n.id === activeView);
+  const currentNav    = visibleNavItems.find((n) => n.id === activeView) ?? visibleNavItems[0];
   const coachName     = profile.name ?? user.email ?? "Coach";
   const coachInitials = initialsFromName(coachName);
   const coachRole     = profile.role === "head_coach" ? "Head coach" : "Coach";
@@ -231,7 +249,7 @@ function CoachShell({ user, profile, clubId, signOut, club, clubLoading, refresh
 
         {/* ── Navigation ── */}
         <nav id="coach-sidebar-navigation" className="flex-1 py-3 overflow-y-auto overflow-x-hidden">
-          {NAV_ITEMS.map((item, idx) => {
+          {visibleNavItems.map((item, idx) => {
             const Icon      = item.icon;
             const isActive  = activeView === item.id;
             const showBadge = item.id === "alerts" && unreadAlerts > 0;
@@ -480,10 +498,10 @@ function CoachShell({ user, profile, clubId, signOut, club, clubLoading, refresh
       {/* ── Navigation mobile coach ── */}
       <MobileBottomNav
         ariaLabel="Navigation coach"
-        items={COACH_MOBILE_NAV_ITEMS}
+        items={mobileNavItems}
         activeId={activeView}
         onSelect={navigate}
-        more={{
+        more={mobileMoreItems.length ? {
           label: "Plus",
           icon: MoreHorizontal,
           badge: unreadAlerts,
@@ -491,12 +509,12 @@ function CoachShell({ user, profile, clubId, signOut, club, clubLoading, refresh
           expanded: showMore,
           onSelect: () => setShowMore(true),
           buttonRef: moreButtonRef,
-        }}
+        } : undefined}
       />
 
       {showMore && (
         <MobileMoreSheet
-          items={COACH_MORE_NAV_ITEMS.map((item) => ({
+          items={mobileMoreItems.map((item) => ({
             ...item,
             badge: item.id === "alerts" ? unreadAlerts : 0,
           }))}
@@ -534,6 +552,7 @@ function CoachShell({ user, profile, clubId, signOut, club, clubLoading, refresh
           onClose={() => setShowSettings(false)}
         />
       )}
+      {profile.role === "head_coach" && <ModuleOnboardingModal />}
     </div>
   );
 }
@@ -561,21 +580,25 @@ export default function App() {
       : <LoginPage inviteCode={inviteCodeFromUrl} onSignupClick={() => setShowSignup(true)} />;
   }
   if (profile?.role === "athlete") return (
-    <Suspense fallback={<AuthLoader />}>
-      <AthleteApp clubBrand={club} themeStyle={themeStyle} />
-    </Suspense>
+    <ModulesProvider>
+      <Suspense fallback={<AuthLoader />}>
+        <AthleteApp clubBrand={club} themeStyle={themeStyle} />
+      </Suspense>
+    </ModulesProvider>
   );
   if (!profile) return <AuthLoader />;
 
   return (
-    <CoachShell
-      user={user}
-      profile={profile}
-      clubId={clubId}
-      signOut={signOut}
-      club={club}
-      clubLoading={clubLoading}
-      refreshClub={refreshClub}
-    />
+    <ModulesProvider>
+      <CoachShell
+        user={user}
+        profile={profile}
+        clubId={clubId}
+        signOut={signOut}
+        club={club}
+        clubLoading={clubLoading}
+        refreshClub={refreshClub}
+      />
+    </ModulesProvider>
   );
 }

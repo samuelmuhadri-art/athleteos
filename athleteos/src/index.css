@@ -283,6 +283,70 @@ body {
   transition-duration: 80ms;
 }
 
+/* Configuration modulaire : lecture immédiate, sans aspect administratif. */
+.module-selection-summary {
+  padding: 10px 12px;
+  border: 1px solid var(--c-border);
+  border-radius: var(--r-md);
+  background: linear-gradient(135deg, var(--c-dim-accent), transparent 72%), var(--c-surface-2);
+  color: var(--c-text-1);
+  font-size: 12px;
+  font-weight: 700;
+}
+.module-selection-total { color: var(--c-text-3); font-weight: 600; }
+.module-selection-meter {
+  display: block;
+  height: 3px;
+  margin-top: 8px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--c-surface-3);
+}
+.module-selection-meter > span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--c-accent), var(--tone-info));
+  transition: width var(--dur-base) var(--spring);
+}
+.module-option {
+  transition: background var(--dur-fast) ease, border-color var(--dur-fast) ease, transform var(--dur-fast) var(--spring), box-shadow var(--dur-fast) ease;
+}
+.module-option:hover { transform: translateY(-1px); }
+.module-option[data-selected="true"] { box-shadow: inset 3px 0 0 var(--c-accent); }
+.module-preset { position: relative; }
+.module-preset[data-selected="true"] {
+  border-color: var(--c-accent);
+  background: linear-gradient(145deg, var(--c-dim-accent), transparent 78%), var(--c-surface);
+  box-shadow: 0 0 0 1px var(--c-dim-accent), var(--shadow-sm);
+}
+.module-preset[data-selected="true"]::after {
+  content: '✓';
+  position: absolute;
+  top: 8px;
+  right: 10px;
+  color: var(--c-accent);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+@media (max-width: 639px) {
+  .module-option { padding: 10px 11px; }
+  .module-option-description { font-size: 11px; line-height: 1.4; }
+  .module-settings-actions {
+    position: sticky;
+    bottom: -1px;
+    z-index: 3;
+    margin-inline: -12px;
+    padding: 10px 12px calc(10px + env(safe-area-inset-bottom));
+    background: var(--c-surface);
+    background: color-mix(in srgb, var(--c-surface) 94%, transparent);
+    backdrop-filter: blur(12px);
+    border-top: 1px solid var(--c-border);
+  }
+  .module-settings-actions .btn-primary { flex: 1; }
+}
+
 /* Glassmorphism dark */
 .card-glass {
   background: var(--glass-bg);

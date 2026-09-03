@@ -13,6 +13,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 //
 // Rôle minimal par action :
 //   - update_profile        : n'importe quel compte connecté, sur SOI-MÊME uniquement. Pas audité (pas structurel).
+//   - create_club_invitation : coach et head_coach.
 //   - rename_club            : head_coach uniquement.
 //   - upload_club_branding   : head_coach uniquement, stockage validé côté serveur.
 //   - update_club_branding   : head_coach uniquement.
@@ -333,8 +334,15 @@ serve(async (req) => {
       return ok({ alreadyMember: true, clubName: invitedClub.name });
     }
 
-    // ── Actions réservées au head coach ─────────────────────────────────
-    if (!isHeadCoach) throw new DeniedError("Action réservée au head coach.");
+    // L'invitation individuelle fait partie du flux d'ajout d'un athlète et
+    // reste donc accessible aux coachs. Toutes les autres actions structurelles
+    // restent réservées au head coach. Un athlète ne peut jamais inviter.
+    if (currentAction === "create_club_invitation" && !["coach", "head_coach"].includes(caller.role)) {
+      throw new DeniedError("Action réservée aux coachs.");
+    }
+    if (!isHeadCoach && currentAction !== "create_club_invitation") {
+      throw new DeniedError("Action réservée au head coach.");
+    }
 
     if (currentAction === "list_club_invitations") {
       const { data: rows, error } = await admin

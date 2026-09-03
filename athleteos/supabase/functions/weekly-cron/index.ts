@@ -37,7 +37,7 @@ async function requireData<T>(
 async function sendPush(
   supabaseUrl: string,
   serviceKey: string,
-  payload: { title: string; body: string; tag: string },
+  payload: { title: string; body: string; tag: string; moduleKey: "session_feedback" | "reports" },
   athleteIds: number[],
   userIds: number[],
   dryRun: boolean,
@@ -98,6 +98,23 @@ serve(async (req) => {
         "chargement athlètes",
       ) ?? [];
       if (!athletes.length) continue;
+      const [clubModuleRows, athleteModuleRows] = await Promise.all([
+        requireData<Array<{ module_key: string; enabled: boolean }>>(
+          admin.from("club_modules").select("module_key, enabled").eq("club_id", club.id).in("module_key", ["session_feedback", "reports"]),
+          "chargement modules club",
+        ),
+        requireData<Array<{ athlete_id: number; module_key: string; enabled: boolean }>>(
+          admin.from("athlete_modules").select("athlete_id, module_key, enabled").in("athlete_id", athletes.map((athlete) => athlete.id)).in("module_key", ["session_feedback", "reports"]),
+          "chargement modules athlètes",
+        ),
+      ]);
+      const clubModuleEnabled = new Map((clubModuleRows ?? []).map((row) => [row.module_key, row.enabled]));
+      const athleteModuleEnabled = new Map((athleteModuleRows ?? []).map((row) => [`${row.athlete_id}:${row.module_key}`, row.enabled]));
+      const moduleAthletes = (moduleKey: string) => athletes.filter((athlete) =>
+        clubModuleEnabled.get(moduleKey) !== false && athleteModuleEnabled.get(`${athlete.id}:${moduleKey}`) !== false
+      );
+      const feedbackAthletes = moduleAthletes("session_feedback");
+      const reportAthletes = moduleAthletes("reports");
 
       const coach = await requireData<{ id: number } | null>(
         admin.from("users").select("id")
@@ -128,7 +145,7 @@ serve(async (req) => {
       let doneAll = 0;
       const concerns: string[] = [];
       const statsByAthlete = new Map<number, ReturnType<typeof computeWeeklyStats>>();
-      for (const athlete of athletes) {
+      for (const athlete of feedbackAthletes) {
         const stats = computeWeeklyStats(athlete.id, sessions);
         statsByAthlete.set(athlete.id, stats);
         totalAll += stats.total;
@@ -162,11 +179,11 @@ serve(async (req) => {
           inserted = rows.length > 0;
         }
         if (inserted && coach?.id) {
-          await sendPush(supabaseUrl, serviceKey, { title, body: description, tag: dedupeKey }, [], [coach.id], dryRun, log);
+          await sendPush(supabaseUrl, serviceKey, { title, body: description, tag: dedupeKey, moduleKey: "session_feedback" }, [], [coach.id], dryRun, log);
         }
       }
 
-      const recapRows = athletes.flatMap((athlete) => {
+      const recapRows = feedbackAthletes.flatMap((athlete) => {
         const stats = statsByAthlete.get(athlete.id);
         if (!stats || stats.total === 0) return [];
         const title = `📊 Ta semaine — S${week.week} · ${week.year}`;
@@ -196,7 +213,7 @@ serve(async (req) => {
         await sendPush(
           supabaseUrl,
           serviceKey,
-          { title: row.title, body: row.description, tag: row.dedupe_key },
+          { title: row.title, body: row.description, tag: row.dedupe_key, moduleKey: "session_feedback" },
           [row.athlete_id],
           [],
           dryRun,
@@ -204,11 +221,11 @@ serve(async (req) => {
         );
       }
 
-      const reportTitle = `📄 Rapports S${week.week} · ${week.year} disponibles — ${athletes.length} athlète${athletes.length > 1 ? "s" : ""}`;
+      const reportTitle = `📄 Rapports S${week.week} · ${week.year} disponibles — ${reportAthletes.length} athlète${reportAthletes.length > 1 ? "s" : ""}`;
       const reportDescription = "Les rapports hebdomadaires de tous les athlètes sont prêts dans le module Rapports.";
       const reportDedupeKey = `coach-report-${week.key}`;
-      let reportInserted = true;
-      if (!dryRun) {
+      let reportInserted = reportAthletes.length > 0;
+      if (!dryRun && reportAthletes.length > 0) {
         const rows = await requireData<Array<{ id: number }>>(
           admin.from("alerts").upsert({
             club_id: club.id,
@@ -229,10 +246,11 @@ serve(async (req) => {
           title: reportTitle,
           body: reportDescription,
           tag: reportDedupeKey,
+          moduleKey: "reports",
         }, [], [coach.id], dryRun, log);
       }
 
-      const athleteReportRows = athletes.map((athlete) => ({
+      const athleteReportRows = reportAthletes.map((athlete) => ({
         athlete_id: athlete.id,
         club_id: club.id,
         type: "weekly_report",
@@ -254,7 +272,7 @@ serve(async (req) => {
         await sendPush(
           supabaseUrl,
           serviceKey,
-          { title: row.title, body: row.description, tag: row.dedupe_key },
+          { title: row.title, body: row.description, tag: row.dedupe_key, moduleKey: "reports" },
           [row.athlete_id],
           [],
           dryRun,

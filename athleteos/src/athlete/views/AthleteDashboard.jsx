@@ -302,6 +302,7 @@ export default function AthleteDashboard({
   confirmedRestDays = [], onConfirmRestDay,
   onOpenInjuryReport, allAthletes, onRpeChange, onStatusChange,
   onFeelingChange, onCommentChange, onRsvpChange,
+  modules = {},
 }) {
   // Une référence stable évite de recalculer tous les indicateurs à chaque rendu.
   const today       = useMemo(() => new Date(), []);
@@ -351,8 +352,8 @@ export default function AthleteDashboard({
   const todaySessions = weekSessions
     .filter(s => s.sessionDate && isSameDay(parseLocalDate(s.sessionDate), today));
   const todayFocus = getTodayFocus({
-    wellnessCompleted: Boolean(wellnessToday),
-    restConfirmed: confirmedRestDays.includes(toLocalDateStr(today)),
+    wellnessCompleted: modules.wellness === false || Boolean(wellnessToday),
+    restConfirmed: modules.training_load === false || confirmedRestDays.includes(toLocalDateStr(today)),
     todaySessions, athleteId: athlete.id,
   });
   const focusSession = todayFocus.focusSession;
@@ -424,7 +425,7 @@ export default function AthleteDashboard({
       {/* L'action du jour occupe seule le premier niveau de lecture. Les
           explications et chiffres restent juste après, sans être supprimés. */}
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 md:gap-5 items-stretch">
-        <DailyFocusCard
+        {(modules.planning !== false || modules.wellness !== false || modules.performances !== false) && <DailyFocusCard
           focus={todayFocus}
           todaySessions={todaySessions}
           nextCompetition={nextComp}
@@ -436,14 +437,14 @@ export default function AthleteDashboard({
           onConfirmRestDay={() => onConfirmRestDay?.(toLocalDateStr(today))}
           onOpenDailyState={() => setShowDailyState(true)}
           onOpenLoadDetail={() => setActiveMetric("weeklyLoad")}
-        />
+        />}
 
-        <div className="xl:col-span-2" style={{ paddingTop: "var(--space-2)" }}>
+        {(modules.wellness !== false || modules.training_load !== false) && <div className="xl:col-span-2" style={{ paddingTop: "var(--space-2)" }}>
           <h2 className="section-title">Mieux comprendre ta journée</h2>
           <p className="secondary-text" style={{ marginTop: "var(--space-1)" }}>Ton ressenti et tes chiffres restent disponibles, avec une explication simple avant le détail scientifique.</p>
-        </div>
+        </div>}
 
-        <section className="rounded-2xl overflow-hidden select-none border xl:col-span-2" aria-labelledby="wellness-title"
+        {(modules.wellness !== false || modules.training_load !== false) && <section className="rounded-2xl overflow-hidden select-none border xl:col-span-2" aria-labelledby="wellness-title"
           style={{ position: "relative", background: "linear-gradient(160deg, var(--c-surface) 0%, var(--c-surface-2) 55%, var(--c-bg) 100%)", borderColor: "var(--c-border)" }}>
           {/* Grille décorative — très subtile */}
           <div className="absolute pointer-events-none" aria-hidden="true" style={{
@@ -497,14 +498,14 @@ export default function AthleteDashboard({
             ))}
           </div>
           </div>
-        </section>
+        </section>}
 
       </div>
 
       {/* ══════════════════════════════════════════════════════════════════════
           WELLNESS
          ══════════════════════════════════════════════════════════════════════ */}
-      {wellnessToday && (
+      {modules.wellness !== false && wellnessToday && (
         <div className="card p-4">
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-2.5">
@@ -555,21 +556,21 @@ export default function AthleteDashboard({
       {/* ══════════════════════════════════════════════════════════════════════
           GRILLE PRINCIPALE
          ══════════════════════════════════════════════════════════════════════ */}
-      <section aria-labelledby="athlete-progress-title">
+      {(modules.planning !== false || modules.performances !== false || modules.training_load !== false || modules.health !== false || modules.messaging !== false) && <section aria-labelledby="athlete-progress-title">
         <h2 id="athlete-progress-title" className="section-title">Ta progression</h2>
         <p className="secondary-text mt-1">D'abord ce qui a changé et pourquoi. Les nombres et les formules restent accessibles si tu veux aller plus loin.</p>
-      </section>
+      </section>}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 md:gap-5">
         <div className="lg:col-span-2 space-y-4 md:space-y-5">
 
           {/* ── Profil de charge (6 axes) ───────────────────────────────────── */}
-          <AxisRadarCard
+          {modules.training_load !== false && <AxisRadarCard
             profile={axisProfile} title="Ce que tes séances ont surtout sollicité"
             subtitle="Une lecture simple de tes objectifs de séance ; ouvre une ligne pour voir la méthode."
             sessions={sessions} athleteId={athlete.id} currentWeek={currentWeek}
-          />
+          />}
 
-          <details className="card p-4">
+          {modules.training_load !== false && <details className="card p-4">
             <summary className="tap-feedback" style={{ cursor: "pointer", color: "var(--c-text-2)", fontSize: 13, fontWeight: 600 }}>
               Voir le détail scientifique de chaque mesure
             </summary>
@@ -588,10 +589,10 @@ export default function AthleteDashboard({
                 </button>
               ))}
             </div>
-          </details>
+          </details>}
 
           {/* ── Séances cette semaine ───────────────────────────────────────── */}
-          <div className="card overflow-hidden">
+          {modules.planning !== false && <div className="card overflow-hidden">
             <div style={{ padding: "12px 16px 12px", borderBottom: "1px solid var(--c-border)", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
               <div>
                 <p className="card-title">Cette semaine</p>
@@ -641,10 +642,10 @@ export default function AthleteDashboard({
                 </div>
               );
             })}
-          </div>
+          </div>}
 
           {/* ── Banner PR ────────────────────────────────────────────────────── */}
-          {latestPR && (
+          {modules.performances !== false && latestPR && (
             <div style={{ borderRadius: 14, padding: "14px 16px", position: "relative", overflow: "hidden", background: "linear-gradient(135deg, #7B5104 0%, #9A6800 50%, #C8890A 100%)" }}>
               <div style={{ position: "absolute", inset: 0, backgroundImage: "radial-gradient(circle at 90% 15%, rgba(255,255,255,0.08) 0%, transparent 45%)", pointerEvents: "none" }} />
               <div style={{ position: "relative", display: "flex", alignItems: "center", gap: 14 }}>
@@ -667,7 +668,7 @@ export default function AthleteDashboard({
           )}
 
           {/* ── Records ─────────────────────────────────────────────────────── */}
-          {topRecords.length > 0 && (
+          {modules.performances !== false && topRecords.length > 0 && (
             <div className="card overflow-hidden">
               <div style={{ padding: "12px 16px", borderBottom: "1px solid var(--c-border)", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                 <p className="card-title">Mes records</p>
@@ -702,7 +703,7 @@ export default function AthleteDashboard({
           )}
 
           {/* ── Badges ──────────────────────────────────────────────────────── */}
-          <div className="card p-4">
+          {(modules.planning !== false || modules.performances !== false) && <div className="card p-4">
             <div className="flex items-center justify-between mb-4">
               <div>
                 <p className="card-title">Badges</p>
@@ -735,14 +736,14 @@ export default function AthleteDashboard({
                 )}
               </>
             )}
-          </div>
+          </div>}
         </div>
 
         {/* ── COLONNE DROITE ─────────────────────────────────────────────── */}
         <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-4)" }}>
 
           {/* Prochaine compétition */}
-          {nextComp && (() => {
+          {modules.performances !== false && nextComp && (() => {
             const days = Math.round((new Date(nextComp.date) - today) / (1000*60*60*24));
             return (
               <div style={{ borderRadius: 14, padding: "16px", position: "relative", overflow: "hidden", background: "linear-gradient(135deg, #6B1717 0%, #8B1F1F 50%, #A82525 100%)" }}>
@@ -783,7 +784,7 @@ export default function AthleteDashboard({
           })()}
 
           {/* Régularité */}
-          {streak > 0 && (
+          {modules.session_feedback !== false && streak > 0 && (
             <div className="card p-4">
               <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
                 <div style={{ width: 30, height: 30, borderRadius: 8, background: "rgba(200,137,10,0.09)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
@@ -809,7 +810,7 @@ export default function AthleteDashboard({
           )}
 
           {/* Blessures */}
-          <div style={{ borderRadius: 14, padding: "14px", background: "var(--c-surface-2)", border: "1px solid rgba(232,160,32,0.15)" }}>
+          {modules.health !== false && <div style={{ borderRadius: 14, padding: "14px", background: "var(--c-surface-2)", border: "1px solid rgba(232,160,32,0.15)" }}>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
                 <HeartPulse size={13} color="#C8890A" strokeWidth={2} />
@@ -844,10 +845,10 @@ export default function AthleteDashboard({
                 ))}
               </div>
             )}
-          </div>
+          </div>}
 
           {/* Messages coach */}
-          {lastMessages.length > 0 && (
+          {modules.messaging !== false && lastMessages.length > 0 && (
             <div className="card p-4">
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
@@ -876,7 +877,7 @@ export default function AthleteDashboard({
         </div>
       </div>
 
-      {showDailyState && (
+      {modules.wellness !== false && showDailyState && (
         <DailyStateDetailPanel
           state={dailyState}
           onClose={() => setShowDailyState(false)}
@@ -887,7 +888,7 @@ export default function AthleteDashboard({
         />
       )}
 
-      {activeMetric && (
+      {modules.training_load !== false && activeMetric && (
         <FormeDetailPanel
           metricKey={activeMetric}
           metrics={metrics}

@@ -57,24 +57,49 @@ export default async function globalSetup() {
   const { data: club, error: ce } = await admin.from("clubs").insert({ name: `E2E Club ${runId}` }).select().single();
   if (ce) throw new Error(`seed club : ${ce.message}`);
 
-  async function makeAccount(email, name, role) {
+  async function makeAccount(clubId, email, name, role) {
     const { data: a, error: ea } = await admin.auth.admin.createUser({ email, password, email_confirm: true });
     if (ea) throw new Error(`createUser ${email} : ${ea.message}`);
     const { data: u, error: eu } = await admin.from("users")
-      .insert({ club_id: club.id, name, email, role, auth_uid: a.user.id }).select().single();
+      .insert({ club_id: clubId, name, email, role, auth_uid: a.user.id }).select().single();
     if (eu) throw new Error(`insert users ${email} : ${eu.message}`);
     if (role === "athlete") {
-      const { error: eat } = await admin.from("athletes").insert({ club_id: club.id, name, user_id: u.id });
+      const { error: eat } = await admin.from("athletes").insert({ club_id: clubId, name, user_id: u.id });
       if (eat) throw new Error(`insert athletes ${email} : ${eat.message}`);
     }
     return { email, password, authId: a.user.id, userId: u.id };
   }
 
-  const coach   = await makeAccount(`e2e-coach-${runId}@example.invalid`, "E2E Coach", "head_coach");
-  const athlete = await makeAccount(`e2e-athlete-${runId}@example.invalid`, "E2E Athlete", "athlete");
+  const coach   = await makeAccount(club.id, `e2e-coach-${runId}@example.invalid`, "E2E Coach", "head_coach");
+  const athlete = await makeAccount(club.id, `e2e-athlete-${runId}@example.invalid`, "E2E Athlete", "athlete");
+  const { error: configuredError } = await admin.from("clubs")
+    .update({ modules_configured_at: new Date().toISOString() })
+    .eq("id", club.id);
+  if (configuredError) throw new Error(`configure fixture club : ${configuredError.message}`);
+
+  // Compte isolé réservé au scénario onboarding : il ne partage aucun état
+  // avec les parcours de navigation exécutés en parallèle.
+  const { data: onboardingClub, error: onboardingClubError } = await admin
+    .from("clubs")
+    .insert({ name: `E2E Onboarding ${runId}` })
+    .select()
+    .single();
+  if (onboardingClubError) throw new Error(`seed onboarding club : ${onboardingClubError.message}`);
+  const onboardingCoach = await makeAccount(
+    onboardingClub.id,
+    `e2e-onboarding-${runId}@example.invalid`,
+    "E2E Onboarding Coach",
+    "head_coach",
+  );
 
   const fixturesPath = path.join(path.dirname(fileURLToPath(import.meta.url)), ".auth-fixtures.json");
-  writeFileSync(fixturesPath, JSON.stringify({ runId, clubId: club.id, coach, athlete }, null, 2));
+  writeFileSync(fixturesPath, JSON.stringify({
+    runId,
+    clubId: club.id,
+    coach,
+    athlete,
+    onboarding: { clubId: onboardingClub.id, coach: onboardingCoach },
+  }, null, 2));
 
   // Pas de nettoyage automatique ici : l'instance Supabase locale est
   // jetable (détruite en fin de job CI, `supabase stop`), donc ces comptes

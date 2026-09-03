@@ -4,7 +4,7 @@
 // Couleurs hardcodées remplacées par variables CSS dark
 // ============================================================
 
-import { useState, useCallback, useEffect, useRef, Suspense, lazy } from "react";
+import { useState, useCallback, useEffect, useMemo, useRef, Suspense, lazy } from "react";
 import {
   LayoutDashboard, CalendarDays, TrendingUp, MessageSquare,
   LogOut, Users, Bell, Settings
@@ -37,6 +37,8 @@ import { getNotificationPresentation, mergeIncomingNotification } from "./athlet
 import MobileBottomNav from "./components/navigation/MobileBottomNav";
 import { ATHLETE_MOBILE_ITEM_IDS } from "./navigation/mobileNavigation";
 import { PwaInstallButton } from "./components/pwa/PwaAccess";
+import { useModules } from "./hooks/useModules";
+import { ATHLETE_VIEW_MODULE, filterNavigation, moduleKeyForEventType } from "./domain/modules/moduleRegistry";
 
 const NAV_ITEMS = [
   { id: "dashboard",    label: "Tableau de bord", shortLabel: "Accueil",  icon: LayoutDashboard },
@@ -65,8 +67,12 @@ function ViewLoader() {
 
 export default function AthleteApp({ clubBrand, themeStyle }) {
   const { profile, clubId, signOut } = useAuth();
+  const { effective: enabledModules } = useModules();
 
   const { activeView, navigate, viewKey } = useUrlView(NAV_ITEM_IDS, "dashboard");
+  const visibleNavItems = useMemo(() => filterNavigation(NAV_ITEMS, enabledModules, ATHLETE_VIEW_MODULE), [enabledModules]);
+  const visibleIds = useMemo(() => new Set(visibleNavItems.map((item) => item.id)), [visibleNavItems]);
+  const athleteMobileItems = useMemo(() => ATHLETE_MOBILE_NAV_ITEMS.filter((item) => visibleIds.has(item.id)), [visibleIds]);
   const [athlete,      setAthlete]      = useState(null);
   const [allAthletes,  setAllAthletes]  = useState([]);
   const [weeklyCharge, setWeeklyCharge] = useState([]);
@@ -95,8 +101,12 @@ export default function AthleteApp({ clubBrand, themeStyle }) {
     athlete?.id ?? null, clubId
   );
   useEffect(() => {
-    if (swReady && !subscribed && permissionState !== "denied") subscribe();
-  }, [swReady, subscribed, permissionState, subscribe]);
+    if (enabledModules.messaging !== false && swReady && !subscribed && permissionState !== "denied") subscribe();
+  }, [enabledModules.messaging, swReady, subscribed, permissionState, subscribe]);
+
+  useEffect(() => {
+    if (!visibleIds.has(activeView)) navigate("dashboard");
+  }, [activeView, navigate, visibleIds]);
 
   const fetchAll = useCallback(async () => {
     if (!clubId || !profile?.id) return;
@@ -112,26 +122,29 @@ export default function AthleteApp({ clubBrand, themeStyle }) {
       const wellnessStart = new Date(); wellnessStart.setDate(wellnessStart.getDate() - 28);
 
       const [recordsRes,injuriesRes,perfHistRes,sessionsRes,compsRes,coachRes,allAthletesRes,myPerfsRes,goalsRes,notifsRes,wellnessRes,weeklyChargeRes,restDaysRes] = await Promise.all([
-        supabase.from("records").select("*").eq("athlete_id",athleteId),
-        supabase.from("injuries").select("*").eq("athlete_id",athleteId),
-        supabase.from("performance_history").select("*").eq("athlete_id",athleteId),
-        supabase.from("sessions").select("*, session_athletes(*)").eq("club_id",clubId),
-        supabase.from("competitions").select("*, competition_athletes(*), competition_results(*)").eq("club_id",clubId),
+        enabledModules.performances !== false ? supabase.from("records").select("*").eq("athlete_id",athleteId) : Promise.resolve({ data: [] }),
+        enabledModules.health !== false ? supabase.from("injuries").select("*").eq("athlete_id",athleteId) : Promise.resolve({ data: [] }),
+        enabledModules.performances !== false ? supabase.from("performance_history").select("*").eq("athlete_id",athleteId) : Promise.resolve({ data: [] }),
+        ["planning", "session_feedback", "training_load"].some((key) => enabledModules[key] !== false) ? supabase.from("sessions").select("*, session_athletes(*)").eq("club_id",clubId) : Promise.resolve({ data: [] }),
+        enabledModules.performances !== false ? supabase.from("competitions").select("*, competition_athletes(*), competition_results(*)").eq("club_id",clubId) : Promise.resolve({ data: [] }),
         supabase.from("users").select("id, name").eq("club_id",clubId).eq("role","head_coach").single(),
-        supabase.from("athletes").select("id, name, profile_data, user_id").eq("club_id",clubId),
-        supabase.from("athlete_performances").select("*").eq("athlete_id",athleteId).order("performance_date",{ascending:true}),
-        supabase.from("athlete_goals").select("*").eq("athlete_id",athleteId).order("created_at",{ascending:false}),
+        ["social", "messaging"].some((key) => enabledModules[key] !== false) ? supabase.from("athletes").select("id, name, profile_data, user_id").eq("club_id",clubId) : Promise.resolve({ data: [] }),
+        enabledModules.performances !== false ? supabase.from("athlete_performances").select("*").eq("athlete_id",athleteId).order("performance_date",{ascending:true}) : Promise.resolve({ data: [] }),
+        enabledModules.performances !== false ? supabase.from("athlete_goals").select("*").eq("athlete_id",athleteId).order("created_at",{ascending:false}) : Promise.resolve({ data: [] }),
         supabase.from("athlete_notifications").select("*").eq("athlete_id",athleteId).order("created_at",{ascending:false}).limit(20),
-        supabase.from("athlete_wellness").select("*").eq("athlete_id",athleteId).gte("date",toLocalDateStr(wellnessStart)).order("date",{ascending:false}),
+        enabledModules.wellness !== false ? supabase.from("athlete_wellness").select("*").eq("athlete_id",athleteId).gte("date",toLocalDateStr(wellnessStart)).order("date",{ascending:false}) : Promise.resolve({ data: [] }),
         // Charge hebdomadaire calculée côté serveur (vue weekly_charge, voir
         // migration 20260726120000) — plus de recalcul JS à partir des séances.
-        supabase.from("weekly_charge").select("*").eq("athlete_id",athleteId),
-        supabase.from("athlete_daily_load_days").select("load_date").eq("athlete_id",athleteId).eq("state","rest_confirmed"),
+        enabledModules.training_load !== false ? supabase.from("weekly_charge").select("*").eq("athlete_id",athleteId) : Promise.resolve({ data: [] }),
+        enabledModules.training_load !== false ? supabase.from("athlete_daily_load_days").select("load_date").eq("athlete_id",athleteId).eq("state","rest_confirmed") : Promise.resolve({ data: [] }),
       ]);
 
       setMyPerformances(myPerfsRes.data ?? []);
       setMyGoals(goalsRes.data ?? []);
-      setMyNotifs(notifsRes?.data ?? []);
+      setMyNotifs((notifsRes?.data ?? []).filter((notification) => {
+        const moduleKey = moduleKeyForEventType(notification.type);
+        return !moduleKey || enabledModules[moduleKey] !== false;
+      }));
       const wellnessRows = wellnessRes.data ?? [];
       setWellnessHistory(wellnessRows);
       setWellnessToday(wellnessRows.find(row => String(row.date).slice(0, 10) === todayStr) ?? null);
@@ -140,7 +153,7 @@ export default function AthleteApp({ clubBrand, themeStyle }) {
       const coachId = coachRes.data?.id ?? null;
       setCoachUserId(coachId); setCoachName(coachRes.data?.name ?? null);
 
-      if (coachId) {
+      if (coachId && enabledModules.messaging !== false) {
         const {data:msgs} = await supabase.from("messages").select("*")
           .or(`and(sender_id.eq.${coachId},receiver_id.eq.${profile.id}),and(sender_id.eq.${profile.id},receiver_id.eq.${coachId})`)
           .order("created_at",{ascending:false}).limit(3);
@@ -223,13 +236,13 @@ export default function AthleteApp({ clubBrand, themeStyle }) {
       console.error("AthleteApp:", err);
       setError(err.message ?? "Erreur inconnue");
     } finally { setLoading(false); }
-  }, [clubId, profile?.id]);
+  }, [clubId, enabledModules, profile?.id]);
 
   useEffect(() => { fetchAll(); }, [fetchAll]);
 
   const wellnessShownRef = useRef(false);
   useEffect(() => {
-    if (!athlete || loading) return;
+    if (!athlete || loading || enabledModules.wellness === false) return;
     // Si déjà rempli aujourd'hui -> jamais afficher
     if (wellnessToday) return;
     // Clé unique par jour — évite le réaffichage au rechargement de page
@@ -240,7 +253,7 @@ export default function AthleteApp({ clubBrand, themeStyle }) {
     wellnessShownRef.current = true;
     sessionStorage.setItem(ssKey, "1");
     setShowWellness(true);
-  }, [athlete, wellnessToday, loading]);
+  }, [athlete, wellnessToday, loading, enabledModules.wellness]);
 
   // Le push navigateur reste inchangé. Cette écoute ajoute uniquement le
   // retour visuel instantané quand l'application est déjà ouverte.
@@ -251,12 +264,14 @@ export default function AthleteApp({ clubBrand, themeStyle }) {
         event:"INSERT", schema:"public", table:"athlete_notifications",
         filter:`athlete_id=eq.${athlete.id}`,
       }, payload => {
+        const moduleKey = moduleKeyForEventType(payload.new.type);
+        if (moduleKey && enabledModules[moduleKey] === false) return;
         setMyNotifs(previous => mergeIncomingNotification(previous, payload.new));
         setIncomingNotification(payload.new);
       })
       .subscribe();
     return () => supabase.removeChannel(channel);
-  }, [athlete?.id]);
+  }, [athlete?.id, enabledModules]);
 
   const dismissIncomingNotification = useCallback(() => setIncomingNotification(null), []);
 
@@ -268,7 +283,7 @@ export default function AthleteApp({ clubBrand, themeStyle }) {
     if (wasUnread) {
       setMyNotifs(previous => previous.map(item => item.id === notification.id ? { ...item, is_read:true } : item));
     }
-    navigate(presentation.destination);
+    navigate(visibleIds.has(presentation.destination) ? presentation.destination : "dashboard");
     if (!wasUnread) return;
     const { error:updateError } = await supabase.from("athlete_notifications")
       .update({ is_read:true })
@@ -278,7 +293,7 @@ export default function AthleteApp({ clubBrand, themeStyle }) {
       console.error("AthleteApp — notification lue :", updateError);
       setMyNotifs(previous => previous.map(item => item.id === notification.id ? { ...item, is_read:false } : item));
     }
-  }, [navigate]);
+  }, [navigate, visibleIds]);
 
   const markAllNotificationsRead = useCallback(async () => {
     if (!athlete?.id) return false;
@@ -297,6 +312,7 @@ export default function AthleteApp({ clubBrand, themeStyle }) {
   }, [athlete?.id, myNotifs]);
 
   const handleRpe = useCallback(async (sid,aid,rpe,actualDurationMinutes) => {
+    if (enabledModules.session_feedback === false) return;
     const duration = Number(actualDurationMinutes);
     if (!Number.isFinite(duration) || duration <= 0 || duration > 1440) return;
     setSessions(p=>p.map(s=>s.id!==sid?s:{...s,validations:s.validations.map(v=>v.athleteId===aid?{
@@ -305,9 +321,9 @@ export default function AthleteApp({ clubBrand, themeStyle }) {
     await supabase.from("session_athletes").update({
       rpe, actual_duration_minutes:duration, duration_source:"reported", feedback_submitted_at:new Date().toISOString(),
     }).eq("session_id",sid).eq("athlete_id",aid);
-  }, []);
+  }, [enabledModules.session_feedback]);
   const confirmRestDay = useCallback(async (date = toLocalDateStr(new Date())) => {
-    if (!athlete?.id) return false;
+    if (!athlete?.id || enabledModules.training_load === false) return false;
     const { error: restError } = await supabase.from("athlete_daily_load_days").upsert({
       athlete_id: athlete.id, load_date: date, state: "rest_confirmed", updated_at: new Date().toISOString(),
     }, { onConflict: "athlete_id,load_date" });
@@ -331,19 +347,22 @@ export default function AthleteApp({ clubBrand, themeStyle }) {
       return next;
     });
     return true;
-  }, [athlete?.id]);
+  }, [athlete?.id, enabledModules.training_load]);
   const handleStatus = useCallback(async (sid,aid,status) => {
+    if (enabledModules.session_feedback === false) return;
     setSessions(p=>p.map(s=>s.id!==sid?s:{...s,validations:s.validations.map(v=>v.athleteId===aid?{...v,status}:v)}));
     await supabase.from("session_athletes").update({status}).eq("session_id",sid).eq("athlete_id",aid);
-  }, []);
+  }, [enabledModules.session_feedback]);
   const handleFeeling = useCallback(async (sid,aid,feeling) => {
+    if (enabledModules.session_feedback === false) return;
     setSessions(p=>p.map(s=>s.id!==sid?s:{...s,validations:s.validations.map(v=>v.athleteId===aid?{...v,feeling}:v)}));
     await supabase.from("session_athletes").update({feeling}).eq("session_id",sid).eq("athlete_id",aid);
-  }, []);
+  }, [enabledModules.session_feedback]);
   const handleComment = useCallback(async (sid,aid,comment) => {
+    if (enabledModules.session_feedback === false) return;
     setSessions(p=>p.map(s=>s.id!==sid?s:{...s,validations:s.validations.map(v=>v.athleteId===aid?{...v,comment}:v)}));
     await supabase.from("session_athletes").update({comment}).eq("session_id",sid).eq("athlete_id",aid);
-  }, []);
+  }, [enabledModules.session_feedback]);
   const handleRsvp = useCallback(async (sid, aid, rsvpStatus, rsvpNote = "") => {
     const updatedAt = new Date().toISOString();
     const cleanNote = rsvpNote.trim().slice(0, 500);
@@ -393,7 +412,7 @@ export default function AthleteApp({ clubBrand, themeStyle }) {
     </div>
   );
 
-  const currentNav  = NAV_ITEMS.find(n => n.id === activeView);
+  const currentNav  = visibleNavItems.find(n => n.id === activeView) ?? visibleNavItems[0];
   const unreadCount = myNotifs.filter(n => !n.is_read).length;
   const msgUnread   = myNotifs.filter(n => !n.is_read && n.type === "message").length;
 
@@ -424,7 +443,7 @@ export default function AthleteApp({ clubBrand, themeStyle }) {
 
         {/* Nav items */}
         <nav className="flex-1 py-3 overflow-y-auto">
-          {NAV_ITEMS.map((item, idx) => {
+          {visibleNavItems.map((item, idx) => {
             const Icon     = item.icon;
             const isActive = activeView === item.id;
             const hasBadge = item.id === "messagerie" && msgUnread > 0;
@@ -579,6 +598,7 @@ export default function AthleteApp({ clubBrand, themeStyle }) {
                 allAthletes={allAthletes}
                 onRpeChange={handleRpe} onStatusChange={handleStatus}
                 onFeelingChange={handleFeeling} onCommentChange={handleComment} onRsvpChange={handleRsvp}
+                modules={enabledModules}
               />
             )}
             {activeView === "planning" && (
@@ -617,7 +637,7 @@ export default function AthleteApp({ clubBrand, themeStyle }) {
       {/* ── BOTTOM NAV MOBILE ── */}
       <MobileBottomNav
         ariaLabel="Navigation athlète"
-        items={ATHLETE_MOBILE_NAV_ITEMS.map((item) => ({
+        items={athleteMobileItems.map((item) => ({
           ...item,
           label: item.shortLabel ?? item.label,
           badge: item.id === "messagerie" ? msgUnread : 0,
@@ -638,7 +658,7 @@ export default function AthleteApp({ clubBrand, themeStyle }) {
         />
       )}
 
-      {showWellness && athlete && (
+      {showWellness && athlete && enabledModules.wellness !== false && (
         <WellnessModal
           athlete={athlete} clubId={clubId}
           onClose={() => setShowWellness(false)}
@@ -651,7 +671,7 @@ export default function AthleteApp({ clubBrand, themeStyle }) {
         />
       )}
 
-      {showInjuryReport && athlete && (
+      {showInjuryReport && athlete && enabledModules.health !== false && (
         <InjuryReportModal
           athlete={athlete} clubId={clubId}
           onClose={() => setShowInjuryReport(false)}

@@ -33,6 +33,7 @@ import {
   getWeeklyLoadRow,
   getWeeklyLoadState,
 } from "../domain/coachLoadPresentation.js";
+import { useModules } from "../hooks/useModules";
 
 // ─── Constantes ───────────────────────────────────────────────────────────────
 
@@ -324,6 +325,7 @@ const MethodologyPanel = memo(() => {
 // ─── Composant principal ──────────────────────────────────────────────────────
 function ChargeView() {
   const { clubId } = useAuth();
+  const { enabledAthleteIds } = useModules();
   const CURRENT_WEEK = getISOWeek(new Date());
   const CURRENT_YEAR = getISOWeekYear(new Date());
   const previousWeekDate = new Date();
@@ -368,7 +370,9 @@ function ChargeView() {
       if (sessionsRes.error) throw sessionsRes.error;
       if (wellnessRes.error) throw wellnessRes.error;
 
-      const athleteRows = athletesRes.data ?? [];
+      const configuredIds = enabledAthleteIds("training_load");
+      const eligibleIds = configuredIds ? new Set(configuredIds) : null;
+      const athleteRows = (athletesRes.data ?? []).filter((athlete) => !eligibleIds || eligibleIds.has(athlete.id));
       const sessionRows = sessionsRes.data ?? [];
       const sessionIds = sessionRows.map((session) => session.id);
       const athleteIds = athleteRows.map((athlete) => athlete.id);
@@ -430,7 +434,7 @@ function ChargeView() {
     } finally {
       setLoading(false);
     }
-  }, [clubId]);
+  }, [clubId, enabledAthleteIds]);
 
   useEffect(() => { fetchAll(); }, [fetchAll]);
 

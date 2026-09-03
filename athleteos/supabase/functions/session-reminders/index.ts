@@ -39,11 +39,23 @@ serve(async (req) => {
       .eq("session_date", today)
       .in("lifecycle_status", ["planned", "live"]);
     if (error) throw error;
+    const sessionAthleteIds = [...new Set((sessions ?? []).flatMap((session) =>
+      (session.session_athletes ?? []).map((row: { athlete_id: number }) => row.athlete_id)
+    ))];
+    const sessionClubIds = [...new Set((sessions ?? []).map((session) => session.club_id))];
+    const [clubConfig, athleteConfig] = await Promise.all([
+      sessionClubIds.length ? admin.from("club_modules").select("club_id, enabled").eq("module_key", "planning").in("club_id", sessionClubIds) : Promise.resolve({ data: [], error: null }),
+      sessionAthleteIds.length ? admin.from("athlete_modules").select("athlete_id, enabled").eq("module_key", "planning").in("athlete_id", sessionAthleteIds) : Promise.resolve({ data: [], error: null }),
+    ]);
+    if (clubConfig.error || athleteConfig.error) throw clubConfig.error ?? athleteConfig.error;
+    const clubPlanning = new Map((clubConfig.data ?? []).map((row: { club_id: number; enabled: boolean }) => [row.club_id, row.enabled]));
+    const athletePlanning = new Map((athleteConfig.data ?? []).map((row: { athlete_id: number; enabled: boolean }) => [row.athlete_id, row.enabled]));
 
     for (const session of sessions ?? []) {
+      if (clubPlanning.get(session.club_id) === false) continue;
       const athleteIds = [...new Set(
         (session.session_athletes ?? []).map((row: { athlete_id: number }) => row.athlete_id),
-      )];
+      )].filter((athleteId) => athletePlanning.get(athleteId) !== false);
       if (!athleteIds.length) continue;
 
       const time = session.time ? String(session.time).slice(0, 5) : null;
@@ -86,6 +98,7 @@ serve(async (req) => {
           body: description,
           url: "/planning",
           tag: dedupeKey,
+          moduleKey: "planning",
         }),
       });
       if (!pushResponse.ok) {

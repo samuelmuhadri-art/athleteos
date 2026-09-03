@@ -129,6 +129,7 @@ jobs:
         run: |
           integration_status=0
           for test_file in \
+            test_module_configuration.mjs \
             test_signup_regression.mjs \
             test_send_push_regression.mjs \
             test_admin_actions.mjs \

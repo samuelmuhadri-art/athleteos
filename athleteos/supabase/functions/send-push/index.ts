@@ -36,6 +36,10 @@ const MAX_URL_LEN             = 200;
 const MAX_REQUESTED_RECIPIENTS = 300; // largement au-dessus de la taille d'un club réel
 const MAX_USER_REQUESTS_PER_MINUTE = 20;
 const MAX_USER_REQUESTS_PER_DAY = 200;
+const MODULE_KEYS = new Set([
+  "planning", "performances", "session_feedback", "wellness",
+  "training_load", "health", "messaging", "social", "reports",
+]);
 
 // Origines autorisées pour les appels navigateur (CORS). Domaine de
 // production connu inclus par défaut (URL publique, pas un secret) + ports
@@ -129,6 +133,7 @@ serve(async (req) => {
 
     const requestedAthleteIds = toPositiveIntArray(body.athleteIds);
     const requestedUserIds    = toPositiveIntArray(body.userIds);
+    const moduleKey = typeof body.moduleKey === "string" && MODULE_KEYS.has(body.moduleKey) ? body.moduleKey : null;
     const requestedRecipientCount = requestedAthleteIds.length + requestedUserIds.length;
 
     if (!requestedRecipientCount) return json(400, origin, { error: "Aucun destinataire." });
@@ -217,6 +222,38 @@ serve(async (req) => {
     if (!athleteIds.length && !userIds.length) {
       return json(400, origin, { error: "Aucun destinataire." });
     }
+
+    // A push is an output of a module, not a bypass around its configuration.
+    // Resolve all recipients in grouped queries; missing rows keep the legacy
+    // default (enabled) so a migration can never silence an existing club.
+    if (moduleKey && athleteIds.length) {
+      const { data: athleteRows, error: athleteError } = await admin.from("athletes")
+        .select("id, club_id").in("id", athleteIds);
+      if (athleteError) throw athleteError;
+      const clubIds = [...new Set((athleteRows ?? []).map((row: { club_id: number }) => row.club_id))];
+      const [clubConfig, athleteConfig] = await Promise.all([
+        admin.from("club_modules").select("club_id, enabled").eq("module_key", moduleKey).in("club_id", clubIds),
+        admin.from("athlete_modules").select("athlete_id, enabled").eq("module_key", moduleKey).in("athlete_id", athleteIds),
+      ]);
+      if (clubConfig.error || athleteConfig.error) throw clubConfig.error ?? athleteConfig.error;
+      const clubEnabled = new Map((clubConfig.data ?? []).map((row: { club_id: number; enabled: boolean }) => [row.club_id, row.enabled]));
+      const athleteEnabled = new Map((athleteConfig.data ?? []).map((row: { athlete_id: number; enabled: boolean }) => [row.athlete_id, row.enabled]));
+      athleteIds = (athleteRows ?? [])
+        .filter((row: { id: number; club_id: number }) => clubEnabled.get(row.club_id) !== false && athleteEnabled.get(row.id) !== false)
+        .map((row: { id: number }) => row.id);
+    }
+    if (moduleKey && userIds.length) {
+      const { data: userRows, error: userError } = await admin.from("users").select("id, club_id").in("id", userIds);
+      if (userError) throw userError;
+      const clubIds = [...new Set((userRows ?? []).map((row: { club_id: number }) => row.club_id))];
+      const { data: clubConfig, error: clubError } = await admin.from("club_modules")
+        .select("club_id, enabled").eq("module_key", moduleKey).in("club_id", clubIds);
+      if (clubError) throw clubError;
+      const clubEnabled = new Map((clubConfig ?? []).map((row: { club_id: number; enabled: boolean }) => [row.club_id, row.enabled]));
+      userIds = (userRows ?? []).filter((row: { club_id: number }) => clubEnabled.get(row.club_id) !== false).map((row: { id: number }) => row.id);
+    }
+
+    if (!athleteIds.length && !userIds.length) return json(200, origin, { sent: 0, failed: 0, cleaned: 0, skipped: "module_disabled" });
 
     // ── Validation du contenu de la notification ─────────────────────
     const title   = typeof body.title === "string" ? body.title.trim() : "";

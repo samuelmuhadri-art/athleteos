@@ -13,7 +13,10 @@
     "test:coverage": "vitest run --coverage",
     "test:e2e": "playwright test",
     "test:rls": "node test_rls_regression.mjs",
-    "test:integration": "node test_rls_regression.mjs && node test_signup_regression.mjs && node test_send_push_regression.mjs && node test_admin_actions.mjs && node test_import_club_athletes.mjs && node test_charge_model_parity.mjs && node test_axis_model_parity.mjs && node test_competition_transactions.mjs && node test_private_storage.mjs && node test_performance_normalization.mjs",
+    "test:modules": "node test_module_configuration.mjs",
+    "test:integration": "node test_rls_regression.mjs && node test_module_configuration.mjs && node test_signup_regression.mjs && node test_send_push_regression.mjs && node test_admin_actions.mjs && node test_import_club_athletes.mjs && node test_charge_model_parity.mjs && node test_axis_model_parity.mjs && node test_competition_transactions.mjs && node test_private_storage.mjs && node test_performance_normalization.mjs",
+    "reset:smac:dry-run": "node scripts/reset-smac-operational-data.mjs",
+    "reset:smac": "node scripts/reset-smac-operational-data.mjs --execute",
     "check": "npm run lint && npm run typecheck && npm run test:coverage && npm run build"
   },
   "devDependencies": {

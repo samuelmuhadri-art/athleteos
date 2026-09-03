@@ -27,6 +27,7 @@ import {
 } from "../utils/weeklyReports";
 import { checkWeeklyReports } from "../utils/notifications";
 import { useAccessibleDialog } from "../hooks/useAccessibleDialog";
+import { useModules } from "../hooks/useModules";
 
 // ─── Sous-composants ──────────────────────────────────────────────────────
 
@@ -275,6 +276,7 @@ function AthleteMonthCard({ athlete, aggregate }) {
 // ─── Composant principal ───────────────────────────────────────────────────
 export default function Rapports() {
   const { clubId, profile } = useAuth();
+  const { effectiveForAthlete, enabledAthleteIds } = useModules();
   const now = useMemo(() => new Date(), []);
   const currentWeek = getISOWeek(now);
   const currentYear = getISOWeekYear(now);
@@ -297,18 +299,24 @@ export default function Rapports() {
       const athletesRes = await supabase.from("athletes").select("id, name, profile_data").eq("club_id", clubId);
       if (athletesRes.error) throw athletesRes.error;
 
-      const mappedAthletes = athletesRes.data.map(a => ({
+      const configuredReportIds = enabledAthleteIds("reports");
+      const reportIds = configuredReportIds ? new Set(configuredReportIds) : null;
+      const mappedAthletes = athletesRes.data.filter((athlete) => !reportIds || reportIds.has(athlete.id)).map(a => ({
         id: a.id, name: a.name, avatar: a.profile_data?.avatar ?? initialsFromName(a.name),
       }));
       const athleteIds = mappedAthletes.map(a => a.id);
+      const loadIds = athleteIds.filter((id) => effectiveForAthlete(id).training_load !== false);
+      const wellnessIds = athleteIds.filter((id) => effectiveForAthlete(id).wellness !== false);
 
       // weekly_charge est une vue SANS RLS propre (cf. Dashboard.jsx/AthleteApp.jsx) —
       // on doit impérativement la scoper par athlete_id nous-mêmes, sinon on
       // récupère la charge de TOUS les clubs.
       const [sessionsRes, chargeRes, wellnessRes] = await Promise.all([
         supabase.from("sessions").select("*, session_athletes(*)").eq("club_id", clubId),
-        athleteIds.length ? supabase.from("weekly_charge").select("*").in("athlete_id", athleteIds) : Promise.resolve({ data: [] }),
-        supabase.from("athlete_wellness").select("*").eq("club_id", clubId),
+        loadIds.length ? supabase.from("weekly_charge").select("*").in("athlete_id", loadIds) : Promise.resolve({ data: [] }),
+        wellnessIds.length
+          ? supabase.from("athlete_wellness").select("*").eq("club_id", clubId).in("athlete_id", wellnessIds)
+          : Promise.resolve({ data: [] }),
       ]);
       if (sessionsRes.error) throw sessionsRes.error;
       if (chargeRes.error)   throw chargeRes.error;
@@ -319,8 +327,8 @@ export default function Rapports() {
         return {
           id: s.id, week: s.week, day: s.day, sessionDate: s.session_date,
           category: s.category, trainingFocus: s.training_focus, title: s.title, durationMinutes: s.duration_minutes,
-          athleteIds:  rows.map(v => v.athlete_id),
-          validations: rows.map(v => ({ athleteId: v.athlete_id, status: v.status, feeling: v.feeling, rpe: v.rpe, comment: v.comment, actualDurationMinutes: v.actual_duration_minutes, durationSource: v.duration_source })),
+          athleteIds:  rows.filter((v) => effectiveForAthlete(v.athlete_id).planning !== false).map(v => v.athlete_id),
+          validations: rows.filter((v) => effectiveForAthlete(v.athlete_id).session_feedback !== false).map(v => ({ athleteId: v.athlete_id, status: v.status, feeling: v.feeling, rpe: v.rpe, comment: v.comment, actualDurationMinutes: v.actual_duration_minutes, durationSource: v.duration_source })),
         };
       });
 
@@ -347,7 +355,7 @@ export default function Rapports() {
     } catch (err) {
       setError(err.message ?? "Erreur inconnue");
     } finally { setLoading(false); }
-  }, [clubId, currentWeek, currentYear, profile?.id]);
+  }, [clubId, currentWeek, currentYear, effectiveForAthlete, enabledAthleteIds, profile?.id]);
 
   useEffect(() => { fetchAll(); }, [fetchAll]);
 

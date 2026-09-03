@@ -28,6 +28,7 @@ import { loadClubBranding } from "../../hooks/useClubBranding";
 import { CLUB_ACCENT_PRESETS, DEFAULT_CLUB_ACCENT } from "../../utils/clubBranding";
 import ClubInvitationCenter from "../club/ClubInvitationCenter";
 import PwaAccessCard from "../pwa/PwaAccess";
+import ClubModulesSettings from "../modules/ClubModulesSettings";
 import { ConfirmDialog } from "./premium";
 
 const FOCUSABLE_SELECTOR = [
@@ -578,6 +579,8 @@ export default function AccountSettingsModal({ onClose, initialSection = "accoun
                       disabled={Boolean(busy)}
                     />
                   </ActionRow>
+
+                  <ClubModulesSettings />
 
                   <section className="settings-branding-card" aria-labelledby="settings-branding-title">
                     <div className="settings-branding-heading">

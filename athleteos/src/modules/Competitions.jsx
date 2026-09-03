@@ -23,12 +23,14 @@ import { parsePerf } from "../athlete/shared.js";
 import CompCard from "./CompCard";
 import CompModal from "./CompModal";
 import CreateCompModal from "./CreateCompModal";
+import { useModules } from "../hooks/useModules";
 
 // ─── Composant principal ──────────────────────────────────────────────────────
 
 function Competitions() {
   // ✅ CORRECTION : useAuth() remplace club_id: 1 hardcodé
   const { clubId } = useAuth();
+  const { enabledAthleteIds } = useModules();
 
   const [selectedComp,    setSelectedComp]    = useState(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -53,7 +55,10 @@ function Competitions() {
         .eq("club_id", clubId);
       if (athletesRes.error) throw athletesRes.error;
 
-      const athleteIds = athletesRes.data.map((a) => a.id);
+      const configuredIds = enabledAthleteIds("performances");
+      const eligibleIds = configuredIds ? new Set(configuredIds) : null;
+      const eligibleAthletes = athletesRes.data.filter((athlete) => !eligibleIds || eligibleIds.has(athlete.id));
+      const athleteIds = eligibleAthletes.map((a) => a.id);
 
       const [chargeRes, competitionsRes, recordsRes, injuriesRes] = await Promise.all([
         athleteIds.length
@@ -86,7 +91,7 @@ function Competitions() {
       if (compAthletesRes.error) throw compAthletesRes.error;
       if (compResultsRes.error)  throw compResultsRes.error;
 
-      const remappedAthletes = athletesRes.data.map((a) => ({
+      const remappedAthletes = eligibleAthletes.map((a) => ({
         id:             a.id,
         name:           a.name,
         mainDiscipline: a.main_discipline,
@@ -153,7 +158,7 @@ function Competitions() {
     } finally {
       setLoading(false);
     }
-  }, [clubId]); // ✅ clubId dans les dépendances
+  }, [clubId, enabledAthleteIds]);
 
   useEffect(() => { fetchAll(); }, [fetchAll]);
 

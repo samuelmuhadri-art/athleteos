@@ -18,6 +18,8 @@ import LoadingState    from "../components/ui/LoadingState";
 import ErrorState      from "../components/ui/ErrorState";
 import Modal           from "../components/ui/Modal";
 import { initialsFromName } from "../utils/helpers.js";
+import { useModules } from "../hooks/useModules";
+import { moduleKeyForEventType } from "../domain/modules/moduleRegistry";
 
 // ─── Config UI statique ───────────────────────────────────────────────────────
 
@@ -132,6 +134,7 @@ const AlertFormContent = memo(({ form, set, athletes, saveError }) => (
 // ─── Composant principal ──────────────────────────────────────────────────────
 function Alerts({ onNavigate }) {
   const { clubId } = useAuth(); // remplace club_id: 1
+  const { club: enabledModules, effectiveForAthlete } = useModules();
 
   const [alertList, setAlertList] = useState([]);
   const [athletes,  setAthletes]  = useState([]);
@@ -163,7 +166,10 @@ function Alerts({ onNavigate }) {
       if (alertsRes.error)   throw alertsRes.error;
       if (athletesRes.error) throw athletesRes.error;
 
-      setAlertList(alertsRes.data.map((a) => ({
+      setAlertList(alertsRes.data.filter((alert) => {
+        const moduleKey = moduleKeyForEventType(alert.type);
+        return !moduleKey || (alert.athlete_id ? effectiveForAthlete(alert.athlete_id)[moduleKey] !== false : enabledModules[moduleKey] !== false);
+      }).map((a) => ({
         id:          a.id,
         type:        a.type,
         athleteId:   a.athlete_id,
@@ -185,7 +191,7 @@ function Alerts({ onNavigate }) {
     } finally {
       if (!silent) setLoading(false);
     }
-  }, [clubId]);
+  }, [clubId, effectiveForAthlete, enabledModules]);
 
   useEffect(() => { fetchAll(); }, [fetchAll]);
 

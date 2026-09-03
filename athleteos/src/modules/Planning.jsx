@@ -34,11 +34,13 @@ import SessionModal from "./SessionModal";
 import AddSessionModal from "./AddSessionModal";
 import CompetitionPlanningCard from "../components/planning/CompetitionPlanningCard";
 import { groupCompetitionsByDate } from "../domain/planningCompetitions";
+import { useModules } from "../hooks/useModules";
 
 // ─── Composant principal ──────────────────────────────────────────────────────
 
 function Planning() {
   const { clubId } = useAuth();
+  const { enabledAthleteIds } = useModules();
   const { success: showSuccessToast } = useToast();
   const today   = new Date();
   const isMobile = typeof window !== "undefined" && window.innerWidth < 768;
@@ -77,7 +79,9 @@ function Planning() {
         : { data: [], error: null };
       if (saRes.error) throw saRes.error;
 
-      setAthletes(athletesRes.data.map(a => ({
+      const configuredIds = enabledAthleteIds("planning");
+      const eligibleIds = configuredIds ? new Set(configuredIds) : null;
+      setAthletes(athletesRes.data.filter((a) => !eligibleIds || eligibleIds.has(a.id)).map(a => ({
         id: a.id, name: a.name, mainDiscipline: a.main_discipline,
         avatar: a.profile_data?.avatar ?? initialsFromName(a.name),
       })));
@@ -130,7 +134,7 @@ function Planning() {
     } finally {
       setLoading(false);
     }
-  }, [clubId]);
+  }, [clubId, enabledAthleteIds]);
 
   useEffect(() => { fetchAll(); }, [fetchAll]);
 

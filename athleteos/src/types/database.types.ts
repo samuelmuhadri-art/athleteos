@@ -122,6 +122,64 @@ export type Database = {
           },
         ]
       }
+      athlete_modules: {
+        Row: {
+          athlete_id: number
+          club_id: number
+          config: Json
+          created_at: string
+          enabled: boolean
+          id: number
+          module_key: string
+          updated_at: string
+          updated_by: number | null
+        }
+        Insert: {
+          athlete_id: number
+          club_id: number
+          config?: Json
+          created_at?: string
+          enabled?: boolean
+          id?: number
+          module_key: string
+          updated_at?: string
+          updated_by?: number | null
+        }
+        Update: {
+          athlete_id?: number
+          club_id?: number
+          config?: Json
+          created_at?: string
+          enabled?: boolean
+          id?: number
+          module_key?: string
+          updated_at?: string
+          updated_by?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "athlete_modules_athlete_id_fkey"
+            columns: ["athlete_id"]
+            isOneToOne: false
+            referencedRelation: "athletes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "athlete_modules_club_id_fkey"
+            columns: ["club_id"]
+            isOneToOne: false
+            referencedRelation: "clubs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "athlete_modules_updated_by_fkey"
+            columns: ["updated_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       athlete_notifications: {
         Row: {
           athlete_id: number
@@ -440,6 +498,54 @@ export type Database = {
         }
         Relationships: []
       }
+      club_modules: {
+        Row: {
+          club_id: number
+          config: Json
+          created_at: string
+          enabled: boolean
+          id: number
+          module_key: string
+          updated_at: string
+          updated_by: number | null
+        }
+        Insert: {
+          club_id: number
+          config?: Json
+          created_at?: string
+          enabled?: boolean
+          id?: number
+          module_key: string
+          updated_at?: string
+          updated_by?: number | null
+        }
+        Update: {
+          club_id?: number
+          config?: Json
+          created_at?: string
+          enabled?: boolean
+          id?: number
+          module_key?: string
+          updated_at?: string
+          updated_by?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "club_modules_club_id_fkey"
+            columns: ["club_id"]
+            isOneToOne: false
+            referencedRelation: "clubs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "club_modules_updated_by_fkey"
+            columns: ["updated_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       clubs: {
         Row: {
           accent_color: string
@@ -447,6 +553,7 @@ export type Database = {
           id: number
           invite_code: string | null
           logo_path: string | null
+          modules_configured_at: string | null
           name: string
         }
         Insert: {
@@ -455,6 +562,7 @@ export type Database = {
           id?: number
           invite_code?: string | null
           logo_path?: string | null
+          modules_configured_at?: string | null
           name: string
         }
         Update: {
@@ -463,6 +571,7 @@ export type Database = {
           id?: number
           invite_code?: string | null
           logo_path?: string | null
+          modules_configured_at?: string | null
           name?: string
         }
         Relationships: []
@@ -1293,14 +1402,31 @@ export type Database = {
         }
         Returns: undefined
       }
+      configure_athlete_modules: {
+        Args: { p_athlete_ids: number[]; p_enabled_module_keys: string[] }
+        Returns: Json
+      }
+      configure_my_club_modules: {
+        Args: { p_enabled_module_keys: string[] }
+        Returns: Json
+      }
       get_my_athlete_id: { Args: never; Returns: number }
       get_my_club_id: { Args: never; Returns: number }
       get_my_role: { Args: never; Returns: string }
       get_my_user_id: { Args: never; Returns: number }
+      is_athlete_module_enabled: {
+        Args: { p_athlete_id: number; p_module_key: string }
+        Returns: boolean
+      }
+      is_club_module_enabled: {
+        Args: { p_club_id: number; p_module_key: string }
+        Returns: boolean
+      }
       import_club_athletes: {
         Args: { p_rows: Json }
         Returns: Json
       }
+      reset_my_club_module_onboarding: { Args: never; Returns: undefined }
       signup_create_account: {
         Args: {
           p_auth_uid: string

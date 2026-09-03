@@ -6,9 +6,9 @@
 // (tâche 4) en conditions réelles, contre la fonction DÉPLOYÉE (ce
 // script ne peut pas s'exécuter sans déploiement préalable — Deno
 // n'est pas exécutable en local ici) :
-//   1. Un coach (pas head_coach) et un athlète sont refusés sur
-//      rename_club / update_club_branding / regenerate_invite_code /
-//      remove_user / change_role.
+//   1. Un coach (pas head_coach) et un athlète sont refusés sur les actions
+//      structurelles. La création d'une invitation individuelle est autorisée
+//      au coach pour son propre club, mais reste refusée à l'athlète.
 //   2. Un head coach d'un AUTRE club ne peut pas agir sur un membre/club
 //      qui n'est pas le sien.
 //   3. Impossible de supprimer ou rétrograder le DERNIER head coach
@@ -108,12 +108,11 @@ async function main() {
     const athleteA = await makeUser(`admin-test-athletea-${RUN_ID}@example.invalid`, password, clubA.id, "athlete", "Athlete A"); auths.push(athleteA);
     const headB = await makeUser(`admin-test-headb-${RUN_ID}@example.invalid`, password, clubB.id, "head_coach", "Head B"); auths.push(headB);
 
-    // ── 1. Coach et athlète refusés sur toutes les actions head coach ──────
+    // ── 1. Coach et athlète refusés sur les actions head coach ────────────
     for (const [label, client] of [["coach", coachA.client], ["athlète", athleteA.client]]) {
       for (const payload of [
         { action: "rename_club", clubName: "Triche" },
         { action: "update_club_branding", accentColor: "#378ADD" },
-        { action: "create_club_invitation", recipientName: "Intrusion", expiresInDays: 7 },
         { action: "list_club_invitations" },
         { action: "regenerate_invite_code" },
         { action: "remove_user", userId: athleteA.row.id },
@@ -122,6 +121,22 @@ async function main() {
         const res = await callAdmin(client, payload);
         record(`${payload.action} refusé pour ${label}`, res.success === false, res.success ? "AUTORISÉ !" : res.error);
       }
+    }
+    {
+      const res = await callAdmin(coachA.client, {
+        action: "create_club_invitation",
+        recipientName: "Athlète invité par coach",
+        expiresInDays: 7,
+      });
+      record("create_club_invitation autorisé pour coach", res.success === true, res.error);
+    }
+    {
+      const res = await callAdmin(athleteA.client, {
+        action: "create_club_invitation",
+        recipientName: "Intrusion",
+        expiresInDays: 7,
+      });
+      record("create_club_invitation refusé pour athlète", res.success === false, res.success ? "AUTORISÉ !" : res.error);
     }
 
     // ── 2. Head coach d'un AUTRE club refusé sur un membre/club qui n'est pas le sien ──

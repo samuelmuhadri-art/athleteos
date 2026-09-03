@@ -3,7 +3,7 @@
 // Vue détail d'un athlète (hero + onglets) — extraite d'AthleteList.jsx.
 // ============================================================
 
-import { memo, useState, useMemo } from "react";
+import { memo, useEffect, useState, useMemo } from "react";
 import { ArrowLeft, HeartPulse, Pencil, Trash2 } from "lucide-react";
 import { getAthleteMetricsForWeek } from "../utils/chargeCalculations";
 import { getISOWeek } from "../utils/helpers.js";
@@ -12,7 +12,7 @@ import { StatusBadge, ScoreRing } from "./athleteListShared";
 import { TabPerformances, TabCharge, TabEntrainements, TabBlessures, TabProfil } from "./AthleteProfileTabs";
 import { ConfirmDialog, InlineNotice, SegmentedTabs } from "../components/ui/premium";
 
-const AthleteProfile = memo(({ athlete, weeklyCharge, sessions, competitions, onBack, onAddRecord, onEditRequest, onDelete, onAddInjury, onUpdateInjury, onDeleteInjury }) => {
+const AthleteProfile = memo(({ athlete, weeklyCharge, sessions, competitions, onBack, onAddRecord, onEditRequest, onDelete, onAddInjury, onUpdateInjury, onDeleteInjury, modules = {} }) => {
   const [activeTab,      setActiveTab]      = useState("performances");
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting,       setDeleting]       = useState(false);
@@ -20,6 +20,17 @@ const AthleteProfile = memo(({ athlete, weeklyCharge, sessions, competitions, on
 
   const metrics        = useMemo(() => getAthleteMetricsForWeek(athlete.id, weeklyCharge, getISOWeek(new Date())), [athlete.id, weeklyCharge]);
   const activeInjuries = athlete.injuries?.filter(i => i.status !== "résolu") ?? [];
+  const visibleTabs = useMemo(() => TABS.filter((tab) => ({
+    performances: modules.performances,
+    charge: modules.training_load,
+    entrainements: modules.planning,
+    blessures: modules.health,
+    profil: true,
+  })[tab.id] !== false), [modules]);
+
+  useEffect(() => {
+    if (!visibleTabs.some((tab) => tab.id === activeTab)) setActiveTab(visibleTabs[0]?.id ?? "profil");
+  }, [activeTab, visibleTabs]);
 
   const handleDelete = async () => {
     setDeleting(true); setDeleteError(null);
@@ -68,8 +79,8 @@ const AthleteProfile = memo(({ athlete, weeklyCharge, sessions, competitions, on
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-3 flex-wrap mb-1">
               <h2 className="text-[24px] font-bold text-white tracking-tight">{athlete.name}</h2>
-              <StatusBadge wellnessScore={metrics.wellnessScore} />
-              {activeInjuries.length > 0 && (
+              {modules.wellness !== false && <StatusBadge wellnessScore={metrics.wellnessScore} />}
+              {modules.health !== false && activeInjuries.length > 0 && (
                 <span className="flex items-center gap-1 text-[12px] font-bold px-2.5 py-1 rounded-full text-white" style={{ background: "rgba(239,159,39,0.3)", border: "1px solid rgba(239,159,39,0.4)" }}>
                   <HeartPulse size={11} /> {activeInjuries.length} blessure{activeInjuries.length > 1 ? "s" : ""}
                 </span>
@@ -86,9 +97,9 @@ const AthleteProfile = memo(({ athlete, weeklyCharge, sessions, competitions, on
           </div>
 
           {/* Métriques inline */}
-          <div className="flex items-center gap-3 flex-shrink-0">
-            <ScoreRing value={metrics.wellnessScore ?? 0} color="white" label="Bien-être" size={80} />
-            <div className="space-y-2 text-[12px]">
+          {(modules.wellness !== false || modules.training_load !== false) && <div className="flex items-center gap-3 flex-shrink-0">
+            {modules.wellness !== false && <ScoreRing value={metrics.wellnessScore ?? 0} color="white" label="Bien-être" size={80} />}
+            {modules.training_load !== false && <div className="space-y-2 text-[12px]">
               <div className="flex items-center justify-between gap-6">
                 <span style={{ color: "rgba(255,255,255,0.76)" }}>Cette semaine</span>
                 <span className="font-bold text-white">{metrics.load7 ?? "—"}</span>
@@ -101,8 +112,8 @@ const AthleteProfile = memo(({ athlete, weeklyCharge, sessions, competitions, on
                 <span style={{ color: "rgba(255,255,255,0.76)" }}>Variation</span>
                 <span className="font-bold text-white">{metrics.variationPercent == null ? "—" : `${metrics.variationPercent >= 0 ? "+" : ""}${metrics.variationPercent}%`}</span>
               </div>
-            </div>
-          </div>
+            </div>}
+          </div>}
         </div>
       </div>
 
@@ -110,7 +121,7 @@ const AthleteProfile = memo(({ athlete, weeklyCharge, sessions, competitions, on
       <SegmentedTabs
         className="aos-segmented-tabs--fill"
         ariaLabel="Sections du profil athlète"
-        items={TABS.map((tab) => ({
+        items={visibleTabs.map((tab) => ({
           ...tab,
           tabId: `coach-athlete-tab-${tab.id}`,
           panelId: "coach-athlete-tabpanel",

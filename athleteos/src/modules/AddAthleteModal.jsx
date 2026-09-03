@@ -8,13 +8,17 @@ import { createPortal } from "react-dom";
 import { Plus, X } from "lucide-react";
 import { inputCls, labelCls, RADAR_KEYS, scoreColor } from "./athleteListUtils";
 import { useAccessibleDialog } from "../hooks/useAccessibleDialog";
+import ModulePresetPicker from "../components/modules/ModulePresetPicker";
+import ModuleSelector from "../components/modules/ModuleSelector";
+import { MODULE_KEYS } from "../domain/modules/moduleRegistry";
 
-const AddAthleteModal = memo(({ onClose, onCreate, initialData = null }) => {
+const AddAthleteModal = memo(({ onClose, onCreate, initialData = null, availableModuleKeys = MODULE_KEYS }) => {
   const isEdit = initialData != null;
   const [form, setForm] = useState(initialData ?? {
     name: "", email: "", age: "", mainDiscipline: "", secondaryDisciplines: "",
     group: "", level: "", speed: 50, strength: 50, explosivity: 50, endurance: 50, technique: 50,
     recoveryRate: "normale", volumeTolerance: "modérée", intensityTolerance: "modérée", psychProfile: "",
+    moduleKeys: availableModuleKeys, sendInvitation: true,
   });
   const [showProfile, setShowProfile] = useState(isEdit);
   const [saving, setSaving]           = useState(false);
@@ -58,10 +62,16 @@ const AddAthleteModal = memo(({ onClose, onCreate, initialData = null }) => {
               value={form.name} onChange={e => set("name", e.target.value)} />
           </div>
           <div>
-            <label className={labelCls} style={{ color: "var(--c-text-3)" }}>Email (pour la messagerie)</label>
+            <label className={labelCls} style={{ color: "var(--c-text-3)" }}>Email</label>
             <input type="email" className={inputCls} placeholder="nora.v@exemple.be"
               value={form.email} onChange={e => set("email", e.target.value)} />
           </div>
+          {!isEdit && (
+            <label className="flex items-start gap-3 rounded-2xl p-3" style={{ background: "var(--c-surface-2)", border: "1px solid var(--c-border)" }}>
+              <input type="checkbox" checked={form.sendInvitation} disabled={!form.email.trim()} onChange={e => set("sendInvitation", e.target.checked)} className="mt-1" style={{ accentColor: "var(--c-accent)" }} />
+              <span><span className="block text-[13px] font-semibold" style={{ color: "var(--c-text-1)" }}>Préparer son invitation</span><span className="block text-[12px] mt-0.5" style={{ color: "var(--c-text-2)" }}>Un lien individuel sécurisé sera créé après le profil.</span></span>
+            </label>
+          )}
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className={labelCls} style={{ color: "var(--c-text-3)" }}>Âge</label>
@@ -77,6 +87,14 @@ const AddAthleteModal = memo(({ onClose, onCreate, initialData = null }) => {
             <input className={inputCls} placeholder="Ex: Sprint 100m/200m"
               value={form.mainDiscipline} onChange={e => set("mainDiscipline", e.target.value)} />
           </div>
+
+          {!isEdit && (
+            <div className="rounded-2xl p-4 space-y-4" style={{ border: "1px solid var(--c-border)" }}>
+              <div><p className="text-[13px] font-bold" style={{ color: "var(--c-text-1)" }}>Outils de cet athlète</p><p className="text-[12px] mt-0.5" style={{ color: "var(--c-text-2)" }}>Il ne verra que les outils également actifs pour le club.</p></div>
+              <ModulePresetPicker onSelect={(keys) => set("moduleKeys", keys)} availableKeys={availableModuleKeys} value={form.moduleKeys} />
+              <ModuleSelector value={form.moduleKeys} onChange={(keys) => set("moduleKeys", keys)} availableKeys={availableModuleKeys} compact />
+            </div>
+          )}
           <div>
             <label className={labelCls} style={{ color: "var(--c-text-3)" }}>Disciplines secondaires</label>
             <input className={inputCls} placeholder="Séparées par des virgules"

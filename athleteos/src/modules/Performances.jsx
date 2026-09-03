@@ -32,6 +32,7 @@ import { getISOWeek, initialsFromName } from "../utils/helpers.js";
 // athlète, pour que classements et records concordent entre coach et
 // athlète (DoD tâche 11).
 import { parsePerf, getDiscHib, pctOfReference, compareValues } from "../athlete/shared.js";
+import { useModules } from "../hooks/useModules";
 
 // ─── Constantes ───────────────────────────────────────────────────────────────
 
@@ -157,6 +158,7 @@ const Podium = memo(({ ranked }) => {
 // ─── Composant principal ──────────────────────────────────────────────────────
 function Performances() {
   const { clubId } = useAuth();
+  const { enabledAthleteIds } = useModules();
   const CURRENT_WEEK = getISOWeek(new Date());
 
   const [athletes,       setAthletes]       = useState([]);
@@ -179,7 +181,10 @@ function Performances() {
         .from("athletes").select("id, name, main_discipline, profile_data").eq("club_id", clubId);
       if (athletesRes.error) throw athletesRes.error;
 
-      const athleteIds = athletesRes.data.map((a) => a.id);
+      const configuredIds = enabledAthleteIds("performances");
+      const eligibleIds = configuredIds ? new Set(configuredIds) : null;
+      const eligibleAthletes = athletesRes.data.filter((athlete) => !eligibleIds || eligibleIds.has(athlete.id));
+      const athleteIds = eligibleAthletes.map((a) => a.id);
 
       const [recordsRes, historyRes] = await Promise.all([
         athleteIds.length ? supabase.from("records").select("*").in("athlete_id", athleteIds) : Promise.resolve({ data: [] }),
@@ -202,7 +207,7 @@ function Performances() {
         }
       }
 
-      const assembledAthletes = athletesRes.data.map((a) => {
+      const assembledAthletes = eligibleAthletes.map((a) => {
         const recs = {};
         (recordsRes.data ?? []).filter((r) => r.athlete_id === a.id).forEach((r) => {
           recs[r.discipline] = { sb: r.sb, pr: r.pr, prDate: r.pr_date };
@@ -223,7 +228,7 @@ function Performances() {
     } finally {
       setLoading(false);
     }
-  }, [clubId]);
+  }, [clubId, enabledAthleteIds]);
 
   useEffect(() => { fetchAll(); }, [fetchAll]);
 
