@@ -336,6 +336,7 @@ function CoachShell({ user, profile, clubId, signOut, club, clubLoading, refresh
               <button
                 onClick={() => setShowSettings(true)}
                 title="Réglages du compte"
+                aria-label="Ouvrir les réglages"
                 className="p-1.5 rounded-lg transition-all flex-shrink-0"
                 style={{ color: "var(--c-text-3)" }}
                 onMouseEnter={e => { e.currentTarget.style.color = "var(--c-text-1)"; e.currentTarget.style.background = "var(--c-surface-2)"; }}

@@ -51,8 +51,16 @@ export async function saveAthleteModules(athleteIds, moduleKeys) {
   return data;
 }
 
+export async function saveModuleAthletes(moduleKey, athleteIds) {
+  const { data, error } = await supabase.rpc("configure_module_athletes", {
+    p_module_key: moduleKey,
+    p_enabled_athlete_ids: athleteIds,
+  });
+  if (error) throw error;
+  return data;
+}
+
 export async function resetModuleOnboarding() {
   const { error } = await supabase.rpc("reset_my_club_module_onboarding");
   if (error) throw error;
 }
-

@@ -61,6 +61,11 @@ describe("matchesISOWeek", () => {
     expect(matchesISOWeek({ date: "2026-07-23" }, 30, 2026)).toBe(true);
     expect(matchesISOWeek({ date: "2026-07-30" }, 30, 2026)).toBe(false);
   });
+
+  it("utilise la date quand les anciens champs semaine et annee sont vides", () => {
+    expect(matchesISOWeek({ week: null, isoYear: null, sessionDate: "2026-09-03" }, 36, 2026)).toBe(true);
+    expect(matchesISOWeek({ week: "", iso_year: "", session_date: "2026-09-03" }, 35, 2026)).toBe(false);
+  });
 });
 
 describe("initialsFromName", () => {

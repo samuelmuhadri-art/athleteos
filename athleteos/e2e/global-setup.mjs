@@ -63,11 +63,13 @@ export default async function globalSetup() {
     const { data: u, error: eu } = await admin.from("users")
       .insert({ club_id: clubId, name, email, role, auth_uid: a.user.id }).select().single();
     if (eu) throw new Error(`insert users ${email} : ${eu.message}`);
+    let athleteId = null;
     if (role === "athlete") {
-      const { error: eat } = await admin.from("athletes").insert({ club_id: clubId, name, user_id: u.id });
+      const { data: athleteRow, error: eat } = await admin.from("athletes").insert({ club_id: clubId, name, user_id: u.id, group_name: "Sprint", main_discipline: "100m" }).select().single();
       if (eat) throw new Error(`insert athletes ${email} : ${eat.message}`);
+      athleteId = athleteRow.id;
     }
-    return { email, password, authId: a.user.id, userId: u.id };
+    return { email, password, authId: a.user.id, userId: u.id, athleteId };
   }
 
   const coach   = await makeAccount(club.id, `e2e-coach-${runId}@example.invalid`, "E2E Coach", "head_coach");
@@ -92,6 +94,46 @@ export default async function globalSetup() {
     "head_coach",
   );
 
+  // Club isolé pour les tests de découverte des outils et de hiérarchie du
+  // dashboard. Les scénarios peuvent modifier ses modules sans perturber les
+  // parcours coach/athlète historiques exécutés en parallèle.
+  const { data: uxClub, error: uxClubError } = await admin.from("clubs").insert({ name: `E2E UX ${runId}` }).select().single();
+  if (uxClubError) throw new Error(`seed ux club : ${uxClubError.message}`);
+  const uxCoach = await makeAccount(uxClub.id, `e2e-ux-coach-${runId}@example.invalid`, "Benoît Coach", "head_coach");
+  const uxAthlete = await makeAccount(uxClub.id, `e2e-ux-athlete-${runId}@example.invalid`, "Antonin Leroy", "athlete");
+  const today = new Date();
+  const todayDate = today.toISOString().slice(0, 10);
+  const competitionDate = new Date(today); competitionDate.setDate(competitionDate.getDate() + 10);
+  const { data: uxSession, error: uxSessionError } = await admin.from("sessions").insert({
+    club_id: uxClub.id, title: "Sprint — vitesse max", category: "sprint", time: "18:00",
+    description: "6 × 40 m", instructions: "Récupération 4 min", duration_minutes: 60,
+    session_date: todayDate, created_by: uxCoach.userId,
+  }).select().single();
+  if (uxSessionError) throw new Error(`seed ux session : ${uxSessionError.message}`);
+  const { error: uxAssignmentError } = await admin.from("session_athletes").insert({ session_id: uxSession.id, athlete_id: uxAthlete.athleteId, status: "future" });
+  if (uxAssignmentError) throw new Error(`seed ux assignment : ${uxAssignmentError.message}`);
+  const historicalDate = new Date(today); historicalDate.setDate(historicalDate.getDate() - 7);
+  const { data: historicalSession, error: historicalSessionError } = await admin.from("sessions").insert({
+    club_id: uxClub.id, title: "Technique départ", category: "sprint", time: "18:00",
+    duration_minutes: 45, session_date: historicalDate.toISOString().slice(0, 10), created_by: uxCoach.userId,
+  }).select().single();
+  if (historicalSessionError) throw new Error(`seed ux historical session : ${historicalSessionError.message}`);
+  const { error: historicalAssignmentError } = await admin.from("session_athletes").insert({
+    session_id: historicalSession.id, athlete_id: uxAthlete.athleteId, status: "done", rpe: 5,
+    actual_duration_minutes: 45, duration_source: "reported",
+  });
+  if (historicalAssignmentError) throw new Error(`seed ux historical assignment : ${historicalAssignmentError.message}`);
+  const { data: uxCompetition, error: uxCompetitionError } = await admin.from("competitions").insert({
+    club_id: uxClub.id, name: "Meeting de Bruxelles", date: competitionDate.toISOString().slice(0, 10), location: "Bruxelles",
+  }).select().single();
+  if (uxCompetitionError) throw new Error(`seed ux competition : ${uxCompetitionError.message}`);
+  const { error: uxCompetitionAthleteError } = await admin.from("competition_athletes").insert({ competition_id: uxCompetition.id, athlete_id: uxAthlete.athleteId, planned_event: "100 m" });
+  if (uxCompetitionAthleteError) throw new Error(`seed ux competition athlete : ${uxCompetitionAthleteError.message}`);
+  const { error: uxMessageError } = await admin.from("messages").insert({ sender_id: uxCoach.userId, receiver_id: uxAthlete.userId, content: "Pense à confirmer ta présence pour ce soir." });
+  if (uxMessageError) throw new Error(`seed ux message : ${uxMessageError.message}`);
+  const { error: uxConfiguredError } = await admin.from("clubs").update({ modules_configured_at: new Date().toISOString() }).eq("id", uxClub.id);
+  if (uxConfiguredError) throw new Error(`configure ux club : ${uxConfiguredError.message}`);
+
   const fixturesPath = path.join(path.dirname(fileURLToPath(import.meta.url)), ".auth-fixtures.json");
   writeFileSync(fixturesPath, JSON.stringify({
     runId,
@@ -99,6 +141,7 @@ export default async function globalSetup() {
     coach,
     athlete,
     onboarding: { clubId: onboardingClub.id, coach: onboardingCoach },
+    ux: { clubId: uxClub.id, coach: uxCoach, athlete: uxAthlete },
   }, null, 2));
 
   // Pas de nettoyage automatique ici : l'instance Supabase locale est

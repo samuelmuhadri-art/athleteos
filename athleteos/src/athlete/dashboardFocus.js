@@ -7,27 +7,18 @@ export function getAthleteSessionStatus(session, athleteId) {
   return session?.validations?.find(validation => validation.athleteId === athleteId)?.status ?? "future";
 }
 
-export function getTodayFocus({ wellnessCompleted, restConfirmed = false, todaySessions = [], athleteId }) {
+export function getTodayFocus({ wellnessCompleted, wellnessEnabled = true, restConfirmed = false, restTrackingEnabled = true, todaySessions = [], athleteId }) {
   const sessions = Array.isArray(todaySessions) ? todaySessions : [];
   const pendingSessions = sessions.filter(
     session => !TERMINAL_SESSION_STATUSES.has(getAthleteSessionStatus(session, athleteId))
   );
   const completedSessions = sessions.length - pendingSessions.length;
-  const restStep = sessions.length === 0;
-  const completedSteps = completedSessions + (wellnessCompleted ? 1 : 0) + (restStep && restConfirmed ? 1 : 0);
-  const totalSteps = sessions.length + 1 + (restStep ? 1 : 0);
+  const restStep = sessions.length === 0 && restTrackingEnabled;
+  const completedSteps = completedSessions + (wellnessEnabled && wellnessCompleted ? 1 : 0) + (restStep && restConfirmed ? 1 : 0);
+  const totalSteps = sessions.length + (wellnessEnabled ? 1 : 0) + (restStep ? 1 : 0);
 
-  if (!wellnessCompleted) {
-    return {
-      kind: "wellness",
-      completedSteps,
-      totalSteps,
-      completedSessions,
-      pendingSessions,
-      focusSession: pendingSessions[0] ?? null,
-    };
-  }
-
+  // Le planning reste la première question opérationnelle de l’athlète.
+  // Le check-in demeure visible juste après, mais ne masque plus une séance.
   if (pendingSessions.length > 0) {
     return {
       kind: "session",
@@ -36,6 +27,17 @@ export function getTodayFocus({ wellnessCompleted, restConfirmed = false, todayS
       completedSessions,
       pendingSessions,
       focusSession: pendingSessions[0],
+    };
+  }
+
+  if (wellnessEnabled && !wellnessCompleted) {
+    return {
+      kind: "wellness",
+      completedSteps,
+      totalSteps,
+      completedSessions,
+      pendingSessions,
+      focusSession: null,
     };
   }
 

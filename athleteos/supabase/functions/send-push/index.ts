@@ -38,7 +38,7 @@ const MAX_USER_REQUESTS_PER_MINUTE = 20;
 const MAX_USER_REQUESTS_PER_DAY = 200;
 const MODULE_KEYS = new Set([
   "planning", "performances", "session_feedback", "wellness",
-  "training_load", "health", "messaging", "social", "reports",
+  "training_load", "health", "messaging", "social", "reports", "gamification",
 ]);
 
 // Origines autorisées pour les appels navigateur (CORS). Domaine de

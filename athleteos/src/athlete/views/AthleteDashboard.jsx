@@ -12,8 +12,8 @@
 import { useState, useMemo, memo } from "react";
 import {
   CalendarDays, TrendingUp, Zap, CheckCircle,
-  Activity, FileText, HeartPulse, Trophy, ChevronRight,
-  Star, Clock,
+  Activity, HeartPulse, Trophy, ChevronRight,
+  Star, Clock, MessageSquare,
 } from "lucide-react";
 import {
   getAthleteMetricsForWeek,
@@ -29,7 +29,6 @@ import TrainingGauge from "../components/TrainingGauge";
 import { getAthleteLoadStory, getMonitoringReading } from "../../domain/monitoringMetrics.js";
 import { TRAINING_GAUGE_KEYS, getTrainingGaugeReading } from "../../domain/trainingGauges.js";
 import { SessionDetailModal } from "./AthletePlanning";
-import { openSessionAttachment } from "../../utils/storage";
 import { getTodayFocus } from "../dashboardFocus";
 import { buildDailyState } from "../../domain/dailyState";
 import DailyStateDetailPanel from "../components/DailyStateDetailPanel";
@@ -133,16 +132,33 @@ const BadgeItem = memo(({ badge }) => (
 ));
 
 const DailyFocusCard = memo(({
-  focus, todaySessions, nextCompetition,
+  focus, todaySessions, nextSession, wellnessCompleted,
   dailyState, loadStory,
   onOpenWellness, onOpenSession, onOpenPlanning, onConfirmRestDay,
-  onOpenDailyState, onOpenLoadDetail,
+  onOpenDailyState, onOpenLoadDetail, modules,
 }) => {
-  const wellnessCompleted = focus.kind !== "wellness";
   const session = focus.focusSession;
   const progress = Math.round((focus.completedSteps / Math.max(1, focus.totalSteps)) * 100);
 
-  const presentation = focus.kind === "wellness" ? {
+  const presentation = modules.planning !== false && todaySessions.length === 0 ? {
+    eyebrow: "Aujourd’hui",
+    title: "Pas de séance prévue aujourd’hui",
+    description: nextSession
+      ? `Prochaine séance : ${nextSession.title}${nextSession.sessionDate ? ` · ${new Date(nextSession.sessionDate).toLocaleDateString("fr-BE", { weekday: "long", day: "numeric", month: "short" })}` : ""}`
+      : "Ta semaine est libre pour le moment.",
+    cta: "Voir ma semaine",
+    color: "var(--color-info)",
+    icon: CalendarDays,
+    action: onOpenPlanning,
+  } : focus.kind === "session" ? {
+    eyebrow: "Séance du jour",
+    title: session?.title ?? "Séance du jour",
+    description: [session?.time, session?.durationMinutes ? `${session.durationMinutes} min` : null, session ? getSessionTrainingFocus(session).shortLabel : null].filter(Boolean).join(" · "),
+    cta: "Voir ma séance",
+    color: session ? colorsFor(session.category).border : "var(--c-accent)",
+    icon: Clock,
+    action: onOpenSession,
+  } : focus.kind === "wellness" ? {
     eyebrow: "Étape suivante",
     title: "Check-in du matin",
     description: "30 secondes pour décrire ton ressenti du jour et donner du contexte à ton coach.",
@@ -150,14 +166,6 @@ const DailyFocusCard = memo(({
     color: "var(--color-success)",
     icon: Activity,
     action: onOpenWellness,
-  } : focus.kind === "session" ? {
-    eyebrow: "Prochaine séance",
-    title: session?.title ?? "Séance du jour",
-    description: [session?.time, session?.durationMinutes ? `${session.durationMinutes} min` : null].filter(Boolean).join(" · "),
-    cta: "Ouvrir la séance",
-    color: session ? colorsFor(session.category).border : "var(--c-accent)",
-    icon: Clock,
-    action: onOpenSession,
   } : focus.kind === "rest" ? {
     eyebrow: "Donnée du jour",
     title: "Confirmer le jour de repos",
@@ -188,6 +196,24 @@ const DailyFocusCard = memo(({
   const completedSessionLabel = todaySessions.length === 0
     ? (focus.kind === "rest" ? "Repos à confirmer" : "Repos confirmé")
     : `${focus.completedSessions}/${todaySessions.length} traitée${todaySessions.length > 1 ? "s" : ""}`;
+  const detailItems = [
+    modules.planning !== false ? {
+      key: "session", icon: CalendarDays, label: "Ta séance",
+      value: session?.title ?? (todaySessions.length ? completedSessionLabel : "Voir ma semaine"),
+      detail: session ? completedSessionLabel : null,
+      color: session ? presentation.color : "var(--c-text-2)", action: session ? onOpenSession : onOpenPlanning,
+    } : null,
+    modules.wellness !== false ? {
+      key: "checkin", icon: Activity, label: "Ton check-in",
+      value: wellnessCompleted ? (dailyState?.plainHeadline ?? "Complété") : "30 secondes pour le faire",
+      color: wellnessCompleted ? dailyState?.color : "var(--color-warning)", action: wellnessCompleted ? onOpenDailyState : onOpenWellness,
+    } : null,
+    modules.training_load !== false ? {
+      key: "progress", icon: TrendingUp, label: "Ta progression",
+      value: loadStory?.headline ?? "Ton historique se construit",
+      color: "var(--color-info)", action: onOpenLoadDetail,
+    } : null,
+  ].filter(Boolean);
 
   return (
     <section className="card xl:col-span-2" aria-labelledby="daily-focus-title" style={{
@@ -245,29 +271,12 @@ const DailyFocusCard = memo(({
           </div>
 
           <div style={{ borderRadius: "var(--r-lg)", overflow: "hidden", border: "1px solid var(--c-border)", background: "rgba(2,7,12,0.16)" }}>
-            {[
-              {
-                key: "checkin", icon: Activity, label: "Ton check-in",
-                value: wellnessCompleted ? (dailyState?.plainHeadline ?? "Complété") : "30 secondes pour le faire",
-                color: wellnessCompleted ? dailyState?.color : "var(--color-warning)", action: wellnessCompleted ? onOpenDailyState : onOpenWellness,
-              },
-              {
-                key: "session", icon: CalendarDays, label: "Ta séance",
-                value: session?.title ?? completedSessionLabel,
-                detail: session ? completedSessionLabel : null,
-                color: session ? presentation.color : "var(--c-text-2)", action: session ? onOpenSession : onOpenPlanning,
-              },
-              {
-                key: "progress", icon: TrendingUp, label: "Ta progression",
-                value: loadStory?.headline ?? "Ton historique se construit",
-                color: "var(--color-info)", action: onOpenLoadDetail,
-              },
-            ].map((item, index) => {
+            {detailItems.map((item, index) => {
               const ItemIcon = item.icon;
               return (
                 <button key={item.key} type="button" onClick={item.action} className="tap-feedback" style={{
                   width: "100%", minHeight: 58, display: "flex", alignItems: "center", gap: 10,
-                  background: "transparent", border: 0, borderBottom: index < 2 ? "1px solid var(--c-border)" : 0,
+                  background: "transparent", border: 0, borderBottom: index < detailItems.length - 1 ? "1px solid var(--c-border)" : 0,
                   padding: "10px 12px", color: "inherit", cursor: "pointer", textAlign: "left",
                 }}>
                   <ItemIcon size={16} color={item.color} aria-hidden="true" />
@@ -283,11 +292,39 @@ const DailyFocusCard = memo(({
           </div>
         </div>
 
-        {nextCompetition && (
-          <p className="meta-text" style={{ marginTop: "auto", paddingTop: "var(--space-3)" }}>
-            Prochain cap · <span style={{ color: "var(--c-text-2)", fontWeight: 600 }}>{nextCompetition.name}</span>
-          </p>
-        )}
+      </div>
+    </section>
+  );
+});
+
+const WeekOverview = memo(({ sessions, today, onOpenPlanning }) => {
+  const days = useMemo(() => {
+    const monday = new Date(today);
+    monday.setHours(12, 0, 0, 0);
+    monday.setDate(monday.getDate() - ((monday.getDay() + 6) % 7));
+    return Array.from({ length: 7 }, (_, index) => {
+      const date = new Date(monday);
+      date.setDate(monday.getDate() + index);
+      const daySessions = sessions.filter((session) => session.sessionDate && isSameDay(parseLocalDate(session.sessionDate), date));
+      return { date, session: daySessions[0] ?? null, count: daySessions.length };
+    });
+  }, [sessions, today]);
+
+  return (
+    <section className="card athlete-week-overview" aria-labelledby="athlete-week-title">
+      <div className="athlete-week-heading">
+        <div><p className="metric-label">Planning</p><h2 id="athlete-week-title" className="section-title">Ma semaine</h2></div>
+        <button type="button" onClick={onOpenPlanning} className="btn-ghost">Voir le planning <ChevronRight size={14} /></button>
+      </div>
+      <div className="athlete-week-days">
+        {days.map(({ date, session, count }) => {
+          const isToday = isSameDay(date, today);
+          return <button key={toLocalDateStr(date)} type="button" onClick={onOpenPlanning} className="athlete-week-day" data-today={isToday ? "true" : "false"}>
+            <span>{date.toLocaleDateString("fr-BE", { weekday: "short" }).replace(".", "")}</span>
+            <strong>{date.getDate()}</strong>
+            <small>{session ? session.title : "Repos"}{count > 1 ? ` +${count - 1}` : ""}</small>
+          </button>;
+        })}
       </div>
     </section>
   );
@@ -341,6 +378,10 @@ export default function AthleteDashboard({
     .filter(c => c.athleteIds.includes(athlete.id) && new Date(c.date) >= today)
     .sort((a, b) => new Date(a.date) - new Date(b.date))[0] ?? null;
 
+  const nextSession = sessions
+    .filter((session) => session.sessionDate && parseLocalDate(session.sessionDate) > today)
+    .sort((a, b) => `${a.sessionDate ?? ""}T${a.time ?? ""}`.localeCompare(`${b.sessionDate ?? ""}T${b.time ?? ""}`))[0] ?? null;
+
   const weekSessions = useMemo(() =>
     sessions
       .filter(session => matchesISOWeek(session, currentWeek, currentYear))
@@ -353,7 +394,9 @@ export default function AthleteDashboard({
     .filter(s => s.sessionDate && isSameDay(parseLocalDate(s.sessionDate), today));
   const todayFocus = getTodayFocus({
     wellnessCompleted: modules.wellness === false || Boolean(wellnessToday),
+    wellnessEnabled: modules.wellness !== false,
     restConfirmed: modules.training_load === false || confirmedRestDays.includes(toLocalDateStr(today)),
+    restTrackingEnabled: modules.training_load !== false,
     todaySessions, athleteId: athlete.id,
   });
   const focusSession = todayFocus.focusSession;
@@ -404,9 +447,6 @@ export default function AthleteDashboard({
     }) ?? null;
   }, [myPerformances, athlete.records]);
 
-  const doneThisWeek = weekSessions.filter(s =>
-    s.validations?.find(v => v.athleteId === athlete.id && v.status === "done")).length;
-
   const statusColor = dailyState.color;
 
   // ══════════════════════════════════════════════════════════════════════════
@@ -425,10 +465,11 @@ export default function AthleteDashboard({
       {/* L'action du jour occupe seule le premier niveau de lecture. Les
           explications et chiffres restent juste après, sans être supprimés. */}
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 md:gap-5 items-stretch">
-        {(modules.planning !== false || modules.wellness !== false || modules.performances !== false) && <DailyFocusCard
+        {(modules.planning !== false || modules.wellness !== false || modules.training_load !== false) && <DailyFocusCard
           focus={todayFocus}
           todaySessions={todaySessions}
-          nextCompetition={nextComp}
+          nextSession={nextSession}
+          wellnessCompleted={modules.wellness === false || Boolean(wellnessToday)}
           dailyState={dailyState}
           loadStory={loadStory}
           onOpenWellness={onOpenWellness}
@@ -437,7 +478,24 @@ export default function AthleteDashboard({
           onConfirmRestDay={() => onConfirmRestDay?.(toLocalDateStr(today))}
           onOpenDailyState={() => setShowDailyState(true)}
           onOpenLoadDetail={() => setActiveMetric("weeklyLoad")}
+          modules={modules}
         />}
+
+        {modules.planning !== false && <div className="xl:col-span-2"><WeekOverview sessions={weekSessions} today={today} onOpenPlanning={() => onNavigate("planning")} /></div>}
+
+        {modules.performances !== false && nextComp && (() => {
+          const days = Math.max(0, Math.ceil((new Date(nextComp.date) - today) / (1000 * 60 * 60 * 24)));
+          return <section className="athlete-next-event" aria-labelledby="next-event-title">
+            <div><p className="metric-label">PROCHAIN RENDEZ-VOUS</p><h2 id="next-event-title">{nextComp.name}</h2><p>{new Date(nextComp.date).toLocaleDateString("fr-BE", { day: "numeric", month: "long" })}{nextComp.location ? ` · ${nextComp.location}` : ""}</p>{nextComp.plannedEvents?.[athlete.id] && <span>{nextComp.plannedEvents[athlete.id]}</span>}</div>
+            <strong>{days}<small> jour{days > 1 ? "s" : ""}</small></strong>
+          </section>;
+        })()}
+
+        {modules.messaging !== false && lastMessages.length > 0 && <section className="card athlete-important-message" aria-labelledby="important-message-title">
+          <div className="athlete-important-message__icon"><MessageSquare size={17} aria-hidden="true" /></div>
+          <div className="min-w-0 flex-1"><p className="metric-label">MESSAGE IMPORTANT</p><h2 id="important-message-title">{coachName?.split(" ")[0] ?? "Ton coach"} t’a envoyé un message</h2><p className="line-clamp-2">{lastMessages[0].content}</p></div>
+          <button type="button" className="btn-ghost" onClick={() => onNavigate("messagerie")}>Lire <ChevronRight size={14} /></button>
+        </section>}
 
         {(modules.wellness !== false || modules.training_load !== false) && <div className="xl:col-span-2" style={{ paddingTop: "var(--space-2)" }}>
           <h2 className="section-title">Mieux comprendre ta journée</h2>
@@ -591,59 +649,6 @@ export default function AthleteDashboard({
             </div>
           </details>}
 
-          {/* ── Séances cette semaine ───────────────────────────────────────── */}
-          {modules.planning !== false && <div className="card overflow-hidden">
-            <div style={{ padding: "12px 16px 12px", borderBottom: "1px solid var(--c-border)", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-              <div>
-                <p className="card-title">Cette semaine</p>
-                <p className="card-subtitle">{doneThisWeek}/{weekSessions.length} réalisée{weekSessions.length > 1 ? "s" : ""}</p>
-              </div>
-              <button onClick={() => onNavigate("planning")} className="btn-ghost" style={{ minHeight: "var(--touch)", padding: 0 }}>
-                Voir tout
-              </button>
-            </div>
-            {weekSessions.length === 0 ? (
-              <div style={{ padding: "32px 16px", textAlign: "center" }}>
-                <CalendarDays size={20} color="var(--c-text-3)" strokeWidth={1.5} style={{ margin: "0 auto 8px" }} />
-                <p style={{ fontSize: 12, color: "var(--c-text-3)" }}>Aucune séance cette semaine</p>
-              </div>
-            ) : weekSessions.map((s, idx) => {
-              const c   = colorsFor(s.category);
-              const val = s.validations?.find(v => v.athleteId === athlete.id);
-              const st  = val?.status ?? "future";
-              const stCfg = {
-                done:    { label: "Fait",    bg: "rgba(29,158,117,0.15)",  color: "var(--tone-success)" },
-                partial: { label: "Partiel", bg: "rgba(232,160,32,0.15)",  color: "var(--tone-warning)" },
-                none:    { label: "Absent",  bg: "rgba(224,82,82,0.15)",   color: "var(--tone-danger)" },
-                future:  { label: "À venir", bg: "rgba(255,255,255,0.08)", color: "var(--c-text-3)" },
-              }[st] ?? { label: "À venir", bg: "rgba(255,255,255,0.08)", color: "var(--c-text-3)" };
-              return (
-                <div key={s.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 16px", borderTop: idx > 0 ? "1px solid var(--c-border)" : "none" }}>
-                  {/* Liseré catégorie 2px */}
-                  <div style={{ width: 2, alignSelf: "stretch", borderRadius: 2, flexShrink: 0, background: c.border }} />
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <p style={{ fontSize: 12.5, fontWeight: 500, color: "var(--c-text-1)" }} className="truncate">{s.title}</p>
-                    <p className="meta-text" style={{ marginTop: "var(--space-1)" }}>
-                      {s.sessionDate
-                        ? new Date(s.sessionDate).toLocaleDateString("fr-BE", { weekday: "short", day: "numeric", month: "short" })
-                        : s.day} · {s.time}
-                    </p>
-                    <p className="meta-text" style={{ marginTop: 2, color: "var(--c-text-2)" }}>Objectif · {getSessionTrainingFocus(s).shortLabel}</p>
-                  </div>
-                  {s.pdfUrl && (
-                    <button type="button" onClick={() => openSessionAttachment(s.pdfUrl)}
-                      style={{ display: "flex", alignItems: "center", gap: 4, minHeight: "var(--touch)", padding: "4px 8px", borderRadius: 7, background: "rgba(91,141,239,0.15)", color: "var(--color-info)", fontSize: "var(--text-meta)", fontWeight: 600, flexShrink: 0, border: "none", cursor: "pointer" }}>
-                      <FileText size={12} />Fichier
-                    </button>
-                  )}
-                  <span style={{ flexShrink: 0, padding: "3px 8px", borderRadius: 6, background: stCfg.bg, color: stCfg.color, fontSize: "var(--text-meta)", fontWeight: 600 }}>
-                    {stCfg.label}
-                  </span>
-                </div>
-              );
-            })}
-          </div>}
-
           {/* ── Banner PR ────────────────────────────────────────────────────── */}
           {modules.performances !== false && latestPR && (
             <div style={{ borderRadius: 14, padding: "14px 16px", position: "relative", overflow: "hidden", background: "linear-gradient(135deg, #7B5104 0%, #9A6800 50%, #C8890A 100%)" }}>
@@ -703,7 +708,7 @@ export default function AthleteDashboard({
           )}
 
           {/* ── Badges ──────────────────────────────────────────────────────── */}
-          {(modules.planning !== false || modules.performances !== false) && <div className="card p-4">
+          {modules.gamification !== false && <div className="card p-4">
             <div className="flex items-center justify-between mb-4">
               <div>
                 <p className="card-title">Badges</p>
@@ -742,47 +747,6 @@ export default function AthleteDashboard({
         {/* ── COLONNE DROITE ─────────────────────────────────────────────── */}
         <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-4)" }}>
 
-          {/* Prochaine compétition */}
-          {modules.performances !== false && nextComp && (() => {
-            const days = Math.round((new Date(nextComp.date) - today) / (1000*60*60*24));
-            return (
-              <div style={{ borderRadius: 14, padding: "16px", position: "relative", overflow: "hidden", background: "linear-gradient(135deg, #6B1717 0%, #8B1F1F 50%, #A82525 100%)" }}>
-                <div style={{ position: "absolute", right: -20, top: -20, width: 80, height: 80, borderRadius: "50%", background: "rgba(255,255,255,0.04)", pointerEvents: "none" }} />
-                <div style={{ position: "relative" }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 10 }}>
-                    <Trophy size={11} color="rgba(255,255,255,0.40)" strokeWidth={2} />
-                    <span style={{ fontSize: "var(--text-meta)", fontWeight: 600, letterSpacing: "0.06em", textTransform: "uppercase", color: "rgba(255,255,255,0.80)" }}>
-                      Prochaine compétition
-                    </span>
-                  </div>
-                  <p style={{ fontSize: 15, fontWeight: 600, color: "white", letterSpacing: "-0.02em", lineHeight: 1.2, marginBottom: 3 }}>
-                    {nextComp.name}
-                  </p>
-                  <p style={{ fontSize: "var(--text-meta)", color: "rgba(255,255,255,0.78)", marginBottom: 12 }}>
-                    {new Date(nextComp.date).toLocaleDateString("fr-BE", { day: "numeric", month: "long", year: "numeric" })}
-                  </p>
-                  <div style={{ borderRadius: 10, padding: "10px 12px", textAlign: "center", marginBottom: 10, background: "rgba(255,255,255,0.09)" }}>
-                    {/* 1 seul chiffre héro dans tout l'écran — weight 700 autorisé */}
-                    <p style={{ fontSize: 38, fontWeight: 700, color: "white", letterSpacing: "-0.04em", fontVariantNumeric: "tabular-nums", lineHeight: 1 }}>
-                      {days}
-                    </p>
-                    <p style={{ fontSize: "var(--text-meta)", fontWeight: 600, letterSpacing: "0.06em", textTransform: "uppercase", color: "rgba(255,255,255,0.80)", marginTop: 4 }}>
-                      jours
-                    </p>
-                  </div>
-                  {nextComp.plannedEvents?.[athlete.id] && (
-                    <div style={{ borderRadius: 8, padding: "8px 10px", background: "rgba(255,255,255,0.09)" }}>
-                      <p style={{ fontSize: "var(--text-meta)", color: "rgba(255,255,255,0.78)", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 4 }}>
-                        Épreuve prévue
-                      </p>
-                      <p style={{ fontSize: 13, fontWeight: 500, color: "white" }}>{nextComp.plannedEvents[athlete.id]}</p>
-                    </div>
-                  )}
-                </div>
-              </div>
-            );
-          })()}
-
           {/* Régularité */}
           {modules.session_feedback !== false && streak > 0 && (
             <div className="card p-4">
@@ -805,7 +769,7 @@ export default function AthleteDashboard({
               <div className="progress-bar">
                 <div className="progress-fill" style={{ width: `${Math.min(100,streak*10)}%`, background: "#C8890A" }} />
               </div>
-              <p className="meta-text" style={{ textAlign: "right", marginTop: "var(--space-1)" }}>{streak}/10 badge Maestro</p>
+              <p className="meta-text" style={{ textAlign: "right", marginTop: "var(--space-1)" }}>{modules.gamification !== false ? `${streak}/10 badge Maestro` : `${streak}/10 semaines`}</p>
             </div>
           )}
 
@@ -847,33 +811,6 @@ export default function AthleteDashboard({
             )}
           </div>}
 
-          {/* Messages coach */}
-          {modules.messaging !== false && lastMessages.length > 0 && (
-            <div className="card p-4">
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
-                  <div style={{ width: 32, height: 32, borderRadius: "50%", background: "linear-gradient(135deg,var(--c-accent),var(--c-accent-dark))", display: "flex", alignItems: "center", justifyContent: "center", color: "white", fontSize: "var(--text-meta)", fontWeight: 600, flexShrink: 0 }}>
-                    {initialsFromName(coachName ?? "C")}
-                  </div>
-                  <div>
-                    <p style={{ fontSize: 12.5, fontWeight: 500, color: "var(--c-text-1)" }}>{coachName?.split(" ")[0] ?? "Coach"}</p>
-                    <p className="meta-text">Message récent</p>
-                  </div>
-                </div>
-                <button onClick={() => onNavigate("messagerie")} className="btn-ghost" style={{ minHeight: "var(--touch)", padding: 0 }}>
-                  Répondre
-                </button>
-              </div>
-              {lastMessages.slice(0, 2).map(m => (
-                <div key={m.id} style={{ borderRadius: 10, padding: "9px 11px", marginBottom: 6, background: "var(--c-surface-2)" }}>
-                  <p style={{ fontSize: 12, color: "var(--c-text-2)", lineHeight: 1.5 }} className="line-clamp-2">{m.content}</p>
-                  <p className="meta-text" style={{ marginTop: "var(--space-1)" }}>
-                    {new Date(m.created_at).toLocaleDateString("fr-BE", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}
-                  </p>
-                </div>
-              ))}
-            </div>
-          )}
         </div>
       </div>
 

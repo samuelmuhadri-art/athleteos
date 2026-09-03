@@ -8,6 +8,7 @@ export const MODULE_KEYS = Object.freeze([
   "messaging",
   "social",
   "reports",
+  "gamification",
 ]);
 
 export const MODULE_REGISTRY = Object.freeze({
@@ -66,6 +67,12 @@ export const MODULE_REGISTRY = Object.freeze({
     description: "Composer des synthèses uniquement avec les données activées.",
     group: "progress",
   },
+  gamification: {
+    label: "Badges et progression",
+    shortLabel: "Badges",
+    description: "Afficher les badges, récompenses et éléments de progression dans l’espace athlète.",
+    group: "progress",
+  },
 });
 
 export const MODULE_GROUPS = Object.freeze([
@@ -84,7 +91,7 @@ export const MODULE_PRESETS = Object.freeze([
   },
   {
     id: "balanced",
-    label: "Suivi équilibré",
+    label: "Suivi entraînement",
     description: "Ajoute feedback, bien-être, santé et rapports.",
     moduleKeys: ["planning", "performances", "session_feedback", "wellness", "health", "messaging", "reports"],
   },
@@ -115,6 +122,13 @@ export const ATHLETE_VIEW_MODULE = Object.freeze({
 export function normalizeModuleKeys(keys, availableKeys = MODULE_KEYS) {
   const allowed = new Set(availableKeys);
   return [...new Set((keys ?? []).filter((key) => allowed.has(key)))];
+}
+
+export function matchingModulePreset(keys, availableKeys = MODULE_KEYS) {
+  const current = normalizeModuleKeys(keys, availableKeys).sort().join("|");
+  return MODULE_PRESETS.find((preset) => (
+    normalizeModuleKeys(preset.moduleKeys, availableKeys).sort().join("|") === current
+  )) ?? null;
 }
 
 export function resolveModuleDependencies(keys, availableKeys = MODULE_KEYS) {
@@ -179,5 +193,6 @@ export function moduleKeyForEventType(type) {
   if (["blessure", "injury"].includes(type)) return "health";
   if (type === "wellness") return "wellness";
   if (["charge", "load", "acwr"].includes(type)) return "training_load";
+  if (["badge", "achievement", "gamification"].includes(type)) return "gamification";
   return null;
 }

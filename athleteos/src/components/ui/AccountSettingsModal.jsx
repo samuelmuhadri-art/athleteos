@@ -4,6 +4,7 @@ import {
   Check,
   Copy,
   KeyRound,
+  Layers3,
   Lock,
   Mail,
   Image as ImageIcon,
@@ -95,7 +96,7 @@ export default function AccountSettingsModal({ onClose, initialSection = "accoun
   const isHeadCoach = profile?.role === "head_coach";
   const initialActiveSection = initialSection === "application"
     ? "application"
-    : initialSection === "club" && isHeadCoach ? "club" : "account";
+    : ["club", "tools"].includes(initialSection) && isHeadCoach ? initialSection : "account";
   const [activeSection, setActiveSection] = useState(initialActiveSection);
   const [name, setName] = useState(profile?.name ?? "");
   const [email, setEmail] = useState(user?.email ?? "");
@@ -405,7 +406,7 @@ export default function AccountSettingsModal({ onClose, initialSection = "accoun
           className="account-settings-tabs"
           role="tablist"
           aria-label="Sections des réglages"
-          style={{ gridTemplateColumns: `repeat(${isHeadCoach ? 3 : 2}, minmax(0, 1fr))` }}
+          style={{ gridTemplateColumns: `repeat(${isHeadCoach ? 4 : 2}, minmax(0, 1fr))` }}
         >
             <button
               type="button"
@@ -429,6 +430,17 @@ export default function AccountSettingsModal({ onClose, initialSection = "accoun
             >
               <MonitorDown size={16} aria-hidden="true" /> Application
             </button>
+            {isHeadCoach && <button
+              type="button"
+              role="tab"
+              id="settings-tools-tab"
+              aria-selected={activeSection === "tools"}
+              aria-controls="settings-tools-panel"
+              className={activeSection === "tools" ? "active" : ""}
+              onClick={() => switchSection("tools")}
+            >
+              <Layers3 size={16} aria-hidden="true" /> Outils
+            </button>}
             {isHeadCoach && <button
               type="button"
               role="tab"
@@ -543,6 +555,20 @@ export default function AccountSettingsModal({ onClose, initialSection = "accoun
               />
               <PwaAccessCard />
             </div>
+          ) : activeSection === "tools" ? (
+            <div
+              id="settings-tools-panel"
+              role="tabpanel"
+              aria-labelledby="settings-tools-tab"
+              className="settings-panel"
+            >
+              <SettingsSectionHeader
+                icon={Layers3}
+                title="Outils AthleteOS"
+                description="Choisis les outils que tu souhaites utiliser avec ton groupe. Tu pourras ensuite les personnaliser pour chaque athlète."
+              />
+              <ClubModulesSettings />
+            </div>
           ) : (
             <div
               id="settings-club-panel"
@@ -579,8 +605,6 @@ export default function AccountSettingsModal({ onClose, initialSection = "accoun
                       disabled={Boolean(busy)}
                     />
                   </ActionRow>
-
-                  <ClubModulesSettings />
 
                   <section className="settings-branding-card" aria-labelledby="settings-branding-title">
                     <div className="settings-branding-heading">

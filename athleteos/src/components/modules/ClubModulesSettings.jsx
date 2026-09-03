@@ -28,8 +28,9 @@ export default function ClubModulesSettings() {
       <div className="settings-branding-heading">
         <span><SlidersHorizontal size={18} aria-hidden="true" /></span>
         <div>
+          <p className="meta-text">NIVEAU CLUB</p>
           <h4 id="settings-modules-title">Outils du club</h4>
-          <p>Un outil désactivé disparaît partout, sans supprimer son historique. Les réglages individuels sont conservés.</p>
+          <p>Choisis les outils que tu souhaites utiliser avec ton groupe. Un outil désactivé disparaît partout, sans supprimer son historique ni les réglages individuels.</p>
         </div>
       </div>
       <ModulePresetPicker onSelect={setSelected} value={selected} />

@@ -8,14 +8,14 @@ const session = (id, status = "future") => ({
 });
 
 describe("dashboard athlete daily focus", () => {
-  it("demande le wellness avant la séance pour fiabiliser l'état du jour", () => {
+  it("place la séance avant le wellness pour répondre immédiatement au besoin opérationnel", () => {
     const focus = getTodayFocus({
       wellnessCompleted: false,
       todaySessions: [session("speed")],
       athleteId: "athlete-1",
     });
 
-    expect(focus.kind).toBe("wellness");
+    expect(focus.kind).toBe("session");
     expect(focus.focusSession?.id).toBe("speed");
     expect(focus.completedSteps).toBe(0);
     expect(focus.totalSteps).toBe(2);

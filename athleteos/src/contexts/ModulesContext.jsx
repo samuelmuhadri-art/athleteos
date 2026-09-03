@@ -6,6 +6,7 @@ import {
   resetModuleOnboarding,
   saveAthleteModules,
   saveClubModules,
+  saveModuleAthletes,
 } from "../services/moduleService";
 import { supabase } from "../utils/supabaseClient";
 
@@ -98,6 +99,20 @@ export function ModulesProvider({ children }) {
           athleteModules: current.athleteModules.map((row) => targetIds.has(row.athlete_id)
             ? { ...row, enabled: enabled.has(row.module_key) }
             : row),
+        }));
+        void refresh();
+      },
+      saveModuleForAthletes: async (moduleKey, ids) => {
+        await saveModuleAthletes(moduleKey, ids);
+        const enabledIds = new Set(ids);
+        setState((current) => ({
+          ...current,
+          athleteModules: current.athleteModules.map((row) => {
+            if (row.module_key === moduleKey) return { ...row, enabled: enabledIds.has(row.athlete_id) };
+            if (moduleKey === "training_load" && row.module_key === "session_feedback" && enabledIds.has(row.athlete_id)) return { ...row, enabled: true };
+            if (moduleKey === "session_feedback" && row.module_key === "training_load" && !enabledIds.has(row.athlete_id)) return { ...row, enabled: false };
+            return row;
+          }),
         }));
         void refresh();
       },

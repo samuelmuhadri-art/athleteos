@@ -6,6 +6,7 @@ const schema = readFileSync(resolve(process.cwd(), "supabase/migrations/20260902
 const guards = readFileSync(resolve(process.cwd(), "supabase/migrations/20260902020000_enforce_module_aware_writes_and_notifications.sql"), "utf8");
 const reset = readFileSync(resolve(process.cwd(), "supabase/migrations/20260902030000_local_club_operational_reset.sql"), "utf8");
 const resetScript = readFileSync(resolve(process.cwd(), "scripts/reset-smac-operational-data.mjs"), "utf8");
+const uxMigration = readFileSync(resolve(process.cwd(), "supabase/migrations/20260903010000_obvious_module_ux_and_optional_gamification.sql"), "utf8");
 
 describe("architecture modulaire Supabase", () => {
   it("stocke les niveaux club et athlète hors de profile_data", () => {
@@ -56,5 +57,12 @@ describe("architecture modulaire Supabase", () => {
     expect(resetScript).toContain('["localhost", "127.0.0.1", "::1"]');
     expect(resetScript).toContain('CONFIRM_RESET_CLUB_DATA !== "SMAC"');
   });
-});
 
+  it("ajoute la gamification sans supprimer ses données et partage une source de vérité inverse", () => {
+    expect(uxMigration).toContain("'gamification'");
+    expect(uxMigration).toContain("configure_module_athletes");
+    expect(uxMigration).toContain("ON CONFLICT (athlete_id, module_key) DO NOTHING");
+    expect(uxMigration).not.toMatch(/DELETE\s+FROM|TRUNCATE/iu);
+    expect(uxMigration.trim().endsWith("COMMIT;")).toBe(true);
+  });
+});

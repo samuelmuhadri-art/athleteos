@@ -17,6 +17,7 @@ const LEGACY_MODULES = Object.freeze({
   refresh: async () => {},
   saveClub: async () => {},
   saveAthletes: async () => {},
+  saveModuleForAthletes: async () => {},
   restartOnboarding: async () => {},
 });
 

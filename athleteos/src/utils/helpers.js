@@ -38,8 +38,10 @@ export function parseLocalDate(s) {
 
 export function matchesISOWeek(row, week, year) {
   if (!row) return false;
-  const explicitYear = Number(row.isoYear ?? row.iso_year);
-  const explicitWeek = Number(row.week);
+  const yearValue = row.isoYear ?? row.iso_year;
+  const weekValue = row.week;
+  const explicitYear = yearValue == null || yearValue === "" ? Number.NaN : Number(yearValue);
+  const explicitWeek = weekValue == null || weekValue === "" ? Number.NaN : Number(weekValue);
   if (Number.isInteger(explicitWeek) && explicitWeek !== week) return false;
   if (Number.isInteger(explicitYear)) {
     return explicitYear === year && (!Number.isInteger(explicitWeek) || explicitWeek === week);

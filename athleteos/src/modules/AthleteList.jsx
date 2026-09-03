@@ -42,7 +42,7 @@ function AthleteList() {
   const [existingEmails,     setExistingEmails]     = useState([]);
   const [showImport,         setShowImport]         = useState(false);
   const [importReport,       setImportReport]       = useState(null);
-  const [showModuleManager,  setShowModuleManager]  = useState(false);
+  const [moduleManagerTarget, setModuleManagerTarget] = useState(null);
   const [creationNotice,     setCreationNotice]     = useState(null);
 
   // ═══ Chargement (identique) ═══════════════════════════════════════════════
@@ -286,10 +286,12 @@ function AthleteList() {
           onBack={() => setSelectedAthlete(null)}
           onAddRecord={addRecord}
           onEditRequest={setAthleteModalTarget}
+          onConfigureTools={(athlete) => setModuleManagerTarget(athlete.id)}
           onDelete={deleteAthlete}
           onAddInjury={addInjury} onUpdateInjury={updateInjury} onDeleteInjury={deleteInjury}
           modules={effectiveForAthlete(liveSelected.id)}
         />
+        {moduleManagerTarget != null && <AthleteModulesManager initialAthleteId={moduleManagerTarget === "all" ? null : moduleManagerTarget} onClose={() => setModuleManagerTarget(null)} />}
         {athleteModalTarget && (
           <AddAthleteModal
             onClose={() => setAthleteModalTarget(null)}
@@ -317,8 +319,8 @@ function AthleteList() {
                 <FileSpreadsheet size={16} aria-hidden="true" /> Importer un CSV
               </button>
             )}
-            <button type="button" onClick={() => setShowModuleManager(true)} className="btn-secondary">
-              <SlidersHorizontal size={16} aria-hidden="true" /> Configurer les outils
+            <button type="button" onClick={() => setModuleManagerTarget("all")} className="btn-secondary">
+              <SlidersHorizontal size={16} aria-hidden="true" /> Gérer les outils
             </button>
             <button type="button" onClick={() => setAthleteModalTarget("create")} className="btn-primary">
               <Plus size={16} aria-hidden="true" /> Inscrire un athlète
@@ -365,7 +367,7 @@ function AthleteList() {
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
           {athletes.map(a => (
-            <AthleteCard key={a.id} athlete={a} weeklyCharge={weeklyCharge} modules={effectiveForAthlete(a.id)} onClick={setSelectedAthlete} />
+            <AthleteCard key={a.id} athlete={a} weeklyCharge={weeklyCharge} modules={effectiveForAthlete(a.id)} onClick={setSelectedAthlete} onConfigureTools={(athlete) => setModuleManagerTarget(athlete.id)} />
           ))}
         </div>
       )}
@@ -386,7 +388,7 @@ function AthleteList() {
           onClose={() => setShowImport(false)}
         />
       )}
-      {showModuleManager && <AthleteModulesManager onClose={() => setShowModuleManager(false)} />}
+      {moduleManagerTarget != null && <AthleteModulesManager initialAthleteId={moduleManagerTarget === "all" ? null : moduleManagerTarget} onClose={() => setModuleManagerTarget(null)} />}
     </div>
   );
 }

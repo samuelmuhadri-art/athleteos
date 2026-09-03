@@ -101,12 +101,12 @@ async function main() {
       .select("module_key, enabled")
       .eq("club_id", club.id);
     record(
-      "Nouveau club rétrocompatible : 9 modules actifs",
-      !initialClubError && initialClubModules?.length === 9 && initialClubModules.every((row) => row.enabled),
+      "Nouveau club rétrocompatible : 10 modules actifs",
+      !initialClubError && initialClubModules?.length === 10 && initialClubModules.every((row) => row.enabled),
       initialClubError?.message,
     );
 
-    const clubSelection = ["planning", "session_feedback", "wellness", "health", "messaging", "reports"];
+    const clubSelection = ["planning", "session_feedback", "wellness", "health", "messaging", "reports", "gamification"];
     const { error: configureClubError } = await head.client.rpc("configure_my_club_modules", {
       p_enabled_module_keys: clubSelection,
     });
@@ -136,6 +136,21 @@ async function main() {
     });
     record("Le coach configure un athlète individuellement", !configureAthleteError, configureAthleteError?.message);
 
+    const { error: configureByToolError } = await coach.client.rpc("configure_module_athletes", {
+      p_module_key: "gamification",
+      p_enabled_athlete_ids: [athlete.id],
+    });
+    const { data: gamificationState } = await admin.from("athlete_modules")
+      .select("enabled")
+      .eq("athlete_id", athlete.id)
+      .eq("module_key", "gamification")
+      .single();
+    record(
+      "Le parcours outil vers athlètes utilise la même matrice",
+      !configureByToolError && gamificationState?.enabled === true,
+      configureByToolError?.message,
+    );
+
     const { error: foreignAthleteError } = await coach.client.rpc("configure_athlete_modules", {
       p_athlete_ids: [otherAthlete.id],
       p_enabled_module_keys: athleteSelection,
@@ -153,7 +168,7 @@ async function main() {
       .select("athlete_id, module_key, enabled");
     record(
       "L’athlète lit uniquement sa propre matrice",
-      !ownMatrixError && ownMatrix?.length === 9 && ownMatrix.every((row) => row.athlete_id === athlete.id),
+      !ownMatrixError && ownMatrix?.length === 10 && ownMatrix.every((row) => row.athlete_id === athlete.id),
       ownMatrixError?.message,
     );
 
@@ -267,7 +282,7 @@ async function main() {
     ]);
     record(
       "Le reset préserve club, comptes, athlète, modules et abonnement push",
-      clubCount === 1 && userCount === 3 && athleteCount === 1 && moduleCount === 9 && pushCount === 1,
+      clubCount === 1 && userCount === 3 && athleteCount === 1 && moduleCount === 10 && pushCount === 1,
       `club=${clubCount}, users=${userCount}, athlete=${athleteCount}, modules=${moduleCount}, push=${pushCount}`,
     );
   } finally {

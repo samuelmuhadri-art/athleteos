@@ -25,17 +25,13 @@ export default function ModuleSelector({ value, onChange, availableKeys = MODULE
                 const module = MODULE_REGISTRY[key];
                 const checked = selected.has(key);
                 return (
-                  <label key={key} className="module-option flex items-start gap-3 rounded-2xl p-3 cursor-pointer"
+                  <button key={key} type="button" role="switch" aria-checked={checked}
+                    aria-label={`${module.label} : ${checked ? "activé" : "désactivé"}`}
+                    onClick={() => onChange(toggleModule(value, key, !checked, availableKeys))}
+                    className="module-option flex w-full items-start gap-3 rounded-2xl p-3 cursor-pointer text-left"
                     data-selected={checked ? "true" : "false"}
                     style={{ background: checked ? "var(--c-dim-accent)" : "var(--c-surface-2)", border: `1px solid ${checked ? "var(--c-accent)" : "var(--c-border)"}` }}>
-                    <input
-                      type="checkbox"
-                      checked={checked}
-                      onChange={(event) => onChange(toggleModule(value, key, event.target.checked, availableKeys))}
-                      className="mt-1 h-4 w-4"
-                      style={{ accentColor: "var(--c-accent)" }}
-                    />
-                    <span className="min-w-0">
+                    <span className="min-w-0 flex-1">
                       <span className="block text-[13px] font-bold" style={{ color: "var(--c-text-1)" }}>{module.label}</span>
                       {!compact && <span className="module-option-description block text-[12px] mt-0.5 leading-relaxed" style={{ color: "var(--c-text-2)" }}>{module.description}</span>}
                       {module.dependsOn?.length > 0 && (
@@ -44,7 +40,11 @@ export default function ModuleSelector({ value, onChange, availableKeys = MODULE
                         </span>
                       )}
                     </span>
-                  </label>
+                    <span className="module-toggle-wrap" aria-hidden="true">
+                      <span className="module-toggle-state">{checked ? "ON" : "OFF"}</span>
+                      <span className="module-toggle" data-on={checked ? "true" : "false"}><span /></span>
+                    </span>
+                  </button>
                 );
               })}
             </div>

@@ -7,6 +7,7 @@ import {
   rowsToModuleMap,
   toggleModule,
   moduleKeyForEventType,
+  matchingModulePreset,
 } from "./moduleRegistry";
 
 describe("module registry", () => {
@@ -44,6 +45,12 @@ describe("module registry", () => {
     expect(moduleKeyForEventType("weekly_report")).toBe("reports");
     expect(moduleKeyForEventType("session_feedback_reminder")).toBe("session_feedback");
     expect(moduleKeyForEventType("blessure")).toBe("health");
+    expect(moduleKeyForEventType("badge")).toBe("gamification");
     expect(moduleKeyForEventType("unknown")).toBeNull();
+  });
+
+  it("identifie un preset puis bascule en personnalisé après un changement manuel", () => {
+    expect(matchingModulePreset(["planning", "performances", "messaging"])?.id).toBe("essential");
+    expect(matchingModulePreset(["planning", "performances", "messaging", "gamification"])).toBeNull();
   });
 });

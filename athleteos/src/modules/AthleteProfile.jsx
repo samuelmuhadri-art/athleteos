@@ -4,15 +4,16 @@
 // ============================================================
 
 import { memo, useEffect, useState, useMemo } from "react";
-import { ArrowLeft, HeartPulse, Pencil, Trash2 } from "lucide-react";
+import { ArrowLeft, HeartPulse, Pencil, SlidersHorizontal, Trash2 } from "lucide-react";
 import { getAthleteMetricsForWeek } from "../utils/chargeCalculations";
 import { getISOWeek } from "../utils/helpers.js";
 import { TABS } from "./athleteListUtils";
 import { StatusBadge, ScoreRing } from "./athleteListShared";
 import { TabPerformances, TabCharge, TabEntrainements, TabBlessures, TabProfil } from "./AthleteProfileTabs";
 import { ConfirmDialog, InlineNotice, SegmentedTabs } from "../components/ui/premium";
+import ActiveToolsSummary from "../components/modules/ActiveToolsSummary";
 
-const AthleteProfile = memo(({ athlete, weeklyCharge, sessions, competitions, onBack, onAddRecord, onEditRequest, onDelete, onAddInjury, onUpdateInjury, onDeleteInjury, modules = {} }) => {
+const AthleteProfile = memo(({ athlete, weeklyCharge, sessions, competitions, onBack, onAddRecord, onEditRequest, onConfigureTools, onDelete, onAddInjury, onUpdateInjury, onDeleteInjury, modules = {} }) => {
   const [activeTab,      setActiveTab]      = useState("performances");
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting,       setDeleting]       = useState(false);
@@ -46,7 +47,10 @@ const AthleteProfile = memo(({ athlete, weeklyCharge, sessions, competitions, on
           className="flex items-center gap-1.5 min-h-10 text-[13px] font-semibold transition-colors tap-feedback" style={{ color: "var(--c-text-2)" }} onMouseEnter={e => e.currentTarget.style.color = "var(--c-text-1)"} onMouseLeave={e => e.currentTarget.style.color = "var(--c-text-2)"}>
           <ArrowLeft size={16} /> Retour à la liste
         </button>
-        <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2">
+          <button type="button" onClick={() => onConfigureTools?.(athlete)} className="btn-secondary">
+            <SlidersHorizontal size={15} aria-hidden="true" /> Outils actifs
+          </button>
           <button type="button" onClick={() => onEditRequest(athlete)}
             className="btn-secondary">
             <Pencil size={15} aria-hidden="true" /> Modifier
@@ -93,6 +97,11 @@ const AthleteProfile = memo(({ athlete, weeklyCharge, sessions, competitions, on
               <span>{athlete.level ?? "—"}</span>
               <span>·</span>
               <span>{athlete.age ? `${athlete.age} ans` : "—"}</span>
+            </div>
+            <div className="athlete-profile-tools mt-3">
+              <span>Outils actifs</span>
+              <ActiveToolsSummary modules={modules} compact inverted />
+              <button type="button" onClick={() => onConfigureTools?.(athlete)}>Configurer</button>
             </div>
           </div>
 

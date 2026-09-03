@@ -4,12 +4,13 @@
 // ============================================================
 
 import { memo, useMemo } from "react";
-import { ChevronRight, HeartPulse } from "lucide-react";
+import { ChevronRight, HeartPulse, SlidersHorizontal } from "lucide-react";
 import { getAthleteMetricsForWeek, getWellnessStatus } from "../utils/chargeCalculations";
 import { getISOWeek } from "../utils/helpers.js";
 import { scoreColor } from "./athleteListUtils";
+import ActiveToolsSummary from "../components/modules/ActiveToolsSummary";
 
-const AthleteCard = memo(({ athlete, weeklyCharge, modules = {}, onClick }) => {
+const AthleteCard = memo(({ athlete, weeklyCharge, modules = {}, onClick, onConfigureTools }) => {
   const metrics        = useMemo(() => getAthleteMetricsForWeek(athlete.id, weeklyCharge, getISOWeek(new Date())), [athlete.id, weeklyCharge]);
   const status         = getWellnessStatus(metrics.wellnessScore);
   const activeInjuries = athlete.injuries?.filter(i => i.status !== "résolu") ?? [];
@@ -18,13 +19,9 @@ const AthleteCard = memo(({ athlete, weeklyCharge, modules = {}, onClick }) => {
   const showHealth     = modules.health !== false;
 
   return (
-    <button
-      type="button"
-      onClick={() => onClick(athlete)}
-      className="card card-hover card-glow-green shimmer-hover text-left p-5 flex flex-col gap-4 w-full tap-feedback"
-    >
+    <article className="card card-hover card-glow-green shimmer-hover text-left p-5 flex flex-col gap-4 w-full">
       {/* Header */}
-      <div className="flex items-start justify-between gap-2">
+      <button type="button" onClick={() => onClick(athlete)} className="flex items-start justify-between gap-2 text-left w-full tap-feedback" aria-label={`Ouvrir le profil de ${athlete.name}`}>
         <div className="flex items-center gap-3">
           <div
             className="w-12 h-12 rounded-2xl flex items-center justify-center text-white text-[14px] font-bold flex-shrink-0 shadow-sm"
@@ -38,7 +35,7 @@ const AthleteCard = memo(({ athlete, weeklyCharge, modules = {}, onClick }) => {
           </div>
         </div>
         <ChevronRight size={16} className="flex-shrink-0 mt-1" style={{ color: "var(--c-text-3)" }} />
-      </div>
+      </button>
 
       {/* Badges */}
       <div className="flex flex-wrap gap-1.5">
@@ -79,7 +76,16 @@ const AthleteCard = memo(({ athlete, weeklyCharge, modules = {}, onClick }) => {
       ) : null}
 
       <p className="meta-text font-medium">{athlete.group ?? "Groupe —"}</p>
-    </button>
+      <div className="athlete-tools-preview">
+        <div className="min-w-0">
+          <p className="metric-label">Outils actifs</p>
+          <ActiveToolsSummary modules={modules} compact />
+        </div>
+        <button type="button" className="btn-secondary athlete-tools-action" onClick={() => onConfigureTools?.(athlete)}>
+          <SlidersHorizontal size={14} aria-hidden="true" /> Configurer les outils
+        </button>
+      </div>
+    </article>
   );
 });
 

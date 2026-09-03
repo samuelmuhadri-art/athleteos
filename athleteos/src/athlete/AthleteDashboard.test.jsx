@@ -62,16 +62,16 @@ describe("AthleteDashboard — plan du jour", () => {
     renderDashboard();
 
     expect(screen.getAllByText("Technique du soir").length).toBeGreaterThanOrEqual(2);
-    fireEvent.click(screen.getByRole("button", { name: /ouvrir la séance/i }));
+    fireEvent.click(screen.getByRole("button", { name: /voir ma séance/i }));
     expect(screen.getByText("Séance ouverte : Technique du soir")).toBeTruthy();
   }, 10_000);
 
-  it("place le wellness en priorité sans masquer la séance du jour", () => {
+  it("place la séance en priorité tout en gardant le check-in accessible", () => {
     const props = renderDashboard({ wellnessToday: null });
 
-    expect(screen.getByText("Check-in du matin")).toBeTruthy();
+    expect(screen.getByText("Séance du jour")).toBeTruthy();
     expect(screen.getByText("1/2 traitées")).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: /faire mon check-in/i }));
+    fireEvent.click(screen.getByRole("button", { name: /ton check-in.*30 secondes/i }));
     expect(props.onOpenWellness).toHaveBeenCalledOnce();
   });
 
@@ -93,5 +93,50 @@ describe("AthleteDashboard — plan du jour", () => {
     expect(screen.queryByTestId("metric-panel")).toBeNull();
     fireEvent.click(screen.getByText("Fatigue"));
     expect(screen.getByTestId("metric-panel")).toBeTruthy();
+  });
+
+  it("place Aujourd’hui et Ma semaine avant le contenu pédagogique", () => {
+    renderDashboard();
+    const todayHeading = screen.getByRole("heading", { name: "Aujourd’hui" });
+    const weekHeading = screen.getByRole("heading", { name: "Ma semaine" });
+    const educationalHeading = screen.getByRole("heading", { name: "Mieux comprendre ta journée" });
+    expect(todayHeading.compareDocumentPosition(weekHeading) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(weekHeading.compareDocumentPosition(educationalHeading) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it("retire toute gamification sans laisser de trou quand l’outil est désactivé", () => {
+    renderDashboard({ modules: { gamification: false } });
+    expect(screen.queryByText("Badges")).toBeNull();
+    expect(screen.queryByText(/badge Maestro/i)).toBeNull();
+    expect(screen.getByText("1/10 semaines")).toBeTruthy();
+  });
+
+  it("affiche les badges quand la gamification est active", () => {
+    renderDashboard({ modules: { gamification: true } });
+    expect(screen.getByText("Badges")).toBeTruthy();
+  });
+
+  it("compose un dashboard Planning + Messages sans sections étrangères", () => {
+    renderDashboard({
+      modules: {
+        planning: true, messaging: true, performances: false, session_feedback: false,
+        wellness: false, training_load: false, health: false, social: false,
+        reports: false, gamification: false,
+      },
+      lastMessages: [{ id: 1, content: "Séance décalée à 18 h", created_at: NOW.toISOString() }],
+    });
+    expect(screen.getByRole("heading", { name: "Aujourd’hui" })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Ma semaine" })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: /a envoyé un message/ })).toBeTruthy();
+    expect(screen.queryByRole("heading", { name: "Mieux comprendre ta journée" })).toBeNull();
+    expect(screen.queryByText("Badges")).toBeNull();
+  });
+
+  it("met en évidence la prochaine compétition quand elle existe", () => {
+    renderDashboard({
+      competitions: [{ id: 1, name: "Meeting de Bruxelles", date: "2026-09-12", location: "Bruxelles", athleteIds: ["athlete-1"], plannedEvents: { "athlete-1": "100 m" } }],
+    });
+    expect(screen.getByRole("heading", { name: "Meeting de Bruxelles" })).toBeTruthy();
+    expect(screen.getByText("100 m")).toBeTruthy();
   });
 });

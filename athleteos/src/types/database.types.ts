@@ -1406,6 +1406,10 @@ export type Database = {
         Args: { p_athlete_ids: number[]; p_enabled_module_keys: string[] }
         Returns: Json
       }
+      configure_module_athletes: {
+        Args: { p_enabled_athlete_ids: number[]; p_module_key: string }
+        Returns: Json
+      }
       configure_my_club_modules: {
         Args: { p_enabled_module_keys: string[] }
         Returns: Json
