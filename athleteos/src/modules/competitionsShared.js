@@ -15,16 +15,16 @@ export const TYPE_CONFIG = {
     text: "#B6C2CE", dot: "#94A3B8", badge: "bg-slate-100 text-slate-500",
   },
   "régional": {
-    label: "Régional", bg: "rgba(91,141,239,0.15)", border: "#378ADD",
+    label: "Secondaire", bg: "rgba(91,141,239,0.15)", border: "#378ADD",
     text: "#5B8DEF", dot: "#378ADD", badge: "bg-blue-50 text-blue-700",
   },
   "objectif": {
-    label: "Objectif", bg: "rgba(29,158,117,0.15)", border: "#1D9E75",
+    label: "Importante", bg: "rgba(29,158,117,0.15)", border: "#1D9E75",
     text: "#4DC9A0", dot: "#1D9E75", badge: "bg-emerald-50 text-emerald-700",
   },
   "objectif A": {
-    label: "Objectif A", bg: "rgba(224,82,82,0.15)", border: "#E24B4A",
-    text: "#E05252", dot: "#E24B4A", badge: "bg-red-50 text-red-700",
+    label: "Objectif principal", bg: "rgba(155,132,240,0.15)", border: "#9B84F0",
+    text: "#B9A8F7", dot: "#9B84F0", badge: "bg-violet-50 text-violet-700",
   },
 };
 

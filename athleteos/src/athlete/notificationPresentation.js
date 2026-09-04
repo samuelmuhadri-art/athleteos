@@ -31,6 +31,11 @@ const PRESENTATIONS = {
     soft: "rgba(56,189,248,0.13)", border: "rgba(56,189,248,0.24)",
     destination: "planning", actionLabel: "Voir les changements", category: "sport",
   },
+  training_document: {
+    label: "Document d’entraînement", icon: "report", accent: "#69C5F7",
+    soft: "rgba(56,189,248,0.13)", border: "rgba(56,189,248,0.24)",
+    destination: "planning", actionLabel: "Ouvrir dans le planning", category: "sport",
+  },
   session_feedback_reminder: {
     label: "Retour de séance", icon: "calendar", accent: "#F2C46D",
     soft: "rgba(232,160,32,0.14)", border: "rgba(232,160,32,0.26)",
@@ -85,6 +90,10 @@ export function filterNotificationItems(notifications, filter) {
   if (filter === "all") return notifications;
   if (filter === "unread") return notifications.filter(notification => !notification.is_read);
   return notifications.filter(notification => getNotificationPresentation(notification).category === filter);
+}
+
+export function filterNotificationLifecycle(notifications, lifecycle = "active") {
+  return notifications.filter(notification => lifecycle === "history" ? notification.is_read : !notification.is_read);
 }
 
 export function mergeIncomingNotification(notifications, incoming, limit = 20) {

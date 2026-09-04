@@ -142,9 +142,9 @@ const SessionDetailModal = memo(({ session, athlete, allAthletes, onClose, onSet
             </div>
           )}
 
-        {/* Pièce jointe */}
-          {session.pdfUrl && (
-          <button type="button" onClick={() => openSessionAttachment(session.pdfUrl)}
+        {/* Documents privés : une liste peut contenir plusieurs formats. */}
+          {(session.documents?.length > 0 ? session.documents : session.pdfUrl ? [{ id:"legacy", name:"Pièce jointe", storagePath:session.pdfUrl }] : []).map(document => (
+          <button key={document.id} type="button" onClick={() => openSessionAttachment(document.storagePath)}
               style={{
                 display: "flex", alignItems: "center", gap: 12, padding: "14px 16px", borderRadius: 16,
                 background: "rgba(91,158,245,0.10)", border: "1px solid rgba(91,158,245,0.25)",
@@ -154,10 +154,10 @@ const SessionDetailModal = memo(({ session, athlete, allAthletes, onClose, onSet
               <div style={{ width: 32, height: 32, borderRadius: 10, background: "rgba(91,158,245,0.18)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
                 <FileText size={14} color="#5B9EF5" />
               </div>
-            Voir la pièce jointe
+            <span className="truncate">{document.name}</span>
               <ChevronRight size={14} style={{ marginLeft: "auto", color: "#5B9EF5", opacity: 0.6 }} />
             </button>
-          )}
+          ))}
 
           {/* Athlètes */}
           <div>

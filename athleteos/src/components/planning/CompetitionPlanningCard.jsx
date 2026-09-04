@@ -11,7 +11,7 @@ function plannedEventLabel(competition, athleteId) {
   return `${uniqueEvents.slice(0, 2).join(" · ")} +${uniqueEvents.length - 2}`;
 }
 
-export default function CompetitionPlanningCard({ competition, athletes = [], athleteId = null, compact = false }) {
+export default function CompetitionPlanningCard({ competition, athletes = [], athleteId = null, compact = false, onOpen }) {
   const cfg = getTypeConfig(competition.type);
   const engagedAthletes = athletes.filter(athlete => competition.athleteIds?.includes(athlete.id));
   const plannedEvent = plannedEventLabel(competition, athleteId);
@@ -19,7 +19,10 @@ export default function CompetitionPlanningCard({ competition, athletes = [], at
   if (compact) {
     return (
       <div
-        role="group"
+        role={onOpen ? "button" : "group"}
+        tabIndex={onOpen ? 0 : undefined}
+        onClick={onOpen ? () => onOpen(competition) : undefined}
+        onKeyDown={onOpen ? event => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); onOpen(competition); } } : undefined}
         aria-label={`Compétition ${competition.name}`}
         className="truncate"
         style={{
@@ -36,8 +39,12 @@ export default function CompetitionPlanningCard({ competition, athletes = [], at
 
   return (
     <article
+      role={onOpen ? "button" : undefined}
+      tabIndex={onOpen ? 0 : undefined}
+      onClick={onOpen ? () => onOpen(competition) : undefined}
+      onKeyDown={onOpen ? event => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); onOpen(competition); } } : undefined}
       aria-label={`Compétition ${competition.name}`}
-      className="card overflow-hidden"
+      className={`card overflow-hidden ${onOpen ? "card-hover tap-feedback cursor-pointer" : ""}`}
       style={{ borderColor: `${cfg.border}66` }}
     >
       <div

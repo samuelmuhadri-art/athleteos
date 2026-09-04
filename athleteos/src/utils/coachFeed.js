@@ -47,7 +47,7 @@ export function buildCoachFeed({
   const inSevenDaysKey = localDateKey(inSevenDays);
   const weekSessions = sessions.filter(session => matchesISOWeek(session, currentWeek, currentYear));
 
-  const unreadAlerts = alerts.filter(alert => !alert.is_read);
+  const unreadAlerts = alerts.filter(alert => !alert.isRead && !alert.resolvedAt && !alert.archivedAt);
   if (unreadAlerts.length > 0) {
     const important = unreadAlerts.filter(alert => ["high", "critical", "danger"].includes(String(alert.severity).toLowerCase())).length;
     items.push({

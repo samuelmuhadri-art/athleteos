@@ -25,7 +25,7 @@ import { useModules } from "../hooks/useModules";
 
 // ─── Composant principal ──────────────────────────────────────────────────────
 
-function AthleteList() {
+function AthleteList({ onNavigate }) {
   const { clubId, profile } = useAuth();
   const canImportAthletes = profile?.role === "head_coach";
   const { club: clubModules, effectiveForAthlete, saveAthletes } = useModules();
@@ -286,6 +286,10 @@ function AthleteList() {
           onBack={() => setSelectedAthlete(null)}
           onAddRecord={addRecord}
           onEditRequest={setAthleteModalTarget}
+          onPlanSession={(athlete) => {
+            window.sessionStorage.setItem("athleteos:planning-athlete", String(athlete.id));
+            onNavigate?.("planning");
+          }}
           onConfigureTools={(athlete) => setModuleManagerTarget(athlete.id)}
           onDelete={deleteAthlete}
           onAddInjury={addInjury} onUpdateInjury={updateInjury} onDeleteInjury={deleteInjury}

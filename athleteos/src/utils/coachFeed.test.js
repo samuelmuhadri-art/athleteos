@@ -8,7 +8,7 @@ describe("file d'actions du coach", () => {
       weeklyCharge: [],
       currentWeek: 31,
       now: new Date("2026-07-29T10:00:00+02:00"),
-      alerts: [{ id: 1, is_read: false, severity: "high" }],
+      alerts: [{ id: 1, isRead: false, resolvedAt:null, severity: "high" }],
       injuries: [{ id: 2, athleteId: 7, name: "Cheville", intensity: 5, status: "actif" }],
       competitions: [{ id: 3, name: "Meeting de Bruxelles", date: "2026-08-03", athleteIds: [7] }],
       sessions: [

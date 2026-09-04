@@ -4,7 +4,7 @@
 // ============================================================
 
 import { memo, useEffect, useState, useMemo } from "react";
-import { ArrowLeft, HeartPulse, Pencil, SlidersHorizontal, Trash2 } from "lucide-react";
+import { ArrowLeft, CalendarPlus, HeartPulse, Pencil, SlidersHorizontal, Trash2 } from "lucide-react";
 import { getAthleteMetricsForWeek } from "../utils/chargeCalculations";
 import { getISOWeek } from "../utils/helpers.js";
 import { TABS } from "./athleteListUtils";
@@ -13,7 +13,7 @@ import { TabPerformances, TabCharge, TabEntrainements, TabBlessures, TabProfil }
 import { ConfirmDialog, InlineNotice, SegmentedTabs } from "../components/ui/premium";
 import ActiveToolsSummary from "../components/modules/ActiveToolsSummary";
 
-const AthleteProfile = memo(({ athlete, weeklyCharge, sessions, competitions, onBack, onAddRecord, onEditRequest, onConfigureTools, onDelete, onAddInjury, onUpdateInjury, onDeleteInjury, modules = {} }) => {
+const AthleteProfile = memo(({ athlete, weeklyCharge, sessions, competitions, onBack, onAddRecord, onEditRequest, onPlanSession, onConfigureTools, onDelete, onAddInjury, onUpdateInjury, onDeleteInjury, modules = {} }) => {
   const [activeTab,      setActiveTab]      = useState("performances");
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting,       setDeleting]       = useState(false);
@@ -48,6 +48,11 @@ const AthleteProfile = memo(({ athlete, weeklyCharge, sessions, competitions, on
           <ArrowLeft size={16} /> Retour à la liste
         </button>
           <div className="flex items-center gap-2">
+          {modules.planning !== false && (
+            <button type="button" onClick={() => onPlanSession?.(athlete)} className="btn-primary">
+              <CalendarPlus size={15} aria-hidden="true" /> Planifier
+            </button>
+          )}
           <button type="button" onClick={() => onConfigureTools?.(athlete)} className="btn-secondary">
             <SlidersHorizontal size={15} aria-hidden="true" /> Outils actifs
           </button>

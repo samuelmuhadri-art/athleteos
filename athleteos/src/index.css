@@ -1503,3 +1503,42 @@ select.input-premium {
 
 .animate-slide-right { animation: slide-right 0.22s var(--spring) both; }
 .animate-bounce-in   { animation: bounce-in  0.32s var(--spring) both; }
+/* Avatar unique coach/athlète : le texte reste explicitement blanc en light
+   comme en dark, indépendamment de la couleur héritée du conteneur. */
+.initial-avatar {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  border-radius: 9999px;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  color: #fff;
+  font-size: 0.75rem;
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: 0.01em;
+  object-fit: cover;
+  box-shadow: inset 0 0 0 1px rgba(15, 23, 42, 0.08), var(--shadow-sm);
+}
+
+.btn-icon {
+  width: var(--touch);
+  height: var(--touch);
+  min-width: var(--touch);
+  min-height: var(--touch);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0.75rem;
+  color: var(--c-text-2);
+  background: var(--c-surface-2);
+  border: 1px solid var(--c-border);
+  transition: color 150ms ease, background-color 150ms ease, border-color 150ms ease;
+}
+
+.btn-icon:hover {
+  color: var(--c-text-1);
+  background: var(--c-surface-3);
+  border-color: var(--c-border-strong);
+}

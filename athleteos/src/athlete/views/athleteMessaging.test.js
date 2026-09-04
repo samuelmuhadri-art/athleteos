@@ -5,6 +5,8 @@ import {
   filterAthleteConversations,
   formatConversationTime,
   formatMessageDay,
+  formatMessageTime,
+  getLatestUnreadIncomingMessage,
   groupMessagesByDay,
   mapMessageRow,
 } from "./athleteMessaging";
@@ -26,6 +28,13 @@ describe("buildAthleteConversations", () => {
     expect(conversations.map(conversation => conversation.contactId)).toEqual(["athlete-3", "coach-2"]);
     expect(conversations.find(conversation => conversation.contactId === "coach-2")?.unread).toBe(1);
     expect(conversations.flatMap(conversation => conversation.messages).some(message => message.id === 3)).toBe(false);
+  });
+});
+
+describe("message important du dashboard", () => {
+  it("retient uniquement le dernier message entrant non lu", () => {
+    expect(getLatestUnreadIncomingMessage(messages, 1, 2)?.id).toBe(1);
+    expect(getLatestUnreadIncomingMessage([{ ...messages[0], isRead:true }], 1, 2)).toBeNull();
   });
 });
 
@@ -52,5 +61,20 @@ describe("message helpers", () => {
     const now = new Date("2026-07-29T12:00:00Z");
     expect(formatMessageDay("2026-07-29T08:00:00Z", now)).toBe("Aujourd’hui");
     expect(formatConversationTime("2026-07-28T08:00:00Z", now)).toBe("mar.");
+  });
+
+  it.each([
+    ["Europe/Brussels", "16:35"],
+    ["Europe/Sofia", "17:35"],
+    ["America/New_York", "10:35"],
+    ["Asia/Tokyo", "23:35"],
+  ])("affiche un timestamp serveur dans la timezone %s", (timeZone, expected) => {
+    expect(formatMessageTime("2026-09-03T14:35:00Z", timeZone)).toBe(expected);
+  });
+
+  it("détermine Aujourd’hui/Hier selon le jour local, y compris autour de minuit", () => {
+    const now = new Date("2026-09-04T00:30:00Z");
+    expect(formatMessageDay("2026-09-03T23:45:00Z", now, "Europe/Brussels")).toBe("Aujourd’hui");
+    expect(formatMessageDay("2026-09-03T02:00:00Z", now, "Europe/Brussels")).toBe("Hier");
   });
 });

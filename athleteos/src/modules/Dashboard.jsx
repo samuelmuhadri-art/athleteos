@@ -31,6 +31,8 @@ import {
 } from "../utils/chargeCalculations";
 import { checkUpcomingCompetitions, checkAndAlertACWR, notifyAthleteCompetitionReminder, checkWeeklyRecap, checkWeeklyReports } from "../utils/notifications";
 import { buildCoachFeed } from "../utils/coachFeed";
+import { mergePersonalAlertReadState } from "../domain/alertLifecycle";
+import { getRecentFeedbacks } from "../domain/recentFeedback";
 import { getISOWeek, getISOWeekYear, initialsFromName, matchesISOWeek } from "../utils/helpers.js";
 import ClubOnboardingCard from "../components/club/ClubOnboardingCard";
 import { PageHeader } from "../components/ui/premium";
@@ -38,6 +40,7 @@ import { buildDailyState, buildGroupDailyState } from "../domain/dailyState";
 import { buildClubSetupSteps, getClubSetupProgress } from "../utils/clubBranding";
 import { useModules } from "../hooks/useModules";
 import { moduleKeyForEventType } from "../domain/modules/moduleRegistry";
+import { calendarDayDifference, formatCivilDate } from "../utils/dateTime";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -388,14 +391,15 @@ function Dashboard({
       setLoading(true); setError(null);
       const requestDate = new Date();
 
-      const [athletesRes, sessionsRes, alertsRes, compsRes, injuriesRes, goalsRes, wellnessRes] = await Promise.all([
+      const [athletesRes, sessionsRes, alertsRes, compsRes, injuriesRes, goalsRes, wellnessRes, alertReadStatesRes] = await Promise.all([
         supabase.from("athletes").select("id, name, main_discipline, profile_data, group_name, user_id").eq("club_id", clubId),
         ["planning", "session_feedback", "training_load"].some((key) => enabledModules[key] !== false) ? supabase.from("sessions").select("*, session_athletes(*)").eq("club_id", clubId) : Promise.resolve({ data: [] }),
-        ["performances", "session_feedback", "wellness", "training_load", "health", "social"].some((key) => enabledModules[key] !== false) ? supabase.from("alerts").select("id, is_read, severity, type").eq("club_id", clubId) : Promise.resolve({ data: [] }),
+        ["performances", "session_feedback", "wellness", "training_load", "health", "social"].some((key) => enabledModules[key] !== false) ? supabase.from("alerts").select("id, severity, type, athlete_id, resolved_at, archived_at").eq("club_id", clubId) : Promise.resolve({ data: [] }),
         enabledModules.performances !== false ? supabase.from("competitions").select("id, name, date, competition_athletes(athlete_id)").eq("club_id", clubId).gte("date", toLocalDateStr(requestDate)).order("date").limit(3) : Promise.resolve({ data: [] }),
         enabledModules.health !== false ? supabase.from("injuries").select("id, athlete_id, name, intensity, status, location").eq("status", "actif") : Promise.resolve({ data: [] }),
         enabledModules.performances !== false ? supabase.from("athlete_goals").select("*").eq("club_id", clubId).eq("achieved", false) : Promise.resolve({ data: [] }),
         enabledModules.wellness !== false ? supabase.from("athlete_wellness").select("athlete_id, date, sleep, energy, soreness, mood, stress, notes").eq("club_id", clubId).eq("date", toLocalDateStr(requestDate)) : Promise.resolve({ data: [] }),
+        supabase.from("alert_read_states").select("alert_id"),
       ]);
 
       if (athletesRes.error) throw athletesRes.error;
@@ -418,7 +422,7 @@ function Dashboard({
           lifecycleStatus: s.lifecycle_status ?? "planned",
           createdByAthlete: s.created_by != null && athletesRes.data.some(a => a.user_id === s.created_by),
           athleteIds:   rows.map(v => v.athlete_id),
-          validations:  rows.map(v => ({ athleteId: v.athlete_id, status: v.status, feeling: v.feeling, rpe: v.rpe, comment: v.comment, actualDurationMinutes: v.actual_duration_minutes, durationSource: v.duration_source, rsvpStatus: v.rsvp_status, rsvpNote: v.rsvp_note, coachNote: v.coach_note })),
+          validations:  rows.map(v => ({ athleteId: v.athlete_id, status: v.status, feeling: v.feeling, rpe: v.rpe, comment: v.comment, actualDurationMinutes: v.actual_duration_minutes, durationSource: v.duration_source, rsvpStatus: v.rsvp_status, rsvpNote: v.rsvp_note, coachNote: v.coach_note, feedbackSubmittedAt:v.feedback_submitted_at })),
         };
       });
 
@@ -436,10 +440,10 @@ function Dashboard({
       setAthletes(mappedAthletes);
       setWeeklyCharge(charge);
       setSessions(mappedSessions);
-      setAlerts((alertsRes.data ?? []).filter((alert) => {
+      setAlerts(mergePersonalAlertReadState((alertsRes.data ?? []).filter((alert) => {
         const moduleKey = moduleKeyForEventType(alert.type);
         return !moduleKey || (alert.athlete_id ? effectiveForAthlete(alert.athlete_id)[moduleKey] !== false : enabledModules[moduleKey] !== false);
-      }));
+      }).map(alert => ({ ...alert, resolvedAt:alert.resolved_at, archivedAt:alert.archived_at })), alertReadStatesRes.data ?? []));
 
       const mappedComps = (compsRes.data ?? []).map(c => ({
         id: c.id, name: c.name, date: c.date,
@@ -497,7 +501,7 @@ function Dashboard({
       : null;
     const trend = avgCharge && prevAvg ? Math.round(((avgCharge - prevAvg) / prevAvg) * 100) : null;
     const actifs = currentCharges.length;
-    const unreadAlerts = alerts.filter(a => !a.is_read).length;
+    const unreadAlerts = alerts.filter(a => !a.isRead && !a.resolvedAt && !a.archivedAt).length;
     const weekSessions = sessions.filter(session => matchesISOWeek(session, currentWeek, currentYear));
     const totalExpected = weekSessions.reduce((s, sess) => s + sess.athleteIds.length, 0);
     const totalDone = weekSessions.reduce((s, sess) => s + (sess.validations?.filter(v => v.status === "done").length ?? 0), 0);
@@ -550,16 +554,7 @@ function Dashboard({
   const hiddenAthleteCount = Math.max(0, dashboardAthletes.length - visibleAthletes.length);
 
   const recentFeedbacks = useMemo(() => {
-    const results = [];
-    sessions.forEach(s => {
-      (s.validations ?? []).forEach(v => {
-        if (!v.status) return;
-        const athlete = athletes.find(a => a.id === v.athleteId);
-        if (!athlete) return;
-        results.push({ session: s, validation: v, athlete });
-      });
-    });
-    return results.filter(f => f.validation.feeling || f.validation.comment).slice(0, 5);
+    return getRecentFeedbacks(sessions, athletes, { now:new Date(), days:7, limit:6 });
   }, [sessions, athletes]);
 
   const firstName = profile?.name?.split(" ")[0] ?? "Coach";
@@ -785,11 +780,11 @@ function Dashboard({
         </div>}
 
         {/* ── Colonne droite ─────────────────────────────────────────────── */}
-        <div className="space-y-4">
+        <div className="flex flex-col gap-4">
 
           {/* Prochaines compétitions */}
           {enabledModules.performances !== false && competitions.length > 0 && (
-            <div className="card overflow-hidden">
+            <div className="card overflow-hidden" style={{ order:2 }}>
               <div className="px-5 py-4 border-b border-[color:var(--c-border)] flex items-center justify-between">
                 <h3 className="card-title">Compétitions</h3>
                 <button
@@ -801,7 +796,7 @@ function Dashboard({
               </div>
               <div className="divide-y divide-[color:var(--c-border)]">
                 {competitions.map(c => {
-                  const days = Math.round((new Date(c.date) - today) / (1000 * 60 * 60 * 24));
+                  const days = calendarDayDifference(today, c.date);
                   const isUrgent = days <= 7;
                   return (
                     <div key={c.id} className="px-5 py-3.5 flex items-center gap-3 hover:bg-[var(--c-surface-2)] transition-colors">
@@ -814,7 +809,7 @@ function Dashboard({
                       <div className="flex-1 min-w-0">
                         <p className="text-[12.5px] font-semibold truncate" style={{ color: "var(--c-text-1)" }}>{c.name}</p>
                         <p className="meta-text mt-0.5">
-                          {new Date(c.date).toLocaleDateString("fr-BE", { day: "numeric", month: "short" })}
+                          {formatCivilDate(c.date, { day:"numeric", month:"short" })}
                           {" · "}{c.athleteIds.length} athlète{c.athleteIds.length > 1 ? "s" : ""}
                         </p>
                       </div>
@@ -836,7 +831,7 @@ function Dashboard({
 
           {/* Objectifs saison */}
           {enabledModules.performances !== false && goals.length > 0 && (
-            <div className="card overflow-hidden">
+            <div className="card overflow-hidden" style={{ order:3 }}>
               <div className="px-5 py-4 border-b border-[color:var(--c-border)] flex items-center justify-between">
                 <h3 className="card-title">Objectifs saison</h3>
                 <span className="text-[12px] font-bold px-2 py-0.5 rounded-full chip chip-success">
@@ -846,7 +841,7 @@ function Dashboard({
               <div className="divide-y divide-[color:var(--c-border)]">
                 {goals.slice(0, 5).map(g => {
                   const athlete  = athletes.find(a => a.id === g.athlete_id);
-                  const daysLeft = g.deadline ? Math.round((new Date(g.deadline) - today) / (1000 * 60 * 60 * 24)) : null;
+                  const daysLeft = g.deadline ? calendarDayDifference(today, g.deadline) : null;
                   return (
                     <div key={g.id} className="px-5 py-3.5 flex items-center gap-3 hover:bg-[var(--c-surface-2)] transition-colors">
                       <div className="w-10 h-10 rounded-2xl flex items-center justify-center flex-shrink-0" style={{ background: "rgba(29,158,117,0.08)" }}>
@@ -874,10 +869,11 @@ function Dashboard({
 
           {/* Feedbacks récents */}
           {enabledModules.session_feedback !== false && recentFeedbacks.length > 0 && (
-            <div className="card overflow-hidden">
-              <div className="px-5 py-4 border-b border-[color:var(--c-border)]">
-                <h3 className="card-title">Feedbacks récents</h3>
+            <div className="card overflow-hidden" style={{ order:1 }}>
+              <div className="px-5 py-4 border-b border-[color:var(--c-border)] flex items-center justify-between gap-3">
+                <div><h3 className="card-title">Feedbacks récents</h3>
                 <p className="card-subtitle mt-0.5">{recentFeedbacks.length} retour{recentFeedbacks.length > 1 ? "s" : ""} athlète</p>
+                </div><button type="button" className="btn-ghost" onClick={() => onNavigate("alerts")}>Voir tous</button>
               </div>
               <div className="divide-y divide-[color:var(--c-border)]">
                 {recentFeedbacks.map(({ session, validation, athlete }, i) => (

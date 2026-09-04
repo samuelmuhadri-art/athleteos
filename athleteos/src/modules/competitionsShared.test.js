@@ -1,7 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { dateToWeek, daysUntil, generateResultAnalysis } from "./competitionsShared.js";
+import { dateToWeek, daysUntil, generateResultAnalysis, getTypeConfig } from "./competitionsShared.js";
 
 describe("helpers du calendrier des compétitions", () => {
+  it("conserve les valeurs legacy avec des libellés neutres et sans rouge danger", () => {
+    expect(getTypeConfig("régional").label).toBe("Secondaire");
+    expect(getTypeConfig("objectif").label).toBe("Importante");
+    expect(getTypeConfig("objectif A")).toMatchObject({ label: "Objectif principal", border: "#9B84F0" });
+  });
+
   it("considère toute la date du jour comme aujourd'hui", () => {
     const lateToday = new Date(2026, 6, 28, 23, 59, 59);
 

@@ -34,6 +34,7 @@ function Competitions() {
 
   const [selectedComp,    setSelectedComp]    = useState(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [editingComp, setEditingComp] = useState(null);
   const [athletes,        setAthletes]        = useState([]);
   const [weeklyCharge,    setWeeklyCharge]    = useState([]);
   const [competitionList, setCompetitionList] = useState([]);
@@ -137,6 +138,7 @@ function Competitions() {
         return {
           id: c.id, name: c.name, date: c.date,
           location: c.location, type: c.type,
+          notes:c.notes,
           athleteIds: athIds, plannedEvents, results,
         };
       });
@@ -179,6 +181,25 @@ function Competitions() {
       p_idempotency_key: idempotencyKey,
     });
     if (error) throw error;
+    await fetchAll();
+  }, [fetchAll]);
+
+  const updateCompetition = useCallback(async form => {
+    const { error:updateError } = await supabase.rpc("update_competition_with_athletes", {
+      p_competition_id:editingComp.id, p_name:form.name, p_date:form.date,
+      p_location:form.location || null, p_type:form.type, p_notes:form.notes || null,
+      p_athlete_entries:form.athleteEntries,
+    });
+    if (updateError) throw updateError;
+    setSelectedComp(null);
+    await fetchAll();
+  }, [editingComp?.id, fetchAll]);
+
+  const deleteCompetition = useCallback(async competition => {
+    if (!window.confirm(`Supprimer « ${competition.name} » ? Cette action est définitive.`)) return;
+    const { error:deleteError } = await supabase.rpc("delete_competition_transactional", { p_competition_id:competition.id });
+    if (deleteError) throw deleteError;
+    setSelectedComp(null);
     await fetchAll();
   }, [fetchAll]);
 
@@ -388,6 +409,8 @@ function Competitions() {
           records={records}
           onClose={() => setSelectedComp(null)}
           onAddResult={addResult}
+          onEdit={competition => { setEditingComp(competition); setSelectedComp(null); }}
+          onDelete={deleteCompetition}
         />
       )}
 
@@ -397,6 +420,11 @@ function Competitions() {
           onClose={() => setShowCreateModal(false)}
           onCreate={createCompetition}
         />
+      )}
+
+      {editingComp && (
+        <CreateCompModal athletes={athletes} initialData={editingComp}
+          onClose={() => setEditingComp(null)} onCreate={updateCompetition} />
       )}
     </div>
   );

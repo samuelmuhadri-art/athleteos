@@ -3,6 +3,7 @@ import { ArrowRight, Bell, CheckCheck, Heart, Sparkles, X } from "lucide-react";
 import { PushToggleButton } from "../../components/pwa/PushToggleButton";
 import {
   NOTIFICATION_FILTERS,
+  filterNotificationLifecycle,
   filterNotificationItems,
   formatNotificationTime,
   getNotificationPresentation,
@@ -21,21 +22,18 @@ export default function NotificationCenter({
 }) {
   const { dialogRef } = useAccessibleDialog({ onClose });
   const [activeFilter, setActiveFilter] = useState("all");
+  const [lifecycle, setLifecycle] = useState("active");
   const [markingAll, setMarkingAll] = useState(false);
   const [actionError, setActionError] = useState(null);
   const unreadCount = notifications.filter(notification => !notification.is_read).length;
-  const filteredNotifications = useMemo(
-    () => filterNotificationItems(notifications, activeFilter),
-    [notifications, activeFilter]
+  const lifecycleNotifications = useMemo(
+    () => filterNotificationLifecycle(notifications, lifecycle),
+    [notifications, lifecycle]
   );
-  const counts = useMemo(() => ({
-    all:notifications.length,
-    unread:unreadCount,
-    messages:filterNotificationItems(notifications, "messages").length,
-    sport:filterNotificationItems(notifications, "sport").length,
-    club:filterNotificationItems(notifications, "club").length,
-  }), [notifications, unreadCount]);
-
+  const filteredNotifications = useMemo(
+    () => filterNotificationItems(lifecycleNotifications, activeFilter === "unread" ? "all" : activeFilter),
+    [lifecycleNotifications, activeFilter]
+  );
   const markAllRead = async () => {
     setMarkingAll(true);
     setActionError(null);
@@ -78,13 +76,26 @@ export default function NotificationCenter({
           </div>
         </header>
 
+        <div role="tablist" aria-label="État des notifications" style={{ padding:"12px 16px 0", display:"grid", gridTemplateColumns:"1fr 1fr", gap:8, background:"var(--c-surface)" }}>
+          {[
+            { id:"active", label:"Actives", count:unreadCount },
+            { id:"history", label:"Historique", count:notifications.length - unreadCount },
+          ].map(item => {
+            const selected = lifecycle === item.id;
+            return <button key={item.id} type="button" role="tab" aria-selected={selected} onClick={() => { setLifecycle(item.id); setActiveFilter("all"); }}
+              className="tap-feedback" style={{ minHeight:44, borderRadius:12, border:`1px solid ${selected ? "rgba(91,141,239,0.32)" : "var(--c-border)"}`, background:selected ? "rgba(91,141,239,0.12)" : "var(--c-surface-2)", color:selected ? "var(--tone-info)" : "var(--c-text-2)", fontSize:13, fontWeight:800 }}>
+              {item.label} · {item.count}
+            </button>;
+          })}
+        </div>
+
         <nav aria-label="Filtrer les notifications" style={{ padding:"12px 16px", display:"flex", gap:8, overflowX:"auto", scrollbarWidth:"none", flexShrink:0, borderBottom:"1px solid var(--c-border)" }}>
-          {NOTIFICATION_FILTERS.map(filter => {
+          {NOTIFICATION_FILTERS.filter(filter => filter.id !== "unread").map(filter => {
             const active = activeFilter === filter.id;
             return (
               <button key={filter.id} type="button" aria-pressed={active} onClick={() => setActiveFilter(filter.id)} className="tap-feedback"
                 style={{ minHeight:44, padding:"0 13px", borderRadius:12, flexShrink:0, border:`1px solid ${active ? "rgba(77,201,160,0.30)" : "var(--c-border)"}`, background:active ? "rgba(29,158,117,0.13)" : "var(--c-surface-2)", color:active ? "#7BD8B4" : "var(--c-text-2)", fontSize:13, fontWeight:800, cursor:"pointer" }}>
-                {filter.label} · {counts[filter.id]}
+                {filter.label} · {filterNotificationItems(lifecycleNotifications, filter.id).length}
               </button>
             );
           })}
@@ -98,8 +109,8 @@ export default function NotificationCenter({
               <div style={{ width:64, height:64, borderRadius:20, display:"flex", alignItems:"center", justifyContent:"center", background:"var(--c-surface-2)", border:"1px solid var(--c-border)" }}>
                 <Bell size={27} color="var(--c-text-3)" strokeWidth={1.6}/>
               </div>
-              <p style={{ marginTop:16, fontSize:16, fontWeight:800, color:"var(--c-text-1)" }}>{notifications.length ? "Rien dans ce filtre" : "Aucune notification"}</p>
-              <p style={{ marginTop:6, maxWidth:300, fontSize:13, lineHeight:1.5, color:"var(--c-text-2)" }}>{notifications.length ? "Choisis une autre catégorie pour retrouver tes actualités." : "Tes messages, séances et performances apparaîtront ici."}</p>
+              <p style={{ marginTop:16, fontSize:16, fontWeight:800, color:"var(--c-text-1)" }}>{lifecycle === "active" ? "Tu es à jour" : "Aucun historique"}</p>
+              <p style={{ marginTop:6, maxWidth:300, fontSize:13, lineHeight:1.5, color:"var(--c-text-2)" }}>{lifecycle === "active" ? "Les nouvelles notifications apparaîtront ici." : "Les notifications lues restent consultables ici, sans encombrer le flux actif."}</p>
               {activeFilter !== "all" && <button type="button" onClick={() => setActiveFilter("all")} className="btn-secondary" style={{ marginTop:16 }}>Voir toutes les notifications</button>}
             </div>
           ) : filteredNotifications.map(notification => {

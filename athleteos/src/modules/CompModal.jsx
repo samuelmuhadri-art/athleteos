@@ -4,7 +4,7 @@
 // ============================================================
 
 import { memo } from "react";
-import { MapPin, CalendarDays, Users, Trophy, X, Zap } from "lucide-react";
+import { MapPin, CalendarDays, Users, Trophy, X, Zap, Edit3, Trash2 } from "lucide-react";
 import { getAthleteMetricsForWeek } from "../utils/chargeCalculations";
 import { getTypeConfig, daysUntil, formatDate, dateToWeek, athleteColor, generateResultAnalysis } from "./competitionsShared";
 import { parsePerf } from "../athlete/shared.js";
@@ -12,7 +12,7 @@ import AddResultInline from "./AddResultInline";
 import PerformanceContextChips from "../components/performance/PerformanceContextChips.jsx";
 import { useAccessibleDialog } from "../hooks/useAccessibleDialog";
 
-const CompModal = memo(({ competition, athletes, weeklyCharge, records, onClose, onAddResult }) => {
+const CompModal = memo(({ competition, athletes, weeklyCharge, records, onClose, onAddResult, onEdit, onDelete }) => {
   const { dialogRef } = useAccessibleDialog({ onClose, enabled: Boolean(competition) });
   if (!competition) return null;
 
@@ -239,7 +239,11 @@ const CompModal = memo(({ competition, athletes, weeklyCharge, records, onClose,
           )}
         </div>
 
-        <div className="px-4 sm:px-6 py-4 border-t border-[var(--c-border)] flex justify-end flex-shrink-0">
+        <div className="px-4 sm:px-6 py-4 border-t border-[var(--c-border)] flex items-center justify-between gap-3 flex-shrink-0">
+          <div className="flex items-center gap-2">
+            {onDelete && <button type="button" onClick={() => onDelete(competition)} className="btn-ghost" style={{ color:"var(--tone-danger)" }}><Trash2 size={15} /> Supprimer</button>}
+            {onEdit && <button type="button" onClick={() => onEdit(competition)} className="btn-secondary"><Edit3 size={15} /> Modifier</button>}
+          </div>
           <button
             type="button"
             onClick={onClose}

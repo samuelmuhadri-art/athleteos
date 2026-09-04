@@ -9,7 +9,7 @@
 import { memo, useState, useMemo, useCallback, useEffect } from "react";
 import {
   ChevronLeft, ChevronRight, Plus, X,
-  Clock, CalendarDays,
+  Clock, CalendarDays, Trophy, Copy,
 } from "lucide-react";
 import { supabase }  from "../utils/supabaseClient";
 import { useAuth }   from "../hooks/useAuth";
@@ -35,6 +35,10 @@ import AddSessionModal from "./AddSessionModal";
 import CompetitionPlanningCard from "../components/planning/CompetitionPlanningCard";
 import { groupCompetitionsByDate } from "../domain/planningCompetitions";
 import { useModules } from "../hooks/useModules";
+import { mapDocument, publishSessionDocumentDistribution } from "../services/documentLibrary";
+import CompetitionDetailModal from "../components/planning/CompetitionDetailModal";
+import CreateCompModal from "./CreateCompModal";
+import PlanningEventModal from "../components/planning/PlanningEventModal";
 
 // ─── Composant principal ──────────────────────────────────────────────────────
 
@@ -52,10 +56,20 @@ function Planning() {
   const [athletes,           setAthletes]           = useState([]);
   const [sessionList,        setSessionList]         = useState([]);
   const [competitionList,    setCompetitionList]     = useState([]);
+  const [eventList,          setEventList]           = useState([]);
   const [activeSession,      setActiveSession]       = useState(null);
   const [sessionModalTarget, setSessionModalTarget]  = useState(null);
+  const [initialAthleteIds,  setInitialAthleteIds]   = useState([]);
   const [selectedDate,       setSelectedDate]        = useState(null);
+  const [activeCompetition,  setActiveCompetition]   = useState(null);
+  const [competitionEditor,  setCompetitionEditor]   = useState(null);
+  const [showAddMenu,        setShowAddMenu]         = useState(false);
+  const [eventEditor,        setEventEditor]         = useState(null);
   const [filterMode,         setFilterMode]          = useState("all");
+  const [filterAthlete,      setFilterAthlete]       = useState("all");
+  const [filterGroup,        setFilterGroup]         = useState("all");
+  const [filterDiscipline,   setFilterDiscipline]    = useState("all");
+  const [filterCategory,     setFilterCategory]      = useState("all");
   const [loading,            setLoading]             = useState(true);
   const [error,              setError]               = useState(null);
 
@@ -64,26 +78,33 @@ function Planning() {
     if (!clubId) return;
     try {
       setLoading(true); setError(null);
-      const [athletesRes, sessionsRes, competitionsRes] = await Promise.all([
-        supabase.from("athletes").select("id, name, main_discipline, profile_data, user_id").eq("club_id", clubId),
+      const [athletesRes, sessionsRes, competitionsRes, eventsRes] = await Promise.all([
+        supabase.from("athletes").select("id, name, main_discipline, profile_data, user_id, group_name").eq("club_id", clubId),
         supabase.from("sessions").select("*").eq("club_id", clubId),
-        supabase.from("competitions").select("id, name, date, location, type, competition_athletes(athlete_id, planned_event)").eq("club_id", clubId),
+        supabase.from("competitions").select("id, name, date, location, type, notes, competition_athletes(athlete_id, planned_event)").eq("club_id", clubId),
+        supabase.from("planning_events").select("*, planning_event_athletes(athlete_id), planning_event_documents(document_id, documents(*))").eq("club_id", clubId),
       ]);
       if (athletesRes.error) throw athletesRes.error;
       if (sessionsRes.error) throw sessionsRes.error;
       if (competitionsRes.error) throw competitionsRes.error;
+      if (eventsRes.error) throw eventsRes.error;
 
       const sessionIds = sessionsRes.data.map(s => s.id);
-      const saRes = sessionIds.length
-        ? await supabase.from("session_athletes").select("*").in("session_id", sessionIds)
-        : { data: [], error: null };
+      const [saRes, documentsRes, recipientsRes] = sessionIds.length ? await Promise.all([
+        supabase.from("session_athletes").select("*").in("session_id", sessionIds),
+        supabase.from("session_documents").select("session_id, document_id, visibility, documents(*)").in("session_id", sessionIds),
+        supabase.from("session_document_recipients").select("session_id, document_id, athlete_id").in("session_id", sessionIds),
+      ]) : [{ data:[], error:null }, { data:[], error:null }, { data:[], error:null }];
       if (saRes.error) throw saRes.error;
+      if (documentsRes.error) throw documentsRes.error;
+      if (recipientsRes.error) throw recipientsRes.error;
 
       const configuredIds = enabledAthleteIds("planning");
       const eligibleIds = configuredIds ? new Set(configuredIds) : null;
       setAthletes(athletesRes.data.filter((a) => !eligibleIds || eligibleIds.has(a.id)).map(a => ({
         id: a.id, name: a.name, mainDiscipline: a.main_discipline,
         avatar: a.profile_data?.avatar ?? initialsFromName(a.name),
+        group:a.group_name,
       })));
 
       setSessionList(sessionsRes.data.map(s => {
@@ -100,7 +121,15 @@ function Planning() {
           instructions:    s.instructions,
           durationMinutes: s.duration_minutes,
           pdfUrl:          s.pdf_url,
+          documents: (documentsRes.data ?? []).filter(link => link.session_id === s.id).map(link => ({
+            ...mapDocument(link.documents),
+            visibility:link.visibility,
+            athleteIds:(recipientsRes.data ?? []).filter(recipient => recipient.session_id === s.id && recipient.document_id === link.document_id).map(recipient => recipient.athlete_id),
+          })),
           createdBy:       s.created_by,
+          seriesId:        s.series_id,
+          sourceKind:      s.source_kind ?? "individual",
+          targetGroup:     s.target_group,
           lifecycleStatus: s.lifecycle_status ?? "planned",
           startedAt:       s.started_at,
           closedAt:        s.closed_at,
@@ -126,8 +155,16 @@ function Planning() {
         date: competition.date,
         location: competition.location,
         type: competition.type,
+        notes:competition.notes,
         athleteIds: (competition.competition_athletes ?? []).map(row => row.athlete_id),
         plannedEvents: Object.fromEntries((competition.competition_athletes ?? []).map(row => [row.athlete_id, row.planned_event])),
+      })));
+      setEventList((eventsRes.data ?? []).map(event => ({
+        id:event.id, kind:event.kind, name:event.name, startsOn:event.starts_on, endsOn:event.ends_on,
+        time:event.time, location:event.location, description:event.description, notes:event.notes,
+        customLabel:event.custom_label, targetGroup:event.target_group,
+        athleteIds:(event.planning_event_athletes ?? []).map(row => row.athlete_id),
+        documents:(event.planning_event_documents ?? []).map(link => mapDocument(link.documents)).filter(Boolean),
       })));
     } catch (err) {
       setError(err.message ?? "Erreur inconnue");
@@ -138,9 +175,52 @@ function Planning() {
 
   useEffect(() => { fetchAll(); }, [fetchAll]);
 
+  useEffect(() => {
+    if (!athletes.length || typeof window === "undefined") return;
+    const storedAthleteId = Number(window.sessionStorage.getItem("athleteos:planning-athlete"));
+    if (!Number.isInteger(storedAthleteId)) return;
+    window.sessionStorage.removeItem("athleteos:planning-athlete");
+    if (!athletes.some(athlete => athlete.id === storedAthleteId)) return;
+    setInitialAthleteIds([storedAthleteId]);
+    setSessionModalTarget("create");
+  }, [athletes]);
+
+  const openCreateSession = useCallback((athleteIds = []) => {
+    setInitialAthleteIds(athleteIds);
+    setSessionModalTarget("create");
+  }, []);
+
   // ═══ Écritures ════════════════════════════════════════════════════════════
 
   const addSession = useCallback(async (form, idempotencyKey) => {
+    if (form.recurrence && form.recurrence !== "none") {
+      const { data, error:seriesError } = await supabase.rpc("create_session_series_with_occurrences", {
+        p_series:{
+          title:form.title, type:form.type, category:form.category, trainingFocus:form.trainingFocus,
+          durationMinutes:form.durationMinutes, description:form.description, instructions:form.instructions,
+          time:form.time, loadWeight:form.loadWeight ?? 1,
+          startsOn:form.sessionDate,
+          endsOn:form.recurrenceEndsOn || null,
+          occurrenceCount:form.recurrenceEndsOn ? null : form.recurrenceCount,
+          intervalWeeks:form.recurrence === "biweekly" ? 2 : 1,
+          weekdays:form.recurrenceWeekdays,
+          targetGroup:form.targetGroup || null,
+        },
+        p_athlete_ids:form.athleteIds,
+        p_idempotency_key:idempotencyKey,
+      });
+      if (seriesError) throw seriesError;
+      if (form.documentIds?.length) {
+        const { error:documentError } = await supabase.rpc("publish_series_documents", {
+          p_series_id:data.seriesId, p_document_ids:form.documentIds, p_notification_key:idempotencyKey,
+        });
+        if (documentError) throw documentError;
+      }
+      await notifyAthleteNewSession(clubId, form.athleteIds, { title:form.title, sessionDate:form.sessionDate, day:form.day });
+      await fetchAll();
+      showSuccessToast({ key:`series-created-${data.seriesId}`, title:"Série planifiée", message:`${data.occurrenceCount} séances ont été créées.` });
+      return;
+    }
     const { data, error: sessionError } = await supabase.rpc("create_session_with_athletes", {
       p_session: form,
       p_athlete_ids: form.athleteIds,
@@ -148,6 +228,12 @@ function Planning() {
     });
     if (sessionError) throw sessionError;
     const newSession = { id: data?.sessionId };
+
+    await publishSessionDocumentDistribution({
+      sessionId:newSession.id,
+      documents:form.documents,
+      notificationKey:idempotencyKey,
+    });
 
     await notifyAthleteNewSession(clubId, form.athleteIds, { title: form.title, sessionDate: form.sessionDate, day: form.day });
     await fetchAll();
@@ -159,14 +245,30 @@ function Planning() {
   }, [clubId, fetchAll, showSuccessToast]);
 
   const updateSession = useCallback(async (sessionId, form) => {
-    const { error: sessionError } = await supabase.rpc("update_session_with_athletes", {
-      p_session_id: sessionId,
-      p_session: form,
-      p_athlete_ids: form.athleteIds,
+    const existing = sessionList.find(s => s.id === sessionId);
+    const { error: sessionError } = existing?.seriesId ? await supabase.rpc("update_recurring_session", {
+      p_session_id:sessionId, p_scope:form.editScope ?? "single", p_patch:form, p_athlete_ids:form.athleteIds,
+    }) : await supabase.rpc("update_session_with_athletes", {
+      p_session_id:sessionId, p_session:form, p_athlete_ids:form.athleteIds,
     });
     if (sessionError) throw sessionError;
 
-    const existing    = sessionList.find(s => s.id === sessionId);
+    if (existing?.seriesId && form.editScope !== "single") {
+      const { error:documentError } = await supabase.rpc("publish_series_documents", {
+        p_series_id:existing.seriesId,
+        p_document_ids:form.documentIds ?? [],
+        p_notification_key:`update-series-${existing.seriesId}-${Date.now()}`,
+        p_from_date:form.editScope === "all" ? "0001-01-01" : existing.sessionDate,
+      });
+      if (documentError) throw documentError;
+    } else {
+      await publishSessionDocumentDistribution({
+        sessionId,
+        documents:form.documents,
+        notificationKey:`update-${sessionId}-${Date.now()}`,
+      });
+    }
+
     const previousIds = existing?.athleteIds ?? [];
     const toAdd       = form.athleteIds.filter(id => !previousIds.includes(id));
     const retainedIds = form.athleteIds.filter(id => previousIds.includes(id));
@@ -180,11 +282,63 @@ function Planning() {
     });
   }, [clubId, fetchAll, sessionList, showSuccessToast]);
 
-  const deleteSession = useCallback(async (sessionId) => {
-    const existing = sessionList.find(s => s.id === sessionId);
-    const { data, error: e } = await supabase.rpc("delete_session_transactional", {
-      p_session_id: sessionId,
+  const saveCompetition = useCallback(async (form, idempotencyKey) => {
+    if (competitionEditor && competitionEditor !== "create") {
+      const { error:updateError } = await supabase.rpc("update_competition_with_athletes", {
+        p_competition_id:competitionEditor.id, p_name:form.name, p_date:form.date,
+        p_location:form.location || null, p_type:form.type, p_notes:form.notes || null,
+        p_athlete_entries:form.athleteEntries,
+      });
+      if (updateError) throw updateError;
+    } else {
+      const { error:createError } = await supabase.rpc("create_competition_with_athletes", {
+        p_name:form.name, p_date:form.date, p_location:form.location || null, p_type:form.type,
+        p_athlete_entries:form.athleteEntries, p_idempotency_key:idempotencyKey,
+      });
+      if (createError) throw createError;
+    }
+    await fetchAll();
+  }, [competitionEditor, fetchAll]);
+
+  const deleteCompetition = useCallback(async competition => {
+    if (!window.confirm(`Supprimer « ${competition.name} » ? Cette action est définitive.`)) return;
+    const { error:deleteError } = await supabase.rpc("delete_competition_transactional", { p_competition_id:competition.id });
+    if (deleteError) throw deleteError;
+    setActiveCompetition(null);
+    await fetchAll();
+  }, [fetchAll]);
+
+  const savePlanningEvent = useCallback(async form => {
+    const eventId = eventEditor?.event?.id ?? null;
+    const { data:eventResult, error:eventError } = await supabase.rpc("upsert_planning_event_with_athletes", {
+      p_event_id:eventId,
+      p_event:{ kind:form.kind, name:form.name, startsOn:form.startsOn, endsOn:form.endsOn, time:form.time,
+        location:form.location, description:form.description, notes:form.notes, customLabel:form.customLabel, targetGroup:form.targetGroup },
+      p_athlete_ids:form.athleteIds,
     });
+    if (eventError) throw eventError;
+    const { error:documentError } = await supabase.rpc("publish_planning_event_documents", {
+      p_event_id:eventResult.eventId,
+      p_document_ids:(form.documents ?? []).map(document => Number(document.id)),
+      p_notification_key:`planning-event-${eventResult.eventId}-${Date.now()}`,
+    });
+    if (documentError) throw documentError;
+    await fetchAll();
+  }, [eventEditor, fetchAll]);
+
+  const deletePlanningEvent = useCallback(async event => {
+    if (!window.confirm(`Supprimer « ${event.name} » ?`)) return;
+    const { error:eventError } = await supabase.rpc("delete_planning_event", { p_event_id:event.id });
+    if (eventError) throw eventError;
+    setEventEditor(null);
+    await fetchAll();
+  }, [fetchAll]);
+
+  const deleteSession = useCallback(async (sessionId, scope = "single") => {
+    const existing = sessionList.find(s => s.id === sessionId);
+    const { data, error: e } = existing?.seriesId ? await supabase.rpc("delete_recurring_session", {
+      p_session_id:sessionId, p_scope:scope,
+    }) : await supabase.rpc("delete_session_transactional", { p_session_id:sessionId });
     if (e) throw e;
     // Évite d'orpheliner la pièce jointe privée une fois la séance
     // supprimée (échec d'écriture ici non bloquant : la séance est déjà
@@ -202,6 +356,22 @@ function Planning() {
       message: "Elle n’apparaît plus dans le planning.",
     });
   }, [fetchAll, sessionList, showSuccessToast]);
+
+  const duplicateSession = useCallback(async (session, sessionDate) => {
+    const { data, error:duplicateError } = await supabase.rpc("duplicate_session_transactional", {
+      p_session_id:session.id, p_session_date:sessionDate, p_athlete_ids:session.athleteIds,
+    });
+    if (duplicateError) throw duplicateError;
+    await notifyAthleteNewSession(clubId, session.athleteIds, { title:session.title, sessionDate });
+    await fetchAll();
+    showSuccessToast({ key:`session-duplicate-${data.sessionId}`, title:"Séance dupliquée", message:"Contenu, participants et documents ont été réutilisés sans copier les fichiers." });
+  }, [clubId, fetchAll, showSuccessToast]);
+
+  const saveSessionTemplate = useCallback(async (session, name) => {
+    const { error:templateError } = await supabase.rpc("save_session_template", { p_name:name, p_session_id:session.id });
+    if (templateError) throw templateError;
+    showSuccessToast({ key:`session-template-${session.id}-${name}`, title:"Modèle enregistré", message:"Tu pourras réutiliser cette séance et ses documents." });
+  }, [showSuccessToast]);
 
   const setCoachNote = useCallback(async (sessionId, athleteId, coachNote) => {
     const { error: updateError } = await supabase.from("session_athletes").update({ coach_note: coachNote || null })
@@ -239,11 +409,34 @@ function Planning() {
 
   const calendarDays = useMemo(() => getCalendarDays(viewYear, viewMonth), [viewYear, viewMonth]);
 
+  const filteredAudienceIds = useMemo(() => new Set(athletes.filter(athlete => (
+    (filterGroup === "all" || athlete.group === filterGroup)
+    && (filterDiscipline === "all" || athlete.mainDiscipline === filterDiscipline)
+  )).map(athlete => athlete.id)), [athletes, filterDiscipline, filterGroup]);
+
+  const matchesAudience = useCallback(athleteIds => {
+    if (filterAthlete !== "all" && !athleteIds.includes(Number(filterAthlete))) return false;
+    if ((filterGroup !== "all" || filterDiscipline !== "all") && !athleteIds.some(id => filteredAudienceIds.has(id))) return false;
+    return true;
+  }, [filterAthlete, filterDiscipline, filterGroup, filteredAudienceIds]);
+
   const filteredSessions = useMemo(() => {
-    if (filterMode === "athlete") return sessionList.filter(s => s.createdByAthlete);
-    if (filterMode === "coach")   return sessionList.filter(s => !s.createdByAthlete);
-    return sessionList;
-  }, [sessionList, filterMode]);
+    return sessionList.filter(session => {
+      if (filterMode === "athlete" && !session.createdByAthlete) return false;
+      if (filterMode === "coach" && session.createdByAthlete) return false;
+      if (filterCategory !== "all" && session.category !== filterCategory) return false;
+      return matchesAudience(session.athleteIds);
+    });
+  }, [filterCategory, filterMode, matchesAudience, sessionList]);
+
+  const filteredCompetitions = useMemo(
+    () => competitionList.filter(competition => matchesAudience(competition.athleteIds)),
+    [competitionList, matchesAudience],
+  );
+  const filteredEvents = useMemo(
+    () => eventList.filter(event => matchesAudience(event.athleteIds)),
+    [eventList, matchesAudience],
+  );
 
   const sessionsByDate = useMemo(() => {
     const map = {};
@@ -257,8 +450,8 @@ function Planning() {
   }, [filteredSessions]);
 
   const competitionsByDate = useMemo(
-    () => groupCompetitionsByDate(competitionList),
-    [competitionList],
+    () => groupCompetitionsByDate(filteredCompetitions),
+    [filteredCompetitions],
   );
 
   const selectedDaySessions = useMemo(() => {
@@ -280,6 +473,19 @@ function Planning() {
     date.setDate(weekStart.getDate() + i);
     return date;
   });
+
+  const duplicateWeek = useCallback(async () => {
+    const source = toLocalDateStr(weekDays[0]);
+    const targetDate = new Date(weekDays[0]); targetDate.setDate(targetDate.getDate() + 7);
+    const target = toLocalDateStr(targetDate);
+    if (!window.confirm(`Dupliquer les séances de la semaine du ${source} vers celle du ${target} ?`)) return;
+    const { data, error:duplicateError } = await supabase.rpc("duplicate_week_transactional", {
+      p_source_monday:source, p_target_monday:target, p_athlete_ids:null,
+    });
+    if (duplicateError) throw duplicateError;
+    await fetchAll();
+    showSuccessToast({ key:`week-duplicate-${source}-${target}`, title:"Semaine dupliquée", message:`${data.duplicatedCount} séance${data.duplicatedCount !== 1 ? "s" : ""} copiée${data.duplicatedCount !== 1 ? "s" : ""}.` });
+  }, [fetchAll, showSuccessToast, weekDays]);
 
   const prevMonth = () => {
     if (viewMonth === 0) { setViewYear(y => y - 1); setViewMonth(11); }
@@ -318,6 +524,8 @@ function Planning() {
       durationMinutes: s.durationMinutes ?? "",
       description: s.description ?? "", instructions: s.instructions ?? "",
       athleteIds: s.athleteIds, pdfUrl: s.pdfUrl ?? null,
+      documents:s.documents ?? [],
+      seriesId:s.seriesId, targetGroup:s.targetGroup,
       sessionDate: s.sessionDate?.slice(0, 10) ?? "",
     };
   }
@@ -401,18 +609,42 @@ function Planning() {
             </div>
           )}
 
+          {viewMode === "week" && <button type="button" className="btn-secondary hidden xl:inline-flex" onClick={() => duplicateWeek().catch(error => setError(error.message))}><Copy size={14} /> Dupliquer la semaine</button>}
+
+          <div className="relative">
           <button
             type="button"
-            aria-label="Ajouter une séance"
-            onClick={() => setSessionModalTarget("create")}
+            aria-label="Ajouter au planning"
+            onClick={() => setShowAddMenu(value => !value)}
             disabled={athletes.length === 0}
             className="btn-primary disabled:opacity-40 !px-3 md:!px-4"
           >
             <Plus size={14} />
             <span className="hidden sm:inline">Ajouter</span>
           </button>
+          {showAddMenu && <div className="absolute right-0 top-full mt-2 z-30 card p-2 min-w-52 shadow-xl">
+            <button type="button" className="btn-ghost w-full justify-start" onClick={() => { openCreateSession(); setShowAddMenu(false); }}><CalendarDays size={15} /> Séance</button>
+            <button type="button" className="btn-ghost w-full justify-start" onClick={() => { setCompetitionEditor("create"); setShowAddMenu(false); }}><Trophy size={15} /> Compétition</button>
+            <button type="button" className="btn-ghost w-full justify-start" onClick={() => { setEventEditor({ kind:"stage" }); setShowAddMenu(false); }}><CalendarDays size={15} /> Stage, test ou autre</button>
+          </div>}
+          </div>
         </div>
       </div>
+
+      <div className="px-4 md:px-6 py-2 flex items-center gap-2 overflow-x-auto" style={{ borderBottom:"1px solid var(--c-border)" }} aria-label="Filtres du planning">
+        <select className="input-premium !w-auto" value={filterGroup} onChange={event => setFilterGroup(event.target.value)} aria-label="Filtrer par groupe"><option value="all">Tous les groupes</option>{[...new Set(athletes.map(athlete => athlete.group).filter(Boolean))].map(group => <option key={group}>{group}</option>)}</select>
+        <select className="input-premium !w-auto" value={filterAthlete} onChange={event => setFilterAthlete(event.target.value)} aria-label="Filtrer par athlète"><option value="all">Tous les athlètes</option>{athletes.map(athlete => <option key={athlete.id} value={athlete.id}>{athlete.name}</option>)}</select>
+        <select className="input-premium !w-auto" value={filterDiscipline} onChange={event => setFilterDiscipline(event.target.value)} aria-label="Filtrer par discipline"><option value="all">Toutes les disciplines</option>{[...new Set(athletes.map(athlete => athlete.mainDiscipline).filter(Boolean))].map(discipline => <option key={discipline}>{discipline}</option>)}</select>
+        <select className="input-premium !w-auto" value={filterCategory} onChange={event => setFilterCategory(event.target.value)} aria-label="Filtrer par catégorie"><option value="all">Toutes les catégories</option>{CATEGORIES.map(category => <option key={category.id} value={category.id}>{category.label}</option>)}</select>
+        {(filterGroup !== "all" || filterAthlete !== "all" || filterDiscipline !== "all" || filterCategory !== "all") && <button type="button" className="btn-ghost whitespace-nowrap" onClick={() => { setFilterGroup("all"); setFilterAthlete("all"); setFilterDiscipline("all"); setFilterCategory("all"); }}>Effacer</button>}
+      </div>
+
+      {filteredEvents.length > 0 && <div className="px-4 md:px-6 py-2 flex gap-2 overflow-x-auto" style={{ borderBottom:"1px solid var(--c-border)" }}>
+        {[...filteredEvents].sort((a,b) => a.startsOn.localeCompare(b.startsOn)).map(event => <button key={event.id} type="button"
+          onClick={() => setEventEditor({ event })} className="chip chip-neutral whitespace-nowrap min-h-11">
+          <CalendarDays size={13} /> {event.kind === "stage" ? "Stage" : event.kind === "test" ? "Test" : event.kind === "rest" ? "Repos" : event.customLabel || "Événement"} · {event.name} · {event.startsOn === event.endsOn ? event.startsOn : `${event.startsOn} → ${event.endsOn}`}
+        </button>)}
+      </div>}
 
       <div className="flex flex-1 overflow-hidden">
 
@@ -474,7 +706,7 @@ function Planning() {
                         <button
                           type="button"
                           aria-label={`Ajouter une séance le ${date.toLocaleDateString("fr-BE")}`}
-                          onClick={() => { setSelectedDate(date); setSessionModalTarget("create"); }}
+                          onClick={() => { setSelectedDate(date); openCreateSession(); }}
                           className="w-7 h-7 rounded-lg flex items-center justify-center transition-all"
                           style={{ background: "var(--c-surface-2)", color: "var(--c-text-3)" }}
                         >
@@ -488,7 +720,7 @@ function Planning() {
                       <div style={{ background: "var(--c-surface)" }}>
                         {dc.map(competition => (
                           <div key={`competition-${competition.id}`} className="p-3" style={{ borderTop: "1px solid var(--c-border)" }}>
-                            <CompetitionPlanningCard competition={competition} athletes={athletes} />
+                            <CompetitionPlanningCard competition={competition} athletes={athletes} onOpen={setActiveCompetition} />
                           </div>
                         ))}
                         {ds.map((s, idx) => {
@@ -641,7 +873,7 @@ function Planning() {
                       <div className="hidden md:block space-y-0.5">
                         {dayEvents.slice(0, 3).map(event => {
                           if (event.kind === "competition") return (
-                            <CompetitionPlanningCard key={`competition-${event.value.id}`} competition={event.value} athletes={athletes} compact />
+                            <CompetitionPlanningCard key={`competition-${event.value.id}`} competition={event.value} athletes={athletes} compact onOpen={setActiveCompetition} />
                           );
                           const s = event.value;
                           const c  = colors(s.category);
@@ -696,13 +928,13 @@ function Planning() {
 
             <div className="flex-1 overflow-y-auto p-3 space-y-2">
               {selectedDayCompetitions.map(competition => (
-                <CompetitionPlanningCard key={`competition-${competition.id}`} competition={competition} athletes={athletes} />
+                <CompetitionPlanningCard key={`competition-${competition.id}`} competition={competition} athletes={athletes} onOpen={setActiveCompetition} />
               ))}
               {selectedDaySessions.length === 0 && selectedDayCompetitions.length === 0 ? (
                 <div className="flex flex-col items-center justify-center h-full gap-3 py-10" style={{ color: "var(--c-text-3)" }}>
                   <CalendarDays size={32} strokeWidth={1.5} />
                   <p className="text-[12px] text-center font-medium">Aucun événement ce jour</p>
-                  <button onClick={() => setSessionModalTarget("create")}
+                  <button onClick={() => openCreateSession()}
                     className="text-[12px] font-semibold transition-colors" style={{ color: "var(--tone-success)" }}>
                     + Planifier une séance
                   </button>
@@ -785,7 +1017,7 @@ function Planning() {
 
             <div className="p-3 flex-shrink-0" style={{ borderTop: "1px solid var(--c-border)" }}>
               <button
-                onClick={() => setSessionModalTarget("create")}
+                onClick={() => openCreateSession()}
                 className="w-full flex items-center justify-center gap-2 py-2.5 rounded-2xl text-[12px] font-bold transition-colors"
                 style={{ background: "rgba(29,158,117,0.10)", border: "1px solid rgba(29,158,117,0.25)", color: "var(--tone-success)" }}
               >
@@ -824,7 +1056,7 @@ function Planning() {
 
             <div className="flex-1 overflow-y-auto px-4 space-y-2 pb-2">
               {selectedDayCompetitions.map(competition => (
-                <CompetitionPlanningCard key={`competition-${competition.id}`} competition={competition} athletes={athletes} />
+                <CompetitionPlanningCard key={`competition-${competition.id}`} competition={competition} athletes={athletes} onOpen={competition => { setActiveCompetition(competition); setSelectedDate(null); }} />
               ))}
               {selectedDaySessions.length === 0 && selectedDayCompetitions.length === 0 ? (
                 <div className="text-center py-8" style={{ color: "var(--c-text-3)" }}>
@@ -854,7 +1086,7 @@ function Planning() {
 
             <div className="p-4 flex-shrink-0" style={{ borderTop: "1px solid var(--c-border)" }}>
               <button
-                onClick={() => { setSessionModalTarget("create"); setSelectedDate(null); }}
+                onClick={() => { openCreateSession(); setSelectedDate(null); }}
                 className="w-full py-3 rounded-2xl text-[13px] font-bold tap-feedback"
                 style={{ background: "rgba(29,158,117,0.10)", border: "1px solid rgba(29,158,117,0.25)", color: "var(--tone-success)" }}
               >
@@ -877,6 +1109,8 @@ function Planning() {
           onSetCoachNote={setCoachNote}
           onSetLifecycle={setLifecycle}
           onRemindFeedback={remindFeedback}
+          onDuplicate={duplicateSession}
+          onSaveTemplate={saveSessionTemplate}
         />
       )}
 
@@ -884,10 +1118,21 @@ function Planning() {
         <AddSessionModal
           athletes={athletes}
           initialData={sessionModalTarget === "create" ? null : buildFormFromSession(sessionModalTarget)}
-          onClose={() => setSessionModalTarget(null)}
+          initialAthleteIds={sessionModalTarget === "create" ? initialAthleteIds : []}
+          onClose={() => { setSessionModalTarget(null); setInitialAthleteIds([]); }}
           onAdd={sessionModalTarget === "create" ? addSession : form => updateSession(sessionModalTarget.id, form)}
         />
       )}
+      {activeCompetition && <CompetitionDetailModal competition={activeCompetition} athletes={athletes}
+        onClose={() => setActiveCompetition(null)}
+        onEdit={competition => { setCompetitionEditor(competition); setActiveCompetition(null); }}
+        onDelete={deleteCompetition} />}
+      {competitionEditor && <CreateCompModal athletes={athletes}
+        initialData={competitionEditor === "create" ? null : competitionEditor}
+        onClose={() => setCompetitionEditor(null)} onCreate={saveCompetition} />}
+      {eventEditor && <PlanningEventModal athletes={athletes} initialKind={eventEditor.kind}
+        initialData={eventEditor.event ?? null} onClose={() => setEventEditor(null)}
+        onSave={savePlanningEvent} onDelete={deletePlanningEvent} />}
     </div>
   );
 }

@@ -105,6 +105,7 @@ async function main() {
     const coachA   = await makeUser(`storage-test-coacha-${RUN_ID}@example.invalid`,   password, clubA.id, "coach",   "Coach A");   auths.push(coachA);
     const athleteA = await makeUser(`storage-test-athletea-${RUN_ID}@example.invalid`, password, clubA.id, "athlete", "Athlete A"); auths.push(athleteA);
     const athleteB = await makeUser(`storage-test-athleteb-${RUN_ID}@example.invalid`, password, clubB.id, "athlete", "Athlete B"); auths.push(athleteB);
+    const athleteARow = await insertOrThrow("athletes", { club_id:clubA.id, name:"Athlete A", user_id:athleteA.row.id });
 
     // ── 1. Upload coach autorisé ────────────────────────────────────────────
     const pathA1 = `${clubA.id}/${RUN_ID}-coach.pdf`;
@@ -113,6 +114,25 @@ async function main() {
       if (!error) uploadedPaths.push(pathA1);
       record("upload coach autorisé (dossier de son club)", !error, error?.message);
     }
+
+    // Depuis la bibliothèque documentaire, une URL n'est lisible qu'après
+    // une association métier explicite. Cela évite qu'un simple membre du
+    // club parcoure tous les uploads privés du dossier.
+    const registered = await coachA.client.rpc("register_training_document", {
+      p_name:"Programme.pdf", p_storage_path:pathA1, p_mime_type:"application/pdf",
+      p_size_bytes:PDF_BYTES.length, p_category:"Entraînement", p_tags:[],
+    });
+    if (registered.error) throw registered.error;
+    const createdSession = await coachA.client.rpc("create_session_with_athletes", {
+      p_session:{ title:"Test Storage", sessionDate:"2027-01-15", day:"Vendredi", week:2, time:"10:00", type:"Sprint", category:"sprint", trainingFocus:"acceleration", durationMinutes:60, loadWeight:1 },
+      p_athlete_ids:[athleteARow.id], p_idempotency_key:`storage-${RUN_ID}`,
+    });
+    if (createdSession.error) throw createdSession.error;
+    const published = await coachA.client.rpc("publish_session_documents", {
+      p_session_id:createdSession.data.sessionId, p_document_ids:[registered.data.id],
+      p_athlete_ids:null, p_notification_key:`storage-${RUN_ID}`,
+    });
+    if (published.error) throw published.error;
 
     // ── 2. Upload athlète autorisé (mêmes règles que le coach) ─────────────
     const pathA2 = `${clubA.id}/${RUN_ID}-athlete.pdf`;

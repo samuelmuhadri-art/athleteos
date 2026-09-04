@@ -10,7 +10,7 @@
 import { memo, useState, useMemo, useEffect, useCallback } from "react";
 import {
   Bell, Activity, AlertTriangle, Users,
-  TrendingUp, CheckCheck, Filter, Plus, Trash2, Trophy, BarChart2,
+  TrendingUp, CheckCheck, CheckCircle2, Filter, Plus, Archive, RotateCcw, Trophy, BarChart2,
 } from "lucide-react";
 import { supabase }    from "../utils/supabaseClient";
 import { useAuth }     from "../hooks/useAuth";
@@ -20,6 +20,7 @@ import Modal           from "../components/ui/Modal";
 import { initialsFromName } from "../utils/helpers.js";
 import { useModules } from "../hooks/useModules";
 import { moduleKeyForEventType } from "../domain/modules/moduleRegistry";
+import { countUnreadActiveAlerts, filterAlertLifecycle, mergePersonalAlertReadState } from "../domain/alertLifecycle";
 
 // ─── Config UI statique ───────────────────────────────────────────────────────
 
@@ -144,6 +145,7 @@ function Alerts({ onNavigate }) {
   const [filterType,    setFilterType]    = useState("tous");
   const [filterRead,    setFilterRead]    = useState("tous");
   const [filterAthlete, setFilterAthlete] = useState("tous");
+  const [lifecycle, setLifecycle] = useState("active");
   const [showCreateModal, setShowCreateModal] = useState(false);
 
   // État du formulaire de création
@@ -159,14 +161,16 @@ function Alerts({ onNavigate }) {
       if (!silent) setLoading(true);
       setError(null);
 
-      const [alertsRes, athletesRes] = await Promise.all([
+      const [alertsRes, athletesRes, readStatesRes] = await Promise.all([
         supabase.from("alerts").select("*").eq("club_id", clubId).order("created_at", { ascending: false }),
         supabase.from("athletes").select("id, name, profile_data").eq("club_id", clubId),
+        supabase.from("alert_read_states").select("alert_id"),
       ]);
       if (alertsRes.error)   throw alertsRes.error;
       if (athletesRes.error) throw athletesRes.error;
+      if (readStatesRes.error) throw readStatesRes.error;
 
-      setAlertList(alertsRes.data.filter((alert) => {
+      const visibleAlerts = alertsRes.data.filter((alert) => {
         const moduleKey = moduleKeyForEventType(alert.type);
         return !moduleKey || (alert.athlete_id ? effectiveForAthlete(alert.athlete_id)[moduleKey] !== false : enabledModules[moduleKey] !== false);
       }).map((a) => ({
@@ -176,9 +180,12 @@ function Alerts({ onNavigate }) {
         title:       a.title,
         description: a.description,
         severity:    a.severity,
-        isRead:      a.is_read,
+        isRead:      false,
+        resolvedAt:  a.resolved_at,
+        archivedAt:  a.archived_at,
         date:        a.created_at,
-      })));
+      }));
+      setAlertList(mergePersonalAlertReadState(visibleAlerts, readStatesRes.data ?? []));
 
       setAthletes(athletesRes.data.map((a) => ({
         id:     a.id,
@@ -211,7 +218,7 @@ function Alerts({ onNavigate }) {
   const markRead = async (id) => {
     // Mise à jour optimiste
     setAlertList((prev) => prev.map((a) => (a.id === id ? { ...a, isRead: true } : a)));
-    const { error: err } = await supabase.from("alerts").update({ is_read: true }).eq("id", id);
+    const { error: err } = await supabase.rpc("mark_alerts_read", { p_alert_ids:[id] });
     if (err) {
       console.error("Alerts — markRead :", err);
       setAlertList((prev) => prev.map((a) => (a.id === id ? { ...a, isRead: false } : a)));
@@ -219,18 +226,25 @@ function Alerts({ onNavigate }) {
   };
 
   const markAllRead = async () => {
-    const unreadIds = alertList.filter((a) => !a.isRead).map((a) => a.id);
+    const unreadIds = filterAlertLifecycle(alertList, lifecycle).filter((a) => !a.isRead).map((a) => a.id);
     if (unreadIds.length === 0) return;
     setAlertList((prev) => prev.map((a) => ({ ...a, isRead: true })));
-    const { error: err } = await supabase.from("alerts").update({ is_read: true }).in("id", unreadIds);
+    const { error: err } = await supabase.rpc("mark_alerts_read", { p_alert_ids:unreadIds });
     if (err) { console.error("Alerts — markAllRead :", err); fetchAll(); }
   };
 
-  const deleteAlert = async (id) => {
+  const setResolution = async (id, { resolved, archived = false }) => {
     const previous = alertList;
-    setAlertList((prev) => prev.filter((a) => a.id !== id));
-    const { error: err } = await supabase.from("alerts").delete().eq("id", id);
-    if (err) { console.error("Alerts — delete :", err); setAlertList(previous); }
+    const now = new Date().toISOString();
+    setAlertList((items) => items.map(alert => alert.id !== id ? alert : {
+      ...alert,
+      resolvedAt:resolved ? (alert.resolvedAt ?? now) : null,
+      archivedAt:archived ? (alert.archivedAt ?? now) : null,
+    }));
+    const { error: err } = await supabase.rpc("set_alert_resolution", {
+      p_alert_id:id, p_resolved:resolved, p_archived:archived,
+    });
+    if (err) { console.error("Alerts — lifecycle :", err); setAlertList(previous); }
   };
 
   const handleCreate = async () => {
@@ -261,6 +275,8 @@ function Alerts({ onNavigate }) {
         description: data.description,
         severity:    data.severity,
         isRead:      data.is_read,
+        resolvedAt:  data.resolved_at,
+        archivedAt:  data.archived_at,
         date:        data.created_at,
       }, ...prev]);
 
@@ -274,7 +290,7 @@ function Alerts({ onNavigate }) {
   };
 
   // ═══ Filtrage ═════════════════════════════════════════════════════════════
-  const filtered = useMemo(() => alertList
+  const filtered = useMemo(() => filterAlertLifecycle(alertList, lifecycle)
     .filter((a) => filterType === "tous" || a.type === filterType)
     .filter((a) => {
       if (filterRead === "lues")     return  a.isRead;
@@ -283,9 +299,11 @@ function Alerts({ onNavigate }) {
     })
     .filter((a) => filterAthlete === "tous" || String(a.athleteId) === filterAthlete)
     .sort((a, b) => new Date(b.date) - new Date(a.date)),
-  [alertList, filterType, filterRead, filterAthlete]);
+  [alertList, lifecycle, filterType, filterRead, filterAthlete]);
 
-  const unreadCount = alertList.filter((a) => !a.isRead).length;
+  const unreadCount = countUnreadActiveAlerts(alertList);
+  const activeCount = filterAlertLifecycle(alertList, "active").length;
+  const historyCount = filterAlertLifecycle(alertList, "history").length;
 
   // ═══ Render ═══════════════════════════════════════════════════════════════
   if (loading) return <LoadingState message="Chargement des alertes…" />;
@@ -297,11 +315,11 @@ function Alerts({ onNavigate }) {
       {/* ── En-tête ──────────────────────────────────────────────────────── */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <h2 className="text-[22px] font-bold text-[var(--c-text-1)] tracking-tight">Alertes</h2>
+          <h2 className="text-[22px] font-bold text-[var(--c-text-1)] tracking-tight">Centre d’action</h2>
           <p className="text-[13px] text-[var(--c-text-3)] mt-0.5">
             {unreadCount > 0
               ? `${unreadCount} alerte${unreadCount > 1 ? "s" : ""} non lue${unreadCount > 1 ? "s" : ""}`
-              : "Tout est à jour"}
+              : "Aucune action non lue"}
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -323,6 +341,18 @@ function Alerts({ onNavigate }) {
             Créer une alerte
           </button>
         </div>
+      </div>
+
+      <div className="grid grid-cols-2 gap-2" role="tablist" aria-label="Cycle de vie des alertes">
+        {[
+          { id:"active", label:"À traiter", count:activeCount },
+          { id:"history", label:"Historique", count:historyCount },
+        ].map(item => (
+          <button key={item.id} type="button" role="tab" aria-selected={lifecycle === item.id}
+            onClick={() => setLifecycle(item.id)} className={lifecycle === item.id ? "btn-primary" : "btn-secondary"}>
+            {item.label} <span className="chip chip-neutral">{item.count}</span>
+          </button>
+        ))}
       </div>
 
       {/* ── Filtres ──────────────────────────────────────────────────────── */}
@@ -382,7 +412,7 @@ function Alerts({ onNavigate }) {
         <div className="card p-12 flex flex-col items-center gap-3 text-[var(--c-text-3)]">
           <Bell size={32} strokeWidth={1.5} />
           <p className="text-[14px] font-medium">
-            {alertList.length === 0 ? "Aucune alerte pour l'instant" : "Aucune alerte pour ce filtre"}
+            {alertList.length === 0 ? "Aucune alerte pour l'instant" : lifecycle === "active" ? "Aucune action à traiter" : "Historique vide"}
           </p>
           {alertList.length === 0 && (
             <p className="text-[12px] text-[var(--c-text-4)] text-center max-w-xs">
@@ -437,13 +467,13 @@ function Alerts({ onNavigate }) {
                             Marquer lu
                           </button>
                         )}
-                        <button
-                          onClick={() => deleteAlert(alert.id)}
-                          className="text-[var(--c-text-4)] hover:text-[#E05252] transition-colors opacity-0 group-hover:opacity-100"
-                          title="Supprimer l'alerte"
-                        >
-                          <Trash2 size={14} />
-                        </button>
+                        {lifecycle === "active" ? <>
+                          <button type="button" onClick={() => setResolution(alert.id, { resolved:true })}
+                            className="btn-ghost" title="Marquer comme traitée"><CheckCircle2 size={14} /> Traiter</button>
+                          <button type="button" onClick={() => setResolution(alert.id, { resolved:true, archived:true })}
+                            className="btn-icon" title="Archiver"><Archive size={14} /></button>
+                        </> : <button type="button" onClick={() => setResolution(alert.id, { resolved:false })}
+                          className="btn-ghost" title="Remettre à traiter"><RotateCcw size={14} /> Rouvrir</button>}
                       </div>
                     </div>
 

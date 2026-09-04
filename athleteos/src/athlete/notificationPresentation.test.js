@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  filterNotificationLifecycle,
   filterNotificationItems,
   formatNotificationTime,
   getNotificationPresentation,
@@ -24,6 +25,9 @@ describe("notification presentation", () => {
     expect(filterNotificationItems(notifications, "unread").map(item => item.id)).toEqual([1, 3]);
     expect(filterNotificationItems(notifications, "messages").map(item => item.id)).toEqual([1]);
     expect(filterNotificationItems(notifications, "club").map(item => item.id)).toEqual([2]);
+    expect(filterNotificationLifecycle(notifications, "active").map(item => item.id)).toEqual([1, 3]);
+    expect(filterNotificationLifecycle(notifications, "history").map(item => item.id)).toEqual([2]);
+    expect(getNotificationPresentation("training_document")).toMatchObject({ destination:"planning", category:"sport" });
   });
 
   it("ajoute le temps réel sans doublon et respecte la limite", () => {

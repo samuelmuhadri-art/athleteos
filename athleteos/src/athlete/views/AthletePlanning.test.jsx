@@ -41,7 +41,7 @@ describe("AthletePlanning", () => {
     const selector = screen.getByRole("radiogroup", { name: "Affichage du planning" });
     expect(selector).toHaveClass("aos-segmented-tabs", "w-full", "sm:w-auto");
     expect(within(selector).getAllByRole("radio")).toHaveLength(4);
-    expect(within(selector).getByRole("radio", { name: "Mois" })).toHaveAttribute("aria-checked", "true");
+    expect(within(selector).getByRole("radio", { name: "Semaine" })).toHaveAttribute("aria-checked", "true");
 
     const archives = within(selector).getByRole("radio", { name: "Archives, 1" });
     expect(archives.querySelector(".aos-segmented-tabs__badge")).toHaveTextContent("1");
@@ -90,7 +90,7 @@ describe("AthletePlanning", () => {
       />,
     );
 
-    expect(screen.getByRole("group", { name: "Compétition Meeting de Bruxelles" })).toBeVisible();
+    expect(screen.getByRole("button", { name: "Compétition Meeting de Bruxelles" })).toBeVisible();
     expect(screen.queryByText("Meeting non concerné")).not.toBeInTheDocument();
   });
 });

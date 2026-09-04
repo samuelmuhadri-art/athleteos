@@ -20,6 +20,7 @@ async function openAthletes(page) {
   await page.getByRole("complementary", { name: "Navigation coach desktop" })
     .getByRole("button", { name: "Athlètes", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Athlètes" })).toBeVisible({ timeout: 15000 });
+  await expect(page.getByText("Chargement des athlètes…", { exact: true })).toBeHidden({ timeout: 15000 });
 }
 
 test.describe.serial("UX prioritaire des outils", () => {

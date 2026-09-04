@@ -8,10 +8,13 @@ import { X, Plus } from "lucide-react";
 import { TYPE_CONFIG } from "./competitionsShared";
 import { useAccessibleDialog } from "../hooks/useAccessibleDialog";
 
-const CreateCompModal = memo(({ athletes, onClose, onCreate }) => {
-  const [form, setForm] = useState({
-    name: "", date: "", location: "", type: "préparation", athleteEntries: [],
-  });
+const CreateCompModal = memo(({ athletes, initialData = null, onClose, onCreate }) => {
+  const isEdit = Boolean(initialData);
+  const [form, setForm] = useState(() => ({
+    name:initialData?.name ?? "", date:initialData?.date ?? "", location:initialData?.location ?? "",
+    type:initialData?.type ?? "préparation", notes:initialData?.notes ?? "",
+    athleteEntries:initialData?.athleteIds?.map(athleteId => ({ athleteId, plannedEvent:initialData.plannedEvents?.[athleteId] ?? "" })) ?? [],
+  }));
   const [saving,    setSaving]    = useState(false);
   const [saveError, setSaveError] = useState(null);
   const requestKeyRef = useRef(crypto.randomUUID());
@@ -65,7 +68,7 @@ const CreateCompModal = memo(({ athletes, onClose, onCreate }) => {
     >
       <div ref={dialogRef} tabIndex={-1} role="dialog" aria-modal="true" aria-labelledby="create-competition-title" className="modal-content bg-[var(--c-surface)] border border-[var(--c-border)] rounded-2xl shadow-2xl w-full max-w-md max-h-[90vh] flex flex-col overflow-hidden">
         <div className="px-4 sm:px-6 py-4 border-b border-[var(--c-border)] flex items-center justify-between">
-          <h3 id="create-competition-title" className="section-title">Créer une compétition</h3>
+          <h3 id="create-competition-title" className="section-title">{isEdit ? "Modifier la compétition" : "Créer une compétition"}</h3>
           <button type="button" aria-label="Fermer" onClick={onClose} disabled={saving} className="min-w-11 min-h-11 inline-flex items-center justify-center rounded-lg hover:bg-[var(--c-surface-3)] transition-colors disabled:opacity-40">
             <X size={18} className="text-[var(--c-text-2)]" />
           </button>
@@ -89,6 +92,12 @@ const CreateCompModal = memo(({ athletes, onClose, onCreate }) => {
               value={form.name}
               onChange={(e) => set("name", e.target.value)}
             />
+          </div>
+
+          <div>
+            <label htmlFor="competition-notes" className={labelCls}>Notes</label>
+            <textarea id="competition-notes" rows={3} className={`${inputCls} resize-none`} placeholder="Accueil, matériel, consignes…"
+              value={form.notes} onChange={event => set("notes", event.target.value)} />
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -185,12 +194,12 @@ const CreateCompModal = memo(({ athletes, onClose, onCreate }) => {
             {saving ? (
               <>
                 <div className="w-3.5 h-3.5 border-2 border-white/40 border-t-white rounded-full animate-spin" />
-                Création…
+                {isEdit ? "Enregistrement…" : "Création…"}
               </>
             ) : (
               <>
                 <Plus size={15} />
-                Créer
+                {isEdit ? "Enregistrer" : "Créer"}
               </>
             )}
           </button>

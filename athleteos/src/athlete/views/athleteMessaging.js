@@ -1,3 +1,5 @@
+import { calendarDayDifference, formatLocalTimestamp, timestampDayKey } from "../../utils/dateTime";
+
 export const MESSAGE_MAX_LENGTH = 1000;
 
 export const MESSAGE_FILTERS = [
@@ -27,6 +29,13 @@ export function mapMessageRow(row) {
 export function appendUniqueMessage(messages, message) {
   if (messages.some(item => item.id === message.id)) return messages;
   return [...messages, message];
+}
+
+export function getLatestUnreadIncomingMessage(messages, currentUserId, preferredSenderId = null) {
+  return [...(messages ?? [])]
+    .filter(message => message.receiverId === currentUserId && message.senderId !== currentUserId && !message.isRead)
+    .filter(message => preferredSenderId == null || message.senderId === preferredSenderId)
+    .sort((first, second) => new Date(second.date) - new Date(first.date))[0] ?? null;
 }
 
 export function buildAthleteConversations(messages, contacts, currentUserId) {
@@ -88,14 +97,9 @@ export function filterAthleteConversations(conversations, contacts, filter, sear
   });
 }
 
-function localDayKey(dateValue) {
-  const date = new Date(dateValue);
-  return `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
-}
-
-export function groupMessagesByDay(messages) {
+export function groupMessagesByDay(messages, timeZone) {
   return messages.reduce((groups, message) => {
-    const key = localDayKey(message.date);
+    const key = timestampDayKey(message.date, timeZone);
     const lastGroup = groups.at(-1);
     if (lastGroup?.key === key) {
       lastGroup.messages.push(message);
@@ -106,22 +110,20 @@ export function groupMessagesByDay(messages) {
   }, []);
 }
 
-export function formatMessageTime(dateValue) {
-  return new Date(dateValue).toLocaleTimeString("fr-BE", { hour: "2-digit", minute: "2-digit" });
+export function formatMessageTime(dateValue, timeZone) {
+  return formatLocalTimestamp(dateValue, { hour: "2-digit", minute: "2-digit", hourCycle: "h23" }, "fr-BE", timeZone);
 }
 
-export function formatConversationTime(dateValue, now = new Date()) {
-  const date = new Date(dateValue);
-  if (localDayKey(date) === localDayKey(now)) return formatMessageTime(date);
-  const dayDifference = Math.floor((new Date(now.getFullYear(), now.getMonth(), now.getDate()) - new Date(date.getFullYear(), date.getMonth(), date.getDate())) / 86400000);
-  if (dayDifference > 0 && dayDifference < 7) return date.toLocaleDateString("fr-BE", { weekday: "short" });
-  return date.toLocaleDateString("fr-BE", { day: "numeric", month: "short" });
+export function formatConversationTime(dateValue, now = new Date(), timeZone) {
+  const dayDifference = calendarDayDifference(dateValue, now, timeZone);
+  if (dayDifference === 0) return formatMessageTime(dateValue, timeZone);
+  if (dayDifference > 0 && dayDifference < 7) return formatLocalTimestamp(dateValue, { weekday: "short" }, "fr-BE", timeZone);
+  return formatLocalTimestamp(dateValue, { day: "numeric", month: "short" }, "fr-BE", timeZone);
 }
 
-export function formatMessageDay(dateValue, now = new Date()) {
-  const date = new Date(dateValue);
-  if (localDayKey(date) === localDayKey(now)) return "Aujourd’hui";
-  const yesterday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1);
-  if (localDayKey(date) === localDayKey(yesterday)) return "Hier";
-  return date.toLocaleDateString("fr-BE", { weekday: "long", day: "numeric", month: "long" });
+export function formatMessageDay(dateValue, now = new Date(), timeZone) {
+  const dayDifference = calendarDayDifference(dateValue, now, timeZone);
+  if (dayDifference === 0) return "Aujourd’hui";
+  if (dayDifference === 1) return "Hier";
+  return formatLocalTimestamp(dateValue, { weekday: "long", day: "numeric", month: "long", year: "numeric" }, "fr-BE", timeZone);
 }

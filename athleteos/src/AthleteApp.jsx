@@ -32,6 +32,7 @@ import InjuryReportModal from "./athlete/components/InjuryReportModal";
 import NotificationBanner from "./athlete/components/NotificationBanner";
 import NotificationCenter from "./athlete/components/NotificationCenter";
 import AccountSettingsModal from "./components/ui/AccountSettingsModal";
+import InitialAvatar from "./components/ui/InitialAvatar";
 import { AthleteOSBadge, AthleteOSWordmark } from "./components/brand/AthleteOSLogo";
 import { getNotificationPresentation, mergeIncomingNotification } from "./athlete/notificationPresentation";
 import MobileBottomNav from "./components/navigation/MobileBottomNav";
@@ -39,6 +40,7 @@ import { ATHLETE_MOBILE_ITEM_IDS } from "./navigation/mobileNavigation";
 import { PwaInstallButton } from "./components/pwa/PwaAccess";
 import { useModules } from "./hooks/useModules";
 import { ATHLETE_VIEW_MODULE, filterNavigation, moduleKeyForEventType } from "./domain/modules/moduleRegistry";
+import { mapDocument } from "./services/documentLibrary";
 
 const NAV_ITEMS = [
   { id: "dashboard",    label: "Tableau de bord", shortLabel: "Accueil",  icon: LayoutDashboard },
@@ -78,6 +80,7 @@ export default function AthleteApp({ clubBrand, themeStyle }) {
   const [weeklyCharge, setWeeklyCharge] = useState([]);
   const [sessions,     setSessions]     = useState([]);
   const [competitions, setCompetitions] = useState([]);
+  const [planningEvents, setPlanningEvents] = useState([]);
   const [coachUserId,    setCoachUserId]    = useState(null);
   const [coachName,      setCoachName]      = useState(null);
   const [lastMessages,   setLastMessages]   = useState([]);
@@ -121,11 +124,11 @@ export default function AthleteApp({ clubBrand, themeStyle }) {
       const todayStr = toLocalDateStr(new Date());
       const wellnessStart = new Date(); wellnessStart.setDate(wellnessStart.getDate() - 28);
 
-      const [recordsRes,injuriesRes,perfHistRes,sessionsRes,compsRes,coachRes,allAthletesRes,myPerfsRes,goalsRes,notifsRes,wellnessRes,weeklyChargeRes,restDaysRes] = await Promise.all([
+      const [recordsRes,injuriesRes,perfHistRes,sessionsRes,compsRes,coachRes,allAthletesRes,myPerfsRes,goalsRes,notifsRes,wellnessRes,weeklyChargeRes,restDaysRes,eventsRes] = await Promise.all([
         enabledModules.performances !== false ? supabase.from("records").select("*").eq("athlete_id",athleteId) : Promise.resolve({ data: [] }),
         enabledModules.health !== false ? supabase.from("injuries").select("*").eq("athlete_id",athleteId) : Promise.resolve({ data: [] }),
         enabledModules.performances !== false ? supabase.from("performance_history").select("*").eq("athlete_id",athleteId) : Promise.resolve({ data: [] }),
-        ["planning", "session_feedback", "training_load"].some((key) => enabledModules[key] !== false) ? supabase.from("sessions").select("*, session_athletes(*)").eq("club_id",clubId) : Promise.resolve({ data: [] }),
+        ["planning", "session_feedback", "training_load"].some((key) => enabledModules[key] !== false) ? supabase.from("sessions").select("*, session_athletes(*), session_documents(visibility, documents(*), session_document_recipients(athlete_id))").eq("club_id",clubId) : Promise.resolve({ data: [] }),
         enabledModules.performances !== false ? supabase.from("competitions").select("*, competition_athletes(*), competition_results(*)").eq("club_id",clubId) : Promise.resolve({ data: [] }),
         supabase.from("users").select("id, name").eq("club_id",clubId).eq("role","head_coach").single(),
         ["social", "messaging"].some((key) => enabledModules[key] !== false) ? supabase.from("athletes").select("id, name, profile_data, user_id").eq("club_id",clubId) : Promise.resolve({ data: [] }),
@@ -137,6 +140,7 @@ export default function AthleteApp({ clubBrand, themeStyle }) {
         // migration 20260726120000) — plus de recalcul JS à partir des séances.
         enabledModules.training_load !== false ? supabase.from("weekly_charge").select("*").eq("athlete_id",athleteId) : Promise.resolve({ data: [] }),
         enabledModules.training_load !== false ? supabase.from("athlete_daily_load_days").select("load_date").eq("athlete_id",athleteId).eq("state","rest_confirmed") : Promise.resolve({ data: [] }),
+        enabledModules.planning !== false ? supabase.from("planning_events").select("*, planning_event_athletes(athlete_id), planning_event_documents(document_id, documents(*))").eq("club_id", clubId) : Promise.resolve({ data:[] }),
       ]);
 
       setMyPerformances(myPerfsRes.data ?? []);
@@ -155,9 +159,9 @@ export default function AthleteApp({ clubBrand, themeStyle }) {
 
       if (coachId && enabledModules.messaging !== false) {
         const {data:msgs} = await supabase.from("messages").select("*")
-          .or(`and(sender_id.eq.${coachId},receiver_id.eq.${profile.id}),and(sender_id.eq.${profile.id},receiver_id.eq.${coachId})`)
-          .order("created_at",{ascending:false}).limit(3);
-        setLastMessages((msgs??[]).filter(m=>m.sender_id===coachId));
+          .eq("sender_id", coachId).eq("receiver_id", profile.id).eq("is_read", false)
+          .order("created_at",{ascending:false}).limit(1);
+        setLastMessages(msgs ?? []);
       }
 
       setAllAthletes((allAthletesRes.data??[]).map(a=>({id:a.id,name:a.name,user_id:a.user_id,avatar:a.profile_data?.avatar??initialsFromName(a.name)})));
@@ -184,6 +188,11 @@ export default function AthleteApp({ clubBrand, themeStyle }) {
           id:s.id, week:s.week, day:s.day, sessionDate:s.session_date, time:s.time,
           type:s.type, category:s.category, trainingFocus:s.training_focus, title:s.title, description:s.description,
           instructions:s.instructions, durationMinutes:s.duration_minutes, pdfUrl:s.pdf_url,
+          documents:(s.session_documents ?? []).map(link => ({
+            ...mapDocument(link.documents),
+            visibility:link.visibility,
+            athleteIds:(link.session_document_recipients ?? []).map(recipient => recipient.athlete_id),
+          })),
           createdBy:s.created_by,
           lifecycleStatus:s.lifecycle_status ?? "planned", startedAt:s.started_at, closedAt:s.closed_at,
           athleteIds:rows.map(v=>v.athlete_id),
@@ -213,6 +222,11 @@ export default function AthleteApp({ clubBrand, themeStyle }) {
       setWeeklyCharge(charge);
       setSessions(allSessions);
       setCompetitions(allComps);
+      setPlanningEvents((eventsRes.data ?? []).filter(event => (event.planning_event_athletes ?? []).some(row => row.athlete_id === athleteId)).map(event => ({
+        id:event.id, kind:event.kind, name:event.name, startsOn:event.starts_on, endsOn:event.ends_on,
+        time:event.time, location:event.location, description:event.description, customLabel:event.custom_label,
+        documents:(event.planning_event_documents ?? []).map(link => mapDocument(link.documents)).filter(Boolean),
+      })));
 
       // Récap perso samedi soir — au cas où le coach n'a pas encore ouvert
       // son dashboard (qui envoie aussi celui-ci en boucle sur tout le club).
@@ -237,6 +251,28 @@ export default function AthleteApp({ clubBrand, themeStyle }) {
       setError(err.message ?? "Erreur inconnue");
     } finally { setLoading(false); }
   }, [clubId, enabledModules, profile?.id]);
+
+  const refreshUnreadCoachMessage = useCallback(async () => {
+    if (!coachUserId || !profile?.id || enabledModules.messaging === false) {
+      setLastMessages([]);
+      return;
+    }
+    const { data, error: messageError } = await supabase.from("messages").select("*")
+      .eq("sender_id", coachUserId).eq("receiver_id", profile.id).eq("is_read", false)
+      .order("created_at", { ascending:false }).limit(1);
+    if (!messageError) setLastMessages(data ?? []);
+  }, [coachUserId, enabledModules.messaging, profile?.id]);
+
+  useEffect(() => {
+    if (!profile?.id || enabledModules.messaging === false) return undefined;
+    const channel = supabase.channel(`athlete-dashboard-message-${profile.id}`)
+      .on("postgres_changes", { event:"*", schema:"public", table:"messages" }, payload => {
+        const row = payload.new ?? payload.old;
+        if (row?.receiver_id === profile.id || row?.sender_id === profile.id) refreshUnreadCoachMessage();
+      })
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [enabledModules.messaging, profile?.id, refreshUnreadCoachMessage]);
 
   useEffect(() => { fetchAll(); }, [fetchAll]);
 
@@ -268,10 +304,11 @@ export default function AthleteApp({ clubBrand, themeStyle }) {
         if (moduleKey && enabledModules[moduleKey] === false) return;
         setMyNotifs(previous => mergeIncomingNotification(previous, payload.new));
         setIncomingNotification(payload.new);
+        if (payload.new.type === "training_document") fetchAll();
       })
       .subscribe();
     return () => supabase.removeChannel(channel);
-  }, [athlete?.id, enabledModules]);
+  }, [athlete?.id, enabledModules, fetchAll]);
 
   const dismissIncomingNotification = useCallback(() => setIncomingNotification(null), []);
 
@@ -478,10 +515,7 @@ export default function AthleteApp({ clubBrand, themeStyle }) {
         <div className="flex-shrink-0 px-3 py-3"
           style={{ borderTop: "1px solid var(--c-border)" }}>
           <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-full flex items-center justify-center text-white flex-shrink-0"
-              style={{ background: "linear-gradient(135deg, #1D9E75, #16826C)", fontSize: 10, fontWeight: 600 }}>
-              {initialsFromName(athlete.name)}
-            </div>
+            <InitialAvatar name={athlete.name} size={32} />
             <div className="min-w-0 flex-1">
               <p style={{ fontSize: 12, fontWeight: 500, color: "var(--c-text-1)" }} className="truncate">
                 {athlete.name}
@@ -576,7 +610,7 @@ export default function AthleteApp({ clubBrand, themeStyle }) {
             className="mobile-account-action md:hidden"
             aria-label="Ouvrir les réglages du compte"
           >
-            {initialsFromName(athlete.name)}
+            <InitialAvatar name={athlete.name} size={32} />
           </button>
           <div className="hidden md:block">
             <PushToggleButton subscribed={subscribed} onToggle={subscribe} permissionState={permissionState} />
@@ -603,7 +637,7 @@ export default function AthleteApp({ clubBrand, themeStyle }) {
             )}
             {activeView === "planning" && (
               <AthletePlanning
-                athlete={athlete} sessions={sessions} competitions={competitions} allAthletes={allAthletes}
+                athlete={athlete} sessions={sessions} competitions={competitions} planningEvents={planningEvents} allAthletes={allAthletes}
                 clubId={clubId} createdBy={profile?.id} coachUserId={coachUserId}
                 onRpeChange={handleRpe} onStatusChange={handleStatus}
                 onFeelingChange={handleFeeling} onCommentChange={handleComment} onRsvpChange={handleRsvp}
@@ -621,6 +655,7 @@ export default function AthleteApp({ clubBrand, themeStyle }) {
               <AthleteMsgerie
                 athlete={athlete} coachUserId={coachUserId}
                 athleteUserId={profile?.id} clubId={clubId}
+                onReadStateChange={refreshUnreadCoachMessage}
               />
             )}
             {activeView === "social" && (

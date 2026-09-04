@@ -4,21 +4,31 @@
 // ============================================================
 
 import { memo, useState } from "react";
-import { X, Users, FileText, AlertCircle, Star } from "lucide-react";
+import { X, Users, FileText, AlertCircle, Star, Copy, BookmarkPlus } from "lucide-react";
 import { CATEGORIES, colors, sessionStatus } from "./planningUtils";
 import { ValidationBadge, StatusIcon } from "./planningShared";
 import { getSessionTrainingFocus } from "../domain/trainingFocus";
 import { openSessionAttachment } from "../utils/storage";
 import CoachSessionDayPanel from "../components/session/CoachSessionDayPanel";
 import { useAccessibleDialog } from "../hooks/useAccessibleDialog";
+import { SESSION_PROVENANCE } from "../domain/planningEvolution";
+import { civilDateKey, parseCivilDate } from "../utils/dateTime";
 
 const SessionModal = memo(({
   session, athletes, onClose, onEditRequest, onDeleteSession,
-  onSetCoachNote, onSetLifecycle, onRemindFeedback,
+  onSetCoachNote, onSetLifecycle, onRemindFeedback, onDuplicate, onSaveTemplate,
 }) => {
   const [deleting,    setDeleting]    = useState(false);
   const [deleteError, setDeleteError] = useState(null);
   const [confirmDel,  setConfirmDel]  = useState(false);
+  const [deleteScope, setDeleteScope] = useState("single");
+  const [duplicateDate, setDuplicateDate] = useState(() => {
+    const date = parseCivilDate(session.sessionDate) ?? new Date();
+    date.setDate(date.getDate() + 7);
+    return civilDateKey(date);
+  });
+  const [showDuplicate, setShowDuplicate] = useState(false);
+  const [actionError, setActionError] = useState(null);
   const { dialogRef, titleId } = useAccessibleDialog({ onClose, closeDisabled: deleting });
   const c      = colors(session.category);
   const trainingFocus = getSessionTrainingFocus(session);
@@ -30,7 +40,7 @@ const SessionModal = memo(({
 
   const handleDelete = async () => {
     setDeleting(true);
-    try { await onDeleteSession(session.id); onClose(); }
+    try { await onDeleteSession(session.id, deleteScope); onClose(); }
     catch { setDeleteError("Impossible de supprimer."); setDeleting(false); }
   };
 
@@ -71,6 +81,7 @@ const SessionModal = memo(({
                 </span>
               )}
               <StatusIcon status={status} size={14} />
+              <span className="chip chip-neutral">{SESSION_PROVENANCE[session.sourceKind] ?? "Séance planifiée"}</span>
             </div>
             <h2 id={titleId} className="text-[20px] font-bold leading-tight" style={{ color: c.text }}>
               {session.title}
@@ -127,15 +138,15 @@ const SessionModal = memo(({
             </div>
           )}
 
-      {/* Pièce jointe */}
-          {session.pdfUrl && (
-        <button type="button" onClick={() => openSessionAttachment(session.pdfUrl)}
+      {/* Documents privés */}
+          {(session.documents?.length > 0 ? session.documents : session.pdfUrl ? [{ id:"legacy", name:"Pièce jointe", storagePath:session.pdfUrl }] : []).map(document => (
+        <button key={document.id} type="button" onClick={() => openSessionAttachment(document.storagePath)}
               className="w-full flex items-center gap-3 px-4 py-3.5 rounded-2xl text-[13px] font-semibold transition-colors"
               style={{ background: "rgba(91,158,245,0.10)", border: "1px solid rgba(91,158,245,0.25)", color: "var(--tone-info)" }}>
               <span className="text-[18px]">📄</span>
-          Voir la pièce jointe
+          {document.name}
             </button>
-          )}
+          ))}
 
           {/* Athlètes */}
           <div>
@@ -194,6 +205,13 @@ const SessionModal = memo(({
           {deleteError && (
             <p className="text-[12px] rounded-xl px-3 py-2" style={{ color: "var(--tone-danger)", background: "rgba(239,107,107,0.10)" }}>{deleteError}</p>
           )}
+          {showDuplicate && <div className="card p-4 space-y-3">
+            <p className="card-title">Dupliquer la séance</p>
+            <p className="card-subtitle">Le contenu et les références aux documents sont réutilisés, sans copier les fichiers.</p>
+            <div className="flex items-end gap-2"><label className="flex-1"><span className="metric-label block mb-2">NOUVELLE DATE</span><input type="date" className="input-premium" value={duplicateDate} onChange={event => setDuplicateDate(event.target.value)} /></label>
+              <button type="button" className="btn-primary" onClick={async () => { try { setActionError(null); await onDuplicate(session, duplicateDate); onClose(); } catch (error) { setActionError(error.message); } }}><Copy size={14} /> Dupliquer</button></div>
+          </div>}
+          {actionError && <p role="alert" className="text-[12px]" style={{ color:"var(--tone-danger)" }}>{actionError}</p>}
         </div>
 
         {/* Footer */}
@@ -206,8 +224,9 @@ const SessionModal = memo(({
                 Supprimer
               </button>
             ) : (
-              <span className="flex items-center gap-2">
+              <span className="flex items-center gap-2 flex-wrap">
                 <span className="text-[12px] font-semibold" style={{ color: "var(--tone-danger)" }}>Confirmer ?</span>
+                {session.seriesId && <select className="input-premium !w-auto" value={deleteScope} onChange={event => setDeleteScope(event.target.value)} aria-label="Portée de suppression"><option value="single">Cette séance</option><option value="future">Celle-ci et suivantes</option><option value="all">Toute la série future</option></select>}
                 <button onClick={handleDelete} disabled={deleting}
                   className="text-[12px] font-bold rounded-lg px-2.5 py-1 tap-feedback"
                   style={{ background: "#EF6B6B", color: "#0A150F" }}>
@@ -217,9 +236,11 @@ const SessionModal = memo(({
               </span>
             )}
           </div>
-          <button onClick={() => onEditRequest(session)} disabled={deleting} className="btn-primary">
-            ✏️ Modifier
-          </button>
+          <div className="flex items-center gap-2">
+            {onSaveTemplate && <button type="button" className="btn-icon" title="Enregistrer comme modèle" onClick={() => { const name=window.prompt("Nom du modèle", session.title); if (name?.trim()) onSaveTemplate(session, name.trim()).catch(error => setActionError(error.message)); }}><BookmarkPlus size={15} /></button>}
+            {onDuplicate && <button type="button" className="btn-secondary" onClick={() => setShowDuplicate(value => !value)}><Copy size={15} /> Dupliquer</button>}
+            <button onClick={() => onEditRequest(session)} disabled={deleting} className="btn-primary">✏️ Modifier</button>
+          </div>
         </div>
       </div>
     </div>

@@ -21,6 +21,13 @@ const fixturesPath = path.join(path.dirname(fileURLToPath(import.meta.url)), ".a
 test.skip(!existsSync(fixturesPath), "Nécessite e2e/global-setup.mjs (Supabase local, E2E_WITH_AUTH=1) — voir le commentaire en tête de fichier.");
 const fixtures = existsSync(fixturesPath) ? JSON.parse(readFileSync(fixturesPath, "utf8")) : null;
 
+test.beforeEach(async ({ page }) => {
+  page.on("pageerror", error => console.error(`[browser page error] ${error.stack ?? error.message}`));
+  page.on("console", message => {
+    if (message.type() === "error") console.error(`[browser console] ${message.text()}`);
+  });
+});
+
 async function login(page, email, password) {
   await page.goto("/");
   await page.getByPlaceholder("coach@club.be").fill(email);
@@ -46,6 +53,18 @@ test("le coach navigue vers la liste des athlètes", async ({ page }) => {
   await expect(page.getByRole("heading", { name: "Dashboard", exact: true })).toBeVisible({ timeout: 15000 });
   await page.getByRole("button", { name: "Athlètes", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Athlètes" })).toBeVisible({ timeout: 10000 });
+});
+
+test("le coach planifie depuis une fiche avec l’athlète déjà sélectionné", async ({ page }) => {
+  await login(page, fixtures.coach.email, fixtures.coach.password);
+  await expect(page.getByRole("heading", { name:"Dashboard", exact:true })).toBeVisible({ timeout:15000 });
+  await page.getByRole("button", { name:"Athlètes", exact:true }).click();
+  await page.getByRole("button", { name:"Ouvrir le profil de E2E Athlete" }).click();
+  await page.getByRole("button", { name:"Planifier", exact:true }).click();
+
+  await expect(page).toHaveURL(/\/planning$/);
+  await expect(page.getByRole("dialog", { name:"Nouvelle séance" })).toBeVisible({ timeout:10000 });
+  await expect(page.getByRole("button", { name:"Retirer E2E Athlete" })).toHaveAttribute("aria-pressed", "true");
 });
 
 test("le code d'invitation du club est affichable", async ({ page }) => {

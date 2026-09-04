@@ -158,7 +158,7 @@ function EmptyThread({ onSuggestion }) {
   );
 }
 
-export default function AthleteMsgerie({ athlete, coachUserId, athleteUserId, clubId }) {
+export default function AthleteMsgerie({ athlete, coachUserId, athleteUserId, clubId, onReadStateChange }) {
   const [contacts, setContacts] = useState([]);
   const [allMessages, setAllMessages] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -262,7 +262,7 @@ export default function AthleteMsgerie({ athlete, coachUserId, athleteUserId, cl
 
       if (receivedInOpenThread) {
         supabase.from("messages").update({ is_read:true }).eq("id", row.id).then(({ error }) => {
-          if (!error) return;
+          if (!error) { onReadStateChange?.(); return; }
           setAllMessages(previous => previous.map(item => item.id === row.id ? { ...item, isRead:false } : item));
           setActionError("Le message est arrivé, mais son statut de lecture n’a pas pu être synchronisé.");
         });
@@ -274,7 +274,7 @@ export default function AthleteMsgerie({ athlete, coachUserId, athleteUserId, cl
       .on("postgres_changes", { event:"UPDATE", schema:"public", table:"messages" }, payload => applyRealtimeMessage(payload.new, true))
       .subscribe();
     return () => supabase.removeChannel(channel);
-  }, [athleteUserId]);
+  }, [athleteUserId, onReadStateChange]);
 
   const conversations = useMemo(
     () => buildAthleteConversations(allMessages, contacts, athleteUserId),
@@ -321,8 +321,10 @@ export default function AthleteMsgerie({ athlete, coachUserId, athleteUserId, cl
     if (error) {
       setAllMessages(previous => previous.map(message => unreadSet.has(message.id) ? { ...message, isRead:false } : message));
       setActionError("Impossible de synchroniser les messages lus. Vérifie ta connexion.");
+    } else {
+      onReadStateChange?.();
     }
-  }, [contacts, allMessages, athleteUserId]);
+  }, [contacts, allMessages, athleteUserId, onReadStateChange]);
 
   const handleSend = useCallback(async rawText => {
     const text = rawText.trim().slice(0, MESSAGE_MAX_LENGTH);

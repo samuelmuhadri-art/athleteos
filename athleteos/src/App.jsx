@@ -16,6 +16,7 @@ import LoginPage      from "./pages/LoginPage";
 import SignupPage     from "./pages/SignupPage";
 import ResetPasswordPage from "./pages/ResetPasswordPage";
 import AccountSettingsModal from "./components/ui/AccountSettingsModal";
+import InitialAvatar from "./components/ui/InitialAvatar";
 import { AthleteOSBadge, AthleteOSWordmark } from "./components/brand/AthleteOSLogo";
 import { usePushNotifications } from "./hooks/usePushNotifications";
 import { PushToggleButton } from "./components/pwa/PushToggleButton";
@@ -34,6 +35,7 @@ import { ModulesProvider } from "./contexts/ModulesContext";
 import { useModules } from "./hooks/useModules";
 import ModuleOnboardingModal from "./components/modules/ModuleOnboardingModal";
 import { COACH_VIEW_MODULE, filterNavigation, moduleKeyForEventType } from "./domain/modules/moduleRegistry";
+import { countUnreadActiveAlerts, mergePersonalAlertReadState } from "./domain/alertLifecycle";
 import {
   COACH_MOBILE_MORE_ITEMS,
   COACH_MOBILE_PRIMARY_ITEMS,
@@ -162,15 +164,15 @@ function CoachShell({ user, profile, clubId, signOut, club, clubLoading, refresh
 
   const fetchUnreadCount = useCallback(async () => {
     if (!clubId) return;
-    const { data } = await supabase
-      .from("alerts")
-      .select("id, type, athlete_id")
-      .eq("club_id", clubId)
-      .eq("is_read", false);
-    setUnreadAlerts((data ?? []).filter((alert) => {
+    const [alertsResult, readStatesResult] = await Promise.all([
+      supabase.from("alerts").select("id, type, athlete_id, resolved_at, archived_at").eq("club_id", clubId),
+      supabase.from("alert_read_states").select("alert_id"),
+    ]);
+    const visibleAlerts = (alertsResult.data ?? []).filter((alert) => {
       const moduleKey = moduleKeyForEventType(alert.type);
       return !moduleKey || (alert.athlete_id ? effectiveForAthlete(alert.athlete_id)[moduleKey] !== false : enabledModules[moduleKey] !== false);
-    }).length);
+    }).map(alert => ({ ...alert, resolvedAt:alert.resolved_at, archivedAt:alert.archived_at }));
+    setUnreadAlerts(countUnreadActiveAlerts(mergePersonalAlertReadState(visibleAlerts, readStatesResult.data ?? [])));
   }, [clubId, effectiveForAthlete, enabledModules]);
 
   useEffect(() => { fetchUnreadCount(); }, [fetchUnreadCount]);
@@ -312,12 +314,7 @@ function CoachShell({ user, profile, clubId, signOut, club, clubLoading, refresh
         <div className="flex-shrink-0" style={{ borderTop: "1px solid var(--c-border)" }}>
           <div className="flex items-center gap-3 px-3 py-3.5">
             {/* Avatar coach */}
-            <div
-              className="w-9 h-9 rounded-full flex items-center justify-center text-white text-[11px] font-bold flex-shrink-0 shadow-sm"
-              style={{ background: "linear-gradient(135deg, #378ADD 0%, #2563EB 100%)" }}
-            >
-              {coachInitials}
-            </div>
+            <InitialAvatar name={coachName} initials={coachInitials} size={36} variant="coach" />
 
             {/* Infos coach (masquées si sidebar réduite) */}
             <div
@@ -466,7 +463,7 @@ function CoachShell({ user, profile, clubId, signOut, club, clubLoading, refresh
             className="mobile-account-action md:hidden"
             aria-label="Ouvrir les réglages du compte"
           >
-            {coachInitials}
+            <InitialAvatar name={coachName} initials={coachInitials} size={32} variant="coach" />
           </button>
 
           {/* Date */}

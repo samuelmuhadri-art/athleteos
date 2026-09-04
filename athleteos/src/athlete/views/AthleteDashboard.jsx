@@ -34,6 +34,8 @@ import { buildDailyState } from "../../domain/dailyState";
 import DailyStateDetailPanel from "../components/DailyStateDetailPanel";
 import { getISOWeekInfo, getISOWeekYear, matchesISOWeek } from "../../utils/helpers";
 import { getSessionTrainingFocus } from "../../domain/trainingFocus";
+import CompetitionDetailModal from "../../components/planning/CompetitionDetailModal";
+import { formatCivilDate, parseCivilDate } from "../../utils/dateTime";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 function getDiscType(discName) {
@@ -348,6 +350,7 @@ export default function AthleteDashboard({
   const [openTodaySessionId, setOpenTodaySessionId] = useState(null);
   const [activeMetric, setActiveMetric] = useState(null);
   const [showDailyState, setShowDailyState] = useState(false);
+  const [activeCompetition, setActiveCompetition] = useState(null);
 
   const metrics = useMemo(() =>
     getAthleteMetricsForWeek(athlete.id, weeklyCharge, currentWeek, wellnessToday ? [wellnessToday] : [], sessions),
@@ -402,7 +405,7 @@ export default function AthleteDashboard({
   const focusSession = todayFocus.focusSession;
   const openedTodaySession = todaySessions.find(session => session.id === openTodaySessionId) ?? null;
 
-  const topRecords     = Object.entries(athlete.records ?? {}).slice(0, 4);
+  const topRecords     = Object.entries(athlete.records ?? {}).slice(0, 3);
   const activeInjuries = (athlete.injuries ?? []).filter(i => i.status !== "résolu");
 
   const streak = useMemo(() => {
@@ -484,9 +487,9 @@ export default function AthleteDashboard({
         {modules.planning !== false && <div className="xl:col-span-2"><WeekOverview sessions={weekSessions} today={today} onOpenPlanning={() => onNavigate("planning")} /></div>}
 
         {modules.performances !== false && nextComp && (() => {
-          const days = Math.max(0, Math.ceil((new Date(nextComp.date) - today) / (1000 * 60 * 60 * 24)));
-          return <section className="athlete-next-event" aria-labelledby="next-event-title">
-            <div><p className="metric-label">PROCHAIN RENDEZ-VOUS</p><h2 id="next-event-title">{nextComp.name}</h2><p>{new Date(nextComp.date).toLocaleDateString("fr-BE", { day: "numeric", month: "long" })}{nextComp.location ? ` · ${nextComp.location}` : ""}</p>{nextComp.plannedEvents?.[athlete.id] && <span>{nextComp.plannedEvents[athlete.id]}</span>}</div>
+          const days = Math.max(0, Math.ceil((parseCivilDate(nextComp.date) - new Date(today.getFullYear(), today.getMonth(), today.getDate())) / (1000 * 60 * 60 * 24)));
+          return <section className="athlete-next-event tap-feedback cursor-pointer" role="button" tabIndex={0} aria-labelledby="next-event-title" onClick={() => setActiveCompetition(nextComp)} onKeyDown={event => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); setActiveCompetition(nextComp); } }}>
+            <div><p className="metric-label">PROCHAIN RENDEZ-VOUS</p><h2 id="next-event-title">{nextComp.name}</h2><p>{formatCivilDate(nextComp.date, { day: "numeric", month: "long" })}{nextComp.location ? ` · ${nextComp.location}` : ""}</p>{nextComp.plannedEvents?.[athlete.id] && <span>{nextComp.plannedEvents[athlete.id]}</span>}</div>
             <strong>{days}<small> jour{days > 1 ? "s" : ""}</small></strong>
           </section>;
         })()}
@@ -676,19 +679,18 @@ export default function AthleteDashboard({
           {modules.performances !== false && topRecords.length > 0 && (
             <div className="card overflow-hidden">
               <div style={{ padding: "12px 16px", borderBottom: "1px solid var(--c-border)", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                <p className="card-title">Mes records</p>
+                <p className="card-title">Mes repères</p>
                 <button onClick={() => onNavigate("performances")} className="btn-ghost" style={{ minHeight: "var(--touch)", padding: 0 }}>
                   Tout voir
                 </button>
               </div>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr" }}>
-                {topRecords.map(([disc, r], idx) => {
+              <div style={{ display: "flex", flexDirection: "column" }}>
+                {topRecords.map(([disc, r]) => {
                   const c = DISC_TYPE_COLORS[getDiscType(disc)] ?? DISC_TYPE_COLORS.sprint;
                   return (
                     <div key={disc} style={{
                       padding: "12px 14px",
-                      borderRight: idx % 2 === 0 ? "1px solid var(--c-border)" : "none",
-                      borderTop: idx >= 2 ? "1px solid var(--c-border)" : "none",
+                      borderTop: "1px solid var(--c-border)",
                     }}>
                       <div style={{ display: "flex", alignItems: "center", gap: 5, marginBottom: 6 }}>
                         <div style={{ width: 5, height: 5, borderRadius: "50%", background: c.dot, flexShrink: 0 }} />
@@ -844,6 +846,15 @@ export default function AthleteDashboard({
           onSetStatus={onStatusChange} onSetRpe={onRpeChange}
           onSetFeeling={onFeelingChange} onSetComment={onCommentChange}
           onSetRsvp={onRsvpChange}
+        />
+      )}
+
+      {activeCompetition && (
+        <CompetitionDetailModal
+          competition={activeCompetition}
+          athletes={allAthletes ?? [athlete]}
+          athleteId={athlete.id}
+          onClose={() => setActiveCompetition(null)}
         />
       )}
     </div>

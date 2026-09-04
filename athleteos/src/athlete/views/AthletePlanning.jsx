@@ -25,9 +25,11 @@ import { SegmentedTabs } from "../../components/ui/premium";
 import { cat, rpeColor } from "./planningUtils";
 import { StatusBadge } from "./planningShared";
 import CompetitionPlanningCard from "../../components/planning/CompetitionPlanningCard";
+import CompetitionDetailModal from "../../components/planning/CompetitionDetailModal";
 import { getPlanningCompetitions, groupCompetitionsByDate } from "../../domain/planningCompetitions";
 import CreateSessionModal from "./CreateSessionModal";
 import SessionDetailModal from "./SessionDetailModal";
+import PlanningEventDetailModal from "../../components/planning/PlanningEventDetailModal";
 
 // Ré-export — AthleteDashboard.jsx importe SessionDetailModal depuis ce
 // fichier (`import { SessionDetailModal } from "./AthletePlanning"`), donc
@@ -143,7 +145,7 @@ function SessionCard({ session, athleteId, isPast = false, compact = false, onOp
               {CATEGORIES.find(x => x.id === session.category)?.label ?? session.type}
             </span>
             <span className="chip chip-neutral">{getSessionTrainingFocus(session).shortLabel}</span>
-            {session.pdfUrl && (
+            {(session.documents?.length > 0 || session.pdfUrl) && (
               <span style={{ fontSize: 12, fontWeight: 700, padding: "3px 8px", borderRadius: 99, background: "rgba(91,158,245,0.16)", color: "var(--tone-info)" }}>
                 Fichier
               </span>
@@ -179,18 +181,18 @@ function SessionCard({ session, athleteId, isPast = false, compact = false, onOp
 // COMPOSANT PRINCIPAL — AthletePlanning
 // ═══════════════════════════════════════════════════════════════════════════════
 export default function AthletePlanning({
-  athlete, sessions, competitions = [], allAthletes, clubId, createdBy, coachUserId,
+  athlete, sessions, competitions = [], planningEvents = [], allAthletes, clubId, createdBy, coachUserId,
   onRpeChange, onStatusChange, onFeelingChange, onCommentChange, onRsvpChange, onRefresh,
 }) {
   const todayKey = toLocalDateStr(new Date());
   const today    = useMemo(() => parseLocalDate(todayKey), [todayKey]);
-  const isMobile = typeof window !== "undefined" && window.innerWidth < 768;
-
   const [viewYear,      setViewYear]      = useState(today.getFullYear());
+  const [activePlanningEvent, setActivePlanningEvent] = useState(null);
   const [viewMonth,     setViewMonth]     = useState(today.getMonth());
-  const [viewMode,      setViewMode]      = useState(isMobile ? "agenda" : "month");
+  const [viewMode,      setViewMode]      = useState("week");
   const [selectedDate,  setSelectedDate]  = useState(today);
   const [activeSession, setActiveSession] = useState(null);
+  const [activeCompetition, setActiveCompetition] = useState(null);
   const [showCreate,    setShowCreate]    = useState(false);
 
   const planningCompetitions = useMemo(
@@ -335,9 +337,9 @@ export default function AthletePlanning({
               ariaLabel="Affichage du planning"
               className="w-full sm:w-auto"
               items={[
-                { id: "agenda", label: "Liste" },
-                { id: "month", label: "Mois" },
                 { id: "week", label: "Semaine" },
+                { id: "month", label: "Mois" },
+                { id: "agenda", label: "Liste" },
                 { id: "archive", label: "Archives", badge: archivedSessionCount },
               ]}
               value={viewMode}
@@ -346,6 +348,14 @@ export default function AthletePlanning({
           </div>
         </div>
       </header>
+
+      {planningEvents.length > 0 && <div className="px-4 md:px-6 py-2 flex gap-2 overflow-x-auto" style={{ borderBottom:"1px solid var(--c-border)" }}>
+        {[...planningEvents].sort((a,b) => a.startsOn.localeCompare(b.startsOn)).map(event => <button type="button" onClick={() => setActivePlanningEvent(event)} key={event.id} className="chip chip-neutral whitespace-nowrap min-h-11">
+          <CalendarDays size={13} /> {event.kind === "stage" ? "Stage" : event.kind === "test" ? "Test" : event.kind === "rest" ? "Repos" : event.customLabel || "Événement"} · {event.name} · {event.startsOn === event.endsOn ? event.startsOn : `${event.startsOn} → ${event.endsOn}`}
+        </button>)}
+      </div>}
+
+      {activePlanningEvent && <PlanningEventDetailModal event={activePlanningEvent} onClose={() => setActivePlanningEvent(null)} />}
 
       {/* ══════════════════════════════════════════════════════════════════════
           VUE AGENDA
@@ -404,6 +414,7 @@ export default function AthletePlanning({
                           competition={competition}
                           athletes={allAthletes}
                           athleteId={athlete.id}
+                          onOpen={setActiveCompetition}
                         />
                       ))}
                       {ds.sort((a, b) => (a.time ?? "").localeCompare(b.time ?? "")).map(s => (
@@ -482,7 +493,7 @@ export default function AthletePlanning({
                   </div>
                   <div className="hidden md:block space-y-0.5">
                     {dayEvents.slice(0, 3).map(event => event.kind === "competition" ? (
-                      <CompetitionPlanningCard key={`competition-${event.value.id}`} competition={event.value} athletes={allAthletes} athleteId={athlete.id} compact />
+                      <CompetitionPlanningCard key={`competition-${event.value.id}`} competition={event.value} athletes={allAthletes} athleteId={athlete.id} compact onOpen={setActiveCompetition} />
                     ) : (
                       <SessionCard key={`session-${event.value.id}`} session={event.value} athleteId={athlete.id} compact onOpen={setActiveSession} onStatusChange={onStatusChange} />
                     ))}
@@ -509,7 +520,7 @@ export default function AthletePlanning({
                   </span>
                   {selectedDate.toLocaleDateString("fr-BE", { weekday: "long", day: "numeric", month: "long" })}
                 </p>
-                {dc.map(competition => <CompetitionPlanningCard key={`competition-${competition.id}`} competition={competition} athletes={allAthletes} athleteId={athlete.id} />)}
+                {dc.map(competition => <CompetitionPlanningCard key={`competition-${competition.id}`} competition={competition} athletes={allAthletes} athleteId={athlete.id} onOpen={setActiveCompetition} />)}
                 {ds.map(s => <SessionCard key={`session-${s.id}`} session={s} athleteId={athlete.id} isPast={isPast} onOpen={setActiveSession} onStatusChange={onStatusChange} />)}
               </div>
             );
@@ -560,7 +571,7 @@ export default function AthletePlanning({
                   <div style={{ width: 56, height: 56, borderRadius: 20, background: "var(--c-surface-2)", display: "flex", alignItems: "center", justifyContent: "center" }}>
                     <CalendarDays size={24} color="var(--c-text-3)" strokeWidth={1.5} />
                   </div>
-                  <p style={{ fontSize: 13, fontWeight: 700, color: "var(--c-text-3)" }}>Repos ce jour</p>
+                  <p style={{ fontSize: 13, fontWeight: 700, color: "var(--c-text-3)" }}>{isSameDay(dateObj, today) ? "Aujourd’hui · aucune séance prévue" : "Aucune séance prévue ce jour"}</p>
                   <button type="button" onClick={() => setShowCreate(true)} style={{ minHeight: 44, padding: "0 12px", fontSize: 13, fontWeight: 700, color: "var(--tone-success)", background: "none", border: "none", cursor: "pointer" }}>
                     + Planifier une séance
                   </button>
@@ -569,7 +580,7 @@ export default function AthletePlanning({
 
               return (
                 <>
-                  {dc.map(competition => <CompetitionPlanningCard key={`competition-${competition.id}`} competition={competition} athletes={allAthletes} athleteId={athlete.id} />)}
+                  {dc.map(competition => <CompetitionPlanningCard key={`competition-${competition.id}`} competition={competition} athletes={allAthletes} athleteId={athlete.id} onOpen={setActiveCompetition} />)}
                   {ds.map(s => <SessionCard key={`session-${s.id}`} session={s} athleteId={athlete.id} isPast={isPast} onOpen={setActiveSession} onStatusChange={onStatusChange} />)}
                 </>
               );
@@ -591,6 +602,9 @@ export default function AthletePlanning({
           onSetComment={onCommentChange}
           onSetRsvp={onRsvpChange}
         />
+      )}
+      {activeCompetition && (
+        <CompetitionDetailModal competition={activeCompetition} athletes={allAthletes} athleteId={athlete.id} onClose={() => setActiveCompetition(null)} />
       )}
       {showCreate && (
         <CreateSessionModal
