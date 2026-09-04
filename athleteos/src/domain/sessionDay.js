@@ -1,8 +1,15 @@
+import { civilDateKey } from "../utils/dateTime";
+
 export const RSVP_OPTIONS = Object.freeze([
   { id: "going", label: "Je serai présent" },
   { id: "unsure", label: "Je ne sais pas encore" },
   { id: "unavailable", label: "Je ne peux pas venir" },
 ]);
+
+export function canRespondToSession(session, now = new Date()) {
+  return session.lifecycleStatus !== "completed"
+    && session.sessionDate >= civilDateKey(now);
+}
 
 export function hasCompleteSessionFeedback(validation) {
   return (validation?.status === "done" || validation?.status === "partial")

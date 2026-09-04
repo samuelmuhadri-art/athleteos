@@ -38,7 +38,7 @@ export function getLatestUnreadIncomingMessage(messages, currentUserId, preferre
     .sort((first, second) => new Date(second.date) - new Date(first.date))[0] ?? null;
 }
 
-export function buildAthleteConversations(messages, contacts, currentUserId) {
+export function buildMessagingConversations(messages, contacts, currentUserId) {
   const contactsByUserId = new Map(
     contacts.filter(contact => contact.userId != null).map(contact => [contact.userId, contact])
   );
@@ -73,6 +73,11 @@ export function buildAthleteConversations(messages, contacts, currentUserId) {
     return new Date(b.lastMsg.date) - new Date(a.lastMsg.date);
   });
 }
+
+// Compatibilite avec les imports historiques de l'espace athlete. La logique
+// est partagee avec la messagerie coach afin que les deux interfaces filtrent
+// et indexent les messages de la meme maniere.
+export const buildAthleteConversations = buildMessagingConversations;
 
 function normalizeSearch(value) {
   return String(value ?? "")

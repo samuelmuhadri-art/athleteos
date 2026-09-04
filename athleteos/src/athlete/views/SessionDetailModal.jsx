@@ -14,7 +14,7 @@ import { cat, rpeColor } from "./planningUtils";
 import { StatusBadge } from "./planningShared";
 import { openSessionAttachment } from "../../utils/storage";
 import { parseLocalDate } from "../../utils/helpers";
-import { RSVP_OPTIONS } from "../../domain/sessionDay";
+import { canRespondToSession, RSVP_OPTIONS } from "../../domain/sessionDay";
 import { useAccessibleDialog } from "../../hooks/useAccessibleDialog";
 
 const SessionDetailModal = memo(({ session, athlete, allAthletes, onClose, onSetStatus, onSetRpe, onSetFeeling, onSetComment, onSetRsvp }) => {
@@ -67,7 +67,7 @@ const SessionDetailModal = memo(({ session, athlete, allAthletes, onClose, onSet
 
   const status  = val?.status ?? null;
   const hasPerf = status === "done" || status === "partial";
-  const canRespond = session.lifecycleStatus !== "completed" && session.sessionDate >= new Date().toISOString().slice(0, 10);
+  const canRespond = canRespondToSession(session);
   const labelStyle = { fontSize: 12, fontWeight: 700, color: "var(--c-text-2)", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 12, display: "block" };
 
   const presenceOpts = [

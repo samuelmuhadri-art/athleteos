@@ -28,6 +28,7 @@ import {
   DAYS_FR, DAYS_SHORT, MONTHS_FR, CATEGORIES,
   toLocalDateStr, isSameDay, sessionStatus, colors, getCalendarDays,
   audienceMatchesFilters, competitionMatchesDiscipline, sessionMatchesDiscipline,
+  indexPlanningRelations,
 } from "./planningUtils";
 import { StatusIcon } from "./planningShared";
 import { getSessionTrainingFocus } from "../domain/trainingFocus";
@@ -99,6 +100,13 @@ function Planning() {
       if (documentsRes.error) throw documentsRes.error;
       if (recipientsRes.error) throw recipientsRes.error;
 
+      const planningRelations = indexPlanningRelations(
+        saRes.data,
+        documentsRes.data,
+        recipientsRes.data,
+      );
+      const athleteUserIds = new Set((athletesRes.data ?? []).map(athlete => athlete.user_id).filter(Boolean));
+
       const configuredIds = enabledAthleteIds("planning");
       const eligibleIds = configuredIds ? new Set(configuredIds) : null;
       setAthletes(athletesRes.data.filter((a) => !eligibleIds || eligibleIds.has(a.id)).map(a => ({
@@ -108,7 +116,7 @@ function Planning() {
       })));
 
       setSessionList(sessionsRes.data.map(s => {
-        const rows = saRes.data.filter(v => v.session_id === s.id);
+        const rows = planningRelations.athletesBySessionId.get(s.id) ?? [];
         return {
           id: s.id, week: s.week, day: s.day,
           sessionDate:     s.session_date,
@@ -121,10 +129,10 @@ function Planning() {
           instructions:    s.instructions,
           durationMinutes: s.duration_minutes,
           pdfUrl:          s.pdf_url,
-          documents: (documentsRes.data ?? []).filter(link => link.session_id === s.id).map(link => ({
+          documents: (planningRelations.documentsBySessionId.get(s.id) ?? []).map(link => ({
             ...mapDocument(link.documents),
             visibility:link.visibility,
-            athleteIds:(recipientsRes.data ?? []).filter(recipient => recipient.session_id === s.id && recipient.document_id === link.document_id).map(recipient => recipient.athlete_id),
+            athleteIds:planningRelations.recipientIds(s.id, link.document_id),
           })),
           createdBy:       s.created_by,
           seriesId:        s.series_id,
@@ -133,7 +141,7 @@ function Planning() {
           lifecycleStatus: s.lifecycle_status ?? "planned",
           startedAt:       s.started_at,
           closedAt:        s.closed_at,
-          createdByAthlete: s.created_by != null && athletesRes.data.some(a => a.user_id === s.created_by),
+          createdByAthlete: s.created_by != null && athleteUserIds.has(s.created_by),
           athleteIds:  rows.map(v => v.athlete_id),
           validations: rows.map(v => ({
             athleteId: v.athlete_id, status: v.status,

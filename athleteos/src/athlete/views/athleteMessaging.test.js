@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   appendUniqueMessage,
   buildAthleteConversations,
+  buildMessagingConversations,
   filterAthleteConversations,
   formatConversationTime,
   formatMessageDay,
@@ -28,6 +29,47 @@ describe("buildAthleteConversations", () => {
     expect(conversations.map(conversation => conversation.contactId)).toEqual(["athlete-3", "coach-2"]);
     expect(conversations.find(conversation => conversation.contactId === "coach-2")?.unread).toBe(1);
     expect(conversations.flatMap(conversation => conversation.messages).some(message => message.id === 3)).toBe(false);
+  });
+
+  it("ignore un message entre deux contacts qui ne concerne pas le compte connecte", () => {
+    const messageBetweenContacts = {
+      id: 4,
+      senderId: 2,
+      receiverId: 3,
+      content: "Message prive entre contacts",
+      date: "2026-07-29T11:00:00Z",
+      isRead: false,
+    };
+    const conversations = buildMessagingConversations([...messages, messageBetweenContacts], contacts, 1);
+
+    expect(conversations.flatMap(conversation => conversation.messages).map(message => message.id)).not.toContain(4);
+  });
+
+  it("indexe une messagerie longue pour 30 contacts sans perdre de messages", () => {
+    const manyContacts = Array.from({ length:30 }, (_, index) => ({
+      id:`athlete-${index + 1}`,
+      userId:index + 100,
+      name:`Athlete ${index + 1}`,
+      type:"athlete",
+    }));
+    const manyMessages = Array.from({ length:6000 }, (_, index) => {
+      const contact = manyContacts[index % manyContacts.length];
+      const incoming = index % 2 === 0;
+      return {
+        id:index + 1,
+        senderId:incoming ? contact.userId : 1,
+        receiverId:incoming ? 1 : contact.userId,
+        content:`Message ${index + 1}`,
+        date:new Date(Date.UTC(2026, 8, 1) + index * 1000).toISOString(),
+        isRead:!incoming,
+      };
+    });
+
+    const conversations = buildMessagingConversations(manyMessages, manyContacts, 1);
+
+    expect(conversations).toHaveLength(30);
+    expect(conversations.flatMap(conversation => conversation.messages)).toHaveLength(6000);
+    expect(conversations.reduce((total, conversation) => total + conversation.unread, 0)).toBe(3000);
   });
 });
 

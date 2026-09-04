@@ -2,6 +2,24 @@
 
 Ce document accompagne `repomix-output.xml`. Il donne à un relecteur externe le contexte, les choix effectués, les preuves de validation et les points sur lesquels un avis critique est souhaité.
 
+## Mise à jour — passe finale de qualité du 5 septembre 2026
+
+Une nouvelle passe strictement corrective a été réalisée après la refonte. Aucun modèle scientifique, aucune donnée historique, aucune architecture club/athlète et aucune fonctionnalité produit n'ont été modifiés.
+
+Bugs supplémentaires démontrés et corrigés :
+
+- l'espace athlète utilisait `.single()` pour trouver le head coach alors que le produit autorise plusieurs head coaches ; la lecture sélectionne désormais le premier identifiant de manière déterministe sans échouer sur les clubs multi-head-coach ;
+- les erreurs des lectures parallèles de l'espace athlète et des relations de la liste d'athlètes pouvaient être transformées silencieusement en listes vides ; elles alimentent désormais l'état d'erreur existant ;
+- la messagerie coach contenait une seconde implémentation moins robuste du regroupement des conversations, en `O(messages × contacts)` ; elle partage maintenant l'indexation linéaire déjà utilisée côté athlète et ignore explicitement les messages qui ne concernent pas l'utilisateur connecté ;
+- un échec d'envoi coach vidait le brouillon et n'était visible que dans la console ; le texte est maintenant conservé et une erreur accessible est affichée ;
+- les deux listes de contacts indépendantes de la messagerie étaient chargées séquentiellement ; elles sont maintenant chargées en parallèle ;
+- le planning reconstruisait les affectations, documents et destinataires par scans répétés pour chaque séance ; ces relations sont maintenant indexées une fois avant le mapping ;
+- la comparaison de date de réponse à une séance et les fixtures E2E mélangeaient jour UTC et jour civil local autour de minuit ; elles utilisent maintenant la convention de date civile partagée.
+
+Code supprimé ou mutualisé : trois helpers locaux dupliqués dans `Messaging.jsx` (formatage temporel et construction des conversations), remplacés par les helpers partagés de `athleteMessaging.js`. Aucun style ni composant n'a été supprimé sans preuve d'inutilité.
+
+Cette passe est présente localement dans le Repomix mis à jour. Elle n'a pas été commitée ni poussée automatiquement.
+
 ## Demande au relecteur
 
 Analyse le repository AthleteOS contenu dans `repomix-output.xml` et confronte le code réel au présent rapport.
@@ -235,7 +253,7 @@ Résultats :
 
 - ESLint : réussi ;
 - TypeScript `tsc --noEmit` : réussi ;
-- Vitest : 75 fichiers et 454 tests réussis ;
+- Vitest : 78 fichiers et 463 tests réussis ;
 - couverture statements : 95,95 % ;
 - couverture branches : 91,76 % ;
 - couverture fonctions : 99,13 % ;
@@ -277,6 +295,7 @@ Tailles effectivement contrôlées :
 - Une validation manuelle sur au moins un iPhone Safari et un Android Chrome reste recommandée avant une diffusion large.
 - Le pipeline documentaire est testé fonctionnellement et structurellement. Les tests ne constituent pas un benchmark réseau sous connexion mobile lente ou forte latence réelle.
 - Aucun test vert ne garantit l'absence absolue de régression visuelle sur chaque combinaison de contenu utilisateur ; le relecteur doit rechercher les contenus exceptionnellement longs, noms de clubs longs et listes très volumineuses.
+- Le build reste vert mais `vite-plugin-pwa` émet un avertissement interne de dépréciation `inlineDynamicImports`; aucun usage de cette option n'existe dans le code du repository.
 
 ## Fichiers modifiés dans la passe finale
 
@@ -297,6 +316,29 @@ Tailles effectivement contrôlées :
 - `athleteos/e2e/module-ux-priority.spec.js`
 - `athleteos/e2e/post-refonte.spec.js`
 - `athleteos/dist/sw.js`
+
+Fichiers ajoutés ou modifiés par la passe qualité du 5 septembre :
+
+- `athleteos/e2e/global-setup.mjs`
+- `athleteos/src/AthleteApp.jsx`
+- `athleteos/src/athlete/views/SessionDetailModal.jsx`
+- `athleteos/src/athlete/views/athleteMessaging.js`
+- `athleteos/src/athlete/views/athleteMessaging.test.js`
+- `athleteos/src/domain/sessionDay.js`
+- `athleteos/src/domain/sessionDay.test.js`
+- `athleteos/src/modules/AthleteList.jsx`
+- `athleteos/src/modules/AthleteList.test.jsx`
+- `athleteos/src/modules/Messaging.jsx`
+- `athleteos/src/modules/Messaging.test.jsx`
+- `athleteos/src/modules/Planning.jsx`
+- `athleteos/src/modules/planningUtils.js`
+- `athleteos/src/modules/planningUtils.test.js`
+- `athleteos/src/services/athleteShellData.js`
+- `athleteos/src/services/athleteShellData.test.js`
+- `athleteos/src/utils/dateTime.test.js`
+- `athleteos/src/utils/supabaseResults.js`
+- `athleteos/src/utils/supabaseResults.test.js`
+- `athleteos/dist/sw.js` (artefact PWA régénéré par le build local)
 
 ## Format de réponse souhaité du relecteur
 

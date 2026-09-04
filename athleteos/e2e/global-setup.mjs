@@ -20,6 +20,7 @@ import { createClient } from "@supabase/supabase-js";
 import { writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
+import { civilDateKey } from "../src/utils/dateTime.js";
 
 const SUPABASE_URL    = process.env.VITE_SUPABASE_URL ?? process.env.API_URL;
 const SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.SERVICE_ROLE_KEY;
@@ -102,7 +103,7 @@ export default async function globalSetup() {
   const uxCoach = await makeAccount(uxClub.id, `e2e-ux-coach-${runId}@example.invalid`, "Benoît Coach", "head_coach");
   const uxAthlete = await makeAccount(uxClub.id, `e2e-ux-athlete-${runId}@example.invalid`, "Antonin Leroy", "athlete");
   const today = new Date();
-  const todayDate = today.toISOString().slice(0, 10);
+  const todayDate = civilDateKey(today);
   const competitionDate = new Date(today); competitionDate.setDate(competitionDate.getDate() + 10);
   const { data: uxSession, error: uxSessionError } = await admin.from("sessions").insert({
     club_id: uxClub.id, title: "Sprint — vitesse max", category: "sprint", time: "18:00",
@@ -115,7 +116,7 @@ export default async function globalSetup() {
   const historicalDate = new Date(today); historicalDate.setDate(historicalDate.getDate() - 7);
   const { data: historicalSession, error: historicalSessionError } = await admin.from("sessions").insert({
     club_id: uxClub.id, title: "Technique départ", category: "sprint", time: "18:00",
-    duration_minutes: 45, session_date: historicalDate.toISOString().slice(0, 10), created_by: uxCoach.userId,
+    duration_minutes: 45, session_date: civilDateKey(historicalDate), created_by: uxCoach.userId,
   }).select().single();
   if (historicalSessionError) throw new Error(`seed ux historical session : ${historicalSessionError.message}`);
   const { error: historicalAssignmentError } = await admin.from("session_athletes").insert({
@@ -124,7 +125,7 @@ export default async function globalSetup() {
   });
   if (historicalAssignmentError) throw new Error(`seed ux historical assignment : ${historicalAssignmentError.message}`);
   const { data: uxCompetition, error: uxCompetitionError } = await admin.from("competitions").insert({
-    club_id: uxClub.id, name: "Meeting de Bruxelles", date: competitionDate.toISOString().slice(0, 10), location: "Bruxelles",
+    club_id: uxClub.id, name: "Meeting de Bruxelles", date: civilDateKey(competitionDate), location: "Bruxelles",
   }).select().single();
   if (uxCompetitionError) throw new Error(`seed ux competition : ${uxCompetitionError.message}`);
   const { error: uxCompetitionAthleteError } = await admin.from("competition_athletes").insert({ competition_id: uxCompetition.id, athlete_id: uxAthlete.athleteId, planned_event: "100 m" });
@@ -153,7 +154,7 @@ export default async function globalSetup() {
   });
   if (postAssignmentError) throw new Error(`seed post-refonte assignment : ${postAssignmentError.message}`);
   const { data: postCompetition, error: postCompetitionError } = await admin.from("competitions").insert({
-    club_id: postClub.id, name: "Meeting de Bruxelles", date: competitionDate.toISOString().slice(0, 10), location: "Bruxelles",
+    club_id: postClub.id, name: "Meeting de Bruxelles", date: civilDateKey(competitionDate), location: "Bruxelles",
   }).select().single();
   if (postCompetitionError) throw new Error(`seed post-refonte competition : ${postCompetitionError.message}`);
   const { error: postCompetitionAthleteError } = await admin.from("competition_athletes").insert({
@@ -166,7 +167,7 @@ export default async function globalSetup() {
   if (postMessageError) throw new Error(`seed post-refonte message : ${postMessageError.message}`);
   const { error: postGoalError } = await admin.from("athlete_goals").insert({
     club_id: postClub.id, athlete_id: postAthlete.athleteId, discipline: "100 m",
-    target_value: "10 s 90", deadline: competitionDate.toISOString().slice(0, 10),
+    target_value: "10 s 90", deadline: civilDateKey(competitionDate),
   });
   if (postGoalError) throw new Error(`seed post-refonte goal : ${postGoalError.message}`);
   const { error: postConfiguredError } = await admin.from("clubs")

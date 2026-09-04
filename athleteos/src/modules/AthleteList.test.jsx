@@ -62,6 +62,26 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe("intégration de l'import CSV dans AthleteList", () => {
+  it("affiche l'erreur d'une relation au lieu d'un dossier athlète partiel", async () => {
+    mocks.from.mockImplementation((table) => ({
+      select: vi.fn(() => ({
+        eq: vi.fn(() => Promise.resolve({
+          data: table === "athletes" ? [{ id:1, name:"Nora", profile_data:{} }] : [],
+          error: null,
+        })),
+        in: vi.fn(() => Promise.resolve({
+          data: [],
+          error: table === "records" ? { message:"Records indisponibles" } : null,
+        })),
+      })),
+    }));
+
+    render(<AthleteList />);
+
+    expect(await screen.findByText("Records indisponibles")).toBeTruthy();
+    expect(screen.getByRole("button", { name:/réessayer/i })).toBeTruthy();
+  });
+
   it("envoie uniquement les lignes valides au RPC et affiche ses deux compteurs", async () => {
     render(<AthleteList />);
     await openImportModal();

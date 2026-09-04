@@ -22,6 +22,10 @@ describe("convention date civile", () => {
     expect(civilDateKey("2028-02-29")).toBe("2028-02-29");
     expect(calendarDayDifference("2026-12-31T22:00:00Z", "2027-01-01T22:00:00Z", "Europe/Brussels")).toBe(1);
   });
+
+  it("conserve le jour local d'un Date autour de minuit", () => {
+    expect(civilDateKey(new Date(2026, 8, 5, 0, 30))).toBe("2026-09-05");
+  });
 });
 
 describe("timestamp réel", () => {

@@ -22,6 +22,7 @@ import ImportAthletesCsvModal from "./ImportAthletesCsvModal";
 import { EmptyState, InlineNotice, PageHeader } from "../components/ui/premium";
 import AthleteModulesManager from "../components/modules/AthleteModulesManager";
 import { useModules } from "../hooks/useModules";
+import { firstSupabaseError } from "../utils/supabaseResults";
 
 // ─── Composant principal ──────────────────────────────────────────────────────
 
@@ -78,6 +79,11 @@ function AthleteList({ onNavigate }) {
         // migration 20260726120000) — plus de recalcul JS à partir des séances.
         athleteIds.length     ? supabase.from("weekly_charge").select("*").in("athlete_id", athleteIds)         : Promise.resolve({data:[]}),
       ]);
+      const relationError = firstSupabaseError([
+        recordsRes, injuriesRes, perfHistRes, sessionAthletesRes,
+        compAthletesRes, compResultsRes, weeklyChargeRes,
+      ]);
+      if (relationError) throw relationError;
 
       const remappedCharge = (weeklyChargeRes.data ?? []).map(c => ({
         athleteId: c.athlete_id, week: c.week, isoYear: c.iso_year, rawLoad: c.raw_load,

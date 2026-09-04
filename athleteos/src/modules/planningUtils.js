@@ -95,6 +95,35 @@ export function audienceMatchesFilters(athleteIds = [], { athleteId = "all", gro
   return group === "all" || athleteIds.some(id => allowedByGroup.has(id));
 }
 
+function groupRowsBy(rows, keySelector) {
+  const groups = new Map();
+  for (const row of rows ?? []) {
+    const key = keySelector(row);
+    const group = groups.get(key);
+    if (group) group.push(row);
+    else groups.set(key, [row]);
+  }
+  return groups;
+}
+
+export function indexPlanningRelations(sessionAthletes = [], sessionDocuments = [], documentRecipients = []) {
+  const recipientsBySession = groupRowsBy(documentRecipients, row => row.session_id);
+  const recipientIdsBySessionAndDocument = new Map();
+
+  recipientsBySession.forEach((rows, sessionId) => {
+    recipientIdsBySessionAndDocument.set(sessionId, groupRowsBy(rows, row => row.document_id));
+  });
+
+  return {
+    athletesBySessionId: groupRowsBy(sessionAthletes, row => row.session_id),
+    documentsBySessionId: groupRowsBy(sessionDocuments, row => row.session_id),
+    recipientIds(sessionId, documentId) {
+      return (recipientIdsBySessionAndDocument.get(sessionId)?.get(documentId) ?? [])
+        .map(row => row.athlete_id);
+    },
+  };
+}
+
 export function getCalendarDays(year, month) {
   const firstDay = new Date(year, month, 1);
   const lastDay = new Date(year, month + 1, 0);

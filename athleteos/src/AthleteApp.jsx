@@ -41,6 +41,8 @@ import { PwaInstallButton } from "./components/pwa/PwaAccess";
 import { useModules } from "./hooks/useModules";
 import { ATHLETE_VIEW_MODULE, filterNavigation, moduleKeyForEventType } from "./domain/modules/moduleRegistry";
 import { mapDocument } from "./services/documentLibrary";
+import { fetchPrimaryHeadCoach } from "./services/athleteShellData";
+import { firstSupabaseError } from "./utils/supabaseResults";
 
 const NAV_ITEMS = [
   { id: "dashboard",    label: "Tableau de bord", shortLabel: "Accueil",  icon: LayoutDashboard },
@@ -130,7 +132,7 @@ export default function AthleteApp({ clubBrand, themeStyle }) {
         enabledModules.performances !== false ? supabase.from("performance_history").select("*").eq("athlete_id",athleteId) : Promise.resolve({ data: [] }),
         ["planning", "session_feedback", "training_load"].some((key) => enabledModules[key] !== false) ? supabase.from("sessions").select("*, session_athletes(*), session_documents(visibility, documents(*), session_document_recipients(athlete_id))").eq("club_id",clubId) : Promise.resolve({ data: [] }),
         enabledModules.performances !== false ? supabase.from("competitions").select("*, competition_athletes(*), competition_results(*)").eq("club_id",clubId) : Promise.resolve({ data: [] }),
-        supabase.from("users").select("id, name").eq("club_id",clubId).eq("role","head_coach").single(),
+        fetchPrimaryHeadCoach(supabase, clubId),
         ["social", "messaging"].some((key) => enabledModules[key] !== false) ? supabase.from("athletes").select("id, name, profile_data, user_id").eq("club_id",clubId) : Promise.resolve({ data: [] }),
         enabledModules.performances !== false ? supabase.from("athlete_performances").select("*").eq("athlete_id",athleteId).order("performance_date",{ascending:true}) : Promise.resolve({ data: [] }),
         enabledModules.performances !== false ? supabase.from("athlete_goals").select("*").eq("athlete_id",athleteId).order("created_at",{ascending:false}) : Promise.resolve({ data: [] }),
@@ -143,6 +145,13 @@ export default function AthleteApp({ clubBrand, themeStyle }) {
         enabledModules.planning !== false ? supabase.from("planning_events").select("*, planning_event_athletes(athlete_id), planning_event_documents(document_id, documents(*))").eq("club_id", clubId) : Promise.resolve({ data:[] }),
       ]);
 
+      const queryError = firstSupabaseError([
+        recordsRes, injuriesRes, perfHistRes, sessionsRes, compsRes, coachRes,
+        allAthletesRes, myPerfsRes, goalsRes, notifsRes, wellnessRes,
+        weeklyChargeRes, restDaysRes, eventsRes,
+      ]);
+      if (queryError) throw queryError;
+
       setMyPerformances(myPerfsRes.data ?? []);
       setMyGoals(goalsRes.data ?? []);
       setMyNotifs((notifsRes?.data ?? []).filter((notification) => {
@@ -154,8 +163,9 @@ export default function AthleteApp({ clubBrand, themeStyle }) {
       setWellnessToday(wellnessRows.find(row => String(row.date).slice(0, 10) === todayStr) ?? null);
       setConfirmedRestDays((restDaysRes.data ?? []).map(row => row.load_date));
 
-      const coachId = coachRes.data?.id ?? null;
-      setCoachUserId(coachId); setCoachName(coachRes.data?.name ?? null);
+      const primaryCoach = coachRes.data?.[0] ?? null;
+      const coachId = primaryCoach?.id ?? null;
+      setCoachUserId(coachId); setCoachName(primaryCoach?.name ?? null);
 
       if (coachId && enabledModules.messaging !== false) {
         const {data:msgs} = await supabase.from("messages").select("*")

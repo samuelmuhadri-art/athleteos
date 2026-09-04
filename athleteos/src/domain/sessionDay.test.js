@@ -1,7 +1,14 @@
 import { describe, expect, it } from "vitest";
-import { getSessionDayMessage, getSessionDaySummary, hasCompleteSessionFeedback } from "./sessionDay";
+import { canRespondToSession, getSessionDayMessage, getSessionDaySummary, hasCompleteSessionFeedback } from "./sessionDay";
 
 describe("suivi du jour de séance", () => {
+  it("evalue la date de reponse selon le jour local autour de minuit", () => {
+    const localMidnight = new Date(2026, 8, 5, 0, 30);
+    expect(canRespondToSession({ sessionDate:"2026-09-05", lifecycleStatus:"planned" }, localMidnight)).toBe(true);
+    expect(canRespondToSession({ sessionDate:"2026-09-04", lifecycleStatus:"planned" }, localMidnight)).toBe(false);
+    expect(canRespondToSession({ sessionDate:"2026-09-05", lifecycleStatus:"completed" }, localMidnight)).toBe(false);
+  });
+
   it("sépare retours manquants et charge session-RPE", () => {
     const session = {
       athleteIds: [1, 2, 3, 4],

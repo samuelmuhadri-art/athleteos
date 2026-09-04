@@ -20,6 +20,12 @@ import LoadingState              from "../components/ui/LoadingState";
 import ErrorState                from "../components/ui/ErrorState";
 import { SegmentedTabs }         from "../components/ui/premium";
 import { initialsFromName }      from "../utils/helpers.js";
+import {
+  buildMessagingConversations,
+  formatConversationTime,
+  formatMessageDay,
+  formatMessageTime,
+} from "../athlete/views/athleteMessaging";
 
 // ─── Constantes ───────────────────────────────────────────────────────────────
 
@@ -37,20 +43,6 @@ function contactColor(contact, contacts) {
   return CONTACT_COLORS[idx % CONTACT_COLORS.length] ?? "#94a3b8";
 }
 
-function formatTime(dateStr) {
-  return new Date(dateStr).toLocaleTimeString("fr-BE", { hour: "2-digit", minute: "2-digit" });
-}
-
-function formatDateHeader(dateStr) {
-  const d   = new Date(dateStr);
-  const now = new Date();
-  const isToday     = d.toDateString() === now.toDateString();
-  const isYesterday = d.toDateString() === new Date(now - 86400000).toDateString();
-  if (isToday)     return "Aujourd'hui";
-  if (isYesterday) return "Hier";
-  return d.toLocaleDateString("fr-BE", { weekday: "long", day: "numeric", month: "long" });
-}
-
 function groupByDate(msgs) {
   const groups = [];
   let currentDate = null;
@@ -63,40 +55,6 @@ function groupByDate(msgs) {
     groups.push({ type: "message", data: m, key: m.id });
   });
   return groups;
-}
-
-// Construit les conversations depuis messages + contacts
-// Un "contact" a : { id (unique), userId (int dans users), name, avatar, type, subtitle }
-function buildConversations(msgs, contacts, coachUserId) {
-  const convMap = new Map();
-
-  contacts.forEach((c) => {
-    if (c.userId == null) return;
-    convMap.set(c.id, { contactId: c.id, userId: c.userId, messages: [], unread: 0 });
-  });
-
-  msgs.forEach((m) => {
-    const otherUserId = m.senderId === coachUserId ? m.receiverId : m.senderId;
-    const contact     = contacts.find((c) => c.userId === otherUserId);
-    if (!contact) return;
-    const conv = convMap.get(contact.id);
-    if (!conv) return;
-    conv.messages.push(m);
-    if (!m.isRead && m.senderId !== coachUserId) conv.unread++;
-  });
-
-  convMap.forEach((conv) => {
-    conv.messages.sort((a, b) => new Date(a.date) - new Date(b.date));
-  });
-
-  return [...convMap.values()].sort((a, b) => {
-    const la = a.messages[a.messages.length - 1]?.date ?? "";
-    const lb = b.messages[b.messages.length - 1]?.date ?? "";
-    if (!la && !lb) return 0;
-    if (!la) return 1;
-    if (!lb) return -1;
-    return new Date(lb) - new Date(la);
-  });
 }
 
 // ─── Sous-composants ──────────────────────────────────────────────────────────
@@ -125,7 +83,7 @@ const MessageBubble = memo(({ msg, isOwn, contact, contacts }) => {
           {msg.content}
         </div>
         <div className="flex items-center gap-1 text-[10px] px-1" style={{ color: "var(--c-text-3)" }}>
-          <span>{formatTime(msg.date)}</span>
+          <span>{formatMessageTime(msg.date)}</span>
           {isOwn && (
             msg.isRead
               ? <CheckCheck size={11} color="#1D9E75" />
@@ -141,7 +99,7 @@ const DateSeparator = ({ date }) => (
   <div className="flex items-center gap-3 my-4">
     <div className="flex-1 h-px bg-[var(--c-border)]" />
     <span className="text-[10px] font-semibold uppercase tracking-wider px-2 rounded-full border border-[var(--c-border)] py-0.5" style={{ color: "var(--c-text-3)", background: "var(--c-surface-2)" }}>
-      {formatDateHeader(date)}
+      {formatMessageDay(date)}
     </span>
     <div className="flex-1 h-px bg-[var(--c-border)]" />
   </div>
@@ -200,7 +158,7 @@ const ConvItem = memo(({ conv, contact, contacts, isActive, onClick, coachUserId
           </div>
           {lastMsg && (
             <span className="text-[10px] text-[var(--c-text-3)] flex-shrink-0">
-              {formatTime(lastMsg.date)}
+              {formatConversationTime(lastMsg.date)}
             </span>
           )}
         </div>
@@ -216,9 +174,10 @@ const ConvItem = memo(({ conv, contact, contacts, isActive, onClick, coachUserId
   );
 });
 
-const ChatThread = memo(({ conv, contact, contacts, onSend, onBack, coachUserId }) => {
+export const ChatThread = memo(({ conv, contact, contacts, onSend, onBack, coachUserId }) => {
   const [input,   setInput]   = useState("");
   const [sending, setSending] = useState(false);
+  const [sendError, setSendError] = useState(null);
   const bottomRef = useRef(null);
   const color     = contactColor(contact, contacts);
   const grouped   = useMemo(() => groupByDate(conv.messages), [conv.messages]);
@@ -230,9 +189,16 @@ const ChatThread = memo(({ conv, contact, contacts, onSend, onBack, coachUserId 
   const handleSend = useCallback(async () => {
     const text = input.trim();
     if (!text) return;
-    setInput("");
     setSending(true);
-    try { await onSend(text); } finally { setSending(false); }
+    setSendError(null);
+    try {
+      await onSend(text);
+      setInput("");
+    } catch {
+      setSendError("Le message n’a pas pu être envoyé. Réessaie sans perdre ton texte.");
+    } finally {
+      setSending(false);
+    }
   }, [input, onSend]);
 
   const handleKeyDown = useCallback((e) => {
@@ -294,7 +260,8 @@ const ChatThread = memo(({ conv, contact, contacts, onSend, onBack, coachUserId 
       </div>
 
       {/* Input */}
-      <div className="flex-shrink-0 px-3 sm:px-4 pt-3 pb-3 border-t border-[var(--c-border)] bg-[var(--c-surface)] flex items-end gap-2">
+      <div className="flex-shrink-0 px-3 sm:px-4 pt-3 pb-3 border-t border-[var(--c-border)] bg-[var(--c-surface)] flex flex-wrap items-end gap-2">
+        {sendError && <p role="alert" className="w-full text-[11px] text-[var(--c-danger)]">{sendError}</p>}
         <div className="flex-1 bg-[var(--c-surface-2)] rounded-2xl px-4 py-2.5">
           <textarea
             className="w-full bg-transparent resize-none text-[13px] text-[var(--c-text-1)] placeholder-[var(--c-text-3)] focus:outline-none max-h-28 min-h-[20px]"
@@ -353,18 +320,19 @@ function Messaging() {
       setError(null);
 
       // 1. Athlètes du club
-      const athletesRes = await supabase
+      const athletesPromise = supabase
         .from("athletes")
         .select("id, name, main_discipline, user_id, profile_data")
         .eq("club_id", clubId);
-      if (athletesRes.error) throw athletesRes.error;
 
       // 2. Autres users du club (coachs, staff) — exclut le coach connecté
-      const usersRes = await supabase
+      const usersPromise = supabase
         .from("users")
         .select("id, name, role")
         .eq("club_id", clubId)
         .neq("id", coachUserId); // on s'exclut soi-même
+      const [athletesRes, usersRes] = await Promise.all([athletesPromise, usersPromise]);
+      if (athletesRes.error) throw athletesRes.error;
       if (usersRes.error) throw usersRes.error;
 
       // Construire la liste unifiée de contacts
@@ -431,7 +399,7 @@ function Messaging() {
 
   // ═══ Conversations dérivées ═══════════════════════════════════════════════
   const conversations = useMemo(
-    () => buildConversations(allMessages, contacts, coachUserId),
+    () => buildMessagingConversations(allMessages, contacts, coachUserId),
     [allMessages, contacts, coachUserId]
   );
 
@@ -523,7 +491,7 @@ function Messaging() {
       .select()
       .single();
 
-    if (err) { console.error("Messaging — send :", err); return; }
+    if (err) throw err;
 
     // Ajout optimiste
     setAllMessages((prev) => [...prev, {
