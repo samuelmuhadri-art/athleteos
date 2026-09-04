@@ -1,4 +1,5 @@
 import { getISOWeek, parseLocalDate } from "../utils/helpers.js";
+import { getDiscipline } from "../domain/disciplines.js";
 
 export const DAYS_FR = ["Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi", "Dimanche"];
 export const DAYS_SHORT = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"];
@@ -60,6 +61,38 @@ export function sessionStatus(session) {
 
 export function colors(category) {
   return SESSION_COLORS[category] ?? SESSION_COLORS.technique;
+}
+
+function normalized(value) {
+  return String(value ?? "").trim().toLocaleLowerCase("fr");
+}
+
+export function sessionMatchesDiscipline(session, discipline) {
+  if (!discipline || discipline === "all") return true;
+  if (session.category === discipline) return true;
+  const label = CATEGORIES.find(category => category.id === discipline)?.label;
+  return Boolean(label && normalized(session.type) === normalized(label));
+}
+
+export function competitionMatchesDiscipline(competition, discipline) {
+  if (!discipline || discipline === "all") return true;
+  return Object.values(competition.plannedEvents ?? {}).some(eventName => {
+    const definition = getDiscipline(eventName);
+    if (definition?.type === discipline) return true;
+    const label = CATEGORIES.find(category => category.id === discipline)?.label;
+    return Boolean(label && normalized(eventName).includes(normalized(label)));
+  });
+}
+
+export function audienceMatchesFilters(athleteIds = [], { athleteId = "all", group = "all", athletes = [] } = {}) {
+  const allowedByGroup = new Set(athletes
+    .filter(athlete => group === "all" || athlete.group === group)
+    .map(athlete => athlete.id));
+  if (athleteId !== "all") {
+    const selectedId = Number(athleteId);
+    return allowedByGroup.has(selectedId) && athleteIds.includes(selectedId);
+  }
+  return group === "all" || athleteIds.some(id => allowedByGroup.has(id));
 }
 
 export function getCalendarDays(year, month) {

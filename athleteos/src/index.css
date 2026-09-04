@@ -485,7 +485,7 @@ body {
   gap: 18px;
   padding: 18px;
   border-radius: var(--r-lg);
-  background: linear-gradient(135deg, #6b1717, #a82525);
+  background: linear-gradient(135deg, #243B67 0%, #38477C 52%, #66529A 100%);
   color: white;
 }
 .athlete-next-event h2 { margin-top: 4px; font-size: 17px; font-weight: 700; }
@@ -532,8 +532,12 @@ body {
   .athlete-tools-action { width: 100%; justify-content: center; }
   .athlete-profile-tools { align-items: flex-start; flex-direction: column; }
   .module-manager-footer { position: sticky; bottom: 0; }
-  .athlete-week-overview { margin-inline: calc(var(--page-padding-mobile) * -0.35); }
-  .athlete-week-days { grid-template-columns: repeat(7, 82px); }
+  .athlete-week-overview { width: 100%; margin-inline: auto; }
+  .athlete-week-heading { align-items: flex-start; }
+  .athlete-week-heading .btn-ghost { padding-inline: 8px; }
+  .athlete-week-days { grid-template-columns: repeat(7, minmax(44px, 1fr)); gap: 4px; }
+  .athlete-week-day { min-height: 86px; padding: 7px 5px; }
+  .athlete-week-day > small { font-size: 9px; }
   .athlete-next-event, .athlete-important-message { min-height: 112px; padding: 14px; }
   .athlete-important-message { align-items: flex-start; flex-wrap: wrap; }
   .athlete-important-message .btn-ghost { margin-left: 50px; }
@@ -753,6 +757,10 @@ body {
    ═══════════════════════════════════════════════════════════════════════════════ */
 
 .modal-backdrop {
+  padding-top: max(10px, var(--safe-top));
+  padding-right: max(8px, var(--safe-right));
+  padding-bottom: max(0px, var(--safe-bottom));
+  padding-left: max(8px, var(--safe-left));
   background: rgba(0,0,0,0.70);
   backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
   animation: fade-in var(--dur-base) ease both;
@@ -763,7 +771,27 @@ body {
   padding-bottom: max(16px, var(--safe-bottom));
   padding-left: max(16px, var(--safe-left));
 }
-.modal-content { animation: scale-in var(--dur-slow) var(--spring) both; }
+.modal-content {
+  min-height: 0;
+  max-height: calc(100dvh - max(10px, var(--safe-top)) - max(8px, var(--safe-bottom)));
+  background: var(--c-surface);
+  border: 1px solid var(--c-border-strong);
+  box-shadow: var(--shadow-xl);
+  color: var(--c-text-1);
+  animation: scale-in var(--dur-slow) var(--spring) both;
+}
+.competition-editor-dialog {
+  height: calc(100dvh - max(16px, var(--safe-top)) - max(8px, var(--safe-bottom)));
+}
+:root[data-theme="light"] .modal-backdrop {
+  background: rgba(14,30,21,0.42);
+}
+
+@media (min-width: 640px) {
+  .modal-backdrop { padding: 16px; }
+  .modal-content { max-height: min(90dvh, 860px); }
+  .competition-editor-dialog { height: auto; }
+}
 
 .bottom-sheet-backdrop {
   position: fixed; inset: 0; z-index: 100;
@@ -1270,6 +1298,13 @@ select.input-premium {
 .card-content { padding: var(--card-padding); }
 .card-content-comfortable { padding: var(--card-padding-comfortable); }
 
+/* Réserve exactement l'espace du dock mobile, safe-area comprise. Les vues
+   scrollables atteignent ainsi leur dernier élément sans overscroll artificiel. */
+.app-main-scroll { scroll-padding-bottom: calc(76px + var(--safe-bottom)); }
+@media (max-width: 767px) {
+  .app-main-scroll { padding-bottom: calc(76px + var(--safe-bottom)); }
+}
+
 /* ═══════════════════════════════════════════════════════════════════════════════
    CHIPS — fond semi-transparent, jamais de couleur vive plein fond
    ═══════════════════════════════════════════════════════════════════════════════ */
@@ -1280,6 +1315,16 @@ select.input-premium {
   font-size: var(--text-meta); font-weight: 600;
   letter-spacing: 0.01em; line-height: var(--leading-meta); white-space: nowrap;
 }
+
+.planning-event-chip {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 7px 11px; border: 1px solid var(--c-border);
+  border-radius: var(--r-full); background: var(--c-surface-2);
+  color: var(--c-text-2); font-size: var(--text-meta); font-weight: 600;
+}
+.planning-event-chip[data-kind="stage"] { border-color: rgba(155,132,240,0.30); background: rgba(155,132,240,0.10); color: var(--tone-mental); }
+.planning-event-chip[data-kind="test"] { border-color: rgba(91,141,239,0.30); background: rgba(91,141,239,0.10); color: var(--tone-info); }
+.planning-event-chip[data-kind="custom"] { border-color: rgba(200,137,10,0.28); background: rgba(200,137,10,0.08); color: var(--tone-warning); }
 
 .app-status-banner {
   position: fixed; left: 50%; bottom: calc(76px + var(--safe-bottom)); z-index: 116;
@@ -1454,7 +1499,7 @@ select.input-premium {
    TRANSITIONS DE VUE
    ═══════════════════════════════════════════════════════════════════════════════ */
 
-.view-transition,
+.view-transition { animation: slide-up 0.24s var(--spring); }
 .animate-slide-up { animation: slide-up 0.24s var(--spring) both; }
 
 .stagger-item:nth-child(1) { animation-delay: 0ms;  }

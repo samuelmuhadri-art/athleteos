@@ -478,8 +478,8 @@ function CoachShell({ user, profile, clubId, signOut, club, clubLoading, refresh
         </header>
 
         {/* ── Zone de contenu — transition de vue ── */}
-        <main className="flex-1 overflow-y-auto overflow-x-hidden pb-20 md:pb-0">
-          <div key={viewKey} className="view-transition h-full">
+        <main className={`app-main-scroll flex-1 min-h-0 overflow-x-hidden ${["planning", "messaging"].includes(activeView) ? "overflow-hidden" : "overflow-y-auto"}`}>
+          <div key={viewKey} className={`view-transition ${["planning", "messaging"].includes(activeView) ? "h-full min-h-0" : ""}`}>
             <Suspense fallback={<ViewLoader />}>
               <ActiveView
                 view={activeView}

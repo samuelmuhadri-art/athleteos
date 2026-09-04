@@ -12,7 +12,7 @@ import {
   memo, useState, useMemo, useCallback,
   useEffect, useRef,
 } from "react";
-import { Send, Search, MessageSquare, Check, CheckCheck, Users, User } from "lucide-react";
+import { ArrowLeft, Send, Search, MessageSquare, Check, CheckCheck, Users, User } from "lucide-react";
 import { supabase }              from "../utils/supabaseClient";
 import { notifyAthleteMessage }  from "../utils/notifications";
 import { useAuth }               from "../hooks/useAuth";
@@ -216,7 +216,7 @@ const ConvItem = memo(({ conv, contact, contacts, isActive, onClick, coachUserId
   );
 });
 
-const ChatThread = memo(({ conv, contact, contacts, onSend, coachUserId }) => {
+const ChatThread = memo(({ conv, contact, contacts, onSend, onBack, coachUserId }) => {
   const [input,   setInput]   = useState("");
   const [sending, setSending] = useState(false);
   const bottomRef = useRef(null);
@@ -240,9 +240,17 @@ const ChatThread = memo(({ conv, contact, contacts, onSend, coachUserId }) => {
   }, [handleSend]);
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-full min-h-0">
       {/* Header thread */}
-      <div className="flex-shrink-0 px-5 py-4 border-b border-[var(--c-border)] bg-[var(--c-surface)] flex items-center gap-3">
+      <div className="flex-shrink-0 px-3 sm:px-5 py-3 sm:py-4 border-b border-[var(--c-border)] bg-[var(--c-surface)] flex items-center gap-2 sm:gap-3">
+        <button
+          type="button"
+          onClick={onBack}
+          className="btn-icon lg:hidden"
+          aria-label="Retour aux conversations"
+        >
+          <ArrowLeft size={18} aria-hidden="true" />
+        </button>
         <div
           className="w-10 h-10 rounded-full flex items-center justify-center text-white text-[11px] font-bold flex-shrink-0"
           style={{ background: color }}
@@ -263,7 +271,7 @@ const ChatThread = memo(({ conv, contact, contacts, onSend, coachUserId }) => {
       </div>
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto px-5 py-4 space-y-3" style={{ background: "var(--c-bg)" }}>
+      <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-3 sm:px-5 py-4 space-y-3" style={{ background: "var(--c-bg)" }}>
         {grouped.length === 0 ? (
           <div className="h-full flex flex-col items-center justify-center gap-2 text-[var(--c-text-4)]">
             <MessageSquare size={28} strokeWidth={1.5} />
@@ -286,7 +294,7 @@ const ChatThread = memo(({ conv, contact, contacts, onSend, coachUserId }) => {
       </div>
 
       {/* Input */}
-      <div className="flex-shrink-0 px-4 py-3 border-t border-[var(--c-border)] bg-[var(--c-surface)] flex items-end gap-2">
+      <div className="flex-shrink-0 px-3 sm:px-4 pt-3 pb-3 border-t border-[var(--c-border)] bg-[var(--c-surface)] flex items-end gap-2">
         <div className="flex-1 bg-[var(--c-surface-2)] rounded-2xl px-4 py-2.5">
           <textarea
             className="w-full bg-transparent resize-none text-[13px] text-[var(--c-text-1)] placeholder-[var(--c-text-3)] focus:outline-none max-h-28 min-h-[20px]"
@@ -299,8 +307,10 @@ const ChatThread = memo(({ conv, contact, contacts, onSend, coachUserId }) => {
           />
         </div>
         <button
+          type="button"
           onClick={handleSend}
           disabled={!input.trim() || sending}
+          aria-label="Envoyer le message"
           className="w-10 h-10 rounded-full flex items-center justify-center text-white transition-all flex-shrink-0 disabled:opacity-40 disabled:cursor-not-allowed hover:scale-105 active:scale-95"
           style={{ background: "#1D9E75" }}
         >
@@ -544,15 +554,19 @@ function Messaging() {
   const athleteCount = contacts.filter((c) => c.type === "athlete" && c.linked).length;
 
   return (
-    <div className="flex h-full overflow-hidden" style={{ height: "calc(100vh - 64px)" }}>
+    <div className="flex h-full min-h-0 overflow-hidden" data-coach-messaging>
 
       {/* ── Panneau gauche ─────────────────────────────────────────────── */}
-      <div className="w-72 flex-shrink-0 bg-[var(--c-surface)] border-r border-[var(--c-border)] flex flex-col">
+      <section
+        className={`${activeContactId ? "hidden" : "flex"} lg:flex w-full lg:w-[28%] lg:min-w-72 lg:max-w-96 flex-shrink-0 bg-[var(--c-surface)] lg:border-r border-[var(--c-border)] flex-col`}
+        data-conversation-list
+        aria-label="Liste des conversations"
+      >
 
         {/* Header */}
         <div className="px-4 py-4 border-b border-[var(--c-border)] flex-shrink-0">
           <div className="flex items-center justify-between mb-3">
-            <h2 className="text-[15px] font-bold text-[var(--c-text-1)]">Messagerie</h2>
+            <h2 className="text-[15px] font-bold text-[var(--c-text-1)]">Conversations</h2>
             {totalUnread > 0 && (
               <span
                 className="text-[12px] font-bold px-2 py-0.5 rounded-full text-white"
@@ -639,10 +653,14 @@ function Messaging() {
             })
           )}
         </div>
-      </div>
+      </section>
 
       {/* ── Panneau droit ──────────────────────────────────────────────── */}
-      <div className="flex-1 flex flex-col overflow-hidden">
+      <section
+        className={`${activeContactId ? "flex" : "hidden"} lg:flex flex-1 min-w-0 min-h-0 flex-col overflow-hidden`}
+        data-conversation-thread
+        aria-label={activeContact ? `Conversation ${activeContact.name}` : "Conversation"}
+      >
         {activeConv && activeContact ? (
           <ChatThread
             key={activeContactId}
@@ -650,12 +668,13 @@ function Messaging() {
             contact={activeContact}
             contacts={contacts}
             onSend={handleSend}
+            onBack={() => setActiveContactId(null)}
             coachUserId={coachUserId}
           />
         ) : (
           <EmptyConvState />
         )}
-      </div>
+      </section>
     </div>
   );
 }

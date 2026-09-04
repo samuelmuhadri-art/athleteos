@@ -13,7 +13,7 @@ import { useState, useMemo, memo } from "react";
 import {
   CalendarDays, TrendingUp, Zap, CheckCircle,
   Activity, HeartPulse, Trophy, ChevronRight,
-  Star, Clock, MessageSquare,
+  Clock, MessageSquare,
 } from "lucide-react";
 import {
   getAthleteMetricsForWeek,
@@ -107,32 +107,6 @@ function computeBadges({ athlete, weeklyCharge, sessions, competitions, myPerfor
 }
 
 // ─── Icône badge sans emoji ───────────────────────────────────────────────────
-function BadgeIcon({ icon, color, size = 14 }) {
-  const props = { size, color, strokeWidth: 1.8 };
-  if (icon === "trophy")   return <Trophy   {...props} />;
-  if (icon === "star")     return <Star     {...props} />;
-  if (icon === "check")    return <CheckCircle {...props} />;
-  if (icon === "trending") return <TrendingUp  {...props} />;
-  return <Zap {...props} />;
-}
-
-const BadgeItem = memo(({ badge }) => (
-  <div className={[
-    "flex flex-col items-center gap-1.5 p-3 rounded-xl text-center transition-all",
-    badge.unlocked ? "hover:-translate-y-0.5" : "opacity-30",
-  ].join(" ")}
-    style={badge.unlocked
-      ? { background: "var(--c-surface-2)", border: "1px solid var(--c-border)" }
-      : { background: "var(--c-surface)", border: "1px dashed var(--c-border-strong)" }}>
-    <div className="w-8 h-8 rounded-lg flex items-center justify-center"
-      style={{ background: badge.unlocked ? badge.color + "18" : "rgba(255,255,255,0.04)" }}>
-      <BadgeIcon icon={badge.icon} color={badge.unlocked ? badge.color : "var(--c-text-4)"} />
-    </div>
-    <p style={{ fontSize: "var(--text-meta)", fontWeight: 600, color: "var(--c-text-1)", lineHeight: "var(--leading-meta)" }}>{badge.label}</p>
-    <p style={{ fontSize: "var(--text-meta)", color: "var(--c-text-3)", lineHeight: "var(--leading-meta)" }}>{badge.desc}</p>
-  </div>
-));
-
 const DailyFocusCard = memo(({
   focus, todaySessions, nextSession, wellnessCompleted,
   dailyState, loadStory,
@@ -436,7 +410,6 @@ export default function AthleteDashboard({
   [athlete, weeklyCharge, sessions, competitions, myPerformances, streak]);
 
   const unlockedBadges = badges.filter(b =>  b.unlocked);
-  const lockedBadges   = badges.filter(b => !b.unlocked);
 
   const latestPR = useMemo(() => {
     const ago = new Date(); ago.setDate(ago.getDate() - 7);
@@ -710,40 +683,21 @@ export default function AthleteDashboard({
           )}
 
           {/* ── Badges ──────────────────────────────────────────────────────── */}
-          {modules.gamification !== false && <div className="card p-4">
-            <div className="flex items-center justify-between mb-4">
-              <div>
-                <p className="card-title">Badges</p>
-                <p className="card-subtitle">{unlockedBadges.length} débloqué{unlockedBadges.length > 1 ? "s" : ""}</p>
-              </div>
-              <div style={{ display: "flex", alignItems: "center", gap: 5, padding: "4px 10px", borderRadius: 8, background: "rgba(200,137,10,0.07)" }}>
-                <Trophy size={11} color="#C8890A" strokeWidth={2} />
-                <span style={{ fontSize: 13, fontWeight: 600, color: "var(--tone-warning)", fontVariantNumeric: "tabular-nums" }}>{unlockedBadges.length}</span>
-              </div>
-            </div>
-            {unlockedBadges.length === 0 ? (
-              <div style={{ textAlign: "center", padding: "24px 0" }}>
-                <Trophy size={22} color="var(--c-text-3)" strokeWidth={1.5} style={{ margin: "0 auto 8px" }} />
-                <p style={{ fontSize: 12, color: "var(--c-text-3)" }}>Commence à t'entraîner pour débloquer tes premiers badges</p>
-              </div>
-            ) : (
-              <>
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2" style={{ marginBottom: unlockedBadges.length > 0 && lockedBadges.length > 0 ? 12 : 0 }}>
-                  {unlockedBadges.slice(0, 8).map(b => <BadgeItem key={b.id} badge={b} />)}
-                </div>
-                {lockedBadges.length > 0 && (
-                  <>
-                    <p className="meta-text" style={{ fontWeight: 600, letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: "var(--space-2)" }}>
-                      À débloquer
-                    </p>
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                      {lockedBadges.slice(0, 4).map(b => <BadgeItem key={b.id} badge={b} />)}
-                    </div>
-                  </>
-                )}
-              </>
-            )}
-          </div>}
+          {modules.gamification !== false && <button
+            type="button"
+            onClick={() => onNavigate("performances")}
+            className="card card-hover tap-feedback w-full p-4 text-left flex items-center gap-3"
+            aria-label="Voir la progression et les badges"
+          >
+            <span className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: "rgba(102,82,154,0.12)", color: "var(--tone-mental)" }}>
+              <Trophy size={17} aria-hidden="true" />
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="card-title block">Progression · {unlockedBadges.length} badge{unlockedBadges.length !== 1 ? "s" : ""}</span>
+              <span className="card-subtitle block">Voir les étapes et les récompenses</span>
+            </span>
+            <ChevronRight size={16} color="var(--c-text-3)" aria-hidden="true" />
+          </button>}
         </div>
 
         {/* ── COLONNE DROITE ─────────────────────────────────────────────── */}
@@ -771,7 +725,7 @@ export default function AthleteDashboard({
               <div className="progress-bar">
                 <div className="progress-fill" style={{ width: `${Math.min(100,streak*10)}%`, background: "#C8890A" }} />
               </div>
-              <p className="meta-text" style={{ textAlign: "right", marginTop: "var(--space-1)" }}>{modules.gamification !== false ? `${streak}/10 badge Maestro` : `${streak}/10 semaines`}</p>
+              <p className="meta-text" style={{ textAlign: "right", marginTop: "var(--space-1)" }}>{streak}/10 semaines</p>
             </div>
           )}
 

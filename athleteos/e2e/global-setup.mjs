@@ -134,6 +134,45 @@ export default async function globalSetup() {
   const { error: uxConfiguredError } = await admin.from("clubs").update({ modules_configured_at: new Date().toISOString() }).eq("id", uxClub.id);
   if (uxConfiguredError) throw new Error(`configure ux club : ${uxConfiguredError.message}`);
 
+  // Club dédié à la passe post-refonte. Il reste indépendant des tests qui
+  // activent/désactivent les modules afin que les assertions responsive soient
+  // déterministes, y compris lorsque Playwright parallélise les fichiers.
+  const { data: postClub, error: postClubError } = await admin.from("clubs")
+    .insert({ name: `E2E Post-refonte ${runId}` }).select().single();
+  if (postClubError) throw new Error(`seed post-refonte club : ${postClubError.message}`);
+  const postCoach = await makeAccount(postClub.id, `e2e-post-coach-${runId}@example.invalid`, "Benoît Coach", "head_coach");
+  const postAthlete = await makeAccount(postClub.id, `e2e-post-athlete-${runId}@example.invalid`, "Antonin Leroy", "athlete");
+  const { data: postSession, error: postSessionError } = await admin.from("sessions").insert({
+    club_id: postClub.id, title: "Sprint — vitesse max", category: "sprint", time: "18:00",
+    description: "6 × 40 m", instructions: "Récupération 4 min", duration_minutes: 60,
+    session_date: todayDate, created_by: postCoach.userId,
+  }).select().single();
+  if (postSessionError) throw new Error(`seed post-refonte session : ${postSessionError.message}`);
+  const { error: postAssignmentError } = await admin.from("session_athletes").insert({
+    session_id: postSession.id, athlete_id: postAthlete.athleteId, status: "future",
+  });
+  if (postAssignmentError) throw new Error(`seed post-refonte assignment : ${postAssignmentError.message}`);
+  const { data: postCompetition, error: postCompetitionError } = await admin.from("competitions").insert({
+    club_id: postClub.id, name: "Meeting de Bruxelles", date: competitionDate.toISOString().slice(0, 10), location: "Bruxelles",
+  }).select().single();
+  if (postCompetitionError) throw new Error(`seed post-refonte competition : ${postCompetitionError.message}`);
+  const { error: postCompetitionAthleteError } = await admin.from("competition_athletes").insert({
+    competition_id: postCompetition.id, athlete_id: postAthlete.athleteId, planned_event: "100 m",
+  });
+  if (postCompetitionAthleteError) throw new Error(`seed post-refonte competition athlete : ${postCompetitionAthleteError.message}`);
+  const { error: postMessageError } = await admin.from("messages").insert({
+    sender_id: postCoach.userId, receiver_id: postAthlete.userId, content: "Pense à confirmer ta présence pour ce soir.",
+  });
+  if (postMessageError) throw new Error(`seed post-refonte message : ${postMessageError.message}`);
+  const { error: postGoalError } = await admin.from("athlete_goals").insert({
+    club_id: postClub.id, athlete_id: postAthlete.athleteId, discipline: "100 m",
+    target_value: "10 s 90", deadline: competitionDate.toISOString().slice(0, 10),
+  });
+  if (postGoalError) throw new Error(`seed post-refonte goal : ${postGoalError.message}`);
+  const { error: postConfiguredError } = await admin.from("clubs")
+    .update({ modules_configured_at: new Date().toISOString() }).eq("id", postClub.id);
+  if (postConfiguredError) throw new Error(`configure post-refonte club : ${postConfiguredError.message}`);
+
   const fixturesPath = path.join(path.dirname(fileURLToPath(import.meta.url)), ".auth-fixtures.json");
   writeFileSync(fixturesPath, JSON.stringify({
     runId,
@@ -142,6 +181,7 @@ export default async function globalSetup() {
     athlete,
     onboarding: { clubId: onboardingClub.id, coach: onboardingCoach },
     ux: { clubId: uxClub.id, coach: uxCoach, athlete: uxAthlete },
+    post: { clubId: postClub.id, coach: postCoach, athlete: postAthlete },
   }, null, 2));
 
   // Pas de nettoyage automatique ici : l'instance Supabase locale est

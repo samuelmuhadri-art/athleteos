@@ -618,8 +618,8 @@ export default function AthleteApp({ clubBrand, themeStyle }) {
         </header>
 
         {/* Main */}
-        <main className="flex-1 overflow-y-auto pb-20 md:pb-0">
-          <div key={viewKey} className="view-transition">
+        <main className={`app-main-scroll flex-1 min-h-0 ${["planning", "messagerie"].includes(activeView) ? "overflow-hidden" : "overflow-y-auto"}`}>
+          <div key={viewKey} className={`view-transition ${["planning", "messagerie"].includes(activeView) ? "h-full min-h-0" : ""}`}>
           <Suspense fallback={<ViewLoader />}>
             {activeView === "dashboard" && (
               <AthleteDashboard

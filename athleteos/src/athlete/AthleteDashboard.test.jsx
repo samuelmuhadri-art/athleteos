@@ -111,9 +111,11 @@ describe("AthleteDashboard — plan du jour", () => {
     expect(screen.getByText("1/10 semaines")).toBeTruthy();
   });
 
-  it("affiche les badges quand la gamification est active", () => {
+  it("résume les badges sans afficher une collection sur l’accueil", () => {
     renderDashboard({ modules: { gamification: true } });
-    expect(screen.getByText("Badges")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Voir la progression et les badges" })).toBeTruthy();
+    expect(screen.getByText(/Progression · \d+ badge/)).toBeTruthy();
+    expect(screen.queryByText("Premier pas")).toBeNull();
   });
 
   it("compose un dashboard Planning + Messages sans sections étrangères", () => {
@@ -138,5 +140,6 @@ describe("AthleteDashboard — plan du jour", () => {
     });
     expect(screen.getByRole("heading", { name: "Meeting de Bruxelles" })).toBeTruthy();
     expect(screen.getByText("100 m")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Meeting de Bruxelles" }).className).toContain("athlete-next-event");
   });
 });

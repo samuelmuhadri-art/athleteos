@@ -63,10 +63,10 @@ const CreateCompModal = memo(({ athletes, initialData = null, onClose, onCreate 
 
   return (
     <div
-      className="modal-backdrop fixed inset-0 z-50 flex items-center justify-center p-4"
+      className="modal-backdrop fixed inset-0 z-50 flex items-end sm:items-center justify-center"
       onClick={(e) => e.target === e.currentTarget && !saving && onClose()}
     >
-      <div ref={dialogRef} tabIndex={-1} role="dialog" aria-modal="true" aria-labelledby="create-competition-title" className="modal-content bg-[var(--c-surface)] border border-[var(--c-border)] rounded-2xl shadow-2xl w-full max-w-md max-h-[90vh] flex flex-col overflow-hidden">
+      <div ref={dialogRef} tabIndex={-1} role="dialog" aria-modal="true" aria-labelledby="create-competition-title" className="modal-content competition-editor-dialog rounded-t-3xl sm:rounded-2xl shadow-2xl w-full max-w-md flex flex-col overflow-hidden">
         <div className="px-4 sm:px-6 py-4 border-b border-[var(--c-border)] flex items-center justify-between">
           <h3 id="create-competition-title" className="section-title">{isEdit ? "Modifier la compétition" : "Créer une compétition"}</h3>
           <button type="button" aria-label="Fermer" onClick={onClose} disabled={saving} className="min-w-11 min-h-11 inline-flex items-center justify-center rounded-lg hover:bg-[var(--c-surface-3)] transition-colors disabled:opacity-40">
@@ -177,7 +177,7 @@ const CreateCompModal = memo(({ athletes, initialData = null, onClose, onCreate 
           </div>
         </div>
 
-        <div className="px-4 sm:px-6 py-4 border-t border-[var(--c-border)] flex items-center justify-between gap-3">
+        <div className="px-4 sm:px-6 pt-4 pb-[max(16px,var(--safe-bottom))] border-t border-[var(--c-border)] flex items-center justify-between gap-3">
           <button
             type="button"
             onClick={onClose}

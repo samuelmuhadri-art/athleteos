@@ -64,8 +64,9 @@ test.describe.serial("UX prioritaire des outils", () => {
     await expect(page.getByRole("heading", { name: "Ma semaine" })).toBeVisible();
     await expect(page.getByRole("heading", { name: "Meeting de Bruxelles" })).toBeVisible();
     await expect(page.getByRole("heading", { name: /a envoyé un message/ })).toBeVisible();
-    await expect(page.getByText("Badges", { exact: true })).toBeVisible();
-    await expect(page.getByText("Premier pas", { exact: true })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Voir la progression et les badges" })).toBeVisible();
+    await expect(page.getByText(/Progression · \d+ badge/)).toBeVisible();
+    await expect(page.getByText("Premier pas", { exact: true })).toHaveCount(0);
     const order = await page.evaluate(() => {
       const today = [...document.querySelectorAll("h2")].find((node) => node.textContent === "Aujourd’hui");
       const week = [...document.querySelectorAll("h2")].find((node) => node.textContent === "Ma semaine");
@@ -90,8 +91,8 @@ test.describe.serial("UX prioritaire des outils", () => {
     await page.evaluate(() => localStorage.clear());
     await login(page, fixtures.ux.athlete);
     await expect(page.getByRole("heading", { name: "Aujourd’hui" })).toBeVisible({ timeout: 15000 });
-    await expect(page.getByText("Badges", { exact: true })).toHaveCount(0);
-    await expect(page.getByText("Premier pas", { exact: true })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Voir la progression et les badges" })).toHaveCount(0);
+    await expect(page.getByText(/Progression · \d+ badge/)).toHaveCount(0);
   });
 
   test("le parcours outil → athlètes réactive les badges et restaure la progression", async ({ page }) => {
@@ -108,7 +109,7 @@ test.describe.serial("UX prioritaire des outils", () => {
     await page.context().clearCookies();
     await page.evaluate(() => localStorage.clear());
     await login(page, fixtures.ux.athlete);
-    await expect(page.getByText("Premier pas", { exact: true })).toBeVisible({ timeout: 15000 });
+    await expect(page.getByRole("button", { name: "Voir la progression et les badges" })).toBeVisible({ timeout: 15000 });
   });
 
   test("le haut du dashboard reste propre à 375, 390 et 430 px", async ({ page }) => {

@@ -290,7 +290,7 @@ export default function AthletePlanning({
 
   // ══════════════════════════════════════════════════════════════════════════════
   return (
-    <div className="flex flex-col h-full" style={{ background: "var(--c-bg)" }}>
+    <div className="flex flex-col h-full min-h-0" style={{ background: "var(--c-bg)" }}>
 
       <header className="header-glass px-4 md:px-6 py-4 flex-shrink-0 z-10">
         <div className="flex flex-col gap-4">
@@ -350,7 +350,7 @@ export default function AthletePlanning({
       </header>
 
       {planningEvents.length > 0 && <div className="px-4 md:px-6 py-2 flex gap-2 overflow-x-auto" style={{ borderBottom:"1px solid var(--c-border)" }}>
-        {[...planningEvents].sort((a,b) => a.startsOn.localeCompare(b.startsOn)).map(event => <button type="button" onClick={() => setActivePlanningEvent(event)} key={event.id} className="chip chip-neutral whitespace-nowrap min-h-11">
+        {[...planningEvents].sort((a,b) => a.startsOn.localeCompare(b.startsOn)).map(event => <button type="button" onClick={() => setActivePlanningEvent(event)} key={event.id} className="planning-event-chip whitespace-nowrap min-h-11" data-kind={event.kind}>
           <CalendarDays size={13} /> {event.kind === "stage" ? "Stage" : event.kind === "test" ? "Test" : event.kind === "rest" ? "Repos" : event.customLabel || "Événement"} · {event.name} · {event.startsOn === event.endsOn ? event.startsOn : `${event.startsOn} → ${event.endsOn}`}
         </button>)}
       </div>}
@@ -532,7 +532,7 @@ export default function AthletePlanning({
           VUE SEMAINE
          ══════════════════════════════════════════════════════════════════════ */}
       {viewMode === "week" && (
-        <div className="flex-1 overflow-y-auto flex flex-col">
+        <div className="flex-1 min-h-0 overflow-hidden flex flex-col">
           <div style={{ display: "flex", overflowX: "auto", gap: 6, padding: "12px", background: "var(--c-surface)", borderBottom: "1px solid var(--c-border)", flexShrink: 0, scrollbarWidth: "none" }}>
             {weekDays.map((date, i) => {
               const isToday = isSameDay(date, today);
@@ -543,16 +543,17 @@ export default function AthletePlanning({
                 <button key={i} onClick={() => setSelectedDate(date)}
                   className="tap-feedback"
                   style={{
-                    flexShrink: 0, display: "flex", flexDirection: "column", alignItems: "center", gap: 2, width: 44, padding: "10px 0", borderRadius: 16, border: "none", cursor: "pointer",
-                    background: isToday ? "linear-gradient(135deg, #1D9E75, #16826C)" : isSel ? "var(--c-surface-3)" : "transparent",
+                    flexShrink: 0, display: "flex", flexDirection: "column", alignItems: "center", gap: 2, width: 44, padding: "10px 0", borderRadius: 16, cursor: "pointer",
+                    background: isToday ? "linear-gradient(135deg, #1D9E75, #16826C)" : isSel ? "var(--c-accent-light)" : "transparent",
+                    border: isSel && !isToday ? "1px solid rgba(29,158,117,0.28)" : "1px solid transparent",
                   }}>
-                  <span style={{ fontSize: 12, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: (isToday || isSel) ? "rgba(255,255,255,0.82)" : "var(--c-text-2)" }}>
+                  <span style={{ fontSize: 12, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: isToday ? "rgba(255,255,255,0.82)" : isSel ? "var(--c-accent)" : "var(--c-text-2)" }}>
                     {["L", "M", "M", "J", "V", "S", "D"][i]}
                   </span>
-                  <span style={{ fontSize: 18, fontWeight: 800, lineHeight: 1.2, color: (isToday || isSel) ? "white" : "var(--c-text-1)" }}>
+                  <span style={{ fontSize: 18, fontWeight: 800, lineHeight: 1.2, color: isToday ? "white" : isSel ? "var(--c-accent)" : "var(--c-text-1)" }}>
                     {date.getDate()}
                   </span>
-                  <div style={{ width: 6, height: 6, borderRadius: "50%", background: hasEvent ? ((isToday || isSel) ? "rgba(255,255,255,0.6)" : "#1D9E75") : "transparent" }} />
+                  <div style={{ width: 6, height: 6, borderRadius: "50%", background: hasEvent ? (isToday ? "rgba(255,255,255,0.6)" : "#1D9E75") : "transparent" }} />
                 </button>
               );
             })}

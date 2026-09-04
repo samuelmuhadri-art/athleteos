@@ -27,6 +27,7 @@ import {
 import {
   DAYS_FR, DAYS_SHORT, MONTHS_FR, CATEGORIES,
   toLocalDateStr, isSameDay, sessionStatus, colors, getCalendarDays,
+  audienceMatchesFilters, competitionMatchesDiscipline, sessionMatchesDiscipline,
 } from "./planningUtils";
 import { StatusIcon } from "./planningShared";
 import { getSessionTrainingFocus } from "../domain/trainingFocus";
@@ -69,7 +70,6 @@ function Planning() {
   const [filterAthlete,      setFilterAthlete]       = useState("all");
   const [filterGroup,        setFilterGroup]         = useState("all");
   const [filterDiscipline,   setFilterDiscipline]    = useState("all");
-  const [filterCategory,     setFilterCategory]      = useState("all");
   const [loading,            setLoading]             = useState(true);
   const [error,              setError]               = useState(null);
 
@@ -409,33 +409,34 @@ function Planning() {
 
   const calendarDays = useMemo(() => getCalendarDays(viewYear, viewMonth), [viewYear, viewMonth]);
 
-  const filteredAudienceIds = useMemo(() => new Set(athletes.filter(athlete => (
-    (filterGroup === "all" || athlete.group === filterGroup)
-    && (filterDiscipline === "all" || athlete.mainDiscipline === filterDiscipline)
-  )).map(athlete => athlete.id)), [athletes, filterDiscipline, filterGroup]);
+  const groups = useMemo(() => [...new Set(athletes.map(athlete => athlete.group).filter(Boolean))].sort(), [athletes]);
+  const athleteOptions = useMemo(
+    () => athletes.filter(athlete => filterGroup === "all" || athlete.group === filterGroup),
+    [athletes, filterGroup],
+  );
 
-  const matchesAudience = useCallback(athleteIds => {
-    if (filterAthlete !== "all" && !athleteIds.includes(Number(filterAthlete))) return false;
-    if ((filterGroup !== "all" || filterDiscipline !== "all") && !athleteIds.some(id => filteredAudienceIds.has(id))) return false;
-    return true;
-  }, [filterAthlete, filterDiscipline, filterGroup, filteredAudienceIds]);
+  const matchesAudience = useCallback(athleteIds => audienceMatchesFilters(athleteIds, {
+    athleteId:filterAthlete,
+    group:filterGroup,
+    athletes,
+  }), [athletes, filterAthlete, filterGroup]);
 
   const filteredSessions = useMemo(() => {
     return sessionList.filter(session => {
       if (filterMode === "athlete" && !session.createdByAthlete) return false;
       if (filterMode === "coach" && session.createdByAthlete) return false;
-      if (filterCategory !== "all" && session.category !== filterCategory) return false;
+      if (!sessionMatchesDiscipline(session, filterDiscipline)) return false;
       return matchesAudience(session.athleteIds);
     });
-  }, [filterCategory, filterMode, matchesAudience, sessionList]);
+  }, [filterDiscipline, filterMode, matchesAudience, sessionList]);
 
   const filteredCompetitions = useMemo(
-    () => competitionList.filter(competition => matchesAudience(competition.athleteIds)),
-    [competitionList, matchesAudience],
+    () => competitionList.filter(competition => matchesAudience(competition.athleteIds) && competitionMatchesDiscipline(competition, filterDiscipline)),
+    [competitionList, filterDiscipline, matchesAudience],
   );
   const filteredEvents = useMemo(
-    () => eventList.filter(event => matchesAudience(event.athleteIds)),
-    [eventList, matchesAudience],
+    () => eventList.filter(event => filterDiscipline === "all" && matchesAudience(event.athleteIds)),
+    [eventList, filterDiscipline, matchesAudience],
   );
 
   const sessionsByDate = useMemo(() => {
@@ -632,16 +633,16 @@ function Planning() {
       </div>
 
       <div className="px-4 md:px-6 py-2 flex items-center gap-2 overflow-x-auto" style={{ borderBottom:"1px solid var(--c-border)" }} aria-label="Filtres du planning">
-        <select className="input-premium !w-auto" value={filterGroup} onChange={event => setFilterGroup(event.target.value)} aria-label="Filtrer par groupe"><option value="all">Tous les groupes</option>{[...new Set(athletes.map(athlete => athlete.group).filter(Boolean))].map(group => <option key={group}>{group}</option>)}</select>
-        <select className="input-premium !w-auto" value={filterAthlete} onChange={event => setFilterAthlete(event.target.value)} aria-label="Filtrer par athlète"><option value="all">Tous les athlètes</option>{athletes.map(athlete => <option key={athlete.id} value={athlete.id}>{athlete.name}</option>)}</select>
-        <select className="input-premium !w-auto" value={filterDiscipline} onChange={event => setFilterDiscipline(event.target.value)} aria-label="Filtrer par discipline"><option value="all">Toutes les disciplines</option>{[...new Set(athletes.map(athlete => athlete.mainDiscipline).filter(Boolean))].map(discipline => <option key={discipline}>{discipline}</option>)}</select>
-        <select className="input-premium !w-auto" value={filterCategory} onChange={event => setFilterCategory(event.target.value)} aria-label="Filtrer par catégorie"><option value="all">Toutes les catégories</option>{CATEGORIES.map(category => <option key={category.id} value={category.id}>{category.label}</option>)}</select>
-        {(filterGroup !== "all" || filterAthlete !== "all" || filterDiscipline !== "all" || filterCategory !== "all") && <button type="button" className="btn-ghost whitespace-nowrap" onClick={() => { setFilterGroup("all"); setFilterAthlete("all"); setFilterDiscipline("all"); setFilterCategory("all"); }}>Effacer</button>}
+        {groups.length > 1 && <select className="input-premium !w-auto" value={filterGroup} onChange={event => { setFilterGroup(event.target.value); setFilterAthlete("all"); }} aria-label="Filtrer par groupe"><option value="all">Toutes mes équipes</option>{groups.map(group => <option key={group}>{group}</option>)}</select>}
+        {groups.length === 1 && <span className="chip chip-neutral whitespace-nowrap">Équipe · {groups[0]}</span>}
+        <select className="input-premium !w-auto" value={filterAthlete} onChange={event => setFilterAthlete(event.target.value)} aria-label="Filtrer par athlète"><option value="all">Tous mes athlètes</option>{athleteOptions.map(athlete => <option key={athlete.id} value={athlete.id}>{athlete.name}</option>)}</select>
+        <select className="input-premium !w-auto" value={filterDiscipline} onChange={event => setFilterDiscipline(event.target.value)} aria-label="Filtrer par discipline"><option value="all">Toutes les disciplines</option>{CATEGORIES.map(discipline => <option key={discipline.id} value={discipline.id}>{discipline.label}</option>)}</select>
+        {(filterGroup !== "all" || filterAthlete !== "all" || filterDiscipline !== "all") && <button type="button" className="btn-ghost whitespace-nowrap" onClick={() => { setFilterGroup("all"); setFilterAthlete("all"); setFilterDiscipline("all"); }}>Effacer</button>}
       </div>
 
       {filteredEvents.length > 0 && <div className="px-4 md:px-6 py-2 flex gap-2 overflow-x-auto" style={{ borderBottom:"1px solid var(--c-border)" }}>
         {[...filteredEvents].sort((a,b) => a.startsOn.localeCompare(b.startsOn)).map(event => <button key={event.id} type="button"
-          onClick={() => setEventEditor({ event })} className="chip chip-neutral whitespace-nowrap min-h-11">
+          onClick={() => setEventEditor({ event })} className="planning-event-chip whitespace-nowrap min-h-11" data-kind={event.kind}>
           <CalendarDays size={13} /> {event.kind === "stage" ? "Stage" : event.kind === "test" ? "Test" : event.kind === "rest" ? "Repos" : event.customLabel || "Événement"} · {event.name} · {event.startsOn === event.endsOn ? event.startsOn : `${event.startsOn} → ${event.endsOn}`}
         </button>)}
       </div>}

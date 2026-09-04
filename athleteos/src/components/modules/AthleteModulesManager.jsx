@@ -64,9 +64,9 @@ export default function AthleteModulesManager({ onClose, initialAthleteId = null
   };
 
   return createPortal(
-    <div className="fixed inset-0 z-[70] flex items-end sm:items-center justify-center sm:p-4 modal-backdrop" onMouseDown={(event) => event.target === event.currentTarget && !saving && onClose()}>
+    <div className="fixed inset-0 z-[70] flex items-end sm:items-center justify-center modal-backdrop" onMouseDown={(event) => event.target === event.currentTarget && !saving && onClose()}>
       <section ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby={titleId} tabIndex={-1}
-        className="modal-content rounded-t-3xl sm:rounded-3xl shadow-2xl w-full max-w-5xl max-h-[94vh] flex flex-col overflow-hidden">
+        className="modal-content rounded-t-3xl sm:rounded-3xl shadow-2xl w-full max-w-5xl max-h-[94dvh] flex flex-col overflow-hidden">
         <header className="px-5 sm:px-6 py-5 flex justify-between gap-3" style={{ borderBottom: "1px solid var(--c-border)" }}>
           <div>
             <p className="meta-text">GESTION DES OUTILS</p>
