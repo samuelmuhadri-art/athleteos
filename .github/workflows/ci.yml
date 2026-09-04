@@ -138,6 +138,10 @@ jobs:
             test_axis_model_parity.mjs \
             test_competition_transactions.mjs \
             test_private_storage.mjs \
+            test_document_distribution.mjs \
+            test_planning_evolution.mjs \
+            test_alert_lifecycle.mjs \
+            test_scale_30_athletes.mjs \
             test_performance_normalization.mjs
           do
             bash ../.github/scripts/run-with-diagnostics.sh "$test_file" node "$test_file" \
