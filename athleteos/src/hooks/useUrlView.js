@@ -43,12 +43,12 @@ export function useUrlView(validIds, defaultView) {
     return () => window.removeEventListener("popstate", onPopState);
   }, [validIds, defaultView]);
 
-  const navigate = useCallback((view) => {
+  const navigate = useCallback((view, { replace = false } = {}) => {
     const v = validIds.includes(view) ? view : defaultView;
     setActiveView(v);
     setViewKey(k => k + 1);
     if (window.location.pathname !== `/${v}`) {
-      window.history.pushState({ view: v }, "", `/${v}`);
+      window.history[replace ? "replaceState" : "pushState"]({ view: v }, "", `/${v}`);
     }
   }, [validIds, defaultView]);
 

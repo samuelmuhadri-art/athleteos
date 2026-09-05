@@ -14,14 +14,17 @@ import {
 } from "react";
 import { ArrowLeft, Send, Search, MessageSquare, Check, CheckCheck, Users, User } from "lucide-react";
 import { supabase }              from "../utils/supabaseClient";
-import { notifyAthleteMessage }  from "../utils/notifications";
+import { notifyAthleteMessage, notifyCoachMessage } from "../utils/notifications";
 import { useAuth }               from "../hooks/useAuth";
+import { useMessageRealtime } from "../hooks/useMessageRealtime";
 import LoadingState              from "../components/ui/LoadingState";
 import ErrorState                from "../components/ui/ErrorState";
 import { SegmentedTabs }         from "../components/ui/premium";
 import { initialsFromName }      from "../utils/helpers.js";
 import {
   buildMessagingConversations,
+  mapMessageRow,
+  appendUniqueMessage,
   formatConversationTime,
   formatMessageDay,
   formatMessageTime,
@@ -311,12 +314,16 @@ function Messaging() {
   const [activeContactId, setActiveContactId] = useState(null);
   const [search,      setSearch]      = useState("");
   const [activeTab,   setActiveTab]   = useState("tous"); // "tous" | "athletes" | "coachs"
+  const [realtimeError, setRealtimeError] = useState(null);
+  const requestIdRef = useRef(0);
+  const pendingMessagesRef = useRef(new Map());
 
   // ═══ Chargement ═══════════════════════════════════════════════════════════
-  const fetchAll = useCallback(async () => {
+  const fetchAll = useCallback(async ({ background = false } = {}) => {
     if (!clubId || !coachUserId) return;
+    const requestId = ++requestIdRef.current;
     try {
-      setLoading(true);
+      if (!background) setLoading(true);
       setError(null);
 
       // 1. Athlètes du club
@@ -377,25 +384,49 @@ function Messaging() {
             )
         : { data: [], error: null };
       if (messagesRes.error) throw messagesRes.error;
+      if (requestId !== requestIdRef.current) return;
 
       setContacts(allContacts);
-      setAllMessages((messagesRes.data ?? []).map((m) => ({
-        id:         m.id,
-        senderId:   m.sender_id,
-        receiverId: m.receiver_id,
-        content:    m.content,
-        date:       m.created_at,
-        isRead:     m.is_read,
-      })));
+      const merged = new Map((messagesRes.data ?? []).map(row => [row.id, mapMessageRow(row)]));
+      // Un événement arrivé pendant la requête ne doit pas être effacé par sa réponse.
+      for (const [id, message] of pendingMessagesRef.current) merged.set(id, message);
+      pendingMessagesRef.current.clear();
+      setAllMessages([...merged.values()]);
+      setRealtimeError(null);
     } catch (err) {
+      if (requestId !== requestIdRef.current) return;
       console.error("Messaging — chargement :", err);
-      setError(err.message ?? "Erreur inconnue");
+      if (background) setRealtimeError("La synchronisation a échoué. Tes messages et ton brouillon restent affichés.");
+      else setError(err.message ?? "Erreur inconnue");
     } finally {
-      setLoading(false);
+      if (requestId === requestIdRef.current) setLoading(false);
     }
   }, [clubId, coachUserId]);
 
   useEffect(() => { fetchAll(); }, [fetchAll]);
+  useEffect(() => () => { requestIdRef.current += 1; pendingMessagesRef.current.clear(); }, [clubId, coachUserId]);
+
+  const receiveMessage = useCallback((row, eventType) => {
+    const message = mapMessageRow(row);
+    const openContact = contacts.find(contact => contact.id === activeContactId);
+    const readNow = eventType === "INSERT" && row.receiver_id === coachUserId && openContact?.userId === row.sender_id;
+    if (readNow) message.isRead = true;
+    pendingMessagesRef.current.set(message.id, message);
+    setAllMessages(previous => {
+      const exists = previous.some(item => item.id === message.id);
+      return exists ? previous.map(item => item.id === message.id ? message : item) : [...previous, message];
+    });
+    if (readNow) {
+      supabase.from("messages").update({ is_read: true }).eq("id", row.id).eq("receiver_id", coachUserId).then(({ error: readError }) => {
+        if (!readError) return;
+        pendingMessagesRef.current.set(message.id, { ...message, isRead: false });
+        setAllMessages(previous => previous.map(item => item.id === row.id ? { ...item, isRead: false } : item));
+        setRealtimeError("Le message est arrivé, mais son statut de lecture n’a pas pu être synchronisé.");
+      });
+    }
+  }, [activeContactId, contacts, coachUserId]);
+  const catchUp = useCallback(() => { fetchAll({ background: true }); }, [fetchAll]);
+  useMessageRealtime({ userId: coachUserId, onMessage: receiveMessage, onCatchUp: catchUp });
 
   // ═══ Conversations dérivées ═══════════════════════════════════════════════
   const conversations = useMemo(
@@ -494,14 +525,14 @@ function Messaging() {
     if (err) throw err;
 
     // Ajout optimiste
-    setAllMessages((prev) => [...prev, {
+    setAllMessages((prev) => appendUniqueMessage(prev, {
       id:         data.id,
       senderId:   data.sender_id,
       receiverId: data.receiver_id,
       content:    data.content,
       date:       data.created_at,
       isRead:     data.is_read,
-    }]);
+    }));
 
     // Push notif si c'est un athlète
     if (contact.type === "athlete" && contact.athleteId) {
@@ -509,8 +540,9 @@ function Messaging() {
         clubId,
         contact.athleteId,
         profile?.name ?? "Coach",
-        text
       ).catch(console.warn);
+    } else if (contact.type === "coach") {
+      await notifyCoachMessage(contact.userId, profile?.name ?? "Coach").catch(console.warn);
     }
   }, [activeContactId, contacts, coachUserId, clubId, profile]);
 
@@ -522,7 +554,9 @@ function Messaging() {
   const athleteCount = contacts.filter((c) => c.type === "athlete" && c.linked).length;
 
   return (
-    <div className="flex h-full min-h-0 overflow-hidden" data-coach-messaging>
+    <div className="flex flex-col h-full min-h-0">
+      {realtimeError && <div role="status" className="px-4 py-2 text-sm"><span>{realtimeError}</span> <button type="button" onClick={catchUp}>Réessayer</button></div>}
+    <div className="flex flex-1 min-h-0 overflow-hidden" data-coach-messaging>
 
       {/* ── Panneau gauche ─────────────────────────────────────────────── */}
       <section
@@ -643,6 +677,7 @@ function Messaging() {
           <EmptyConvState />
         )}
       </section>
+    </div>
     </div>
   );
 }

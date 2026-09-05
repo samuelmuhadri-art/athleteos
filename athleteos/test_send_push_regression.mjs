@@ -4,13 +4,11 @@
 //
 // Vérifie l'autorisation de l'Edge Function send-push (tâche 2) :
 //   - un appel sans authentification est refusé (401)
-//   - un athlète ne peut pas cibler un athlète d'un autre club (403)
-//   - un athlète PEUT cibler lui-même, un coéquipier de son club, ou le
-//     coach de son club (200) — cas réels : auto-notif récap hebdo,
-//     messagerie inter-athlètes, post club, message au coach
-//   - un athlète ne peut pas cibler un user non-coach par userIds (403)
-//   - un coach du club A ne peut pas cibler un athlète du club B (403)
-//   - un coach du club A peut cibler ses propres athlètes (200)
+//   - les anciens payloads libres sont des no-op compatibles (200, zéro envoi)
+//   - seuls des événements métier persistés produisent une notification
+//   - un autre acteur ne peut pas réclamer ces événements
+//   - les appels concurrents et rejeux ne réclament pas deux fois le même événement
+//   - un navigateur ne peut ni écrire ni réclamer directement la file serveur
 //   - un payload surdimensionné est refusé (400/413)
 //   - une origine navigateur non autorisée est refusée (403, CORS)
 //   - le chemin cron (secret service_role) fonctionne toujours (200)
@@ -98,6 +96,7 @@ async function callSendPush(token, payload) {
 async function main() {
   let clubA, clubB, coachAuth, athleteAuth, coachUser, athleteUser, athleteA, athleteB, athleteC;
   let coachAClient, athleteAClient;
+  const messageIds = [];
 
   try {
     // ── Setup : deux clubs, un coach + un athlète (club A), un athlète cible (club B) ──
@@ -148,42 +147,64 @@ async function main() {
       record("Appel sans auth -> 401", status === 401, `status=${status}`);
     }
 
-    // ── 2. Athlète tentant un envoi arbitraire (athleteIds hors club) -> 403 ──
+    // Un ancien payload libre ne déclenche plus aucune livraison, quelle que soit sa cible.
     {
-      const { status } = await callSendPush(athleteToken, { ...basePayload, athleteIds: [athleteB.id] });
-      record("Athlète envoi arbitraire (athlète club B) -> 403", status === 403, `status=${status}`);
+      const { status, body } = await callSendPush(athleteToken, { ...basePayload, athleteIds: [athleteB.id] });
+      record("Cible arbitraire inter-clubs ignorée sans envoi", status === 200 && body.sent === 0 && body.events === 0, `status=${status}`);
     }
 
     // ── 2bis. Cas légitimes : athlète vers lui-même / vers un coéquipier (même club) -> succès ──
     // (auto-notif de récap hebdo, messagerie inter-athlètes, post club — voir
     // src/AthleteApp.jsx, src/athlete/views/AthleteMsgerie.jsx et AthleteClub.jsx)
     {
-      const { status } = await callSendPush(athleteToken, { ...basePayload, athleteIds: [athleteA.id] });
-      record("Athlète -> lui-même (même club) -> 200", status === 200, `status=${status}`);
+      const { status, body } = await callSendPush(athleteToken, { ...basePayload, athleteIds: [athleteA.id] });
+      record("Auto-notification inventée ignorée", status === 200 && body.sent === 0 && body.events === 0, `status=${status}`);
     }
     {
-      const { status } = await callSendPush(athleteToken, { ...basePayload, athleteIds: [athleteC.id] });
-      record("Athlète -> coéquipier (même club) -> 200", status === 200, `status=${status}`);
+      const { status, body } = await callSendPush(athleteToken, { ...basePayload, athleteIds: [athleteC.id], moduleKey: "invalid", url: "//evil.example", tag: "system" });
+      record("Usurpation vers un coéquipier ignorée même sans module valide", status === 200 && body.sent === 0 && body.events === 0, `status=${status}`);
     }
     {
-      const { status } = await callSendPush(athleteToken, { ...basePayload, userIds: [coachUser.id] });
-      record("Athlète -> coach de son club (userIds) -> 200", status === 200, `status=${status}`);
+      const { status, body } = await callSendPush(athleteToken, { ...basePayload, userIds: [coachUser.id] });
+      record("Push coach inventée ignorée", status === 200 && body.sent === 0 && body.events === 0, `status=${status}`);
     }
     {
-      const { status } = await callSendPush(athleteToken, { ...basePayload, userIds: [athleteUser.id] });
-      record("Athlète -> userIds d'un non-coach -> 403", status === 403, `status=${status}`);
+      const { status, body } = await callSendPush(athleteToken, { ...basePayload, userIds: [athleteUser.id] });
+      record("Autre vecteur userIds ignoré", status === 200 && body.sent === 0 && body.events === 0, `status=${status}`);
     }
 
     // ── 3. Coach club A ciblant un athlète du club B -> 403 ──────────
     {
-      const { status } = await callSendPush(coachToken, { ...basePayload, athleteIds: [athleteB.id] });
-      record("Coach club A -> athlète club B -> 403", status === 403, `status=${status}`);
+      const { status, body } = await callSendPush(coachToken, { ...basePayload, athleteIds: [athleteB.id] });
+      record("Cible arbitraire coach inter-clubs ignorée", status === 200 && body.sent === 0 && body.events === 0, `status=${status}`);
     }
 
     // ── 4. Coach club A ciblant ses propres athlètes -> succès ───────
     {
-      const { status } = await callSendPush(coachToken, { ...basePayload, athleteIds: [athleteA.id] });
-      record("Coach club A -> son athlète -> 200", status === 200, `status=${status}`);
+      const { status, body } = await callSendPush(coachToken, { ...basePayload, athleteIds: [athleteA.id] });
+      record("Même un coach ne peut inventer une Push système", status === 200 && body.sent === 0 && body.events === 0, `status=${status}`);
+    }
+
+    {
+      const forged = await athleteAClient.from("push_event_outbox").insert({ club_id: clubA.id, actor_user_id: athleteUser.id, event_type: "message_received", entity_id: 123, athlete_ids: [athleteC.id], dedupe_key: "forged" });
+      const claim = await athleteAClient.rpc("claim_trusted_push_events", { p_actor_user_id: coachUser.id });
+      record("File et claim inaccessibles au navigateur", Boolean(forged.error) && Boolean(claim.error));
+      const reminder = await callSendPush(athleteToken, { eventType: "feedback_reminder", entityId: 1 });
+      record("Athlète ne peut déclencher un rappel staff", reminder.status === 403);
+    }
+    {
+      const { data: message, error } = await coachAClient.from("messages").insert({ sender_id: coachUser.id, receiver_id: athleteUser.id, content: "Détail médical strictement privé", is_read: false }).select().single();
+      if (message) messageIds.push(message.id);
+      if (error) throw error;
+      const { data: queued, error: queueError } = await admin.from("push_event_outbox").select("*").eq("actor_user_id", coachUser.id).eq("event_type", "message_received");
+      record("Vrai message -> événement transactionnel sans contenu privé", !queueError && queued?.length === 1 && queued[0].entity_id === message.id && queued[0].athlete_ids.includes(athleteA.id) && !JSON.stringify(queued).includes("médical"));
+      const outsider = await callSendPush(athleteToken, { eventType: "dispatch_pending", entityId: queued?.[0]?.id });
+      record("Un autre compte ne peut consommer l'événement", outsider.body?.events === 0);
+      const results = await Promise.all([callSendPush(coachToken, { eventType: "dispatch_pending" }), callSendPush(coachToken, { eventType: "dispatch_pending" })]);
+      record("Claim concurrent : événement consommé une seule fois", results.every(result => result.status === 200) && results.reduce((sum, result) => sum + (result.body?.events ?? 0), 0) === 1);
+      const replay = await callSendPush(coachToken, { eventType: "dispatch_pending" });
+      record("Rejeu terminé sans nouvelle livraison", replay.status === 200 && replay.body.events === 0);
+      await admin.from("messages").delete().eq("id", message.id);
     }
 
     // ── 5. Payload surdimensionné -> 400/413 ──────────────────────────
@@ -221,6 +242,7 @@ async function main() {
     console.log("\nNettoyage...");
     if (coachAClient)   await coachAClient.auth.signOut().catch(() => {});
     if (athleteAClient) await athleteAClient.auth.signOut().catch(() => {});
+    if (messageIds.length) await admin.from("messages").delete().in("id", messageIds);
     // Cascade FK sur athlete_id : nettoie push_subscriptions automatiquement.
     if (athleteA)    await admin.from("athletes").delete().eq("id", athleteA.id);
     if (athleteB)    await admin.from("athletes").delete().eq("id", athleteB.id);

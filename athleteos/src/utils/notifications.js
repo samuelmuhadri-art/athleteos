@@ -149,7 +149,7 @@ export async function notifyAthleteNewSession(clubId, athleteIds, session) {
     title, description, is_read: false,
   }));
   await supabase.from("athlete_notifications").insert(rows);
-  await sendWebPush(athleteIds, { title, body: description, url: "/", tag: `session-${session.title}`, moduleKey: "planning" });
+  await sendWebPush(athleteIds, { title: "Nouvelle séance", body: "Une séance a été ajoutée à ton planning.", url: "/", tag: `session-${session.id ?? "new"}`, moduleKey: "planning" });
 }
 
 export async function notifyAthleteSessionUpdated(clubId, athleteIds, session) {
@@ -169,7 +169,7 @@ export async function notifyAthleteSessionUpdated(clubId, athleteIds, session) {
   await supabase.from("athlete_notifications").insert(targets.map(athleteId => ({
     athlete_id: athleteId, club_id: clubId, type: "session_updated", title, description, is_read: false,
   })));
-  await sendWebPush(targets, { title, body: description, url: "/planning", tag: `session-update-${session.id ?? session.title}`, moduleKey: "planning" });
+  await sendWebPush(targets, { title: "Séance modifiée", body: "Consulte ton planning pour voir les changements.", url: "/planning", tag: `session-update-${session.id ?? "updated"}`, moduleKey: "planning" });
 }
 
 export async function notifyAthleteFeedbackReminder(clubId, athleteIds, session) {
@@ -186,7 +186,7 @@ export async function notifyAthleteFeedbackReminder(clubId, athleteIds, session)
   await supabase.from("athlete_notifications").insert(targets.map(athleteId => ({
     athlete_id: athleteId, club_id: clubId, type: "session_feedback_reminder", title, description, is_read: false,
   })));
-  await sendWebPush(targets, { title, body: description, url: "/planning", tag: `session-feedback-${session.id ?? session.title}`, moduleKey: "session_feedback" });
+  await sendWebPush(targets, { title: "Ton retour de séance manque", body: description, url: "/planning", tag: `session-feedback-${session.id ?? "reminder"}`, moduleKey: "session_feedback" });
 }
 
 export async function notifyCoachSessionResponse(clubId, coachUserId, athlete, session, response, note = "") {
@@ -204,7 +204,7 @@ export async function notifyCoachSessionResponse(clubId, coachUserId, athlete, s
   };
   if (existing?.id) await supabase.from("alerts").update(alertPayload).eq("id", existing.id);
   else await supabase.from("alerts").insert(alertPayload);
-  if (coachUserId) await sendWebPush([], { title, body: description, url: "/planning", tag: `session-response-${session.id}`, moduleKey: "planning" }, [coachUserId]);
+  if (coachUserId) await sendWebPush([], { title: "Nouvelle réponse à une séance", body: "Consulte le planning pour lire la réponse de ton athlète.", url: "/planning", tag: `session-response-${session.id}`, moduleKey: "planning" }, [coachUserId]);
 }
 
 export async function notifyCoachAthleteSession(clubId, coachUserId, athlete, session) {
@@ -217,7 +217,7 @@ export async function notifyCoachAthleteSession(clubId, coachUserId, athlete, se
     club_id: clubId, athlete_id: athlete.id, session_id: session.id, type: "athlete_session",
     title, description, severity: "info", is_read: false,
   });
-  if (coachUserId) await sendWebPush([], { title, body: description, url: "/planning", tag: `athlete-session-${session.id}`, moduleKey: "planning" }, [coachUserId]);
+  if (coachUserId) await sendWebPush([], { title: "Nouvelle séance proposée", body: "Une séance attend ta vérification dans le planning.", url: "/planning", tag: `athlete-session-${session.id}`, moduleKey: "planning" }, [coachUserId]);
 }
 
 export async function notifyCoachClubPost(clubId, coachUserId, athlete, { hasPhoto = false, caption = "" } = {}) {
@@ -228,7 +228,7 @@ export async function notifyCoachClubPost(clubId, coachUserId, athlete, { hasPho
     club_id: clubId, athlete_id: athlete.id, type: "social_post",
     title, description, severity: "info", is_read: false,
   });
-  if (coachUserId) await sendWebPush([], { title, body: description, url: "/", tag: `club-post-${athlete.id}`, moduleKey: "social" }, [coachUserId]);
+  if (coachUserId) await sendWebPush([], { title: "Nouveau partage dans le club", body: "Ouvre AthleteOS pour découvrir ce partage.", url: "/", tag: `club-post-${athlete.id}`, moduleKey: "social" }, [coachUserId]);
 }
 
 export async function notifyAthleteResult(clubId, athleteId, discipline, result, compName) {
@@ -241,9 +241,9 @@ export async function notifyAthleteResult(clubId, athleteId, discipline, result,
   await sendWebPush([athleteId], { title, body: description, tag: "result", moduleKey: "performances" });
 }
 
-export async function notifyAthleteMessage(clubId, athleteId, coachName, preview) {
+export async function notifyAthleteMessage(clubId, athleteId, coachName) {
   const title       = `💬 Message de ${coachName ?? "ton coach"}`;
-  const description = preview ? preview.slice(0, 100) : "Tu as reçu un nouveau message.";
+  const description = "Tu as reçu un nouveau message. Ouvre la messagerie pour le lire.";
   await supabase.from("athlete_notifications").insert({
     athlete_id: athleteId, club_id: clubId, type: "message",
     title, description, is_read: false,
@@ -254,10 +254,10 @@ export async function notifyAthleteMessage(clubId, athleteId, coachName, preview
 
 // ── NOUVEAU : notif push vers le coach quand un athlète envoie un message ──
 // coachUserId = users.id du coach (ex: 1 pour Benoît)
-export async function notifyCoachMessage(coachUserId, athleteName, preview) {
+export async function notifyCoachMessage(coachUserId, athleteName) {
   if (!coachUserId) return;
   const title       = `💬 Message de ${athleteName}`;
-  const description = preview ? preview.slice(0, 100) : "Tu as reçu un nouveau message.";
+  const description = "Tu as reçu un nouveau message. Ouvre la messagerie pour le lire.";
   // Pas d'insertion dans athlete_notifications (c'est pour les athlètes)
   // On envoie uniquement la push par user_id
   await sendWebPush([], { title, body: description, url: "/", tag: "message", moduleKey: "messaging" }, [coachUserId]);

@@ -7,26 +7,16 @@
 //   - Chemin cron (weekly-cron) : Authorization = Bearer <SERVICE_ROLE_KEY>,
 //     déjà vérifié en amont par weekly-cron/index.ts. Accès total,
 //     inchangé.
-//   - Chemin utilisateur (app) : JWT extrait du header Authorization,
-//     résolu vers users(id, club_id, role) comme le fait déjà
-//     admin-actions/index.ts. Les destinataires (athleteIds/userIds)
-//     envoyés par le client ne sont JAMAIS utilisés tels quels : ils
-//     sont re-résolus côté serveur contre le club de l'appelant.
-//     - athleteIds : toujours limité aux athlètes du club de l'appelant
-//       (coach ou athlete) — un athlète a des cas d'usage légitimes vers
-//       d'autres athlètes de son club (post club diffusé à l'équipe via
-//       notifyClubNewPost, messagerie inter-athlètes via
-//       notifyAthleteMessage) et vers lui-même (récap hebdo). La seule
-//       limite pour ce vecteur est le club, pas le rôle.
-//     - userIds : head_coach/coach peuvent cibler n'importe quel user de
-//       leur club ; athlete uniquement les coachs (head_coach/coach) de
-//       son club (cas du message à son coach) — jamais un autre athlète
-//       par ce vecteur.
+//   - Chemin utilisateur : JWT -> profil -> quota -> événements créés par
+//     les triggers transactionnels de la base. Texte et destinataires libres
+//     sont ignorés, même pour un coach. Les rappels sont revalidés côté SQL.
+//     Une file absente/inaccessible provoque un échec fermé, jamais un fallback.
 // ============================================================
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import webpush from "https://esm.sh/web-push@3.6.6";
+import { dispatchTrustedPushEvents, reminderIntent } from "../_shared/pushOutbox.ts";
 
 const MAX_BODY_BYTES          = 20_000; // taille brute du JSON reçu
 const MAX_TITLE_LEN           = 150;
@@ -130,16 +120,12 @@ serve(async (req) => {
     } catch {
       return json(400, origin, { error: "JSON invalide." });
     }
+    if (!body || typeof body !== "object" || Array.isArray(body)) return json(400, origin, { error: "Objet JSON requis." });
 
     const requestedAthleteIds = toPositiveIntArray(body.athleteIds);
     const requestedUserIds    = toPositiveIntArray(body.userIds);
     const moduleKey = typeof body.moduleKey === "string" && MODULE_KEYS.has(body.moduleKey) ? body.moduleKey : null;
     const requestedRecipientCount = requestedAthleteIds.length + requestedUserIds.length;
-
-    if (!requestedRecipientCount) return json(400, origin, { error: "Aucun destinataire." });
-    if (requestedRecipientCount > MAX_REQUESTED_RECIPIENTS) {
-      return json(413, origin, { error: "Trop de destinataires." });
-    }
 
     // ── Authentification : cron (secret serveur) ou utilisateur (JWT) ──
     const authHeader = req.headers.get("Authorization") ?? "";
@@ -150,6 +136,8 @@ serve(async (req) => {
     let logCaller = "cron";
 
     if (isCronCall) {
+      if (!requestedRecipientCount) return json(400, origin, { error: "Aucun destinataire." });
+      if (requestedRecipientCount > MAX_REQUESTED_RECIPIENTS) return json(413, origin, { error: "Trop de destinataires." });
       // Déjà authentifié via le secret service_role ci-dessus : c'est un
       // appel serveur (weekly-cron) sur toute la base, pas un client —
       // les IDs sont pris tels quels.
@@ -189,36 +177,50 @@ serve(async (req) => {
       }
       const { error: attemptError } = await admin.from("push_delivery_attempts").insert({
         user_id: callerRow.id,
-        recipient_count: requestedRecipientCount,
+        recipient_count: Math.min(MAX_REQUESTED_RECIPIENTS, Math.max(1, requestedRecipientCount)),
       });
       if (attemptError) throw attemptError;
 
-      // athleteIds : toujours limité au club de l'appelant, coach ET athlete
-      // (un athlète a des usages légitimes vers ses coéquipiers — post club,
-      // messagerie inter-athlètes — et vers lui-même).
-      if (requestedAthleteIds.length) {
-        const { data, error } = await admin.from("athletes").select("id")
-          .eq("club_id", callerRow.club_id).in("id", requestedAthleteIds);
-        if (error) throw error;
-        athleteIds = (data ?? []).map((r: { id: number }) => r.id);
+      // Aucun accès au pipeline libre pour un JWT utilisateur, même coach.
+      // Les champs historiques sont ignorés (compatibilité PWA), pas validés comme autorité.
+      const intent = reminderIntent(body);
+      if (intent) {
+        if (!isCoach) return json(403, origin, { error: "Rappel réservé au staff." });
+        const { error: reminderError } = await admin.rpc("queue_trusted_push_reminder", {
+          p_actor_user_id: callerRow.id, p_event_type: intent.eventType, p_entity_id: intent.entityId,
+        });
+        if (reminderError) throw reminderError;
       }
-
-      // userIds : coach peut cibler n'importe quel user de son club ;
-      // athlete uniquement les coachs (head_coach/coach) de son club.
-      if (requestedUserIds.length) {
-        let query = admin.from("users").select("id")
-          .eq("club_id", callerRow.club_id).in("id", requestedUserIds);
-        if (isAthlete) query = query.in("role", ["head_coach", "coach"]);
-        const { data, error } = await query;
-        if (error) throw error;
-        userIds = (data ?? []).map((r: { id: number }) => r.id);
-      }
-
-      if (athleteIds.length !== requestedAthleteIds.length || userIds.length !== requestedUserIds.length) {
-        return json(403, origin, { error: "Certains destinataires ne font pas partie de ton club, ou ne sont pas autorisés pour ce rôle." });
-      }
+      const result = await dispatchTrustedPushEvents(admin, callerRow.id, async (payload) => {
+        // Réutilise uniquement le chemin service_role ci-dessous : filtrage des outils,
+        // livraison, nettoyage des abonnements morts. Aucun secret ne revient au client.
+        const response = await fetch(`${supabaseUrl}/functions/v1/send-push`, {
+          method: "POST",
+          headers: { Authorization: `Bearer ${serviceKey}`, "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+        if (!response.ok) throw new Error(`Trusted push delivery HTTP ${response.status}`);
+        return await response.json();
+      });
+      return json(200, origin, result);
     }
 
+    // Un destinataire déplacé après la création de l'événement ne doit pas
+    // recevoir une notification de son ancien club. Seul le pipeline serveur
+    // atteint ce bloc ; le champ clubId d'un navigateur est ignoré plus haut.
+    if (Number.isSafeInteger(body.clubId) && Number(body.clubId) > 0) {
+      if (athleteIds.length) {
+        const { data, error } = await admin.from("athletes").select("id").eq("club_id", body.clubId).in("id", athleteIds);
+        if (error) throw error;
+        athleteIds = (data ?? []).map((row: { id: number }) => row.id);
+      }
+      if (userIds.length) {
+        const { data, error } = await admin.from("users").select("id").eq("club_id", body.clubId).in("id", userIds).in("role", ["head_coach", "coach"]);
+        if (error) throw error;
+        userIds = (data ?? []).map((row: { id: number }) => row.id);
+      }
+      if (!athleteIds.length && !userIds.length) return json(200, origin, { sent: 0, failed: 0, cleaned: 0, skipped: "recipient_changed" });
+    }
     if (!athleteIds.length && !userIds.length) {
       return json(400, origin, { error: "Aucun destinataire." });
     }
@@ -263,7 +265,7 @@ serve(async (req) => {
 
     if (!title || title.length > MAX_TITLE_LEN)     return json(400, origin, { error: "Titre invalide." });
     if (!msgBody || msgBody.length > MAX_MESSAGE_LEN) return json(400, origin, { error: "Corps du message invalide." });
-    if (!url.startsWith("/") || url.length > MAX_URL_LEN) return json(400, origin, { error: "URL invalide." });
+    if (!url.startsWith("/") || url.startsWith("//") || url.includes("\\") || url.length > MAX_URL_LEN) return json(400, origin, { error: "URL invalide." });
     if (tag.length > MAX_TAG_LEN)                    return json(400, origin, { error: "Tag invalide." });
 
     const vapidPublicKey = Deno.env.get("VAPID_PUBLIC_KEY");

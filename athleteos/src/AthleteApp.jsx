@@ -41,7 +41,7 @@ import { PwaInstallButton } from "./components/pwa/PwaAccess";
 import { useModules } from "./hooks/useModules";
 import { ATHLETE_VIEW_MODULE, filterNavigation, moduleKeyForEventType } from "./domain/modules/moduleRegistry";
 import { mapDocument } from "./services/documentLibrary";
-import { fetchPrimaryHeadCoach } from "./services/athleteShellData";
+import { fetchPrimaryHeadCoach, fetchAthleteSessions, fetchAthleteCompetitions, fetchAthletePlanningEvents } from "./services/athleteShellData";
 import { firstSupabaseError } from "./utils/supabaseResults";
 
 const NAV_ITEMS = [
@@ -102,15 +102,13 @@ export default function AthleteApp({ clubBrand, themeStyle }) {
   const [settingsSection, setSettingsSection] = useState("account");
 
   const { theme, toggleTheme } = useTheme();
-  const { subscribed, subscribe, permissionState, swReady } = usePushNotifications(
+  const { subscribed, subscribe, permissionState } = usePushNotifications(
     athlete?.id ?? null, clubId
   );
-  useEffect(() => {
-    if (enabledModules.messaging !== false && swReady && !subscribed && permissionState !== "denied") subscribe();
-  }, [enabledModules.messaging, swReady, subscribed, permissionState, subscribe]);
+  // La permission Push est demandée uniquement depuis les boutons d'activation.
 
   useEffect(() => {
-    if (!visibleIds.has(activeView)) navigate("dashboard");
+    if (!visibleIds.has(activeView)) navigate("dashboard", { replace: true });
   }, [activeView, navigate, visibleIds]);
 
   const fetchAll = useCallback(async () => {
@@ -130,8 +128,8 @@ export default function AthleteApp({ clubBrand, themeStyle }) {
         enabledModules.performances !== false ? supabase.from("records").select("*").eq("athlete_id",athleteId) : Promise.resolve({ data: [] }),
         enabledModules.health !== false ? supabase.from("injuries").select("*").eq("athlete_id",athleteId) : Promise.resolve({ data: [] }),
         enabledModules.performances !== false ? supabase.from("performance_history").select("*").eq("athlete_id",athleteId) : Promise.resolve({ data: [] }),
-        ["planning", "session_feedback", "training_load"].some((key) => enabledModules[key] !== false) ? supabase.from("sessions").select("*, session_athletes(*), session_documents(visibility, documents(*), session_document_recipients(athlete_id))").eq("club_id",clubId) : Promise.resolve({ data: [] }),
-        enabledModules.performances !== false ? supabase.from("competitions").select("*, competition_athletes(*), competition_results(*)").eq("club_id",clubId) : Promise.resolve({ data: [] }),
+        ["planning", "session_feedback", "training_load"].some((key) => enabledModules[key] !== false) ? fetchAthleteSessions(supabase, clubId, athleteId) : Promise.resolve({ data: [] }),
+        enabledModules.performances !== false ? fetchAthleteCompetitions(supabase, clubId, athleteId) : Promise.resolve({ data: [] }),
         fetchPrimaryHeadCoach(supabase, clubId),
         ["social", "messaging"].some((key) => enabledModules[key] !== false) ? supabase.from("athletes").select("id, name, profile_data, user_id").eq("club_id",clubId) : Promise.resolve({ data: [] }),
         enabledModules.performances !== false ? supabase.from("athlete_performances").select("*").eq("athlete_id",athleteId).order("performance_date",{ascending:true}) : Promise.resolve({ data: [] }),
@@ -142,7 +140,7 @@ export default function AthleteApp({ clubBrand, themeStyle }) {
         // migration 20260726120000) — plus de recalcul JS à partir des séances.
         enabledModules.training_load !== false ? supabase.from("weekly_charge").select("*").eq("athlete_id",athleteId) : Promise.resolve({ data: [] }),
         enabledModules.training_load !== false ? supabase.from("athlete_daily_load_days").select("load_date").eq("athlete_id",athleteId).eq("state","rest_confirmed") : Promise.resolve({ data: [] }),
-        enabledModules.planning !== false ? supabase.from("planning_events").select("*, planning_event_athletes(athlete_id), planning_event_documents(document_id, documents(*))").eq("club_id", clubId) : Promise.resolve({ data:[] }),
+        enabledModules.planning !== false ? fetchAthletePlanningEvents(supabase, clubId, athleteId) : Promise.resolve({ data:[] }),
       ]);
 
       const queryError = firstSupabaseError([

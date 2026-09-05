@@ -8,7 +8,7 @@ export function PushToggleButton({ subscribed, onToggle, permissionState, compac
       type="button"
       onClick={onToggle}
       disabled={subscribed || denied}
-      aria-label={compact ? (subscribed ? "Notifications actives" : denied ? "Notifications bloquées par le navigateur" : "Activer les notifications") : undefined}
+      aria-label={subscribed ? "Notifications actives" : denied ? "Notifications bloquées par le navigateur" : "Activer les notifications"}
       title={compact ? (subscribed ? "Notifications actives" : denied ? "Notifications bloquées" : "Activer les notifications") : undefined}
       className={[
         "flex items-center justify-center rounded-xl text-[12px] font-semibold border transition-all",

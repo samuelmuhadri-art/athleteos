@@ -347,9 +347,9 @@ export default function AthleteMsgerie({ athlete, coachUserId, athleteUserId, cl
       // Notifications existantes : conservées volontairement et déclenchées
       // uniquement après l'enregistrement réussi du message.
       if (contact.type === "coach") {
-        notifyCoachMessage(contact.userId, athlete.name, text).catch(console.warn);
+        notifyCoachMessage(contact.userId, athlete.name).catch(console.warn);
       } else if (contact.type === "athlete" && contact.athleteId) {
-        notifyAthleteMessage(clubId, contact.athleteId, athlete.name, text).catch(console.warn);
+        notifyAthleteMessage(clubId, contact.athleteId, athlete.name).catch(console.warn);
       }
       return true;
     } catch (error) {

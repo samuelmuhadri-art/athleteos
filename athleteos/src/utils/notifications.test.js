@@ -36,6 +36,8 @@ import {
   notifyCoachAthleteSession,
   notifyCoachClubPost,
   notifyCoachSessionResponse,
+  notifyAthleteMessage,
+  notifyCoachMessage,
 } from "./notifications";
 
 beforeEach(() => {
@@ -55,6 +57,7 @@ describe("notifications coach liées aux actions athlète", () => {
     expect(mocks.invoke).toHaveBeenCalledWith("send-push", expect.objectContaining({
       body: expect.objectContaining({ userIds: [91], tag: "session-response-12" }),
     }));
+    expect(JSON.stringify(mocks.invoke.mock.calls)).not.toContain("kiné");
   });
 
   it("ne dérange pas le coach pour une confirmation de présence normale", async () => {
@@ -78,5 +81,24 @@ describe("notifications coach liées aux actions athlète", () => {
       "athlete_session", "social_post",
     ]);
     expect(mocks.invoke).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe("confidentialité des notifications", () => {
+  it("ne recopie jamais le contenu d'un message dans les notifications", async () => {
+    const privateMessage = "Mon diagnostic médical reste privé";
+    // Les anciens appelants peuvent encore transmettre un quatrième/troisième argument : il est ignoré.
+    await notifyAthleteMessage(4, 8, "Camille", privateMessage);
+    await notifyCoachMessage(91, "Alice", privateMessage);
+    expect(mocks.invoke).toHaveBeenCalledTimes(2);
+    expect(JSON.stringify(mocks.invoke.mock.calls)).not.toContain(privateMessage);
+    expect(JSON.stringify(mocks.inserts)).not.toContain(privateMessage);
+    expect(mocks.invoke.mock.calls[0][1].body.body).toContain("Ouvre la messagerie");
+  });
+
+  it("garde une légende dans l'alerte interne mais pas dans la Push", async () => {
+    await notifyCoachClubPost(4, 91, { id: 8, name: "Alice" }, { caption: "Résultat de mon examen médical" });
+    expect(mocks.inserts[0].payload.description).toBe("Résultat de mon examen médical");
+    expect(JSON.stringify(mocks.invoke.mock.calls)).not.toContain("examen médical");
   });
 });
