@@ -31,14 +31,16 @@ describe("clubBranding", () => {
     );
   });
 
-  it("calcule une progression réelle en cinq étapes", () => {
+  it("ne rend pas le logo obligatoire pour préparer le club", () => {
     const steps = buildClubSetupSteps({
       club: { name: "Club ami", logoPath: null },
       athleteCount: 2,
       sessionCount: 0,
     });
     expect(steps.map((step) => step.complete)).toEqual([false, true, true, false, true]);
-    expect(getClubSetupProgress(steps)).toBe(60);
+    expect(getClubSetupProgress(steps)).toBe(75);
+    expect(getClubSetupProgress(buildClubSetupSteps({ club: { name: "Club" }, athleteCount: 2, sessionCount: 1 }))).toBe(100);
+    expect(getClubSetupProgress(buildClubSetupSteps({ club: { name: "Club" }, athleteCount: 2, planningEnabled: false }))).toBe(100);
   });
 });
 

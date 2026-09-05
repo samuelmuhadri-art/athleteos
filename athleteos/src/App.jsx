@@ -39,7 +39,7 @@ import { countUnreadActiveAlerts, mergePersonalAlertReadState } from "./domain/a
 import {
   COACH_MOBILE_MORE_ITEMS,
   COACH_MOBILE_PRIMARY_ITEMS,
-  isCoachMoreView,
+  buildCoachMobileNavigation,
 } from "./navigation/mobileNavigation";
 
 // Séparée du bundle principal : chargée uniquement quand le profil connecté
@@ -61,7 +61,7 @@ const Rapports     = lazy(() => import("./modules/Rapports"));
 
 // ─── Config navigation coach ──────────────────────────────────────────────────
 const NAV_ITEMS = [
-  { id: "dashboard",    label: "Dashboard",        icon: LayoutDashboard },
+  { id: "dashboard",    label: "Accueil",          icon: LayoutDashboard },
   { id: "planning",     label: "Planning",         icon: CalendarDays    },
   { id: "athletes",     label: "Athlètes",         icon: Users           },
   { id: "performances", label: "Performances",     icon: TrendingUp      },
@@ -96,7 +96,7 @@ function ActiveView({ view, onNavigate, club, clubLoading, coachActions }) {
     );
     case "planning":     return <Planning     />;
     case "athletes":     return <AthleteList  onNavigate={onNavigate} />;
-    case "performances": return <Performances />;
+    case "performances": return <Performances onNavigate={onNavigate} />;
     case "charge":       return <ChargeView   />;
     case "rapports":     return <Rapports     />;
     case "competitions": return <Competitions />;
@@ -152,8 +152,10 @@ function CoachShell({ user, profile, clubId, signOut, club, clubLoading, refresh
     .filter((item) => item.id !== "alerts" || ["performances", "session_feedback", "wellness", "training_load", "health", "social"]
       .some((key) => enabledModules[key] !== false)), [enabledModules]);
   const visibleIds = useMemo(() => new Set(visibleNavItems.map((item) => item.id)), [visibleNavItems]);
-  const mobileNavItems = useMemo(() => COACH_MOBILE_NAV_ITEMS.filter((item) => visibleIds.has(item.id)), [visibleIds]);
-  const mobileMoreItems = useMemo(() => COACH_MORE_NAV_ITEMS.filter((item) => visibleIds.has(item.id)), [visibleIds]);
+  const { primary: mobileNavItems, more: mobileMoreItems } = useMemo(() => buildCoachMobileNavigation(
+    COACH_MOBILE_NAV_ITEMS.filter((item) => visibleIds.has(item.id)),
+    COACH_MORE_NAV_ITEMS.filter((item) => visibleIds.has(item.id)),
+  ), [visibleIds]);
 
   const { theme, toggleTheme } = useTheme();
   const { subscribed, subscribe, permissionState } = usePushNotifications(
@@ -192,9 +194,14 @@ function CoachShell({ user, profile, clubId, signOut, club, clubLoading, refresh
     return () => { supabase.removeChannel(channel); };
   }, [clubId, fetchUnreadCount]);
 
-  const navigate = useCallback((view) => {
+  const navigate = useCallback((view, options) => {
     if (activeView === "alerts") fetchUnreadCount();
     navigateUrl(view);
+    if (view === "planning" && options?.action === "new-session") {
+      const url = new URL(window.location.href);
+      url.searchParams.set("action", "new-session");
+      window.history.replaceState(window.history.state, "", url);
+    }
     setShowMore(false);
   }, [activeView, fetchUnreadCount, navigateUrl]);
 
@@ -503,7 +510,7 @@ function CoachShell({ user, profile, clubId, signOut, club, clubLoading, refresh
           label: "Plus",
           icon: MoreHorizontal,
           badge: unreadAlerts,
-          active: showMore || isCoachMoreView(activeView),
+          active: showMore || mobileMoreItems.some(item => item.id === activeView),
           expanded: showMore,
           onSelect: () => setShowMore(true),
           buttonRef: moreButtonRef,

@@ -24,3 +24,14 @@ export const ATHLETE_MOBILE_ITEM_IDS = Object.freeze([
 export function isCoachMoreView(viewId) {
   return COACH_MOBILE_MORE_ITEMS.some((item) => item.id === viewId);
 }
+
+// Fill available places without adding a sixth touch target or duplicating a route.
+export function buildCoachMobileNavigation(primaryItems, secondaryItems) {
+  const combined = [...primaryItems, ...secondaryItems];
+  if (combined.length <= 5) return { primary: combined, more: [] };
+  const promotedCount = Math.max(0, 4 - primaryItems.length);
+  return {
+    primary: [...primaryItems, ...secondaryItems.slice(0, promotedCount)],
+    more: secondaryItems.slice(promotedCount),
+  };
+}

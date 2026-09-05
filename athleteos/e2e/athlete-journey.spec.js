@@ -1,7 +1,7 @@
 // ============================================================
 // AthleteOS — e2e/athlete-journey.spec.js
 //
-// Parcours critique athlète : connexion -> Tableau de bord -> navigation
+// Parcours critique athlète : connexion -> Accueil -> navigation
 // vers Mon planning. Même limite que coach-journey.spec.js : nécessite
 // e2e/global-setup.mjs (Supabase local, job CI dédié E2E_WITH_AUTH),
 // jamais exécuté en local sur cette machine (pas de Docker) — voir le
@@ -33,14 +33,14 @@ async function dismissMorningWellnessIfVisible(page) {
   }
 }
 
-test("l'athlète se connecte et voit son Tableau de bord", async ({ page }) => {
+test("l'athlète se connecte et voit son Accueil", async ({ page }) => {
   await login(page, fixtures.athlete.email, fixtures.athlete.password);
-  await expect(page.getByRole("heading", { name: "Tableau de bord", exact: true })).toBeVisible({ timeout: 15000 });
+  await expect(page.getByRole("heading", { name: "Accueil", exact: true })).toBeVisible({ timeout: 15000 });
 });
 
 test("l'athlète navigue vers son planning", async ({ page }) => {
   await login(page, fixtures.athlete.email, fixtures.athlete.password);
-  await expect(page.getByRole("heading", { name: "Tableau de bord", exact: true })).toBeVisible({ timeout: 15000 });
+  await expect(page.getByRole("heading", { name: "Accueil", exact: true })).toBeVisible({ timeout: 15000 });
   await dismissMorningWellnessIfVisible(page);
   await page.getByRole("button", { name: "Mon planning", exact: true }).click();
   await expect(page).toHaveURL(/\/planning$/);

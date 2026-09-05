@@ -16,9 +16,7 @@ test("le head coach choisit un socle essentiel et obtient une navigation cohére
   const dialog = page.getByRole("dialog");
   await expect(dialog.getByRole("heading", { name: "Quels outils veux-tu utiliser ?" })).toBeVisible({ timeout: 15000 });
   await dialog.getByRole("button", { name: /^Essentiel/ }).click();
-  await dialog.getByRole("button", { name: "Continuer" }).click();
-  await expect(dialog.getByRole("heading", { name: "Comment veux-tu suivre tes athlètes ?" })).toBeVisible();
-  await dialog.getByRole("button", { name: /^Essentiel/ }).click();
+  await expect(dialog.getByRole("button", { name: "Continuer" })).toHaveCount(0);
   await dialog.getByRole("button", { name: "Terminer" }).click();
   await expect(dialog).toBeHidden({ timeout: 10000 });
 

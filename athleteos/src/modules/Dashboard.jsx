@@ -543,7 +543,8 @@ function Dashboard({
     club,
     athleteCount: athletes.length,
     sessionCount: sessions.length,
-  })), [athletes.length, club, sessions.length]);
+    planningEnabled: enabledModules.planning !== false,
+  })), [athletes.length, club, sessions.length, enabledModules.planning]);
 
   const dashboardAthletes = useMemo(
     () => athletes.filter((athlete) => ["wellness", "training_load", "health", "planning", "performances"]
@@ -569,7 +570,7 @@ function Dashboard({
         title={`${getGreeting()}, ${firstName}`}
         description="Les priorités et l’état de ton groupe en un coup d’œil."
         actions={enabledModules.planning !== false ? (
-          <button type="button" className="btn-primary w-full min-[390px]:w-auto" onClick={() => onNavigate("planning")}>
+          <button type="button" className="btn-primary w-full min-[390px]:w-auto" onClick={() => onNavigate("planning", { action: "new-session" })}>
             Planifier une séance
             <ChevronRight size={16} aria-hidden="true" />
           </button>
@@ -583,7 +584,7 @@ function Dashboard({
           sessionCount={sessions.length}
           onBranding={onOpenClubSettings}
           onInvite={onInvite}
-          onPlanning={() => onNavigate("planning")}
+          onPlanning={enabledModules.planning !== false ? () => onNavigate("planning", { action: "new-session" }) : undefined}
           onDemo={onDemo}
         />
       )}

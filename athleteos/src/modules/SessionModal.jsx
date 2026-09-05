@@ -4,6 +4,7 @@
 // ============================================================
 
 import { memo, useState } from "react";
+import { createPortal } from "react-dom";
 import { X, Users, FileText, AlertCircle, Star, Copy, BookmarkPlus } from "lucide-react";
 import { CATEGORIES, colors, sessionStatus } from "./planningUtils";
 import { ValidationBadge, StatusIcon } from "./planningShared";
@@ -44,7 +45,7 @@ const SessionModal = memo(({
     catch { setDeleteError("Impossible de supprimer."); setDeleting(false); }
   };
 
-  return (
+  return createPortal(
     <div
       className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4 modal-backdrop"
       onClick={e => e.target === e.currentTarget && !deleting && onClose()}
@@ -215,7 +216,7 @@ const SessionModal = memo(({
         </div>
 
         {/* Footer */}
-        <div className="px-6 py-4 flex items-center justify-between gap-3 flex-shrink-0" style={{ borderTop: "1px solid var(--c-border)" }}>
+        <div className="px-4 sm:px-6 py-4 flex flex-wrap items-center justify-between gap-3 flex-shrink-0" style={{ borderTop: "1px solid var(--c-border)" }}>
           <div className="flex items-center gap-3">
             {!confirmDel ? (
               <button onClick={() => setConfirmDel(true)} disabled={deleting}
@@ -243,7 +244,7 @@ const SessionModal = memo(({
           </div>
         </div>
       </div>
-    </div>
+    </div>, document.body
   );
 });
 

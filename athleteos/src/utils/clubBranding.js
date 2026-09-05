@@ -58,11 +58,12 @@ export function buildInviteUrl(inviteCode, origin = globalThis.location?.origin)
   return url.toString();
 }
 
-export function buildClubSetupSteps({ club, athleteCount = 0, sessionCount = 0 }) {
+export function buildClubSetupSteps({ club, athleteCount = 0, sessionCount = 0, planningEnabled = true }) {
   return [
     {
       id: "brand",
-      label: "Ajouter le logo du club",
+      label: "Ajouter le logo du club (facultatif)",
+      optional: true,
       description: "Personnalise l’espace pour que les membres reconnaissent immédiatement leur club.",
       complete: Boolean(club?.logoPath),
       action: "branding",
@@ -83,6 +84,7 @@ export function buildClubSetupSteps({ club, athleteCount = 0, sessionCount = 0 }
     },
     {
       id: "session",
+      optional: !planningEnabled,
       label: "Créer la première séance",
       description: "Une première séance suffit pour donner vie au planning.",
       complete: sessionCount > 0,
@@ -100,5 +102,6 @@ export function buildClubSetupSteps({ club, athleteCount = 0, sessionCount = 0 }
 
 export function getClubSetupProgress(steps) {
   if (!steps?.length) return 0;
-  return Math.round((steps.filter((step) => step.complete).length / steps.length) * 100);
+  const requiredSteps = steps.filter(step => !step.optional);
+  return requiredSteps.length ? Math.round((requiredSteps.filter(step => step.complete).length / requiredSteps.length) * 100) : 100;
 }

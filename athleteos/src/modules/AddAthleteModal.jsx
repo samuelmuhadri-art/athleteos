@@ -89,11 +89,12 @@ const AddAthleteModal = memo(({ onClose, onCreate, initialData = null, available
           </div>
 
           {!isEdit && (
-            <div className="rounded-2xl p-4 space-y-4" style={{ border: "1px solid var(--c-border)" }}>
-              <div><p className="text-[13px] font-bold" style={{ color: "var(--c-text-1)" }}>Outils de cet athlète</p><p className="text-[12px] mt-0.5" style={{ color: "var(--c-text-2)" }}>Il ne verra que les outils également actifs pour le club.</p></div>
+            <details className="rounded-2xl p-4 space-y-4" style={{ border: "1px solid var(--c-border)" }}>
+              <summary className="min-h-11 flex items-center cursor-pointer text-[13px] font-semibold">Personnaliser ses outils (optionnel)</summary>
+              <p className="text-[12px]" style={{ color: "var(--c-text-2)" }}>Les outils du club sont déjà sélectionnés. Tu peux les adapter maintenant ou depuis sa fiche.</p>
               <ModulePresetPicker onSelect={(keys) => set("moduleKeys", keys)} availableKeys={availableModuleKeys} value={form.moduleKeys} />
               <ModuleSelector value={form.moduleKeys} onChange={(keys) => set("moduleKeys", keys)} availableKeys={availableModuleKeys} compact />
-            </div>
+            </details>
           )}
           <div>
             <label className={labelCls} style={{ color: "var(--c-text-3)" }}>Disciplines secondaires</label>

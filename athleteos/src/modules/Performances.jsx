@@ -156,7 +156,7 @@ const Podium = memo(({ ranked }) => {
 });
 
 // ─── Composant principal ──────────────────────────────────────────────────────
-function Performances() {
+function Performances({ onNavigate }) {
   const { clubId } = useAuth();
   const { enabledAthleteIds } = useModules();
   const CURRENT_WEEK = getISOWeek(new Date());
@@ -287,6 +287,7 @@ function Performances() {
           icon={Trophy}
           title="Aucun record enregistré pour l’instant"
           description="Les classements et graphiques apparaîtront dès que les premiers records auront été ajoutés aux profils."
+          action={onNavigate ? <button type="button" className="btn-primary" onClick={() => onNavigate("athletes")}>Choisir un athlète pour ajouter un record</button> : undefined}
         />
       </div>
     );

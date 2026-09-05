@@ -24,8 +24,10 @@ describe("ClubOnboardingCard", () => {
       />,
     );
 
-    expect(screen.getByRole("progressbar").getAttribute("aria-valuenow")).toBe("60");
-    expect(screen.getByText("60 %")).toBeTruthy();
+    expect(screen.getByRole("progressbar").getAttribute("aria-valuenow")).toBe("75");
+    expect(screen.getByText("75 %")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Créer la première séance" }));
+    expect(onPlanning).toHaveBeenCalledOnce();
     fireEvent.click(screen.getByRole("button", { name: "Découvrir avec un exemple" }));
     fireEvent.click(screen.getByRole("button", { name: "Personnaliser" }));
     expect(onDemo).toHaveBeenCalledOnce();

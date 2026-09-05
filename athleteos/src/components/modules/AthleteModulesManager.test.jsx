@@ -34,6 +34,7 @@ describe("gestion des outils athlète", () => {
     const onClose = vi.fn();
     render(<AthleteModulesManager initialAthleteId={1} onClose={onClose} />);
     expect(screen.getByText("Ce que Antonin voit dans AthleteOS.")).toBeTruthy();
+    expect(screen.queryByRole("checkbox")).toBeNull();
     fireEvent.click(screen.getByLabelText("Badges et progression : activé"));
     expect(screen.getByText("Personnalisé")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Appliquer" }));
@@ -48,5 +49,12 @@ describe("gestion des outils athlète", () => {
     fireEvent.click(screen.getByText("Antonin Leroy").closest("label").querySelector("input"));
     fireEvent.click(screen.getByRole("button", { name: "Appliquer" }));
     await waitFor(() => expect(moduleMocks.saveModuleForAthletes).toHaveBeenCalledWith("gamification", [2]));
+  });
+
+  it("permet toujours de passer d’un athlète à plusieurs", () => {
+    render(<AthleteModulesManager initialAthleteId={1} onClose={vi.fn()} />);
+    fireEvent.click(screen.getByRole("button", { name: "Choisir d’autres athlètes" }));
+    expect(screen.getAllByRole("checkbox")).toHaveLength(2);
+    expect(screen.getAllByRole("checkbox")[0].checked).toBe(true);
   });
 });

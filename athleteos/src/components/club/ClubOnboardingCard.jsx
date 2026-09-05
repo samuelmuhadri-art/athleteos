@@ -21,11 +21,14 @@ export default function ClubOnboardingCard({
   onDemo,
 }) {
   const steps = useMemo(
-    () => buildClubSetupSteps({ club, athleteCount, sessionCount }),
-    [club, athleteCount, sessionCount],
+    () => buildClubSetupSteps({ club, athleteCount, sessionCount, planningEnabled: Boolean(onPlanning) })
+      .filter(step => step.action !== "planning" || onPlanning)
+      .sort((a, b) => ["athletes", "session", "identity", "brand", "dashboard"].indexOf(a.id) - ["athletes", "session", "identity", "brand", "dashboard"].indexOf(b.id)),
+    [club, athleteCount, sessionCount, onPlanning],
   );
   const progress = getClubSetupProgress(steps);
   const [expanded, setExpanded] = useState(progress < 100);
+  const nextStep = steps.find(step => !step.complete && !step.optional && step.action);
 
   const runAction = (action) => {
     if (action === "branding") onBranding?.();
@@ -63,6 +66,10 @@ export default function ClubOnboardingCard({
         </div>
       </div>
 
+      {nextStep && <div className="px-5 pb-4">
+        <button type="button" className="btn-primary" onClick={() => runAction(nextStep.action)}>{nextStep.label}</button>
+      </div>}
+
       {expanded && (
         <div className="club-onboarding-details">
           <ol className="club-setup-list">
@@ -75,7 +82,7 @@ export default function ClubOnboardingCard({
                   <strong>{step.label}</strong>
                   <p>{step.description}</p>
                 </div>
-                {!step.complete && step.action && (
+                {!step.complete && step.action && step.id !== nextStep?.id && (
                   <button type="button" className="btn-secondary" onClick={() => runAction(step.action)}>
                     Continuer
                   </button>

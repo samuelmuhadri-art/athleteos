@@ -45,7 +45,7 @@ import { fetchPrimaryHeadCoach } from "./services/athleteShellData";
 import { firstSupabaseError } from "./utils/supabaseResults";
 
 const NAV_ITEMS = [
-  { id: "dashboard",    label: "Tableau de bord", shortLabel: "Accueil",  icon: LayoutDashboard },
+  { id: "dashboard",    label: "Accueil",        shortLabel: "Accueil",  icon: LayoutDashboard },
   { id: "planning",     label: "Mon planning",    shortLabel: "Planning", icon: CalendarDays    },
   { id: "performances", label: "Mes perfs",       shortLabel: "Perfs",    icon: TrendingUp      },
   { id: "social",       label: "Mon club",        shortLabel: "Club",     icon: Users           },

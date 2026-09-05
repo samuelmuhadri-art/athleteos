@@ -1,7 +1,7 @@
 // ============================================================
 // AthleteOS — e2e/coach-journey.spec.js
 //
-// Parcours critique coach : connexion -> Dashboard -> navigation vers
+// Parcours critique coach : connexion -> Accueil -> navigation vers
 // Planning et Athlètes. Nécessite un compte réel créé par
 // e2e/global-setup.mjs (voir ce fichier) — tourne UNIQUEMENT contre un
 // Supabase local (E2E_WITH_AUTH=1, job CI dédié), jamais vérifié en
@@ -35,29 +35,29 @@ async function login(page, email, password) {
   await page.getByRole("button", { name: "Se connecter" }).click();
 }
 
-test("le coach se connecte et voit son Dashboard", async ({ page }) => {
+test("le coach se connecte et voit son Accueil", async ({ page }) => {
   await login(page, fixtures.coach.email, fixtures.coach.password);
-  await expect(page.getByRole("heading", { name: "Dashboard", exact: true })).toBeVisible({ timeout: 15000 });
+  await expect(page.getByRole("heading", { name: "Accueil", exact: true })).toBeVisible({ timeout: 15000 });
 });
 
 test("le coach navigue vers Planning", async ({ page }) => {
   await login(page, fixtures.coach.email, fixtures.coach.password);
-  await expect(page.getByRole("heading", { name: "Dashboard", exact: true })).toBeVisible({ timeout: 15000 });
+  await expect(page.getByRole("heading", { name: "Accueil", exact: true })).toBeVisible({ timeout: 15000 });
   await page.getByRole("button", { name: "Planning", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Planning" })).toBeVisible({ timeout: 10000 });
-  await expect(page.getByRole("button", { name: "Ajouter" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Nouvelle séance" })).toBeVisible();
 });
 
 test("le coach navigue vers la liste des athlètes", async ({ page }) => {
   await login(page, fixtures.coach.email, fixtures.coach.password);
-  await expect(page.getByRole("heading", { name: "Dashboard", exact: true })).toBeVisible({ timeout: 15000 });
+  await expect(page.getByRole("heading", { name: "Accueil", exact: true })).toBeVisible({ timeout: 15000 });
   await page.getByRole("button", { name: "Athlètes", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Athlètes" })).toBeVisible({ timeout: 10000 });
 });
 
 test("le coach planifie depuis une fiche avec l’athlète déjà sélectionné", async ({ page }) => {
   await login(page, fixtures.coach.email, fixtures.coach.password);
-  await expect(page.getByRole("heading", { name:"Dashboard", exact:true })).toBeVisible({ timeout:15000 });
+  await expect(page.getByRole("heading", { name:"Accueil", exact:true })).toBeVisible({ timeout:15000 });
   await page.getByRole("button", { name:"Athlètes", exact:true }).click();
   await page.getByRole("button", { name:"Ouvrir le profil de E2E Athlete" }).click();
   await page.getByRole("button", { name:"Planifier", exact:true }).click();
@@ -69,7 +69,7 @@ test("le coach planifie depuis une fiche avec l’athlète déjà sélectionné"
 
 test("le code d'invitation du club est affichable", async ({ page }) => {
   await login(page, fixtures.coach.email, fixtures.coach.password);
-  await expect(page.getByRole("heading", { name: "Dashboard", exact: true })).toBeVisible({ timeout: 15000 });
+  await expect(page.getByRole("heading", { name: "Accueil", exact: true })).toBeVisible({ timeout: 15000 });
   await page.getByRole("button", { name: "Inviter" }).click();
   await expect(page.getByText("Inviter un athlète")).toBeVisible();
 });

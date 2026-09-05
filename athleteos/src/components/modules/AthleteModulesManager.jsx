@@ -15,6 +15,7 @@ export default function AthleteModulesManager({ onClose, initialAthleteId = null
   const { athletes, athlete, club, saveAthletes, saveModuleForAthletes } = useModules();
   const availableKeys = MODULE_KEYS.filter((key) => club[key] !== false);
   const [mode, setMode] = useState(initialMode);
+  const [showAudience, setShowAudience] = useState(initialAthleteId == null);
   const [selectedIds, setSelectedIds] = useState(() => initialAthleteId == null ? [] : [initialAthleteId]);
   const [moduleKeys, setModuleKeys] = useState(() => initialAthleteId == null
     ? availableKeys
@@ -71,16 +72,16 @@ export default function AthleteModulesManager({ onClose, initialAthleteId = null
           <div>
             <p className="meta-text">GESTION DES OUTILS</p>
             <h2 id={titleId} className="text-[19px] font-bold" style={{ color: "var(--c-text-1)" }}>Personnaliser le suivi</h2>
-            <p className="text-[12px] mt-1" style={{ color: "var(--c-text-2)" }}>Outils du club → outils réellement visibles par chaque athlète.</p>
+            <p className="text-[12px] mt-1" style={{ color: "var(--c-text-2)" }}>{selectedAthlete && !showAudience ? `Le suivi de ${selectedAthlete.name}.` : "Choisis les outils utiles à tes athlètes."}</p>
           </div>
           <button type="button" className="icon-btn" aria-label="Fermer" disabled={saving} onClick={onClose}><X size={18} /></button>
         </header>
 
         <div className="px-5 sm:px-6 pt-4">
-          <div className="module-scope-note">
+          {showAudience && <div className="module-scope-note">
             <Layers3 size={16} aria-hidden="true" />
             <span><strong>{availableKeys.length} outils autorisés par le club.</strong> Tu choisis ici lesquels chaque athlète utilise, sans effacer son historique.</span>
-          </div>
+          </div>}
           <div className="module-manager-tabs" role="tablist" aria-label="Méthode de configuration">
             <button type="button" role="tab" aria-selected={mode === "athlete"} data-active={mode === "athlete"} onClick={() => setMode("athlete")}>
               <UserRound size={15} /> Par athlète
@@ -93,8 +94,9 @@ export default function AthleteModulesManager({ onClose, initialAthleteId = null
 
         <div className="flex-1 overflow-y-auto p-5 sm:p-6 pt-4">
           {mode === "athlete" ? (
-            <div className="grid grid-cols-1 lg:grid-cols-[280px_1fr] gap-6">
-              <div className="space-y-3">
+            <div className={showAudience ? "grid grid-cols-1 lg:grid-cols-[280px_1fr] gap-6" : "space-y-4"}>
+              {!showAudience && <button type="button" className="btn-ghost" onClick={() => setShowAudience(true)}>Choisir d’autres athlètes</button>}
+              {showAudience && <div className="space-y-3">
                 <div><p className="card-title">1. Choisir qui</p><p className="card-subtitle">Une personne, un groupe ou tout l’effectif.</p></div>
                 <div className="flex flex-wrap gap-2">
                   <button type="button" className="btn-secondary" onClick={() => setSelectedIds(athletes.map((item) => item.id))}><Users size={14} /> Tout</button>
@@ -110,9 +112,9 @@ export default function AthleteModulesManager({ onClose, initialAthleteId = null
                     </label>;
                   })}
                 </div>
-              </div>
+              </div>}
               <div className="space-y-4">
-                <div><p className="card-title">2. Choisir les outils</p><p className="card-subtitle">{selectedAthlete ? `Ce que ${selectedAthlete.name.split(" ")[0]} voit dans AthleteOS.` : selectedIds.length > 1 ? `Même configuration pour ${selectedIds.length} athlètes.` : "Sélectionne un athlète pour personnaliser son expérience."}</p></div>
+                <div><p className="card-title">{showAudience ? "2. Choisir les outils" : "Ses outils"}</p><p className="card-subtitle">{selectedAthlete ? `Ce que ${selectedAthlete.name.split(" ")[0]} voit dans AthleteOS.` : selectedIds.length > 1 ? `Même configuration pour ${selectedIds.length} athlètes.` : "Sélectionne un athlète pour personnaliser son expérience."}</p></div>
                 <ModulePresetPicker onSelect={setModuleKeys} availableKeys={availableKeys} value={moduleKeys} />
                 <ModuleSelector value={moduleKeys} onChange={setModuleKeys} availableKeys={availableKeys} compact />
               </div>

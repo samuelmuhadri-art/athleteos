@@ -4,6 +4,7 @@
 // ============================================================
 
 import { memo, useState, useRef } from "react";
+import { createPortal } from "react-dom";
 import { X, Plus } from "lucide-react";
 import { TYPE_CONFIG } from "./competitionsShared";
 import { useAccessibleDialog } from "../hooks/useAccessibleDialog";
@@ -61,7 +62,7 @@ const CreateCompModal = memo(({ athletes, initialData = null, onClose, onCreate 
   const inputCls = "input-premium";
   const labelCls = "metric-label block mb-2";
 
-  return (
+  return createPortal(
     <div
       className="modal-backdrop fixed inset-0 z-50 flex items-end sm:items-center justify-center"
       onClick={(e) => e.target === e.currentTarget && !saving && onClose()}
@@ -206,7 +207,7 @@ const CreateCompModal = memo(({ athletes, initialData = null, onClose, onCreate 
         </div>
         </form>
       </div>
-    </div>
+    </div>, document.body
   );
 });
 

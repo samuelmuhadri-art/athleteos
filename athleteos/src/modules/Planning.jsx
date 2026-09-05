@@ -46,7 +46,7 @@ import PlanningEventModal from "../components/planning/PlanningEventModal";
 
 function Planning() {
   const { clubId } = useAuth();
-  const { enabledAthleteIds } = useModules();
+  const { enabledAthleteIds, club: enabledModules } = useModules();
   const { success: showSuccessToast } = useToast();
   const today   = new Date();
   const isMobile = typeof window !== "undefined" && window.innerWidth < 768;
@@ -62,6 +62,8 @@ function Planning() {
   const [activeSession,      setActiveSession]       = useState(null);
   const [sessionModalTarget, setSessionModalTarget]  = useState(null);
   const [initialAthleteIds,  setInitialAthleteIds]   = useState([]);
+  const [initialDate, setInitialDate] = useState(null);
+  const [weekDate, setWeekDate] = useState(null);
   const [selectedDate,       setSelectedDate]        = useState(null);
   const [activeCompetition,  setActiveCompetition]   = useState(null);
   const [competitionEditor,  setCompetitionEditor]   = useState(null);
@@ -82,7 +84,7 @@ function Planning() {
       const [athletesRes, sessionsRes, competitionsRes, eventsRes] = await Promise.all([
         supabase.from("athletes").select("id, name, main_discipline, profile_data, user_id, group_name").eq("club_id", clubId),
         supabase.from("sessions").select("*").eq("club_id", clubId),
-        supabase.from("competitions").select("id, name, date, location, type, notes, competition_athletes(athlete_id, planned_event)").eq("club_id", clubId),
+        enabledModules.performances !== false ? supabase.from("competitions").select("id, name, date, location, type, notes, competition_athletes(athlete_id, planned_event)").eq("club_id", clubId) : Promise.resolve({ data: [], error: null }),
         supabase.from("planning_events").select("*, planning_event_athletes(athlete_id), planning_event_documents(document_id, documents(*))").eq("club_id", clubId),
       ]);
       if (athletesRes.error) throw athletesRes.error;
@@ -179,7 +181,7 @@ function Planning() {
     } finally {
       setLoading(false);
     }
-  }, [clubId, enabledAthleteIds]);
+  }, [clubId, enabledAthleteIds, enabledModules.performances]);
 
   useEffect(() => { fetchAll(); }, [fetchAll]);
 
@@ -193,10 +195,19 @@ function Planning() {
     setSessionModalTarget("create");
   }, [athletes]);
 
-  const openCreateSession = useCallback((athleteIds = []) => {
-    setInitialAthleteIds(athleteIds);
+  const openCreateSession = useCallback((athleteIds, date = selectedDate) => {
+    setInitialAthleteIds(athleteIds ?? (filterAthlete !== "all" ? [Number(filterAthlete)] : filterGroup !== "all" ? athletes.filter(athlete => athlete.group === filterGroup).map(athlete => athlete.id) : []));
+    setInitialDate(date ? toLocalDateStr(date) : null);
     setSessionModalTarget("create");
-  }, []);
+  }, [athletes, filterAthlete, filterGroup, selectedDate]);
+
+  useEffect(() => {
+    if (loading || new URLSearchParams(window.location.search).get("action") !== "new-session") return;
+    const url = new URL(window.location.href);
+    url.searchParams.delete("action");
+    window.history.replaceState(window.history.state, "", url);
+    openCreateSession();
+  }, [loading, openCreateSession]);
 
   // ═══ Écritures ════════════════════════════════════════════════════════════
 
@@ -474,7 +485,7 @@ function Planning() {
     return competitionsByDate[toLocalDateStr(selectedDate)] ?? [];
   }, [competitionsByDate, selectedDate]);
 
-  const weekReference = selectedDate ?? today;
+  const weekReference = weekDate ?? selectedDate ?? today;
   const weekStart = new Date(weekReference);
   weekStart.setDate(weekReference.getDate() - ((weekReference.getDay() + 6) % 7));
   const weekDays = Array.from({ length: 7 }, (_, i) => {
@@ -487,7 +498,7 @@ function Planning() {
     const source = toLocalDateStr(weekDays[0]);
     const targetDate = new Date(weekDays[0]); targetDate.setDate(targetDate.getDate() + 7);
     const target = toLocalDateStr(targetDate);
-    if (!window.confirm(`Dupliquer les séances de la semaine du ${source} vers celle du ${target} ?`)) return;
+    if (!window.confirm(`Dupliquer toutes les séances du club de la semaine du ${source} vers celle du ${target} ? Les filtres affichés ne limitent pas la copie.`)) return;
     const { data, error:duplicateError } = await supabase.rpc("duplicate_week_transactional", {
       p_source_monday:source, p_target_monday:target, p_athlete_ids:null,
     });
@@ -507,19 +518,22 @@ function Planning() {
     setSelectedDate(null);
   };
   const prevWeek = () => {
-    const d = new Date(selectedDate ?? today);
+    const d = new Date(weekDate ?? selectedDate ?? today);
     d.setDate(d.getDate() - 7);
-    setSelectedDate(d);
+    setWeekDate(d);
+    setSelectedDate(null);
   };
   const nextWeek = () => {
-    const d = new Date(selectedDate ?? today);
+    const d = new Date(weekDate ?? selectedDate ?? today);
     d.setDate(d.getDate() + 7);
-    setSelectedDate(d);
+    setWeekDate(d);
+    setSelectedDate(null);
   };
   const goToday = () => {
     setViewYear(today.getFullYear());
     setViewMonth(today.getMonth());
-    setSelectedDate(today);
+    setWeekDate(today);
+    setSelectedDate(viewMode === "month" ? today : null);
   };
 
   const liveActiveSession = activeSession
@@ -558,7 +572,7 @@ function Planning() {
     <div className="flex flex-col h-full min-h-0" style={{ background: "var(--c-bg)" }}>
 
       {/* ── Header glassmorphism ─────────────────────────────────────────── */}
-      <div className="header-glass px-4 md:px-6 py-3 md:py-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 flex-shrink-0 z-10">
+      <div className="header-glass px-4 md:px-6 py-3 md:py-4 flex flex-col xl:flex-row xl:items-center xl:justify-between gap-3 flex-shrink-0 z-10">
 
         <div className="flex items-center gap-1 w-full sm:w-auto">
           <button
@@ -592,14 +606,14 @@ function Planning() {
           </button>
         </div>
 
-        <div className="flex items-center justify-between sm:justify-end gap-2 w-full sm:w-auto">
+        <div className="flex flex-wrap items-center justify-between xl:justify-end gap-2 w-full xl:w-auto">
 
           {/* Toggle vue */}
           <SegmentedTabs
             ariaLabel="Mode d’affichage du planning"
             items={[{ id: "month", label: "Mois" }, { id: "week", label: "Sem." }]}
             value={viewMode}
-            onChange={setViewMode}
+            onChange={mode => { if (mode === "week" && selectedDate) setWeekDate(selectedDate); setViewMode(mode); setShowAddMenu(false); }}
           />
 
           {/* Filtre séances athlètes — desktop */}
@@ -618,23 +632,24 @@ function Planning() {
             </div>
           )}
 
-          {viewMode === "week" && <button type="button" className="btn-secondary hidden xl:inline-flex" onClick={() => duplicateWeek().catch(error => setError(error.message))}><Copy size={14} /> Dupliquer la semaine</button>}
+          <button type="button" className="btn-primary !px-3" onClick={() => openCreateSession()} disabled={athletes.length === 0}>
+            <Plus size={14} /> Nouvelle séance
+          </button>
 
           <div className="relative">
           <button
             type="button"
             aria-label="Ajouter au planning"
+            aria-expanded={showAddMenu}
             onClick={() => setShowAddMenu(value => !value)}
-            disabled={athletes.length === 0}
-            className="btn-primary disabled:opacity-40 !px-3 md:!px-4"
+            className="btn-secondary !px-3"
           >
-            <Plus size={14} />
-            <span className="hidden sm:inline">Ajouter</span>
+            <span>Plus</span>
           </button>
           {showAddMenu && <div className="absolute right-0 top-full mt-2 z-30 card p-2 min-w-52 shadow-xl">
-            <button type="button" className="btn-ghost w-full justify-start" onClick={() => { openCreateSession(); setShowAddMenu(false); }}><CalendarDays size={15} /> Séance</button>
-            <button type="button" className="btn-ghost w-full justify-start" onClick={() => { setCompetitionEditor("create"); setShowAddMenu(false); }}><Trophy size={15} /> Compétition</button>
+            {enabledModules.performances !== false && <button type="button" className="btn-ghost w-full justify-start" onClick={() => { setCompetitionEditor("create"); setShowAddMenu(false); }}><Trophy size={15} /> Compétition</button>}
             <button type="button" className="btn-ghost w-full justify-start" onClick={() => { setEventEditor({ kind:"stage" }); setShowAddMenu(false); }}><CalendarDays size={15} /> Stage, test ou autre</button>
+            {viewMode === "week" && <button type="button" className="btn-ghost w-full justify-start" onClick={() => { setShowAddMenu(false); duplicateWeek().catch(error => setError(error.message)); }}><Copy size={14} /> Dupliquer la semaine</button>}
           </div>}
           </div>
         </div>
@@ -715,8 +730,8 @@ function Planning() {
                         <button
                           type="button"
                           aria-label={`Ajouter une séance le ${date.toLocaleDateString("fr-BE")}`}
-                          onClick={() => { setSelectedDate(date); openCreateSession(); }}
-                          className="w-7 h-7 rounded-lg flex items-center justify-center transition-all"
+                          onClick={() => openCreateSession(undefined, date)}
+                          className="w-11 h-11 rounded-lg flex items-center justify-center transition-all"
                           style={{ background: "var(--c-surface-2)", color: "var(--c-text-3)" }}
                         >
                           <Plus size={13} />
@@ -1128,6 +1143,7 @@ function Planning() {
           athletes={athletes}
           initialData={sessionModalTarget === "create" ? null : buildFormFromSession(sessionModalTarget)}
           initialAthleteIds={sessionModalTarget === "create" ? initialAthleteIds : []}
+          initialDate={initialDate}
           onClose={() => { setSessionModalTarget(null); setInitialAthleteIds([]); }}
           onAdd={sessionModalTarget === "create" ? addSession : form => updateSession(sessionModalTarget.id, form)}
         />

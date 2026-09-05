@@ -5,6 +5,7 @@
 // ============================================================
 
 import { memo, useState, useCallback, useEffect, useMemo, useRef } from "react";
+import { createPortal } from "react-dom";
 import { X, Plus, CheckCircle, Repeat2, UsersRound } from "lucide-react";
 import { CATEGORIES, SESSION_COLORS, EMPTY_FORM, dateToISOWeek, dateToDayName, toLocalDateStr } from "./planningUtils";
 import TrainingFocusField from "../components/session/TrainingFocusField";
@@ -15,11 +16,11 @@ import { groupAthletes, isoWeekday, RECURRENCE_OPTIONS } from "../domain/plannin
 import { supabase } from "../utils/supabaseClient";
 import { mapDocument } from "../services/documentLibrary";
 
-const AddSessionModal = memo(({ athletes, initialData, initialAthleteIds = [], onClose, onAdd }) => {
+const AddSessionModal = memo(({ athletes, initialData, initialAthleteIds = [], initialDate, onClose, onAdd }) => {
   const isEdit = !!initialData;
   const today  = toLocalDateStr(new Date());
   const [form, setForm]             = useState(() => {
-    const base = initialData ?? { ...EMPTY_FORM, sessionDate: today, athleteIds: initialAthleteIds };
+    const base = initialData ?? { ...EMPTY_FORM, sessionDate: initialDate || today, athleteIds: initialAthleteIds };
     return {
       ...base,
       recurrence:base.recurrence ?? "none",
@@ -122,7 +123,7 @@ const AddSessionModal = memo(({ athletes, initialData, initialAthleteIds = [], o
   const labelCls = "block text-[12px] font-bold uppercase tracking-wide mb-1.5";
   const labelStyle = { color: "var(--c-text-3)" };
 
-  return (
+  return createPortal(
     <div
       className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4 modal-backdrop"
       onClick={e => e.target === e.currentTarget && requestClose()}
@@ -166,8 +167,8 @@ const AddSessionModal = memo(({ athletes, initialData, initialAthleteIds = [], o
           </div>}
 
           <div>
-            <label className={labelCls} style={labelStyle}>Titre *</label>
-            <input className="input-premium" placeholder="Ex: Sprint — sorties de blocs"
+            <label htmlFor="session-title" className={labelCls} style={labelStyle}>Titre *</label>
+            <input id="session-title" className="input-premium" placeholder="Ex: Sprint — sorties de blocs"
               value={form.title} onChange={e => set("title", e.target.value)} />
           </div>
 
@@ -191,47 +192,20 @@ const AddSessionModal = memo(({ athletes, initialData, initialAthleteIds = [], o
             </div>
           </div>
 
-          <TrainingFocusField
-            category={form.category}
-            value={form.trainingFocus}
-            onChange={value => set("trainingFocus", value)}
-          />
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className={labelCls} style={labelStyle}>Date *</label>
-              <input type="date" className="input-premium"
+            <label htmlFor="session-date" className={labelCls} style={labelStyle}>Date *</label>
+              <input id="session-date" type="date" className="input-premium"
                 value={form.sessionDate} onChange={e => set("sessionDate", e.target.value)} />
             </div>
             <div>
-              <label className={labelCls} style={labelStyle}>Heure</label>
-              <input type="time" className="input-premium"
+              <label htmlFor="session-time" className={labelCls} style={labelStyle}>Heure</label>
+              <input id="session-time" type="time" className="input-premium"
                 value={form.time} onChange={e => set("time", e.target.value)} />
             </div>
           </div>
 
-          {!isEdit && <div className="rounded-2xl p-4 space-y-3" style={{ background:"var(--c-surface-2)", border:"1px solid var(--c-border)" }}>
-            <div className="flex items-center gap-2"><Repeat2 size={15} color="var(--tone-success)" /><span className={labelCls} style={{ ...labelStyle, marginBottom:0 }}>Récurrence</span></div>
-            <div className="flex flex-wrap gap-2">
-              {RECURRENCE_OPTIONS.map(option => <button type="button" key={option.id} aria-pressed={form.recurrence === option.id} onClick={() => set("recurrence", option.id)}
-                className={form.recurrence === option.id ? "btn-primary" : "btn-secondary"}>{option.label}</button>)}
-            </div>
-            {form.recurrence !== "none" && <>
-              <div><label className={labelCls} style={labelStyle}>Jours</label><div className="grid grid-cols-7 gap-1">
-                {["L","M","M","J","V","S","D"].map((label, index) => {
-                  const day = index + 1;
-                  const selected = form.recurrenceWeekdays.includes(day);
-                  return <button key={day} type="button" aria-label={["Lundi","Mardi","Mercredi","Jeudi","Vendredi","Samedi","Dimanche"][index]}
-                    onClick={() => set("recurrenceWeekdays", selected ? form.recurrenceWeekdays.filter(value => value !== day) : [...form.recurrenceWeekdays, day])}
-                    aria-pressed={selected} className={selected ? "btn-primary" : "btn-secondary"}>{label}</button>;
-                })}
-              </div></div>
-              <div className="grid grid-cols-2 gap-3">
-                <div><label className={labelCls} style={labelStyle}>Nombre de séances</label><input type="number" min="1" max="104" className="input-premium" value={form.recurrenceCount} onChange={event => set("recurrenceCount", Number(event.target.value))} /></div>
-                <div><label className={labelCls} style={labelStyle}>Ou date de fin</label><input type="date" min={form.sessionDate} className="input-premium" value={form.recurrenceEndsOn} onChange={event => set("recurrenceEndsOn", event.target.value)} /></div>
-              </div>
-            </>}
-          </div>}
           {isEdit && initialData?.seriesId && <div className="rounded-2xl p-4" style={{ background:"var(--c-surface-2)", border:"1px solid var(--c-border)" }}>
             <label className={labelCls} style={labelStyle}>Appliquer les modifications</label>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
@@ -241,23 +215,16 @@ const AddSessionModal = memo(({ athletes, initialData, initialAthleteIds = [], o
           </div>}
 
           <div>
-            <label className={labelCls} style={labelStyle}>Durée (minutes)</label>
-            <input type="number" min="5" step="5" className="input-premium"
+            <label htmlFor="session-duration" className={labelCls} style={labelStyle}>Durée (minutes)</label>
+            <input id="session-duration" type="number" min="5" step="5" className="input-premium"
               value={form.durationMinutes} onChange={e => set("durationMinutes", Number(e.target.value))} />
           </div>
 
           <div>
-            <label className={labelCls} style={labelStyle}>Description</label>
-            <textarea className="input-premium resize-none" rows={3}
+            <label htmlFor="session-description" className={labelCls} style={labelStyle}>Contenu de la séance</label>
+            <textarea id="session-description" className="input-premium resize-none" rows={3}
               placeholder="Volume, intensité, objectifs…"
               value={form.description} onChange={e => set("description", e.target.value)} />
-          </div>
-
-          <div>
-            <label className={labelCls} style={labelStyle}>Consignes spécifiques</label>
-            <textarea className="input-premium resize-none" rows={2}
-              placeholder="Instructions particulières…"
-              value={form.instructions} onChange={e => set("instructions", e.target.value)} />
           </div>
 
           <div>
@@ -299,9 +266,51 @@ const AddSessionModal = memo(({ athletes, initialData, initialAthleteIds = [], o
             )}
           </div>
 
+          <details className="rounded-2xl p-3" style={{ border: "1px solid var(--c-border)" }}>
+          <summary className="min-h-11 flex items-center cursor-pointer text-[13px] font-semibold">Préciser l’objectif de la séance</summary>
+          <TrainingFocusField
+            category={form.category}
+            value={form.trainingFocus}
+            onChange={value => set("trainingFocus", value)}
+          />
+          </details>
+
+          {!isEdit && <details className="rounded-2xl p-4 space-y-3" style={{ background:"var(--c-surface-2)", border:"1px solid var(--c-border)" }}>
+            <summary className="min-h-11 flex items-center cursor-pointer text-[13px] font-semibold">Répéter cette séance{form.recurrence !== "none" ? " · répétition activée" : " (optionnel)"}</summary>
+            <div className="flex items-center gap-2"><Repeat2 size={15} color="var(--tone-success)" /><span className={labelCls} style={{ ...labelStyle, marginBottom:0 }}>Récurrence</span></div>
+            <div className="flex flex-wrap gap-2">
+              {RECURRENCE_OPTIONS.map(option => <button type="button" key={option.id} aria-pressed={form.recurrence === option.id} onClick={() => set("recurrence", option.id)}
+                className={form.recurrence === option.id ? "btn-primary" : "btn-secondary"}>{option.label}</button>)}
+            </div>
+            {form.recurrence !== "none" && <>
+              <div><label className={labelCls} style={labelStyle}>Jours</label><div className="grid grid-cols-7 gap-1">
+                {["L","M","M","J","V","S","D"].map((label, index) => {
+                  const day = index + 1;
+                  const selected = form.recurrenceWeekdays.includes(day);
+                  return <button key={day} type="button" aria-label={["Lundi","Mardi","Mercredi","Jeudi","Vendredi","Samedi","Dimanche"][index]}
+                    onClick={() => set("recurrenceWeekdays", selected ? form.recurrenceWeekdays.filter(value => value !== day) : [...form.recurrenceWeekdays, day])}
+                    aria-pressed={selected} className={selected ? "btn-primary" : "btn-secondary"}>{label}</button>;
+                })}
+              </div></div>
+              <div className="grid grid-cols-2 gap-3">
+                <div><label className={labelCls} style={labelStyle}>Nombre de séances</label><input type="number" min="1" max="104" className="input-premium" value={form.recurrenceCount} onChange={event => set("recurrenceCount", Number(event.target.value))} /></div>
+                <div><label className={labelCls} style={labelStyle}>Ou date de fin</label><input type="date" min={form.sessionDate} className="input-premium" value={form.recurrenceEndsOn} onChange={event => set("recurrenceEndsOn", event.target.value)} /></div>
+              </div>
+            </>}
+          </details>}
+          <details className="rounded-2xl p-3 space-y-3" style={{ border: "1px solid var(--c-border)" }}>
+            <summary className="min-h-11 flex items-center cursor-pointer text-[13px] font-semibold">Plus d’options · consignes et documents{(form.instructions || documents.length > 0) ? " · renseignés" : ""}</summary>
+            <div>
+              <label htmlFor="session-instructions" className={labelCls} style={labelStyle}>Consignes spécifiques</label>
+              <textarea id="session-instructions" className="input-premium resize-none" rows={2}
+                placeholder="Instructions particulières…"
+                value={form.instructions} onChange={e => set("instructions", e.target.value)} />
+            </div>
           <DocumentLibraryField value={documents} onChange={setDocuments} athletes={assignedAthletes}
             allowSpecificRecipients={form.recurrence === "none" && (!isEdit || form.editScope === "single")}
             disabled={saving} onBusyChange={setDocumentsBusy} />
+          </details>
+          {invalidDocumentRecipients && <p role="alert" className="text-[12px]" style={{ color: "var(--tone-danger)" }}>Vérifie les destinataires des documents dans « Plus d’options » avant d’enregistrer.</p>}
           {saveError && <p role="alert" className="text-[12px]" style={{ color:"var(--tone-danger)" }}>{saveError}</p>}
         </div>
 
@@ -321,7 +330,7 @@ const AddSessionModal = memo(({ athletes, initialData, initialAthleteIds = [], o
           </button>
         </div>
       </div>
-    </div>
+    </div>, document.body
   );
 });
 
