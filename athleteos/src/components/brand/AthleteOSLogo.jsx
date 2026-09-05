@@ -24,12 +24,12 @@ export const AthleteOSMark = memo(function AthleteOSMark({
       <g
         fill="none"
         stroke="currentColor"
-        strokeWidth="5.5"
-        strokeLinecap="round"
-        strokeLinejoin="round"
+        strokeWidth="4"
+        transform="rotate(-28 32 32)"
       >
-        <path d="M48 16A23 23 0 1 0 54 32" />
-        <path d="M19 45 31.2 17.2c.4-.9 1.7-.9 2.1 0L46 45M25 35h15" />
+        <rect x="4" y="16" width="56" height="32" rx="16" />
+        <rect x="12" y="24" width="40" height="16" rx="8" />
+        <path d="M36 16v8" />
       </g>
     </svg>
   );

@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>AthleteOS — Piste affinée</title>
+  <style>
+    :root{color-scheme:dark;--bg:#07120e;--panel:#101f18;--line:#2a3a32;--text:#f1f6f3;--muted:#a8bab0;--green:#43c99b}
+    *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:16px/1.5 system-ui,-apple-system,sans-serif}main{max-width:1200px;padding:44px 32px;margin:auto}h1,h2,p{margin:0}h1{font-size:clamp(32px,4vw,48px);line-height:1.12;letter-spacing:-1.6px;margin:12px 0 18px}h2{font-size:20px;letter-spacing:-.5px}.eyebrow{font-size:12px;letter-spacing:2px;text-transform:uppercase;color:var(--green);font-weight:700}.intro{color:var(--muted);max-width:780px}.comparison{display:grid;grid-template-columns:1fr 1.8fr;gap:20px;margin-top:32px}.panel{border:1px solid var(--line);border-radius:22px;padding:26px;background:var(--panel);min-width:0}.new{border-color:#43c99b77}.label{font-size:12px;letter-spacing:1.3px;color:var(--muted);text-transform:uppercase}.old img{display:block;width:112px;height:112px;margin:38px auto}.old p:last-child{font-size:14px;color:var(--muted);margin-top:26px}.signature{display:flex;align-items:center;justify-content:center;gap:18px;min-height:212px}.signature img{width:140px;height:140px}.wordmark{font-size:40px;font-weight:700;letter-spacing:-1.6px;white-space:nowrap}.wordmark span{color:var(--green)}.new-note{font-size:14px;color:var(--muted);border-top:1px solid var(--line);padding-top:16px}.details{display:grid;grid-template-columns:1.2fr 1fr 1fr;gap:20px;margin-top:20px}.samples{display:flex;align-items:center;gap:18px;margin:24px 0 12px;min-height:64px}.sample{text-align:center;color:var(--muted);font-size:11px}.sample img{display:block;margin:auto auto 8px}.tile{display:grid;place-items:center;width:64px;height:64px;border-radius:16px;background:var(--bg)}.tile.light{background:var(--text)}.tile.light img{filter:brightness(0)}.tile.white img{filter:brightness(0) invert(1)}.sizes{gap:24px}.icon{border:1px solid #315044;width:72px;height:72px;border-radius:19px}.app-name{font-size:13px}.muted{font-size:13px;color:var(--muted)}footer{margin-top:26px;color:var(--muted);font-size:13px}a{color:var(--green);text-underline-offset:3px}a:focus-visible{outline:2px solid white;outline-offset:4px}
+    @media(max-width:950px){.signature{flex-direction:column;gap:0;min-height:230px}.wordmark{font-size:34px}.details{grid-template-columns:1fr 1fr}.details .panel:first-child{grid-column:1/-1}}
+    @media(max-width:580px){main{padding:28px 16px}.comparison,.details{grid-template-columns:1fr}.panel{padding:22px}.details .panel:first-child{grid-column:auto}.old img{width:80px;height:80px;margin:18px auto}.old p:last-child{margin-top:12px}.signature{min-height:250px}.wordmark{font-size:36px}.samples{justify-content:center}.label{font-size:11px}}
+  </style>
+</head>
+<body>
+<main>
+  <header><p class="eyebrow">AthleteOS · Piste / 03</p><h1>Une piste. Plus un arobase.</h1><p class="intro">Le mouvement est conservé. Le crochet intérieur disparaît : deux boucles fermées, des lignes droites plus longues et une ligne de départ rendent la référence au stade plus explicite.</p></header>
+  <section class="comparison" aria-label="Ancienne et nouvelle proposition">
+    <div class="panel old"><p class="label">Avant · Piste 02</p><img src="concepts/piste-v2.svg" alt="Ancienne proposition avec crochet intérieur"><h2>Le crochet créait l'ambiguïté.</h2><p>La forme verticale et le retour vers le centre pouvaient évoquer un arobase ou un trombone.</p></div>
+    <div class="panel new"><p class="label">Après · Piste 03</p><div class="signature"><img src="concepts/piste-v3.svg" alt="Nouvelle piste ovale inclinée avec deux anneaux fermés et une ligne de départ"><div class="wordmark">Athlete<span>OS</span></div></div><p class="new-note">Deux virages réguliers · couloirs parallèles · départ transversal.<br>Inclinaison de 28°, sans spirale ni retour au centre.</p></div>
+  </section>
+  <section class="details" aria-label="Vérification des déclinaisons">
+    <div class="panel"><h2>Un seul dessin, trois usages</h2><div class="samples"><div class="tile"><img src="concepts/piste-v3.svg" width="48" height="48" alt="Vert sur fond sombre"></div><div class="tile light"><img src="concepts/piste-v3.svg" width="48" height="48" alt="Noir sur fond clair"></div><div class="tile white"><img src="concepts/piste-v3.svg" width="48" height="48" alt="Blanc sur fond sombre"></div></div><p class="muted">Aucun dégradé ni effet nécessaire.</p></div>
+    <div class="panel"><h2>À taille réelle</h2><div class="samples sizes"><div class="sample"><img src="concepts/piste-v3.svg" width="16" height="16" alt="Logo à 16 pixels">16 px</div><div class="sample"><img src="concepts/piste-v3.svg" width="24" height="24" alt="Logo à 24 pixels">24 px</div><div class="sample"><img src="concepts/piste-v3.svg" width="32" height="32" alt="Logo à 32 pixels">32 px</div></div><p class="muted">Espacement régulier entre les couloirs.</p></div>
+    <div class="panel"><h2>Sur le téléphone</h2><div class="samples"><div class="tile icon"><img src="concepts/piste-v3.svg" width="50" height="50" alt="Icône de téléphone avec la nouvelle piste"></div><span class="app-name">AthleteOS</span></div><p class="muted">Même vert, même fond.</p></div>
+  </section>
+  <footer>Piste 03 validée et intégrée au logo partagé, au favicon et aux icônes téléphone. <a href="logo-preview.html">Voir cette version dans les maquettes d'interface.</a></footer>
+</main>
+</body>
+</html>

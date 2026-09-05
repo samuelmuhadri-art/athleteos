@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none" stroke="#43c99b" stroke-width="4" role="img" aria-labelledby="title desc">
+  <title id="title">AthleteOS — Piste, version affinée</title>
+  <desc id="desc">Deux anneaux fermés en forme de piste d'athlétisme, inclinés, avec une ligne de départ transversale. Aucun crochet central.</desc>
+  <g transform="rotate(-28 32 32)">
+    <rect x="4" y="16" width="56" height="32" rx="16"/>
+    <rect x="12" y="24" width="40" height="16" rx="8"/>
+    <path d="M36 16v8"/>
+  </g>
+</svg>
