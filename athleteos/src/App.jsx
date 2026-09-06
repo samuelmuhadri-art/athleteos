@@ -15,6 +15,7 @@ import { useAuth }    from "./hooks/useAuth";
 import LoginPage      from "./pages/LoginPage";
 import SignupPage     from "./pages/SignupPage";
 import ResetPasswordPage from "./pages/ResetPasswordPage";
+import AuthAccessError from "./components/auth/AuthAccessError";
 import AccountSettingsModal from "./components/ui/AccountSettingsModal";
 import InitialAvatar from "./components/ui/InitialAvatar";
 import { AthleteOSBadge, AthleteOSWordmark } from "./components/brand/AthleteOSLogo";
@@ -564,7 +565,7 @@ function CoachShell({ user, profile, clubId, signOut, club, clubLoading, refresh
 
 // ─── App root ─────────────────────────────────────────────────────────────────
 export default function App() {
-  const { user, profile, clubId, loading: authLoading, signOut, passwordRecovery } = useAuth();
+  const { user, profile, clubId, loading: authLoading, signOut, passwordRecovery, profileError, retryProfile } = useAuth();
   // Applique le thème dès l'écran public (connexion, inscription et reset),
   // avant même que les shells coach/athlète soient montés.
   useTheme();
@@ -579,6 +580,7 @@ export default function App() {
   // Priorité absolue : tant qu'un nouveau mot de passe n'est pas défini après
   // un clic sur le lien de réinitialisation, on ne route jamais ailleurs.
   if (passwordRecovery) return <ResetPasswordPage />;
+  if (profileError || (user && !profile)) return <AuthAccessError message={profileError} onRetry={retryProfile} onSignOut={user ? async () => { await signOut(); setShowSignup(false); } : undefined} />;
   if (!user) {
     return showSignup
       ? <SignupPage initialInviteCode={inviteCodeFromUrl} onBack={() => setShowSignup(false)} />
@@ -591,7 +593,6 @@ export default function App() {
       </Suspense>
     </ModulesProvider>
   );
-  if (!profile) return <AuthLoader />;
 
   return (
     <ModulesProvider>

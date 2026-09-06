@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import LoginPage from "./LoginPage";
 import SignupPage from "./SignupPage";
 import ResetPasswordPage from "./ResetPasswordPage";
@@ -41,7 +41,7 @@ beforeEach(() => {
   mocks.signInWithPassword.mockResolvedValue({ error: null });
 });
 
-afterEach(cleanup);
+afterEach(() => { cleanup(); vi.useRealTimers(); });
 
 describe("LoginPage", () => {
   it("associe les labels, permet d'afficher le mot de passe et traduit l'erreur de connexion", async () => {
@@ -85,6 +85,27 @@ describe("LoginPage", () => {
 });
 
 describe("SignupPage", () => {
+  function fillNewClub() {
+    fireEvent.change(screen.getByLabelText("Nom du club"), { target: { value: "Club nouveau" } });
+    fireEvent.change(screen.getByLabelText("Prénom et nom"), { target: { value: "Coach nouveau" } });
+    fireEvent.change(screen.getByLabelText("Adresse email"), { target: { value: "new@example.invalid" } });
+    fireEvent.change(screen.getByLabelText("Mot de passe"), { target: { value: "AthleteOS2026!" } });
+    fireEvent.click(screen.getByRole("button", { name: "Créer mon club", exact: true }));
+  }
+  it("conserve la création du club puis termine l'attente du formulaire après connexion", async () => {
+    render(<SignupPage onBack={vi.fn()} />); fillNewClub();
+    await waitFor(() => expect(mocks.signInWithPassword).toHaveBeenCalled());
+    expect(mocks.invoke.mock.calls[0][1].body).toMatchObject({ mode: "create_club", clubName: "Club nouveau" });
+    await waitFor(() => expect(screen.getByRole("button", { name: "Créer mon club", exact: true }).disabled).toBe(false));
+  });
+  it("sort d'une inscription sans réponse et invite à vérifier le compte avant de recommencer", async () => {
+    vi.useFakeTimers(); mocks.invoke.mockReturnValue(new Promise(() => {}));
+    render(<SignupPage onBack={vi.fn()} />); fillNewClub();
+    await act(async () => vi.advanceTimersByTimeAsync(20000));
+    expect(screen.getByRole("alert").textContent).toContain("compte a peut-être été créé");
+    expect(screen.getByRole("button", { name: "Créer mon club", exact: true }).disabled).toBe(false);
+    expect(mocks.signInWithPassword).not.toHaveBeenCalled();
+  });
   it("préremplit et vérifie le club lorsqu’un athlète ouvre un lien d’invitation", async () => {
     render(<SignupPage onBack={vi.fn()} initialInviteCode="ab12cd34" />);
 

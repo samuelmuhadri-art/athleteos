@@ -22,8 +22,11 @@ import { AuthContext } from "./authContextValue";
 
 export function AuthProvider({ children }) {
   const [user,    setUser]    = useState(null);   // objet supabase.auth.user
-  const [profile, setProfile] = useState(null);   // ligne table users
-  const [loading, setLoading] = useState(true);   // vrai jusqu'à la 1ère résolution
+  const [profileState, setProfileState] = useState(null);
+  const [sessionLoading, setSessionLoading] = useState(true);
+  const [sessionError, setSessionError] = useState(null);
+  const [sessionAttempt, setSessionAttempt] = useState(0);
+  const [profileAttempt, setProfileAttempt] = useState(0);
   // true entre le moment où on clique le lien "mot de passe oublié" reçu par
   // email et le moment où un nouveau mot de passe est effectivement défini —
   // pendant ce laps de temps il ne faut PAS router vers le dashboard normal.
@@ -31,57 +34,92 @@ export function AuthProvider({ children }) {
 
   // ─── Charge le profil métier depuis la table `users` ─────────────────────────
   // Appelé à chaque changement de session (connexion, refresh, déconnexion).
-  const loadProfile = useCallback(async (authUser) => {
-    if (!authUser) {
-      setProfile(null);
-      return;
+  const authUserId = user?.id;
+  useEffect(() => {
+    if (!authUserId) { setProfileState(null); return undefined; }
+    let active = true;
+    const controller = new AbortController();
+    const fail = message => {
+      if (active) setProfileState({ authId: authUserId, data: null, error: message });
+    };
+    const timeout = globalThis.setTimeout(() => {
+      fail("Le chargement de ton club prend trop de temps. Vérifie ta connexion puis réessaie.");
+      active = false;
+      controller.abort();
+    }, 12000);
+    async function load() {
+      try {
+        // Hors du callback Auth : aucune requête n'attend le verrou de session
+        // depuis un événement qui détient déjà ce verrou.
+        const { data, error } = await supabase.from("users")
+          .select("id, name, role, club_id").eq("auth_uid", authUserId)
+          .maybeSingle().abortSignal(controller.signal);
+        if (!active) return;
+        if (error) {
+          fail("Impossible de charger ton accès au club. Réessaie dans quelques instants.");
+        } else if (!data?.club_id || !["head_coach", "coach", "athlete"].includes(data.role)) {
+          fail("Ton compte est connecté, mais son accès au club est introuvable. Réessaie ; si le problème persiste, contacte le support. Ne recrée pas de compte pour le moment.");
+        } else {
+          setProfileState({ authId: authUserId, data, error: null });
+        }
+      } catch {
+        fail("Impossible de charger ton accès au club. Vérifie ta connexion puis réessaie.");
+      } finally { globalThis.clearTimeout(timeout); }
     }
-    try {
-      // users.id est l'identifiant métier entier. Le lien avec Supabase Auth
-      // passe exclusivement par users.auth_uid = auth.users.id.
-      const { data, error } = await supabase
-        .from("users")
-     .select("id, name, role, club_id")
-       .eq("auth_uid", authUser.id)
-        .single();
-
-      if (error) {
-        console.error("AuthContext — profil introuvable :", error.message);
-        setProfile(null);
-      } else {
-        setProfile(data);
-      }
-    } catch (err) {
-      console.error("AuthContext — erreur inattendue :", err);
-      setProfile(null);
-    }
-  }, []);
+    load();
+    return () => { active = false; globalThis.clearTimeout(timeout); controller.abort(); };
+  }, [authUserId, profileAttempt]);
 
   // ─── Écoute les changements de session Supabase ───────────────────────────────
   useEffect(() => {
-    // Vérifie la session existante au montage (page refresh, retour sur l'onglet).
-    supabase.auth.getSession().then(async ({ data: { session } }) => {
-      const authUser = session?.user ?? null;
-      setUser(authUser);
-      await loadProfile(authUser);
-      setLoading(false);
-    });
-
-    // Puis écoute les événements suivants :
-    // SIGNED_IN, SIGNED_OUT, TOKEN_REFRESHED, USER_UPDATED, PASSWORD_RECOVERY
+    let active = true;
+    let eventReceived = false;
+    const settle = session => {
+      if (!active) return;
+      setUser(session?.user ?? null);
+      setSessionError(null);
+      setSessionLoading(false);
+    };
+    const timeout = globalThis.setTimeout(() => {
+      if (!active || eventReceived) return;
+      setSessionError("La vérification de ta session prend trop de temps. Vérifie ta connexion puis réessaie.");
+      setSessionLoading(false);
+    }, 12000);
+    // Ce callback reste synchrone : les lectures métier sont dans l'effet ci-dessus.
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (_event, session) => {
+      (_event, session) => {
+        if (!active) return;
+        eventReceived = true;
+        globalThis.clearTimeout(timeout);
         if (_event === "PASSWORD_RECOVERY") setPasswordRecovery(true);
-        const authUser = session?.user ?? null;
-        setUser(authUser);
-        await loadProfile(authUser);
-        // loading reste false après la 1ère résolution (géré dans getSession ci-dessus)
+        if (_event === "SIGNED_OUT") { setPasswordRecovery(false); setProfileState(null); }
+        if (["SIGNED_IN", "TOKEN_REFRESHED", "USER_UPDATED"].includes(_event)) setProfileAttempt(value => value + 1);
+        settle(session);
       }
     );
+    supabase.auth.getSession().then(({ data, error }) => {
+      if (!active || eventReceived) return;
+      globalThis.clearTimeout(timeout);
+      if (error) throw error;
+      settle(data?.session);
+    }).catch(() => {
+      if (!active || eventReceived) return;
+      globalThis.clearTimeout(timeout);
+      setSessionError("Impossible de vérifier ta session. Réessaie dans quelques instants.");
+      setSessionLoading(false);
+    });
+    return () => { active = false; globalThis.clearTimeout(timeout); subscription.unsubscribe(); };
+  }, [sessionAttempt]);
 
-    // Nettoyage : on se désabonne quand AuthProvider est démonté
-    return () => subscription.unsubscribe();
-  }, [loadProfile]);
+  const retryProfile = useCallback(() => {
+    if (authUserId) { setProfileState(null); setProfileAttempt(value => value + 1); }
+    else { setSessionError(null); setSessionLoading(true); setSessionAttempt(value => value + 1); }
+  }, [authUserId]);
+  // Jamais de profil de l'ancien compte pendant un changement de session.
+  const currentProfile = profileState?.authId === authUserId ? profileState : null;
+  const profile = currentProfile?.data ?? null;
+  const loading = sessionLoading || Boolean(authUserId && !currentProfile);
+  const profileError = sessionError ?? currentProfile?.error ?? null;
 
   // ─── Actions exposées ─────────────────────────────────────────────────────────
 
@@ -124,6 +162,8 @@ export function AuthProvider({ children }) {
     // clubId est le raccourci critique : remplace partout `.eq("club_id", 1)`
     clubId: profile?.club_id ?? null,
     loading,
+    profileError,
+    retryProfile,
     passwordRecovery,
     signIn,
     signOut,

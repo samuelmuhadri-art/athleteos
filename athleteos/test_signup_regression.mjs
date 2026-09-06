@@ -146,6 +146,17 @@ async function main() {
         clubName: `Nouveau Club ${RUN_ID}`,
       }));
       record("Création club valide -> succès", status === 200 && json?.success === true, `status=${status} body=${JSON.stringify(json)}`);
+      // Vérifie le parcours avec les droits du nouveau coach, pas service_role :
+      // un succès HTTP seul ne prouve pas que le profil et le club sont lisibles.
+      const newcomer = createClient(SUPABASE_URL, ANON_KEY, { auth: { persistSession: false, autoRefreshToken: false } });
+      try {
+        const login = await newcomer.auth.signInWithPassword({ email: createEmail, password: `Test-${RUN_ID}-Aa!` });
+        if (login.error) throw login.error;
+        const ownProfile = await newcomer.from("users").select("id, club_id, role").eq("auth_uid", login.data.user.id).maybeSingle();
+        record("Nouveau coach connecté -> profil head_coach lisible sous RLS", !ownProfile.error && ownProfile.data?.role === "head_coach" && Boolean(ownProfile.data?.club_id));
+        const ownClub = ownProfile.data?.club_id ? await newcomer.from("clubs").select("id, name").eq("id", ownProfile.data.club_id).maybeSingle() : { data: null };
+        record("Nouveau coach connecté -> nouveau club lisible sous RLS", !ownClub.error && ownClub.data?.name === `Nouveau Club ${RUN_ID}`);
+      } finally { await newcomer.auth.signOut(); }
     }
 
     // ── 2. Adhésion par code valide ─────────────────────────────────

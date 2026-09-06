@@ -11,6 +11,7 @@ import {
 } from "../components/auth/AuthFormControls";
 import { translateAuthError } from "../components/auth/authFormUtils";
 import { normalizeInviteCode } from "../utils/clubBranding";
+import { withAuthTimeout } from "../utils/authTimeout";
 
 const SIGNUP_MODES = Object.freeze([
   {
@@ -85,7 +86,7 @@ export default function SignupPage({ onBack, initialInviteCode = "" }) {
     setLoading(true);
     setError(null);
     try {
-      const { data, error: functionError } = await supabase.functions.invoke("signup", {
+      const { data, error: functionError } = await withAuthTimeout(supabase.functions.invoke("signup", {
         body: {
           mode,
           name: form.name.trim(),
@@ -96,14 +97,14 @@ export default function SignupPage({ onBack, initialInviteCode = "" }) {
           company: honeypot,
           formLoadedAt: formLoadedAt.current,
         },
-      });
+      }), "Le serveur met trop de temps à répondre. Ton compte a peut-être été créé : essaie de te connecter avant de recommencer.");
       if (functionError) throw functionError;
       if (!data?.success) throw new Error(data?.error ?? "Une erreur est survenue.");
 
-      const { error: signInError } = await supabase.auth.signInWithPassword({
+      const { error: signInError } = await withAuthTimeout(supabase.auth.signInWithPassword({
         email: form.email.trim(),
         password: form.password,
-      });
+      }), "La connexion prend trop de temps. Ton compte a peut-être été créé : reviens à la connexion pour réessayer.");
       if (signInError) throw signInError;
       if (mode === "join_club") {
         const { data: inviteData, error: inviteError } = await supabase.functions.invoke("admin-actions", {
@@ -132,6 +133,7 @@ export default function SignupPage({ onBack, initialInviteCode = "" }) {
         }
       }
       setError(message);
+    } finally {
       setLoading(false);
     }
   };
