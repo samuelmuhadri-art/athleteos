@@ -12,6 +12,7 @@ const mocks = vi.hoisted(() => ({
   invoke: vi.fn(),
   rpc: vi.fn(),
   signInWithPassword: vi.fn(),
+  monotonicTime: 0,
 }));
 
 vi.mock("../hooks/useAuth", () => ({
@@ -33,6 +34,8 @@ vi.mock("../utils/supabaseClient", () => ({
 
 beforeEach(() => {
   vi.clearAllMocks();
+  mocks.monotonicTime = 0;
+  vi.spyOn(performance, "now").mockImplementation(() => mocks.monotonicTime);
   mocks.signIn.mockResolvedValue({ error: null });
   mocks.sendPasswordReset.mockResolvedValue({ error: null });
   mocks.updatePassword.mockResolvedValue({ error: null });
@@ -41,7 +44,7 @@ beforeEach(() => {
   mocks.signInWithPassword.mockResolvedValue({ error: null });
 });
 
-afterEach(() => { cleanup(); vi.useRealTimers(); });
+afterEach(() => { cleanup(); vi.useRealTimers(); vi.restoreAllMocks(); });
 
 describe("LoginPage", () => {
   it("associe les labels, permet d'afficher le mot de passe et traduit l'erreur de connexion", async () => {
@@ -85,26 +88,43 @@ describe("LoginPage", () => {
 });
 
 describe("SignupPage", () => {
-  function fillNewClub() {
+  function fillNewClub(elapsed = 2000) {
     fireEvent.change(screen.getByLabelText("Nom du club"), { target: { value: "Club nouveau" } });
     fireEvent.change(screen.getByLabelText("Prénom et nom"), { target: { value: "Coach nouveau" } });
     fireEvent.change(screen.getByLabelText("Adresse email"), { target: { value: "new@example.invalid" } });
     fireEvent.change(screen.getByLabelText("Mot de passe"), { target: { value: "AthleteOS2026!" } });
+    mocks.monotonicTime = elapsed;
     fireEvent.click(screen.getByRole("button", { name: "Créer mon club", exact: true }));
   }
   it("conserve la création du club puis termine l'attente du formulaire après connexion", async () => {
     render(<SignupPage onBack={vi.fn()} />); fillNewClub();
     await waitFor(() => expect(mocks.signInWithPassword).toHaveBeenCalled());
-    expect(mocks.invoke.mock.calls[0][1].body).toMatchObject({ mode: "create_club", clubName: "Club nouveau" });
+    expect(mocks.invoke.mock.calls[0][1].body).toMatchObject({ mode: "create_club", clubName: "Club nouveau", company: "", formElapsedMs: 2000 });
     await waitFor(() => expect(screen.getByRole("button", { name: "Créer mon club", exact: true }).disabled).toBe(false));
   });
   it("sort d'une inscription sans réponse et invite à vérifier le compte avant de recommencer", async () => {
-    vi.useFakeTimers(); mocks.invoke.mockReturnValue(new Promise(() => {}));
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] }); mocks.invoke.mockReturnValue(new Promise(() => {}));
     render(<SignupPage onBack={vi.fn()} />); fillNewClub();
     await act(async () => vi.advanceTimersByTimeAsync(20000));
     expect(screen.getByRole("alert").textContent).toContain("compte a peut-être été créé");
     expect(screen.getByRole("button", { name: "Créer mon club", exact: true }).disabled).toBe(false);
     expect(mocks.signInWithPassword).not.toHaveBeenCalled();
+  });
+  it("bloque une validation trop rapide sans consommer le quota et autorise le réessai", async () => {
+    render(<SignupPage onBack={vi.fn()} />); fillNewClub(1000);
+    expect(mocks.invoke).not.toHaveBeenCalled();
+    expect(screen.getByRole("alert").textContent).toContain("Attends quelques secondes");
+    mocks.monotonicTime = 2000;
+    fireEvent.click(screen.getByRole("button", { name: "Créer mon club", exact: true }));
+    await waitFor(() => expect(mocks.signInWithPassword).toHaveBeenCalled());
+    expect(mocks.invoke).toHaveBeenCalledTimes(1);
+  });
+  it("rend le rejet des anciens serveurs compréhensible et évite un nom de champ d'autofill", async () => {
+    mocks.invoke.mockResolvedValue({ data: null, error: { context: { json: async () => ({ error: "Requête invalide." }) } } });
+    const { container } = render(<SignupPage onBack={vi.fn()} />); fillNewClub();
+    await waitFor(() => expect(screen.getByRole("alert").textContent).toContain("sans remplissage automatique"));
+    expect(container.querySelector('input[name="company"]')).toBeNull();
+    expect(container.querySelector('input[name="aos_contact_check"]').getAttribute('autocomplete')).toBe('off');
   });
   it("préremplit et vérifie le club lorsqu’un athlète ouvre un lien d’invitation", async () => {
     render(<SignupPage onBack={vi.fn()} initialInviteCode="ab12cd34" />);
@@ -123,6 +143,7 @@ describe("SignupPage", () => {
     fireEvent.change(screen.getByLabelText("Prénom et nom"), { target: { value: "Alice Martin" } });
     fireEvent.change(screen.getByLabelText("Adresse email"), { target: { value: "alice@club.be" } });
     fireEvent.change(screen.getByLabelText("Mot de passe"), { target: { value: "AthleteOS2026!" } });
+    mocks.monotonicTime = 2000;
     fireEvent.click(screen.getByRole("button", { name: "Rejoindre mon club" }));
 
     await waitFor(() => expect(mocks.invoke).toHaveBeenCalledTimes(2));

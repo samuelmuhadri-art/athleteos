@@ -11,11 +11,19 @@ for (const viewport of [{ width: 320, height: 568 }, { width: 768, height: 1024 
       await page.getByLabel('Prénom et nom').fill('Coach Nouveau');
       await page.getByLabel('Adresse email').fill('new-club@example.invalid');
       await page.getByLabel('Mot de passe', { exact: true }).fill('Fixture-only-123!');
+      // Avance la durée monotone sans dormir ni falsifier la date civile.
+      await page.clock.runFor(1600);
       await page.getByRole('button', { name: 'Créer mon club', exact: true }).click();
     }
     async function fixture(page) {
+      await page.clock.install();
       await installUxFixture(page, { empty: true, configured: false });
-      await page.route('**/functions/v1/signup', route => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ success: true }) }));
+      await page.route('**/functions/v1/signup', route => {
+        const body = route.request().postDataJSON();
+        expect(body.formElapsedMs).toBeGreaterThanOrEqual(1500);
+        expect(body.company).toBe('');
+        return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ success: true }) });
+      });
     }
     test('un nouveau coach arrive sur la configuration de son club', async ({ page }) => {
       await fixture(page); await signup(page);

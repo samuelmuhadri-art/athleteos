@@ -39,6 +39,7 @@ export default function SignupPage({ onBack, initialInviteCode = "" }) {
   const [inviteCheck, setInviteCheck] = useState(null);
   const [honeypot, setHoneypot] = useState("");
   const formLoadedAt = useRef(Date.now());
+  const formStartedAt = useRef(performance.now());
 
   const setField = (field, value) => {
     setForm((current) => ({ ...current, [field]: value }));
@@ -83,6 +84,12 @@ export default function SignupPage({ onBack, initialInviteCode = "" }) {
     event.preventDefault();
     if (!canSubmit || loading) return;
 
+    const formElapsedMs = Math.max(0, Math.floor(performance.now() - formStartedAt.current));
+    if (formElapsedMs < 1500) {
+      setError("Attends quelques secondes avant de valider le formulaire.");
+      return;
+    }
+
     setLoading(true);
     setError(null);
     try {
@@ -96,6 +103,7 @@ export default function SignupPage({ onBack, initialInviteCode = "" }) {
           inviteCode: normalizeInviteCode(form.inviteCode),
           company: honeypot,
           formLoadedAt: formLoadedAt.current,
+          formElapsedMs,
         },
       }), "Le serveur met trop de temps à répondre. Ton compte a peut-être été créé : essaie de te connecter avant de recommencer.");
       if (functionError) throw functionError;
@@ -132,6 +140,7 @@ export default function SignupPage({ onBack, initialInviteCode = "" }) {
           // Le corps n'est pas du JSON : le message normalisé reste affiché.
         }
       }
+      if (message === "Requête invalide.") message = "Le formulaire n’a pas pu être vérifié. Attends quelques secondes puis réessaie. Si cela persiste, recharge la page sans remplissage automatique et vérifie la date et l’heure de ton appareil.";
       setError(message);
     } finally {
       setLoading(false);
@@ -198,9 +207,11 @@ export default function SignupPage({ onBack, initialInviteCode = "" }) {
         <div className="auth-honeypot" aria-hidden="true">
           <input
             type="text"
-            name="company"
+            name="aos_contact_check"
             tabIndex={-1}
             autoComplete="off"
+            data-1p-ignore="true"
+            data-lpignore="true"
             value={honeypot}
             onChange={(event) => setHoneypot(event.target.value)}
           />

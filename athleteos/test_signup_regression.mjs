@@ -144,8 +144,10 @@ async function main() {
       const { status, json } = await callSignup(baseBody({
         mode: "create_club", name: "Coach Test", email: createEmail, password: `Test-${RUN_ID}-Aa!`,
         clubName: `Nouveau Club ${RUN_ID}`,
+        // Horloge civile en avance : la durée monotone reste suffisante.
+        formLoadedAt: Date.now() + 86_400_000, formElapsedMs: 3000,
       }));
-      record("Création club valide -> succès", status === 200 && json?.success === true, `status=${status} body=${JSON.stringify(json)}`);
+      record("Création club avec horloge avancée + durée valide -> succès", status === 200 && json?.success === true, `status=${status} body=${JSON.stringify(json)}`);
       // Vérifie le parcours avec les droits du nouveau coach, pas service_role :
       // un succès HTTP seul ne prouve pas que le profil et le club sont lisibles.
       const newcomer = createClient(SUPABASE_URL, ANON_KEY, { auth: { persistSession: false, autoRefreshToken: false } });
@@ -255,18 +257,18 @@ async function main() {
     {
       const { status, json } = await callSignup(baseBody({
         mode: "create_club", name: "Bot", email: `signup-test-bot-${RUN_ID}@example.invalid`,
-        password: `Test-${RUN_ID}-Aa!`, clubName: "Bot Club", company: "http://spam.example",
+        password: `Test-${RUN_ID}-Aa!`, clubName: "Bot Club", company: "http://spam.example", formElapsedMs: 3000,
       }));
-      record("Honeypot rempli -> rejeté (400)", status === 400 && json?.success === false, `status=${status}`);
+      record("Honeypot rempli -> rejeté (400)", status === 400 && json?.code === "form_verification_failed", `status=${status}`);
     }
 
     // ── 6. Soumission trop rapide -> rejetée (équivalent CAPTCHA) ────
     {
       const { status, json } = await callSignup(baseBody({
         mode: "create_club", name: "Bot", email: `signup-test-fast-${RUN_ID}@example.invalid`,
-        password: `Test-${RUN_ID}-Aa!`, clubName: "Fast Club", formLoadedAt: Date.now(), // 0ms écoulé
+        password: `Test-${RUN_ID}-Aa!`, clubName: "Fast Club", formElapsedMs: 0, // ancien timestamp valide ne contourne pas le rejet
       }));
-      record("Soumission trop rapide -> rejetée (400)", status === 400 && json?.success === false, `status=${status}`);
+      record("Soumission trop rapide -> rejetée (400)", status === 400 && json?.code === "form_too_fast", `status=${status}`);
     }
 
     // ── 7. Échec forcé après création Auth -> compensation ───────────

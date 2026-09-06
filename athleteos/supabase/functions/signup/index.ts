@@ -33,6 +33,7 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { signupFormProblem } from "../_shared/signupFormCheck.ts";
 
 const MAX_BODY_BYTES     = 5_000;
 const MAX_NAME_LEN       = 100;
@@ -41,7 +42,6 @@ const MIN_PASSWORD_LEN   = 8;
 const MAX_PASSWORD_LEN   = 128;
 const MAX_CLUB_NAME_LEN  = 100;
 const INVITE_CODE_LEN    = 8;
-const MIN_SUBMIT_MS      = 1500; // en dessous, personne ne remplit un vrai formulaire
 
 const RATE_LIMIT_IP_MAX        = 8;   // tentatives
 const RATE_LIMIT_IP_WINDOW_MIN = 15;
@@ -126,9 +126,9 @@ serve(async (req) => {
   }
   const admin = createClient(supabaseUrl, serviceRoleKey);
 
-  function fail(status: number, error: string) {
+  function fail(status: number, error: string, code?: string) {
     console.error(`signup[${correlationId}] ${status} — ${error}`);
-    return new Response(JSON.stringify({ success: false, error, correlationId }), {
+    return new Response(JSON.stringify({ success: false, error, correlationId, ...(code ? { code } : {}) }), {
       status, headers: { ...corsHeaders(origin), "Content-Type": "application/json" },
     });
   }
@@ -161,6 +161,7 @@ serve(async (req) => {
     if (new TextEncoder().encode(rawBody).byteLength > MAX_BODY_BYTES) return fail(413, "Payload trop volumineux.");
     let body: Record<string, unknown>;
     try { body = JSON.parse(rawBody || "{}"); } catch { return fail(400, "JSON invalide."); }
+    if (!body || typeof body !== "object" || Array.isArray(body)) return fail(400, "Objet JSON requis.");
 
     // x-forwarded-for sur l'infra Supabase (vérifié en conditions réelles via
     // les logs de la fonction déployée, pas une supposition) : la PREMIÈRE
@@ -206,14 +207,12 @@ serve(async (req) => {
     // ── Anti-bot : honeypot + délai minimum ────────────────────────────
     // `company` : champ caché du formulaire, invisible et inatteignable au
     // clavier pour un humain, mais souvent auto-rempli par les bots de spam.
-    // `formLoadedAt` : timestamp posé au montage du formulaire côté client.
-    if (typeof body.company === "string" && body.company.trim() !== "") {
-      return fail(400, "Requête invalide.");
-    }
-    const formLoadedAt = Number(body.formLoadedAt);
-    if (!Number.isFinite(formLoadedAt) || Date.now() - formLoadedAt < MIN_SUBMIT_MS) {
-      return fail(400, "Requête invalide.");
-    }
+    // Le nouveau client mesure une durée monotone, indépendante de son horloge
+    // civile. Le timestamp historique reste accepté pour les anciennes PWA.
+    const formProblem = signupFormProblem(body);
+    if (formProblem === "form_verification_failed") return fail(400, "Le formulaire n’a pas pu être vérifié. Recharge la page puis réessaie sans remplissage automatique.", formProblem);
+    if (formProblem === "form_too_fast") return fail(400, "Attends quelques secondes avant de valider le formulaire.", formProblem);
+    if (formProblem) return fail(400, "Le délai du formulaire n’a pas pu être vérifié. Recharge la page et vérifie la date et l’heure de ton appareil.", formProblem);
 
     // ── Validation des champs ───────────────────────────────────────────
     const mode = body.mode;
