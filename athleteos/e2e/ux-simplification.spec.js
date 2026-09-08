@@ -8,6 +8,23 @@ test.afterEach(async ({ page }, testInfo) => {
   if (testInfo.status === "passed") await page.screenshot({ path: testInfo.outputPath("verified.png"), animations: "disabled", caret: "hide" });
 });
 
+for (const path of ["/", "/alerts"]) {
+  test(`calcul des alertes indisponible : lecture préservée sur ${path}`, async ({ page }) => {
+    await installUxFixture(page);
+    await page.route("**/rest/v1/rpc/evaluate_club_alert_rules", route => route.fulfill({
+      status:500, contentType:"application/json", body:JSON.stringify({ message:"Évaluation temporairement indisponible" }),
+    }));
+    await loginUx(page, path);
+    await expect(page.getByText(/Le calcul des nouvelles alertes est momentanément indisponible/)).toBeVisible();
+    if (path === "/") {
+      await page.getByRole("button", { name:"Planifier une séance", exact:true }).click();
+      await expect(page.getByRole("dialog", { name:"Nouvelle séance" })).toBeVisible();
+    } else {
+      await expect(page.getByRole("heading", { name:"Centre d’action" })).toBeVisible();
+    }
+  });
+}
+
 async function noOverflow(page) {
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   const dialog = page.getByRole("dialog");
@@ -72,6 +89,71 @@ for (const viewport of [{ width: 320, height: 568 }, { width: 375, height: 812 }
       await expect(edit).toBeHidden();
       expect(fixture.writes.find(item => item.resource === "update_session_with_athletes").body.p_session.instructions).toBe("Garder cette consigne");
       expect(fixture.writes.filter(item => item.resource === "athlete_notifications").flatMap(item => item.body).map(item => item.type)).toEqual(["new_session", "session_updated"]);
+      expect(fixture.unexpectedWrites).toEqual([]);
+      await noOverflow(page);
+    });
+
+    test("templates : bibliothèque filtrable et réutilisable sans débordement", async ({ page }) => {
+      const fixture = await installUxFixture(page);
+      await loginUx(page, "/planning");
+      await page.getByRole("button", { name: "Nouvelle séance", exact: true }).click();
+      const dialog = page.getByRole("dialog", { name: "Nouvelle séance" });
+      await dialog.locator("summary").filter({ hasText:"Modèles de séances" }).click();
+      await expect(dialog.getByPlaceholder("Rechercher nom, contenu ou tag")).toBeVisible();
+      await dialog.getByPlaceholder("Rechercher nom, contenu ou tag").fill("100 m");
+      await dialog.getByText("Départs blocs", { exact:true }).click();
+      await expect(dialog.getByLabel("Titre *", { exact:true })).toHaveValue("Accélération 30 m");
+      await dialog.getByRole("button", { name:"Enregistrer ce brouillon" }).click();
+      await expect(dialog.getByLabel("Portée du modèle")).toHaveValue("personal");
+      await dialog.getByLabel("Nom du modèle").fill("Mon accélération");
+      await dialog.getByRole("button", { name:"Enregistrer le modèle" }).click();
+      await expect.poll(() => fixture.writes.filter(item => item.resource === "upsert_session_template").length).toBe(1);
+      await noOverflow(page);
+      expect(fixture.unexpectedWrites).toEqual([]);
+    });
+
+    test("wellness : configuration progressive et versionnée dans les outils", async ({ page }) => {
+      const fixture = await installUxFixture(page, { keys:["planning","performances","messaging","wellness"] });
+      await loginUx(page, "/");
+      await page.getByRole("button", { name:/Ouvrir les réglages/ }).click();
+      const dialog = page.getByRole("dialog", { name:"Réglages" });
+      await dialog.getByRole("tab", { name:"Outils" }).click();
+      await expect(dialog.getByRole("heading", { name:"Questionnaire du club" })).toBeVisible();
+      const stressRow = dialog.getByText("Niveau de stress", { exact:true }).locator("xpath=ancestor::div[contains(@class,'rounded-xl')][1]");
+      await stressRow.locator("input[type=checkbox]").first().uncheck();
+      await dialog.getByRole("button", { name:"Samedi" }).click();
+      await dialog.getByText("Visibilité des réponses").click();
+      await dialog.getByLabel("Qui peut consulter les nouvelles réponses ?").selectOption("head_coach");
+      await dialog.getByRole("button", { name:"Activer cette configuration" }).click();
+      await expect(dialog.getByText(/Questionnaire v2 activé/)).toBeVisible();
+      const saved = fixture.writes.find(item => item.resource === "configure_wellness_questionnaire");
+      expect(saved.body.p_questions.some(question => question.key === "stress")).toBe(false);
+      expect(saved.body.p_active_days).not.toContain(6);
+      expect(saved.body.p_response_visibility).toBe("head_coach");
+      expect(fixture.unexpectedWrites).toEqual([]);
+      await noOverflow(page);
+    });
+
+    test("alertes : seuils et destinataires configurables sur mobile et desktop", async ({ page }) => {
+      const fixture = await installUxFixture(page, { keys:["planning","performances","messaging","wellness"] });
+      await loginUx(page, "/");
+      await page.getByRole("button", { name:/Ouvrir les réglages/ }).click();
+      const dialog = page.getByRole("dialog", { name:"Réglages" });
+      await dialog.getByRole("tab", { name:"Outils" }).click();
+      await dialog.getByLabel("Activer Sommeil sous le seuil").check();
+      await dialog.getByLabel("Seuil maximal").fill("1");
+      await dialog.getByLabel("Population", { exact:true }).selectOption("Sprint");
+      await dialog.getByLabel("Destinataires", { exact:true }).selectOption("head_coach");
+      await noOverflow(page);
+      await dialog.getByRole("button", { name:"Enregistrer les règles" }).click();
+      await expect(dialog.getByText(/Règles d’alertes enregistrées/)).toBeVisible();
+      await expect(dialog.getByText(/Règles d’alertes enregistrées/)).toBeInViewport();
+      await expect(dialog.getByRole("heading", { name:"Réglages", exact:true })).toBeInViewport();
+      await expect(dialog.getByRole("button", { name:"Fermer les réglages" })).toBeInViewport();
+      const saved = fixture.writes.find(item => item.resource === "configure_club_alert_rules");
+      expect(saved.body.p_rules.find(rule => rule.key === "sleep_low")).toMatchObject({
+        enabled:true, parameters:{ threshold:1, consecutiveResponses:2 }, targetGroup:"Sprint", recipientScope:"head_coach",
+      });
       expect(fixture.unexpectedWrites).toEqual([]);
       await noOverflow(page);
     });

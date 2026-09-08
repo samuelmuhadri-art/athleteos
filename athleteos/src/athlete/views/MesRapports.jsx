@@ -164,7 +164,8 @@ export default function MesRapports({ athlete, sessions, weeklyCharge }) {
       .then(({ data }) => {
         setWellnessRows((data ?? []).map(w => ({
           athleteId: w.athlete_id, date: w.date, sleep: w.sleep, energy: w.energy,
-          soreness: w.soreness, mood: w.mood, stress: w.stress,
+          soreness: w.soreness, mood: w.mood, stress: w.stress, answers: w.answers,
+          questionnaireVersionId: w.questionnaire_version_id,
         })));
       });
   }, [athlete?.id]);

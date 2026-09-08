@@ -34,6 +34,12 @@ export type Database = {
   }
   public: {
     Tables: {
+      coach_dashboard_preferences: {
+        Row: { user_id: number; club_id: number; preferences: Json; updated_at: string }
+        Insert: { user_id: number; club_id: number; preferences?: Json; updated_at?: string }
+        Update: { user_id?: number; club_id?: number; preferences?: Json; updated_at?: string }
+        Relationships: []
+      }
       alert_read_states: {
         Row: {
           alert_id: number
@@ -69,6 +75,10 @@ export type Database = {
       }
       alerts: {
         Row: {
+          rule_key: string | null
+          rule_version: number | null
+          trigger_data: Json
+          recipient_scope: string
           archived_at: string | null
           archived_by: number | null
           athlete_id: number | null
@@ -86,6 +96,10 @@ export type Database = {
           type: string | null
         }
         Insert: {
+          rule_key?: string | null
+          rule_version?: number | null
+          trigger_data?: Json
+          recipient_scope?: string
           archived_at?: string | null
           archived_by?: number | null
           athlete_id?: number | null
@@ -103,6 +117,10 @@ export type Database = {
           type?: string | null
         }
         Update: {
+          rule_key?: string | null
+          rule_version?: number | null
+          trigger_data?: Json
+          recipient_scope?: string
           archived_at?: string | null
           archived_by?: number | null
           athlete_id?: number | null
@@ -476,6 +494,7 @@ export type Database = {
       }
       athlete_wellness: {
         Row: {
+          answers: Json
           athlete_id: number
           club_id: number | null
           created_at: string | null
@@ -484,11 +503,13 @@ export type Database = {
           id: number
           mood: number | null
           notes: string | null
+          questionnaire_version_id: number | null
           sleep: number | null
           soreness: number | null
           stress: number | null
         }
         Insert: {
+          answers?: Json
           athlete_id: number
           club_id?: number | null
           created_at?: string | null
@@ -497,11 +518,13 @@ export type Database = {
           id?: number
           mood?: number | null
           notes?: string | null
+          questionnaire_version_id?: number | null
           sleep?: number | null
           soreness?: number | null
           stress?: number | null
         }
         Update: {
+          answers?: Json
           athlete_id?: number
           club_id?: number | null
           created_at?: string | null
@@ -510,6 +533,7 @@ export type Database = {
           id?: number
           mood?: number | null
           notes?: string | null
+          questionnaire_version_id?: number | null
           sleep?: number | null
           soreness?: number | null
           stress?: number | null
@@ -520,6 +544,13 @@ export type Database = {
             columns: ["athlete_id"]
             isOneToOne: false
             referencedRelation: "athletes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "athlete_wellness_questionnaire_version_id_fkey"
+            columns: ["questionnaire_version_id"]
+            isOneToOne: false
+            referencedRelation: "wellness_questionnaire_versions"
             referencedColumns: ["id"]
           },
         ]
@@ -775,6 +806,48 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      club_alert_rules: {
+        Row: {
+          club_id: number
+          rule_key: string
+          enabled: boolean
+          parameters: Json
+          target_group: string | null
+          severity: string
+          recipient_scope: string
+          version: number
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          club_id: number
+          rule_key: string
+          enabled?: boolean
+          parameters: Json
+          target_group?: string | null
+          severity?: string
+          recipient_scope?: string
+          version?: number
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          enabled?: boolean
+          parameters?: Json
+          target_group?: string | null
+          severity?: string
+          recipient_scope?: string
+          version?: number
+          updated_at?: string
+        }
+        Relationships: [{
+          foreignKeyName: "club_alert_rules_club_id_fkey"
+          columns: ["club_id"]
+          isOneToOne: false
+          referencedRelation: "clubs"
+          referencedColumns: ["id"]
+        }]
       }
       club_modules: {
         Row: {
@@ -1936,6 +2009,8 @@ export type Database = {
           id: number
           instructions: string | null
           name: string
+          scope: string
+          tags: string[]
           title: string
           training_focus: string | null
           type: string | null
@@ -1951,6 +2026,8 @@ export type Database = {
           id?: number
           instructions?: string | null
           name: string
+          scope?: string
+          tags?: string[]
           title: string
           training_focus?: string | null
           type?: string | null
@@ -1966,6 +2043,8 @@ export type Database = {
           id?: number
           instructions?: string | null
           name?: string
+          scope?: string
+          tags?: string[]
           title?: string
           training_focus?: string | null
           type?: string | null
@@ -2323,6 +2402,57 @@ export type Database = {
           },
         ]
       }
+      wellness_questionnaire_versions: {
+        Row: {
+          active_days: number[]
+          club_id: number
+          created_at: string
+          created_by: number
+          id: number
+          is_active: boolean
+          questions: Json
+          response_visibility: string
+          version_number: number
+        }
+        Insert: {
+          active_days?: number[]
+          club_id: number
+          created_at?: string
+          created_by: number
+          id?: number
+          is_active?: boolean
+          questions: Json
+          response_visibility?: string
+          version_number: number
+        }
+        Update: {
+          active_days?: number[]
+          club_id?: number
+          created_at?: string
+          created_by?: number
+          id?: number
+          is_active?: boolean
+          questions?: Json
+          response_visibility?: string
+          version_number?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "wellness_questionnaire_versions_club_id_fkey"
+            columns: ["club_id"]
+            isOneToOne: false
+            referencedRelation: "clubs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "wellness_questionnaire_versions_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       daily_training_load: {
@@ -2370,6 +2500,8 @@ export type Database = {
       }
     }
     Functions: {
+      get_my_dashboard_preferences: { Args: Record<PropertyKey, never>; Returns: Json }
+      configure_my_dashboard_preferences: { Args: { p_preferences: Json }; Returns: Json }
       _apply_competition_result: {
         Args: {
           p_also_log_performance: boolean
@@ -2510,12 +2642,26 @@ export type Database = {
         Args: { p_athlete_ids: number[]; p_enabled_module_keys: string[] }
         Returns: Json
       }
+      get_club_alert_rules: { Args: Record<PropertyKey, never>; Returns: Json }
+      configure_club_alert_rules: { Args: { p_rules: Json }; Returns: Json }
+      evaluate_club_alert_rules: {
+        Args: { p_club_id?: number | null; p_as_of?: string; p_dry_run?: boolean }
+        Returns: Json
+      }
       configure_module_athletes: {
         Args: { p_enabled_athlete_ids: number[]; p_module_key: string }
         Returns: Json
       }
       configure_my_club_modules: {
         Args: { p_enabled_module_keys: string[] }
+        Returns: Json
+      }
+      configure_wellness_questionnaire: {
+        Args: {
+          p_active_days: number[]
+          p_questions: Json
+          p_response_visibility?: string
+        }
         Returns: Json
       }
       create_club_athlete: { Args: { p_payload: Json }; Returns: Json }
@@ -2548,6 +2694,10 @@ export type Database = {
           p_schedule: Json
           p_template_id: number
         }
+        Returns: Json
+      }
+      delete_session_template: {
+        Args: { p_template_id: number }
         Returns: Json
       }
       create_session_series_with_occurrences: {
@@ -2638,6 +2788,10 @@ export type Database = {
         }
         Returns: Json
       }
+      duplicate_session_template: {
+        Args: { p_name: string; p_scope?: string; p_template_id: number }
+        Returns: Json
+      }
       duplicate_week_transactional: {
         Args: {
           p_athlete_ids?: number[]
@@ -2650,6 +2804,10 @@ export type Database = {
       get_my_club_id: { Args: never; Returns: number }
       get_my_role: { Args: never; Returns: string }
       get_my_user_id: { Args: never; Returns: number }
+      get_wellness_questionnaire: {
+        Args: { p_date?: string }
+        Returns: Json
+      }
       import_club_athletes: { Args: { p_rows: Json }; Returns: Json }
       inspect_club_invitation: { Args: { p_code: string }; Returns: Json }
       is_athlete_module_enabled: {
@@ -2738,6 +2896,10 @@ export type Database = {
         Args: { p_actor_user_id: number; p_target_user_id: number }
         Returns: Json
       }
+      delete_own_account_transactional: {
+        Args: { p_confirmation_email: string; p_user_id: number }
+        Returns: Json
+      }
       reset_club_operational_data: {
         Args: { p_club_id: number; p_confirmation: string }
         Returns: Json
@@ -2775,6 +2937,10 @@ export type Database = {
         }
         Returns: Json
       }
+      submit_wellness_response: {
+        Args: { p_answers: Json; p_date?: string; p_notes?: string }
+        Returns: Json
+      }
       update_club_athlete: {
         Args: { p_athlete_id: number; p_payload: Json }
         Returns: Json
@@ -2788,6 +2954,14 @@ export type Database = {
           p_name: string
           p_notes: string
           p_type: string
+        }
+        Returns: Json
+      }
+      upsert_session_template: {
+        Args: {
+          p_document_ids?: number[]
+          p_template: Json
+          p_template_id: number | null
         }
         Returns: Json
       }

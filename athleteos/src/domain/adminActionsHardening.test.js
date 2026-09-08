@@ -18,10 +18,37 @@ describe("durcissement d’admin-actions", () => {
   });
 
   it("contrôle chaque suppression avant de toucher au compte Auth", () => {
+    const removalStart = source.indexOf('if (currentAction === "remove_user")');
+    const deletionCheck = source.indexOf("if (deletionError) throw deletionError", removalStart);
+    const authDeletion = source.indexOf("admin.auth.admin.deleteUser", removalStart);
     expect(source).toContain('admin.rpc("remove_club_user_transactional"');
-    expect(source).toContain("if (deletionError) throw deletionError");
-    expect(source.indexOf("if (deletionError) throw deletionError")).toBeLessThan(source.indexOf("admin.auth.admin.deleteUser"));
+    expect(deletionCheck).toBeGreaterThan(removalStart);
+    expect(deletionCheck).toBeLessThan(authDeletion);
     expect(source).toContain("authCleanupPending: true");
+  });
+
+  it("construit l'export personnel depuis l'identité JWT sans accepter d'identifiant client", () => {
+    const exportStart = source.indexOf('if (currentAction === "export_personal_data")');
+    const headCoachGate = source.indexOf('if (!isHeadCoach && currentAction !== "create_club_invitation")');
+    expect(exportStart).toBeGreaterThan(0);
+    expect(exportStart).toBeLessThan(headCoachGate);
+    expect(source).toContain('targetUserId = caller.id');
+    expect(source).toContain('`user_id.eq.${caller.id},athlete_id.eq.${athlete.id}`');
+    expect(source).toContain('.eq("athlete_id", athleteId)');
+    expect(source).toContain('return ok({ export: personalExport })');
+  });
+
+  it("supprime son propre compte via une transaction avant le nettoyage Auth", () => {
+    const actionStart = source.indexOf('if (currentAction === "delete_own_account")');
+    const headCoachGate = source.indexOf('if (!isHeadCoach && currentAction !== "create_club_invitation")');
+    expect(actionStart).toBeGreaterThan(0);
+    expect(actionStart).toBeLessThan(headCoachGate);
+    expect(source).toContain('admin.rpc("delete_own_account_transactional"');
+    expect(source).toContain('p_user_id: caller.id');
+    expect(source.indexOf('if (deletionError)', actionStart)).toBeLessThan(
+      source.indexOf("admin.auth.admin.deleteUser", actionStart),
+    );
+    expect(source).toContain("Transfère d’abord la responsabilité du club");
   });
 
   it("consomme atomiquement et de façon idempotente une invitation d'un compte existant", () => {

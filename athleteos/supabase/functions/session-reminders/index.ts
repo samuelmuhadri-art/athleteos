@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { localDateInTimeZone } from "../_shared/isoWeek.ts";
+import { dispatchTrustedPushEvents } from "../_shared/pushOutbox.ts";
 
 const MAX_BODY_BYTES = 2_000;
 
@@ -34,6 +35,36 @@ serve(async (req) => {
   const log: string[] = [];
 
   try {
+    // The existing daily task also evaluates configured coach rules when no session is planned today.
+    const { data: ruleClubs, error: ruleError } = await admin.from("club_alert_rules").select("club_id").eq("enabled", true);
+    if (ruleError) throw ruleError;
+    for (const clubId of [...new Set((ruleClubs ?? []).map(row => row.club_id))]) {
+      const { error: evaluationError } = await admin.rpc("evaluate_club_alert_rules", {
+        p_club_id: clubId, p_as_of: today, p_dry_run: dryRun,
+      });
+      if (evaluationError) throw evaluationError;
+    }
+    // Retry the durable existing outbox, including alerts generated from the dashboard.
+    if (!dryRun) {
+      const { data: pending, error: pendingError } = await admin.from("push_event_outbox")
+        .select("actor_user_id").in("event_type", ["rule_wellness", "rule_feedback", "rule_competition", "rule_load"])
+        .is("completed_at", null);
+      if (pendingError) throw pendingError;
+      for (const actorId of [...new Set((pending ?? []).map(row => row.actor_user_id).filter(Boolean))]) {
+        for (let batch = 0; batch < 50; batch++) {
+          const dispatched = await dispatchTrustedPushEvents(admin, actorId, async payload => {
+            const response = await fetch(`${supabaseUrl}/functions/v1/send-push`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json", Authorization: `Bearer ${serviceKey}` },
+              body: JSON.stringify(payload),
+            });
+            if (!response.ok) throw new Error(`send-push HTTP ${response.status}`);
+            return await response.json();
+          });
+          if (dispatched.events < 20) break;
+        }
+      }
+    }
     const { data: sessions, error } = await admin.from("sessions")
       .select("id, club_id, title, time, lifecycle_status, session_athletes(athlete_id)")
       .eq("session_date", today)

@@ -184,15 +184,10 @@ async function main() {
       directUpdateError?.message,
     );
 
-    const { error: wellnessWriteError } = await athleteIdentity.client.from("athlete_wellness").insert({
-      athlete_id: athlete.id,
-      club_id: club.id,
-      date: "2026-09-02",
-      sleep: 4,
-      energy: 4,
-      soreness: 3,
-      mood: 4,
-      stress: 2,
+    const { error: wellnessWriteError } = await athleteIdentity.client.rpc("submit_wellness_response", {
+      p_answers:{ sleep:4, energy:4, soreness:3, mood:4, stress:2 },
+      p_notes:null,
+      p_date:new Date().toISOString().slice(0, 10),
     });
     record("Une écriture wellness désactivée est bloquée côté serveur", Boolean(wellnessWriteError), wellnessWriteError?.message);
 

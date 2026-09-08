@@ -4,6 +4,8 @@ import { MODULE_KEYS } from "../../domain/modules/moduleRegistry";
 import { useModules } from "../../hooks/useModules";
 import ModulePresetPicker from "./ModulePresetPicker";
 import ModuleSelector from "./ModuleSelector";
+import WellnessQuestionnaireSettings from "./WellnessQuestionnaireSettings";
+import AlertRulesSettings from "./AlertRulesSettings";
 
 export default function ClubModulesSettings() {
   const { club, saveClub, restartOnboarding } = useModules();
@@ -24,6 +26,7 @@ export default function ClubModulesSettings() {
   };
 
   return (
+    <div className="space-y-4">
     <section className="settings-branding-card" aria-labelledby="settings-modules-title">
       <div className="settings-branding-heading">
         <span><SlidersHorizontal size={18} aria-hidden="true" /></span>
@@ -45,5 +48,8 @@ export default function ClubModulesSettings() {
         </button>
       </div>
     </section>
+    {selected.includes("wellness") && <WellnessQuestionnaireSettings />}
+    <AlertRulesSettings />
+    </div>
   );
 }

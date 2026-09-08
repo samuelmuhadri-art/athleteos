@@ -3,6 +3,7 @@ import {
   Building2,
   Check,
   Copy,
+  Download,
   KeyRound,
   Layers3,
   Lock,
@@ -13,6 +14,7 @@ import {
   RefreshCw,
   Settings,
   LogOut,
+  Trash2,
   Upload,
   User,
   X,
@@ -116,6 +118,9 @@ export default function AccountSettingsModal({ onClose, initialSection = "accoun
   const [copied, setCopied] = useState(false);
   const [confirmRegeneration, setConfirmRegeneration] = useState(false);
   const [confirmSignOut, setConfirmSignOut] = useState(false);
+  const [confirmAccountDeletion, setConfirmAccountDeletion] = useState(false);
+  const [accountDeletionEmail, setAccountDeletionEmail] = useState("");
+  const [accountDeletionError, setAccountDeletionError] = useState(null);
   const [message, setMessage] = useState(null);
   const [busy, setBusy] = useState(null);
   const dialogRef = useRef(null);
@@ -367,6 +372,53 @@ export default function AccountSettingsModal({ onClose, initialSection = "accoun
     }
   };
 
+  const closeAccountDeletion = () => {
+    if (busy === "delete-account") return;
+    setConfirmAccountDeletion(false);
+    setAccountDeletionEmail("");
+    setAccountDeletionError(null);
+  };
+
+  const deleteOwnAccount = async () => {
+    setBusy("delete-account");
+    setAccountDeletionError(null);
+    try {
+      await callAdmin({
+        action: "delete_own_account",
+        confirmationEmail: accountDeletionEmail.trim(),
+      });
+      try {
+        await signOut();
+      } catch {
+        // Le compte Auth a normalement déjà été supprimé côté serveur. Cette
+        // déconnexion locale garantit que le navigateur oublie aussi le JWT.
+        await supabase.auth.signOut({ scope: "local" });
+      }
+      setConfirmAccountDeletion(false);
+      onClose();
+    } catch (deletionError) {
+      setAccountDeletionError(translateAuthError(deletionError));
+      setBusy(null);
+    }
+  };
+
+  const exportPersonalData = () => {
+    runAction("export", async () => {
+      const data = await callAdmin({ action: "export_personal_data" });
+      if (!data.export) throw new Error("L’export n’a pas pu être préparé.");
+      const date = new Date().toISOString().slice(0, 10);
+      const blob = new Blob([JSON.stringify(data.export, null, 2)], { type: "application/json" });
+      const url = globalThis.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `athleteos-donnees-${date}.json`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      globalThis.URL.revokeObjectURL(url);
+    }, "Ton export personnel a été téléchargé.");
+  };
+
   return (
     <div
       className="account-settings-backdrop modal-backdrop"
@@ -526,6 +578,22 @@ export default function AccountSettingsModal({ onClose, initialSection = "accoun
                 />
               </ActionRow>
 
+              <section className="settings-signout-card" aria-labelledby="settings-export-title">
+                <div>
+                  <h3 id="settings-export-title">Tes données AthleteOS</h3>
+                  <p>Télécharge une copie structurée de ton compte et des données qui te concernent.</p>
+                </div>
+                <button
+                  type="button"
+                  className="btn-secondary settings-signout-button"
+                  onClick={exportPersonalData}
+                  disabled={Boolean(busy)}
+                >
+                  <Download size={16} aria-hidden="true" />
+                  {busy === "export" ? "Préparation…" : "Exporter mes données"}
+                </button>
+              </section>
+
               <section className="settings-signout-card" aria-labelledby="settings-signout-title">
                 <div>
                   <h3 id="settings-signout-title">Fin de session</h3>
@@ -538,6 +606,27 @@ export default function AccountSettingsModal({ onClose, initialSection = "accoun
                   disabled={Boolean(busy)}
                 >
                   <LogOut size={16} aria-hidden="true" /> Se déconnecter
+                </button>
+              </section>
+
+              <section className="settings-signout-card" aria-labelledby="settings-delete-account-title">
+                <div>
+                  <h3 id="settings-delete-account-title">Suppression du compte</h3>
+                  <p>
+                    Supprime ton accès personnel. Cette action ne supprime jamais le club ; un autre responsable doit d’abord être désigné si tu es l’unique responsable actuel.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  className="btn-secondary settings-signout-button"
+                  onClick={() => {
+                    setAccountDeletionEmail("");
+                    setAccountDeletionError(null);
+                    setConfirmAccountDeletion(true);
+                  }}
+                  disabled={Boolean(busy)}
+                >
+                  <Trash2 size={16} aria-hidden="true" /> Supprimer mon compte
                 </button>
               </section>
             </div>
@@ -746,6 +835,37 @@ export default function AccountSettingsModal({ onClose, initialSection = "accoun
           )}
         </div>
       </section>
+
+      <ConfirmDialog
+        open={confirmAccountDeletion}
+        title="Supprimer définitivement ton compte ?"
+        description="Tes données d’athlète et tes conversations privées seront supprimées. Les séances et modèles utiles au club que tu as créés comme coach seront transférés à un responsable. Cette action est irréversible."
+        confirmLabel="Supprimer définitivement"
+        loadingLabel="Suppression…"
+        loading={busy === "delete-account"}
+        confirmDisabled={accountDeletionEmail.trim().toLowerCase() !== (user?.email ?? "").toLowerCase()}
+        icon={Trash2}
+        onConfirm={deleteOwnAccount}
+        onClose={closeAccountDeletion}
+        closeOnBackdrop={false}
+      >
+        <div className="space-y-3">
+          {accountDeletionError && <AuthFeedback type="error">{accountDeletionError}</AuthFeedback>}
+          <AuthField
+            id="settings-delete-account-email"
+            label="Adresse email de confirmation"
+            icon={Mail}
+            type="email"
+            inputMode="email"
+            autoComplete="off"
+            hint={`Saisis exactement ${user?.email ?? "l’adresse de ton compte"}.`}
+            value={accountDeletionEmail}
+            maxLength={254}
+            onChange={(event) => setAccountDeletionEmail(event.target.value)}
+            disabled={busy === "delete-account"}
+          />
+        </div>
+      </ConfirmDialog>
 
       <ConfirmDialog
         open={confirmSignOut}

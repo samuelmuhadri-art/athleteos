@@ -24,6 +24,7 @@ let clubA,clubB;
 try {
   clubA=await insert("clubs",{name:`Planning A ${runId}`}); clubB=await insert("clubs",{name:`Planning B ${runId}`});
   const coach=await account(clubA.id,"head_coach","coach");
+  const assistantCoach=await account(clubA.id,"coach","assistant");
   const athleteAccount=await account(clubA.id,"athlete","assigned");
   const unassignedAccount=await account(clubA.id,"athlete","unassigned");
   const otherAccount=await account(clubB.id,"athlete","other");
@@ -70,6 +71,23 @@ try {
   const fromTemplate=await coach.client.rpc("create_session_from_template",{p_template_id:template.data,p_schedule:{sessionDate:"2027-02-15",day:"Lundi",week:7,time:"11:00"},p_athlete_ids:[a1.id],p_idempotency_key:crypto.randomUUID()});
   const {data:templated}=await admin.from("sessions").select("title,source_kind").eq("id",fromTemplate.data?.sessionId).single();
   check("modèle de séance réutilisable",!template.error&&!fromTemplate.error&&templated.source_kind==="template"&&templated.title==="Séance source",fromTemplate.error?.message);
+
+  const personalTemplate=await coach.client.rpc("upsert_session_template",{p_template_id:null,p_template:{name:"Prépa personnelle",title:"Départs personnels",category:"sprint",type:"Sprint",trainingFocus:"acceleration",durationMinutes:45,description:"4 × 30 m",scope:"personal",tags:["départs","100 m"]},p_document_ids:[]});
+  const personalId=personalTemplate.data?.templateId;
+  const assistantPersonalView=await assistantCoach.client.from("session_templates").select("id").eq("id",personalId);
+  const assistantPersonalDuplicate=await assistantCoach.client.rpc("duplicate_session_template",{p_template_id:personalId,p_name:"Copie interdite",p_scope:"personal"});
+  check("modèle personnel invisible aux autres coachs",!personalTemplate.error&&assistantPersonalView.data?.length===0&&!!assistantPersonalDuplicate.error,personalTemplate.error?.message??assistantPersonalView.error?.message);
+
+  const clubTemplate=await coach.client.rpc("upsert_session_template",{p_template_id:null,p_template:{name:"Technique club",title:"Rythme haies",category:"haies",type:"Haies",trainingFocus:"hurdles_rhythm",durationMinutes:55,description:"Passages techniques",scope:"club",tags:["haies"]},p_document_ids:[]});
+  const clubTemplateId=clubTemplate.data?.templateId;
+  const assistantClubView=await assistantCoach.client.from("session_templates").select("id,scope,tags").eq("id",clubTemplateId);
+  const assistantCopy=await assistantCoach.client.rpc("duplicate_session_template",{p_template_id:clubTemplateId,p_name:"Technique club — copie",p_scope:"personal"});
+  const assistantEditOther=await assistantCoach.client.rpc("upsert_session_template",{p_template_id:clubTemplateId,p_template:{name:"Technique club modifiée",title:"Rythme haies",category:"haies",type:"Haies",trainingFocus:"hurdles_rhythm",durationMinutes:60,scope:"club",tags:[]},p_document_ids:[]});
+  check("modèle club visible et duplicable sans devenir modifiable par tous",!clubTemplate.error&&assistantClubView.data?.length===1&&!assistantCopy.error&&!!assistantEditOther.error,clubTemplate.error?.message??assistantClubView.error?.message??assistantCopy.error?.message);
+
+  const headEdit=await coach.client.rpc("upsert_session_template",{p_template_id:clubTemplateId,p_template:{name:"Technique club",title:"Rythme haies ajusté",category:"haies",type:"Haies",trainingFocus:"hurdles_rhythm",durationMinutes:60,scope:"club",tags:["haies","rythme"]},p_document_ids:[]});
+  const headDelete=await coach.client.rpc("delete_session_template",{p_template_id:clubTemplateId});
+  check("head coach administre les modèles partagés",!headEdit.error&&!headDelete.error,headEdit.error?.message??headDelete.error?.message);
 
   const event=await coach.client.rpc("upsert_planning_event_with_athletes",{p_event_id:null,p_event:{kind:"stage",name:"Stage national",startsOn:"2027-03-01",endsOn:"2027-03-03",time:"08:30",location:"Namur",targetGroup:"Sprint"},p_athlete_ids:[a1.id,a2.id]});
   const assignedView=await athleteAccount.client.from("planning_events").select("id").eq("id",event.data?.eventId);

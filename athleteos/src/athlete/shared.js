@@ -4,7 +4,7 @@
 // Utilisés dans plusieurs vues — centralisés ici
 // ============================================================
 
-import { Moon, Battery, HeartPulse, Smile, Activity } from "lucide-react";
+import { Activity, Battery, BatteryLow, Brain, Droplets, Gauge, HeartPulse, Moon, Smile, Target } from "lucide-react";
 import { getISOWeek, parseLocalDate, initialsFromName } from "../utils/helpers.js";
 // Tâche 9 : le registre central des disciplines vit dans domain/disciplines.js
 // (identifiant, libellé, unité, higherIsBetter, décimales, alias, sous-
@@ -14,6 +14,7 @@ import { getISOWeek, parseLocalDate, initialsFromName } from "../utils/helpers.j
 import {
   DISCIPLINE_TYPE_COLORS, getDisciplineType, getDisciplineHib,
 } from "../domain/disciplines.js";
+import { WELLNESS_QUESTION_CATALOG } from "../domain/wellnessQuestionnaire.js";
 
 export { getISOWeek, parseLocalDate, initialsFromName };
 
@@ -45,13 +46,13 @@ export const SESSION_COLORS = {
 // Réexport (compat) : la vraie liste vit dans domain/disciplines.js.
 export const DISC_TYPE_COLORS = DISCIPLINE_TYPE_COLORS;
 
-export const WELLNESS_QUESTIONS = [
-  { key: "sleep",    label: "Qualité du sommeil",    icon: Moon,       color: "#7C3AED", desc: ["Très mauvais","Mauvais","Correct","Bon","Excellent"],            inverted: false },
-  { key: "energy",   label: "Niveau d'énergie",       icon: Battery,    color: "#0284C7", desc: ["Épuisé","Fatigué","Correct","Énergique","Très énergique"],      inverted: false },
-  { key: "soreness", label: "Courbatures / douleurs", icon: HeartPulse, color: "var(--tone-danger)", desc: ["Aucune","Légères","Modérées","Importantes","Très importantes"], inverted: true  },
-  { key: "mood",     label: "Humeur",                 icon: Smile,      color: "#EF9F27", desc: ["Très mauvaise","Mauvaise","Neutre","Bonne","Excellente"],        inverted: false },
-  { key: "stress",   label: "Niveau de stress",       icon: Activity,   color: "var(--tone-danger)", desc: ["Aucun","Faible","Modéré","Élevé","Très élevé"],                 inverted: true  },
-];
+const WELLNESS_ICONS = { moon:Moon, battery:Battery, "battery-low":BatteryLow, heart:HeartPulse, smile:Smile, activity:Activity, target:Target, gauge:Gauge, brain:Brain, droplets:Droplets };
+export const WELLNESS_QUESTIONS = WELLNESS_QUESTION_CATALOG.slice(0, 5).map(question => ({
+  ...question,
+  icon:WELLNESS_ICONS[question.icon] ?? Activity,
+  desc:question.descriptions,
+}));
+export const WELLNESS_QUESTION_ICONS = WELLNESS_ICONS;
 
 // Niveau de preuve affiché à côté de chaque métrique — la distinction que
 // chargeCalculations.js documente déjà en commentaire ("ces pondérations

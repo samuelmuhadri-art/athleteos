@@ -12,7 +12,9 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 // (Postman, curl...) doit rester bloqué de la même façon.
 //
 // Rôle minimal par action :
-//   - update_profile        : n'importe quel compte connecté, sur SOI-MÊME uniquement. Pas audité (pas structurel).
+//   - update_profile         : n'importe quel compte connecté, sur SOI-MÊME uniquement. Pas audité (pas structurel).
+//   - export_personal_data   : n'importe quel compte connecté, uniquement ses propres données.
+//   - delete_own_account     : n'importe quel compte connecté, confirmation forte et protection du dernier head coach.
 //   - create_club_invitation : coach et head_coach.
 //   - rename_club            : head_coach uniquement.
 //   - upload_club_branding   : head_coach uniquement, stockage validé côté serveur.
@@ -45,7 +47,7 @@ function normalizeInviteCode(value: unknown): string {
 }
 
 const VALID_ROLES = ["head_coach", "coach", "athlete"];
-const SENSITIVE_ACTIONS = ["rename_club", "create_club_invitation", "revoke_club_invitation", "upload_club_branding", "update_club_branding", "regenerate_invite_code", "remove_user", "change_role"];
+const SENSITIVE_ACTIONS = ["export_personal_data", "delete_own_account", "rename_club", "create_club_invitation", "revoke_club_invitation", "upload_club_branding", "update_club_branding", "regenerate_invite_code", "remove_user", "change_role"];
 const HEX_COLOR_PATTERN = /^#[0-9A-F]{6}$/;
 const EMAIL_PATTERN = /^[^\s@]{1,64}@[^\s@]{1,190}\.[^\s@]{2,24}$/;
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -87,6 +89,20 @@ function readableErrorMessage(error: unknown): string {
 // `result` ('denied' vs 'error') dans le journal d'audit.
 class DeniedError extends Error {}
 class PayloadTooLargeError extends DeniedError {}
+
+async function collectAllRows(
+  buildQuery: () => { range: (from: number, to: number) => PromiseLike<{ data: unknown[] | null; error: unknown }> },
+): Promise<unknown[]> {
+  const pageSize = 500;
+  const rows: unknown[] = [];
+  for (let from = 0; ; from += pageSize) {
+    const { data, error } = await buildQuery().range(from, from + pageSize - 1);
+    if (error) throw error;
+    const page = data ?? [];
+    rows.push(...page);
+    if (page.length < pageSize) return rows;
+  }
+}
 
 function requireString(value: unknown, label: string, { max = 200 } = {}): string {
   if (typeof value !== "string" || !value.trim()) throw new DeniedError(`${label} manquant.`);
@@ -280,6 +296,180 @@ serve(async (req) => {
       const { error } = await admin.from("users").update({ name }).eq("id", caller.id);
       if (error) throw error;
       return ok({});
+    }
+
+    // Export portable et lisible des données liées à l'appelant. Les filtres
+    // reposent exclusivement sur l'identité issue du JWT : aucun userId ou
+    // athleteId fourni par le navigateur n'est accepté. Les données internes
+    // de Push (clés de chiffrement, outbox) et les données des autres membres
+    // du club sont volontairement exclues.
+    if (currentAction === "export_personal_data") {
+      targetUserId = caller.id;
+      targetClubId = caller.club_id;
+
+      const [{ data: club, error: clubError }, { data: athlete, error: athleteError }] = await Promise.all([
+        admin.from("clubs").select("id, name").eq("id", caller.club_id).maybeSingle(),
+        admin.from("athletes").select("*").eq("user_id", caller.id).maybeSingle(),
+      ]);
+      if (clubError) throw clubError;
+      if (athleteError) throw athleteError;
+
+      const [messages, pushSubscriptions, alertReadStates, auditTrail, authoredSessions,
+        authoredTemplates, authoredSeries, authoredPlanningEvents, authoredDocuments, dashboardPreferences] = await Promise.all([
+        collectAllRows(() => admin.from("messages").select("*")
+          .or(`sender_id.eq.${caller.id},receiver_id.eq.${caller.id}`).order("created_at", { ascending: true })),
+        collectAllRows(() => admin.from("push_subscriptions")
+          .select("id, endpoint, user_agent, created_at")
+          .or(athlete?.id ? `user_id.eq.${caller.id},athlete_id.eq.${athlete.id}` : `user_id.eq.${caller.id}`)
+          .order("created_at", { ascending: true })),
+        collectAllRows(() => admin.from("alert_read_states")
+          .select("alert_id, read_at").eq("user_id", caller.id).order("read_at", { ascending: true })),
+        collectAllRows(() => admin.from("audit_logs")
+          .select("id, action, result, created_at").eq("actor_user_id", caller.id).order("created_at", { ascending: true })),
+        collectAllRows(() => admin.from("sessions").select("*")
+          .eq("created_by", caller.id).order("session_date", { ascending: true })),
+        collectAllRows(() => admin.from("session_templates").select("*")
+          .eq("created_by", caller.id).order("created_at", { ascending: true })),
+        collectAllRows(() => admin.from("session_series").select("*")
+          .eq("created_by", caller.id).order("created_at", { ascending: true })),
+        collectAllRows(() => admin.from("planning_events").select("*")
+          .eq("created_by", caller.id).order("created_at", { ascending: true })),
+        collectAllRows(() => admin.from("documents")
+          .select("id, name, mime_type, size_bytes, category, tags, created_at, updated_at")
+          .eq("uploaded_by", caller.id).order("created_at", { ascending: true })),
+        collectAllRows(() => admin.from("coach_dashboard_preferences").select("club_id, preferences, updated_at")
+          .eq("user_id", caller.id).order("updated_at", { ascending: true })),
+      ]);
+
+      let athleteData: Record<string, unknown> | null = null;
+      if (athlete?.id) {
+        const athleteId = athlete.id;
+        const [wellness, injuries, goals, notifications, performances, records,
+          performanceHistory, loadDays, alerts, sessionAssignments,
+          competitionEntries, competitionResults, planningAssignments,
+          socialPosts, socialComments, socialReactions, modulePreferences] = await Promise.all([
+          collectAllRows(() => admin.from("athlete_wellness").select("*")
+            .eq("athlete_id", athleteId).order("date", { ascending: true })),
+          collectAllRows(() => admin.from("injuries").select("*")
+            .eq("athlete_id", athleteId).order("start_date", { ascending: true })),
+          collectAllRows(() => admin.from("athlete_goals").select("*")
+            .eq("athlete_id", athleteId).order("created_at", { ascending: true })),
+          collectAllRows(() => admin.from("athlete_notifications").select("*")
+            .eq("athlete_id", athleteId).order("created_at", { ascending: true })),
+          collectAllRows(() => admin.from("athlete_performances").select("*")
+            .eq("athlete_id", athleteId).order("performance_date", { ascending: true })),
+          collectAllRows(() => admin.from("records").select("*").eq("athlete_id", athleteId)),
+          collectAllRows(() => admin.from("performance_history").select("*")
+            .eq("athlete_id", athleteId).order("month", { ascending: true })),
+          collectAllRows(() => admin.from("athlete_daily_load_days").select("*")
+            .eq("athlete_id", athleteId).order("load_date", { ascending: true })),
+          collectAllRows(() => admin.from("alerts").select("*")
+            .eq("athlete_id", athleteId).order("created_at", { ascending: true })),
+          collectAllRows(() => admin.from("session_athletes").select("*, session:sessions(*)")
+            .eq("athlete_id", athleteId)),
+          collectAllRows(() => admin.from("competition_athletes").select("*, competition:competitions(*)")
+            .eq("athlete_id", athleteId)),
+          collectAllRows(() => admin.from("competition_results").select("*, competition:competitions(*)")
+            .eq("athlete_id", athleteId)),
+          collectAllRows(() => admin.from("planning_event_athletes").select("*, event:planning_events(*)")
+            .eq("athlete_id", athleteId)),
+          collectAllRows(() => admin.from("social_posts").select("*")
+            .eq("athlete_id", athleteId).order("created_at", { ascending: true })),
+          collectAllRows(() => admin.from("social_comments").select("*")
+            .eq("athlete_id", athleteId).order("created_at", { ascending: true })),
+          collectAllRows(() => admin.from("social_reactions").select("*")
+            .eq("athlete_id", athleteId).order("created_at", { ascending: true })),
+          collectAllRows(() => admin.from("athlete_modules")
+            .select("module_key, enabled, config, created_at, updated_at").eq("athlete_id", athleteId)),
+        ]);
+        athleteData = {
+          profile: athlete,
+          wellness,
+          injuries,
+          goals,
+          notifications,
+          performances,
+          records,
+          performanceHistory,
+          confirmedLoadDays: loadDays,
+          alerts,
+          sessionAssignments,
+          competitionEntries,
+          competitionResults,
+          planningAssignments,
+          socialPosts,
+          socialComments,
+          socialReactions,
+          modulePreferences,
+        };
+      }
+
+      const personalExport = {
+        schemaVersion: 1,
+        generatedAt: new Date().toISOString(),
+        account: {
+          authId: authUser.id,
+          email: authUser.email ?? caller.email,
+          emailConfirmedAt: authUser.email_confirmed_at ?? null,
+          createdAt: authUser.created_at ?? null,
+          profile: caller,
+        },
+        membership: { club, role: caller.role },
+        communications: { messages },
+        preferences: { pushSubscriptions, alertReadStates, dashboardPreferences },
+        authoredContent: {
+          sessions: authoredSessions,
+          sessionTemplates: authoredTemplates,
+          sessionSeries: authoredSeries,
+          planningEvents: authoredPlanningEvents,
+          documents: authoredDocuments,
+        },
+        athleteData,
+        auditTrail,
+      };
+      auditPayload = {
+        schemaVersion: 1,
+        hasAthleteProfile: Boolean(athleteData),
+        messageCount: messages.length,
+      };
+      await logAudit("success", null);
+      return ok({ export: personalExport });
+    }
+
+    if (currentAction === "delete_own_account") {
+      const confirmationEmail = requireString(body.confirmationEmail, "Adresse email", { max: 254 }).toLowerCase();
+      if (!caller.email || confirmationEmail !== caller.email.toLowerCase()) {
+        throw new DeniedError("L’adresse email de confirmation ne correspond pas à ce compte.");
+      }
+      targetUserId = caller.id;
+      targetClubId = caller.club_id;
+
+      const { data: deletion, error: deletionError } = await admin.rpc("delete_own_account_transactional", {
+        p_user_id: caller.id,
+        p_confirmation_email: confirmationEmail,
+      });
+      if (deletionError) {
+        if (deletionError.message?.includes("last_head_coach")) {
+          throw new DeniedError("Transfère d’abord la responsabilité du club à un autre responsable avant de supprimer ton compte.");
+        }
+        if (deletionError.message?.includes("confirmation_email_mismatch")) {
+          throw new DeniedError("L’adresse email de confirmation ne correspond pas à ce compte.");
+        }
+        throw deletionError;
+      }
+
+      const authUid = deletion?.authUid ?? authUser.id;
+      let authCleanupPending = false;
+      if (authUid) {
+        const { error: authDeleteError } = await admin.auth.admin.deleteUser(authUid);
+        if (authDeleteError) {
+          authCleanupPending = true;
+          console.error("Self-service Auth user cleanup failed:", authDeleteError.message);
+        }
+      }
+      // L'audit de succès est écrit dans la transaction avant que la ligne
+      // users disparaisse. Ne pas appeler logAudit ici avec une FK supprimée.
+      return ok({ authCleanupPending });
     }
 
     // Un compte déjà existant peut ouvrir un lien d'invitation. Avec le

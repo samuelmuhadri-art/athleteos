@@ -32,11 +32,17 @@ import {
 import { checkUpcomingCompetitions, checkAndAlertACWR, notifyAthleteCompetitionReminder, checkWeeklyRecap, checkWeeklyReports } from "../utils/notifications";
 import { buildCoachFeed } from "../utils/coachFeed";
 import { mergePersonalAlertReadState } from "../domain/alertLifecycle";
+import { evaluateAlertRules } from "../services/alertRulesService";
+import { fetchDashboardPreferences } from "../services/dashboardPreferencesService";
+import { normalizeDashboardPreferences, scopeDashboardData } from "../domain/dashboardPreferences";
+import DashboardLayout from "../components/dashboard/DashboardLayout";
+import DashboardSettings from "../components/dashboard/DashboardSettings";
 import { getRecentFeedbacks } from "../domain/recentFeedback";
 import { getISOWeek, getISOWeekYear, initialsFromName, matchesISOWeek } from "../utils/helpers.js";
 import ClubOnboardingCard from "../components/club/ClubOnboardingCard";
 import { PageHeader } from "../components/ui/premium";
 import { buildDailyState, buildGroupDailyState } from "../domain/dailyState";
+import { configuredWellnessQuestions } from "../domain/wellnessQuestionnaire";
 import { buildClubSetupSteps, getClubSetupProgress } from "../utils/clubBranding";
 import { useModules } from "../hooks/useModules";
 import { moduleKeyForEventType } from "../domain/modules/moduleRegistry";
@@ -158,6 +164,10 @@ function AthleteStatusCard({ athlete, weeklyCharge, currentWeek, currentYear, in
     () => buildDailyState({ wellness: wellnessToday, metrics }),
     [wellnessToday, metrics]
   );
+  const wellnessAnswers = useMemo(() => wellnessToday ? configuredWellnessQuestions({ questions:wellnessToday.questionnaireQuestions }).map(question => ({
+    ...question,
+    value:wellnessToday.answers?.[question.key] ?? wellnessToday[question.key],
+  })).filter(question => question.value != null) : [], [wellnessToday]);
   const activeInj = (injuries ?? []).filter(i => i.athleteId === athlete.id && i.status !== "résolu");
   const weekSess = sessions.filter(s =>
     matchesISOWeek(s, currentWeek, currentYear) && s.athleteIds?.includes(athlete.id)
@@ -205,6 +215,10 @@ function AthleteStatusCard({ athlete, weeklyCharge, currentWeek, currentYear, in
       {modules.wellness !== false && <div className="rounded-xl px-3 py-2" style={{ background: `${status.color}0D`, border: `1px solid ${status.color}20` }}>
         <p className="text-[12px] font-semibold leading-5" style={{ color: "var(--c-text-1)" }}>{status.plainHeadline ?? status.label}</p>
         {status.score != null && <p className="mt-0.5 text-[12px] leading-4" style={{ color: "var(--c-text-2)" }}>{status.watch?.[0] ?? status.helps?.[0] ?? "Ressenti renseigné aujourd'hui."}</p>}
+        {status.completed && wellnessAnswers.length > 0 && <details onClick={event => event.stopPropagation()} className="mt-1">
+          <summary className="cursor-pointer text-[11px]" style={{ color:"var(--c-text-2)" }}>Voir les réponses</summary>
+          <div className="flex flex-wrap gap-1 mt-1.5">{wellnessAnswers.map(answer => <span key={answer.key} className="text-[11px] rounded-lg px-2 py-1" style={{ background:"var(--c-surface-2)", color:"var(--c-text-2)" }}>{answer.shortLabel} · <strong>{answer.value}/5</strong></span>)}</div>
+        </details>}
       </div>}
 
       {/* Métriques — 3 valeurs + mini barres */}
@@ -373,32 +387,61 @@ function Dashboard({
   const previousWeek = getISOWeek(previousWeekDate);
   const previousYear = getISOWeekYear(previousWeekDate);
 
-  const [athletes,     setAthletes]     = useState([]);
-  const [weeklyCharge, setWeeklyCharge] = useState([]);
-  const [sessions,     setSessions]     = useState([]);
-  const [alerts,       setAlerts]       = useState([]);
-  const [competitions, setCompetitions] = useState([]);
-  const [injuries,     setInjuries]     = useState([]);
-  const [goals,        setGoals]        = useState([]);
-  const [wellnessRows, setWellnessRows] = useState([]);
+  const [allAthletes,     setAthletes]     = useState([]);
+  const [allWeeklyCharge, setWeeklyCharge] = useState([]);
+  const [allSessions,     setSessions]     = useState([]);
+  const [allAlerts,       setAlerts]       = useState([]);
+  const [allCompetitions, setCompetitions] = useState([]);
+  const [allInjuries,     setInjuries]     = useState([]);
+  const [allGoals,        setGoals]        = useState([]);
+  const [allWellnessRows, setWellnessRows] = useState([]);
   const [loading,      setLoading]      = useState(true);
   const [error,        setError]        = useState(null);
+  const [alertEvaluationFailed, setAlertEvaluationFailed] = useState(false);
+  const [preferences, setPreferences] = useState(() => normalizeDashboardPreferences(null));
+  const [preferencesError, setPreferencesError] = useState(false);
+  const [preferencesLoading, setPreferencesLoading] = useState(true);
+  const [showSettings, setShowSettings] = useState(false);
+  const [groupOverride, setGroupOverride] = useState(undefined);
+  const groups = useMemo(() => [...new Set(allAthletes.map(item => item.group).filter(Boolean))].sort(), [allAthletes]);
+  const requestedGroup = groupOverride === undefined ? preferences.defaultGroup : groupOverride;
+  const selectedGroup = groups.includes(requestedGroup) ? requestedGroup : null;
+  const { athletes, weeklyCharge, sessions, alerts, competitions, injuries, goals, wellnessRows } = useMemo(() => scopeDashboardData({
+    athletes:allAthletes, weeklyCharge:allWeeklyCharge, sessions:allSessions, alerts:allAlerts,
+    competitions:allCompetitions, injuries:allInjuries, goals:allGoals, wellnessRows:allWellnessRows,
+  }, selectedGroup), [allAthletes, allWeeklyCharge, allSessions, allAlerts, allCompetitions, allInjuries, allGoals, allWellnessRows, selectedGroup]);
+  const shown = key => !preferences.hidden.includes(key);
+  const showAthletes = shown("athletes") && ["training_load","wellness","health"].some(key => enabledModules[key] !== false);
+  const showSideCards = (enabledModules.performances !== false && (shown("competitions") || shown("goals"))) || (enabledModules.session_feedback !== false && shown("feedback"));
 
-  // ═══ Chargement (identique à l'original — aucune requête modifiée) ═════════
+  useEffect(() => {
+    let active = true;
+    setPreferences(normalizeDashboardPreferences(null)); setGroupOverride(undefined);
+    setPreferencesLoading(true); setPreferencesError(false);
+    fetchDashboardPreferences().then(value => { if (active) setPreferences(value); })
+      .catch(() => { if (active) setPreferencesError(true); })
+      .finally(() => { if (active) setPreferencesLoading(false); });
+    return () => { active = false; };
+  }, [clubId, profile?.id]);
+
+  // ═══ Chargement et actualisation des alertes ══════════════════════════════
   const fetchAll = useCallback(async () => {
     if (!clubId) return;
     try {
       setLoading(true); setError(null);
       const requestDate = new Date();
 
+      setAlertEvaluationFailed(false);
+      await evaluateAlertRules().catch(() => setAlertEvaluationFailed(true));
+
       const [athletesRes, sessionsRes, alertsRes, compsRes, injuriesRes, goalsRes, wellnessRes, alertReadStatesRes] = await Promise.all([
         supabase.from("athletes").select("id, name, main_discipline, profile_data, group_name, user_id").eq("club_id", clubId),
         ["planning", "session_feedback", "training_load"].some((key) => enabledModules[key] !== false) ? supabase.from("sessions").select("*, session_athletes(*)").eq("club_id", clubId) : Promise.resolve({ data: [] }),
         ["performances", "session_feedback", "wellness", "training_load", "health", "social"].some((key) => enabledModules[key] !== false) ? supabase.from("alerts").select("id, severity, type, athlete_id, resolved_at, archived_at").eq("club_id", clubId) : Promise.resolve({ data: [] }),
-        enabledModules.performances !== false ? supabase.from("competitions").select("id, name, date, competition_athletes(athlete_id)").eq("club_id", clubId).gte("date", toLocalDateStr(requestDate)).order("date").limit(3) : Promise.resolve({ data: [] }),
+        enabledModules.performances !== false ? supabase.from("competitions").select("id, name, date, competition_athletes(athlete_id)").eq("club_id", clubId).gte("date", toLocalDateStr(requestDate)).order("date") : Promise.resolve({ data: [] }),
         enabledModules.health !== false ? supabase.from("injuries").select("id, athlete_id, name, intensity, status, location").eq("status", "actif") : Promise.resolve({ data: [] }),
         enabledModules.performances !== false ? supabase.from("athlete_goals").select("*").eq("club_id", clubId).eq("achieved", false) : Promise.resolve({ data: [] }),
-        enabledModules.wellness !== false ? supabase.from("athlete_wellness").select("athlete_id, date, sleep, energy, soreness, mood, stress, notes").eq("club_id", clubId).eq("date", toLocalDateStr(requestDate)) : Promise.resolve({ data: [] }),
+        enabledModules.wellness !== false ? supabase.from("athlete_wellness").select("athlete_id, date, sleep, energy, soreness, mood, stress, notes, answers, questionnaire_version_id, wellness_questionnaire_versions(questions)").eq("club_id", clubId).eq("date", toLocalDateStr(requestDate)) : Promise.resolve({ data: [] }),
         supabase.from("alert_read_states").select("alert_id"),
       ]);
 
@@ -449,7 +492,7 @@ function Dashboard({
         id: c.id, name: c.name, date: c.date,
         athleteIds: (c.competition_athletes ?? []).map(x => x.athlete_id),
       }));
-      setCompetitions(mappedComps);
+      setCompetitions(mappedComps.map(comp => ({ ...comp, athleteIds:comp.athleteIds.filter(id => effectiveForAthlete(id).performances !== false) })).filter((comp,index) => comp.athleteIds.length || mappedComps[index].athleteIds.length === 0));
       // Les lignes brutes de Supabase sont en snake_case (athlete_id) —
       // sans ce mapping, AthleteStatusCard (i.athleteId) et le fil du coach
       // ne matchaient jamais aucun athlète : le badge "blessure" sur les
@@ -458,10 +501,11 @@ function Dashboard({
         id: i.id, athleteId: i.athlete_id, name: i.name,
         intensity: i.intensity, status: i.status, location: i.location,
       })));
-      setGoals(goalsRes.data ?? []);
+      setGoals((goalsRes.data ?? []).filter(goal => effectiveForAthlete(goal.athlete_id).performances !== false));
       setWellnessRows((wellnessRes.data ?? []).map(row => ({
         ...row,
         athleteId: row.athlete_id,
+        questionnaireQuestions: row.wellness_questionnaire_versions?.questions,
       })));
 
       if (enabledModules.performances !== false && mappedComps.length > 0) {
@@ -534,17 +578,18 @@ function Dashboard({
     });
   }, [athletes, weeklyCharge, sessions, injuries, competitions, alerts, currentWeek, currentYear, effectiveForAthlete]);
 
+  const wellnessAthletes = useMemo(() => athletes.filter(athlete => effectiveForAthlete(athlete.id).wellness !== false), [athletes, effectiveForAthlete]);
   const groupDailyState = useMemo(
-    () => buildGroupDailyState(athletes, wellnessRows),
-    [athletes, wellnessRows]
+    () => buildGroupDailyState(wellnessAthletes, wellnessRows),
+    [wellnessAthletes, wellnessRows]
   );
 
   const setupProgress = useMemo(() => getClubSetupProgress(buildClubSetupSteps({
     club,
-    athleteCount: athletes.length,
-    sessionCount: sessions.length,
+    athleteCount: allAthletes.length,
+    sessionCount: allSessions.length,
     planningEnabled: enabledModules.planning !== false,
-  })), [athletes.length, club, sessions.length, enabledModules.planning]);
+  })), [allAthletes.length, club, allSessions.length, enabledModules.planning]);
 
   const dashboardAthletes = useMemo(
     () => athletes.filter((athlete) => ["wellness", "training_load", "health", "planning", "performances"]
@@ -555,8 +600,8 @@ function Dashboard({
   const hiddenAthleteCount = Math.max(0, dashboardAthletes.length - visibleAthletes.length);
 
   const recentFeedbacks = useMemo(() => {
-    return getRecentFeedbacks(sessions, athletes, { now:new Date(), days:7, limit:6 });
-  }, [sessions, athletes]);
+    return getRecentFeedbacks(sessions.map(session => ({ ...session, validations:session.validations.filter(row => effectiveForAthlete(row.athleteId).session_feedback !== false) })), athletes, { now:new Date(), days:preferences.feedbackDays, limit:6 });
+  }, [sessions, athletes, preferences.feedbackDays, effectiveForAthlete]);
 
   const firstName = profile?.name?.split(" ")[0] ?? "Coach";
 
@@ -577,11 +622,21 @@ function Dashboard({
         ) : null}
       />
 
+      {alertEvaluationFailed && <p role="status" className="text-sm" style={{ color:"var(--tone-warning)" }}>Le calcul des nouvelles alertes est momentanément indisponible. Les données déjà enregistrées restent consultables.</p>}
+      <div className="flex items-end justify-between gap-3 flex-wrap">
+        <label className="text-sm">Groupe affiché<select className="input-premium mt-1" value={selectedGroup ?? ""} onChange={event => setGroupOverride(event.target.value || null)}><option value="">Tous les groupes</option>{groups.map(group => <option key={group} value={group}>{group}</option>)}</select></label>
+        <button type="button" className="btn-secondary" disabled={preferencesLoading} onClick={() => setShowSettings(true)}>Personnaliser mon accueil</button>
+      </div>
+      {preferencesError && <p role="status" className="text-sm" style={{ color:"var(--tone-warning)" }}>Tes préférences n’ont pas pu être chargées. L’accueil utilise les valeurs par défaut.</p>}
+      {requestedGroup && !selectedGroup && <p role="status" className="meta-text">Le groupe mémorisé n’existe plus. Tous les groupes sont affichés.</p>}
+      {preferences.order.every(key => !shown(key)) && <p className="card p-5">Tous les blocs sont masqués. Utilise « Personnaliser mon accueil » pour les réafficher.</p>}
+      {showSettings && <DashboardSettings preferences={{ ...preferences, defaultGroup:groups.includes(preferences.defaultGroup) ? preferences.defaultGroup : null }} groups={groups} onClose={() => setShowSettings(false)} onSaved={value => { setPreferences(value); setGroupOverride(undefined); setPreferencesError(false); setShowSettings(false); }} />}
+
       {profile?.role === "head_coach" && !clubLoading && setupProgress < 100 && (
         <ClubOnboardingCard
           club={club}
-          athleteCount={athletes.length}
-          sessionCount={sessions.length}
+          athleteCount={allAthletes.length}
+          sessionCount={allSessions.length}
           onBranding={onOpenClubSettings}
           onInvite={onInvite}
           onPlanning={enabledModules.planning !== false ? () => onNavigate("planning", { action: "new-session" }) : undefined}
@@ -589,8 +644,9 @@ function Dashboard({
         />
       )}
 
+      <DashboardLayout preferences={preferences}>
       {/* ── Priorités coach ──────────────────────────────────────────────── */}
-      {["performances", "session_feedback", "wellness", "training_load", "health", "social"].some((key) => enabledModules[key] !== false) && <div data-dashboard-priority-queue>
+      {["performances", "session_feedback", "wellness", "training_load", "health", "social"].some((key) => enabledModules[key] !== false) && <div data-dashboard-block="priorities" data-dashboard-priority-queue>
         <CoachFeedSection items={coachFeed} onNavigate={onNavigate} limit={4} />
       </div>}
 
@@ -598,6 +654,7 @@ function Dashboard({
           restent entièrement disponibles juste après. */}
       {/* ── Synthèse de la semaine ────────────────────────────────────────── */}
       {enabledModules.wellness !== false && <div
+        data-dashboard-block="wellness"
         className="rounded-3xl overflow-hidden relative"
         style={{ background: "#0A1810" }}
       >
@@ -622,7 +679,7 @@ function Dashboard({
               <p className="text-[12px] font-bold uppercase tracking-[0.12em] mb-1" style={{ color: "rgba(255,255,255,0.68)" }}>
                 {today.toLocaleDateString("fr-BE", { weekday: "long", day: "numeric", month: "long" })}
               </p>
-              <h2 className="text-[20px] md:text-[22px] font-bold text-white tracking-tight leading-tight">Synthèse de la semaine</h2>
+              <h2 className="text-[20px] md:text-[22px] font-bold text-white tracking-tight leading-tight">Wellness du jour</h2>
               <p className="text-[12px] font-medium mt-1" style={{ color: "rgba(255,255,255,0.68)" }}>
                 Semaine {currentWeek} · {athletes.length} athlète{athletes.length > 1 ? "s" : ""} suivi{athletes.length > 1 ? "s" : ""}
               </p>
@@ -650,7 +707,7 @@ function Dashboard({
             {[
               {
                 label: "Check-ins du jour",
-                value: `${groupDailyState.completed}/${athletes.length}`,
+                value: `${groupDailyState.completed}/${wellnessAthletes.length}`,
                 color: "#1D9E75",
               },
               {
@@ -693,7 +750,7 @@ function Dashboard({
       </div>}
 
       {/* ── KPIs — icône + liseré + glow au survol ────────────────────────── */}
-      <section className="space-y-3" aria-labelledby="overview-title">
+      <section data-dashboard-block="overview" className="space-y-3" aria-labelledby="overview-title">
         <div>
           <h2 id="overview-title" className="section-title">Vue d'ensemble</h2>
           <p className="secondary-text mt-0.5">Les indicateurs essentiels de la semaine.</p>
@@ -724,10 +781,10 @@ function Dashboard({
       </section>
 
       {/* ── Layout 2 colonnes ─────────────────────────────────────────────── */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+      {(showAthletes || showSideCards) && <div data-dashboard-block="followup" className={`grid grid-cols-1 ${showAthletes && showSideCards ? "lg:grid-cols-3" : ""} gap-5`}>
 
         {/* ── État du groupe ─────────────────────────────────────────────── */}
-        {(enabledModules.training_load !== false || enabledModules.wellness !== false || enabledModules.health !== false) && <div className="lg:col-span-2 space-y-3">
+        {showAthletes && <div className={showSideCards ? "lg:col-span-2 space-y-3" : "space-y-3"}>
           <div className="flex items-center justify-between">
             <div>
               <h2 className="section-title">
@@ -781,10 +838,10 @@ function Dashboard({
         </div>}
 
         {/* ── Colonne droite ─────────────────────────────────────────────── */}
-        <div className="flex flex-col gap-4">
+        {showSideCards && <div className="flex flex-col gap-4">
 
           {/* Prochaines compétitions */}
-          {enabledModules.performances !== false && competitions.length > 0 && (
+          {shown("competitions") && enabledModules.performances !== false && competitions.length > 0 && (
             <div className="card overflow-hidden" style={{ order:2 }}>
               <div className="px-5 py-4 border-b border-[color:var(--c-border)] flex items-center justify-between">
                 <h3 className="card-title">Compétitions</h3>
@@ -796,7 +853,7 @@ function Dashboard({
                 </button>
               </div>
               <div className="divide-y divide-[color:var(--c-border)]">
-                {competitions.map(c => {
+                {competitions.slice(0,3).map(c => {
                   const days = calendarDayDifference(today, c.date);
                   const isUrgent = days <= 7;
                   return (
@@ -831,7 +888,7 @@ function Dashboard({
           )}
 
           {/* Objectifs saison */}
-          {enabledModules.performances !== false && goals.length > 0 && (
+          {shown("goals") && enabledModules.performances !== false && goals.length > 0 && (
             <div className="card overflow-hidden" style={{ order:3 }}>
               <div className="px-5 py-4 border-b border-[color:var(--c-border)] flex items-center justify-between">
                 <h3 className="card-title">Objectifs saison</h3>
@@ -869,11 +926,11 @@ function Dashboard({
           )}
 
           {/* Feedbacks récents */}
-          {enabledModules.session_feedback !== false && recentFeedbacks.length > 0 && (
+          {shown("feedback") && enabledModules.session_feedback !== false && recentFeedbacks.length > 0 && (
             <div className="card overflow-hidden" style={{ order:1 }}>
               <div className="px-5 py-4 border-b border-[color:var(--c-border)] flex items-center justify-between gap-3">
                 <div><h3 className="card-title">Feedbacks récents</h3>
-                <p className="card-subtitle mt-0.5">{recentFeedbacks.length} retour{recentFeedbacks.length > 1 ? "s" : ""} athlète</p>
+                <p className="card-subtitle mt-0.5">{recentFeedbacks.length} retour{recentFeedbacks.length > 1 ? "s" : ""} · {preferences.feedbackDays} derniers jours</p>
                 </div><button type="button" className="btn-ghost" onClick={() => onNavigate("alerts")}>Voir tous</button>
               </div>
               <div className="divide-y divide-[color:var(--c-border)]">
@@ -919,17 +976,18 @@ function Dashboard({
           )}
 
           {/* État vide */}
-          {(["performances", "session_feedback"].some((key) => enabledModules[key] !== false)) && competitions.length === 0 && goals.length === 0 && recentFeedbacks.length === 0 && (
+          {!(shown("competitions") && enabledModules.performances !== false && competitions.length) && !(shown("goals") && enabledModules.performances !== false && goals.length) && !(shown("feedback") && enabledModules.session_feedback !== false && recentFeedbacks.length) && (
             <div className="card p-8 text-center">
               <BarChart2 size={28} className="mx-auto mb-3" strokeWidth={1.5} style={{ color: "var(--c-text-4)" }} />
               <p className="text-[12px] font-semibold" style={{ color: "var(--c-text-2)" }}>Les données apparaîtront ici</p>
               <p className="meta-text mt-1">
-                Compétitions, objectifs et feedbacks s'afficheront au fur et à mesure.
+                Les cartes activées se rempliront avec les données de ce groupe.
               </p>
             </div>
           )}
-        </div>
-      </div>
+        </div>}
+      </div>}
+      </DashboardLayout>
     </div>
   );
 }

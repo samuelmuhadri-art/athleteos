@@ -337,7 +337,8 @@ export default function Rapports() {
 
       const mappedWellness = (wellnessRes.data ?? []).map(w => ({
         athleteId: w.athlete_id, date: w.date, sleep: w.sleep, energy: w.energy,
-        soreness: w.soreness, mood: w.mood, stress: w.stress,
+        soreness: w.soreness, mood: w.mood, stress: w.stress, answers: w.answers,
+        questionnaireVersionId: w.questionnaire_version_id,
       }));
 
       setAthletes(mappedAthletes);

@@ -43,6 +43,8 @@ import { ATHLETE_VIEW_MODULE, filterNavigation, moduleKeyForEventType } from "./
 import { mapDocument } from "./services/documentLibrary";
 import { fetchPrimaryHeadCoach, fetchAthleteSessions, fetchAthleteCompetitions, fetchAthletePlanningEvents } from "./services/athleteShellData";
 import { firstSupabaseError } from "./utils/supabaseResults";
+import { DEFAULT_WELLNESS_QUESTIONNAIRE, wellnessQuestionnaireRequestedOn } from "./domain/wellnessQuestionnaire";
+import { fetchWellnessQuestionnaire } from "./services/wellnessQuestionnaireService";
 
 const NAV_ITEMS = [
   { id: "dashboard",    label: "Accueil",        shortLabel: "Accueil",  icon: LayoutDashboard },
@@ -95,6 +97,7 @@ export default function AthleteApp({ clubBrand, themeStyle }) {
   const [error,          setError]          = useState(null);
   const [wellnessToday,  setWellnessToday]  = useState(null);
   const [wellnessHistory, setWellnessHistory] = useState([]);
+  const [wellnessQuestionnaire, setWellnessQuestionnaire] = useState(undefined);
   const [confirmedRestDays, setConfirmedRestDays] = useState([]);
   const [showWellness,   setShowWellness]   = useState(false);
   const [showInjuryReport, setShowInjuryReport] = useState(false);
@@ -284,9 +287,19 @@ export default function AthleteApp({ clubBrand, themeStyle }) {
 
   useEffect(() => { fetchAll(); }, [fetchAll]);
 
+  useEffect(() => {
+    if (enabledModules.wellness === false) { setWellnessQuestionnaire(null); return undefined; }
+    let active = true;
+    fetchWellnessQuestionnaire(toLocalDateStr(new Date()))
+      .then(configuration => { if (active) setWellnessQuestionnaire(configuration); })
+      .catch(() => { if (active) setWellnessQuestionnaire(DEFAULT_WELLNESS_QUESTIONNAIRE); });
+    return () => { active = false; };
+  }, [enabledModules.wellness]);
+
   const wellnessShownRef = useRef(false);
   useEffect(() => {
-    if (!athlete || loading || enabledModules.wellness === false) return;
+    if (!athlete || loading || enabledModules.wellness === false || wellnessQuestionnaire === undefined) return;
+    if (!wellnessQuestionnaireRequestedOn(wellnessQuestionnaire, new Date())) return;
     // Si déjà rempli aujourd'hui -> jamais afficher
     if (wellnessToday) return;
     // Clé unique par jour — évite le réaffichage au rechargement de page
@@ -297,7 +310,7 @@ export default function AthleteApp({ clubBrand, themeStyle }) {
     wellnessShownRef.current = true;
     sessionStorage.setItem(ssKey, "1");
     setShowWellness(true);
-  }, [athlete, wellnessToday, loading, enabledModules.wellness]);
+  }, [athlete, wellnessToday, loading, enabledModules.wellness, wellnessQuestionnaire]);
 
   // Le push navigateur reste inchangé. Cette écoute ajoute uniquement le
   // retour visuel instantané quand l'application est déjà ouverte.
@@ -635,6 +648,7 @@ export default function AthleteApp({ clubBrand, themeStyle }) {
                 competitions={competitions} lastMessages={lastMessages} coachName={coachName}
                 myPerformances={myPerformances} onNavigate={navigate}
                 wellnessToday={wellnessToday} wellnessHistory={wellnessHistory} onOpenWellness={() => setShowWellness(true)}
+                wellnessQuestionnaire={wellnessQuestionnaire}
                 confirmedRestDays={confirmedRestDays} onConfirmRestDay={confirmRestDay}
                 onOpenInjuryReport={() => setShowInjuryReport(true)}
                 allAthletes={allAthletes}
@@ -701,9 +715,10 @@ export default function AthleteApp({ clubBrand, themeStyle }) {
         />
       )}
 
-      {showWellness && athlete && enabledModules.wellness !== false && (
+      {showWellness && athlete && enabledModules.wellness !== false && wellnessQuestionnaire !== undefined && (
         <WellnessModal
-          athlete={athlete} clubId={clubId}
+          configuration={wellnessQuestionnaire}
+          existingWellness={wellnessToday}
           onClose={() => setShowWellness(false)}
           onSaved={(data) => {
             // Un seul batch React : ferme ET met à jour

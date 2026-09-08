@@ -22,6 +22,7 @@ function factorReading(factor, value) {
 
 export function buildDailyState({ wellness, history = [], metrics = {} }) {
   const score = computeWellnessScore(wellness);
+  const completed = Boolean(wellness);
   const factors = FACTORS.map(factor => factorReading(factor, wellness?.[factor.key]));
   const pastScores = history
     .filter(row => row && row.date !== wellness?.date)
@@ -36,7 +37,17 @@ export function buildDailyState({ wellness, history = [], metrics = {} }) {
     ? null
     : Number.isFinite(Number(rawVariation)) ? Number(rawVariation) : null;
 
+  if (score == null && completed) return {
+    score: null, completed: true, label: "Ton ressenti est enregistré", legacyLabel: "Questionnaire complété", color: "var(--tone-info)", tone: "neutral",
+    summary: "Cette configuration ne contient pas les cinq dimensions du score AthleteOS historique ; aucun score global n’est calculé.",
+    plainHeadline: "Ton ressenti est bien enregistré",
+    plainSummary: "Tes réponses restent visibles séparément, sans fabriquer un score qui ne correspondrait pas à ce questionnaire.",
+    helps: [], watch: [], coachPrompt: "Signale directement à ton coach tout élément que tu souhaites contextualiser.",
+    factors, baseline, delta, variation, known: factors.filter(item => item.value != null).length,
+  };
+
   if (score == null) return {
+    completed: false,
     score: null, label: "Comment te sens-tu aujourd'hui ?", legacyLabel: "Ton check-in manque", color: "#8A9B90", tone: "unknown",
     summary: "Réponds aux cinq questions pour donner à ton coach une image simple de ton ressenti.",
     plainHeadline: "Ton ressenti n'est pas encore renseigné",
@@ -74,7 +85,7 @@ export function buildDailyState({ wellness, history = [], metrics = {} }) {
     : "Si ton ressenti change pendant l'échauffement, signale-le simplement à ton coach.";
 
   return {
-    ...descriptor, score, summary, plainHeadline: descriptor.label,
+    ...descriptor, score, completed: true, summary, plainHeadline: descriptor.label,
     plainSummary: summary, loadContext, helps, watch, coachPrompt,
     factors, baseline, delta, variation, known: 5,
   };
@@ -85,12 +96,13 @@ export function buildGroupDailyState(athletes, wellnessRows, metricsByAthlete = 
     athlete,
     state: buildDailyState({ wellness: wellnessRows.find(row => row.athleteId === athlete.id), metrics: metricsByAthlete.get(athlete.id) ?? {} }),
   }));
-  const completed = states.filter(item => item.state.score != null);
+  const completed = states.filter(item => item.state.completed);
+  const scored = completed.filter(item => item.state.score != null);
   return {
     states,
     completed: completed.length,
     favorable: completed.filter(item => item.state.tone === "positive").length,
     attention: completed.filter(item => item.state.tone === "attention").length,
-    average: completed.length ? Math.round(completed.reduce((sum, item) => sum + item.state.score, 0) / completed.length) : null,
+    average: scored.length ? Math.round(scored.reduce((sum, item) => sum + item.state.score, 0) / scored.length) : null,
   };
 }

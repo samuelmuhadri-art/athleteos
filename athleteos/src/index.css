@@ -326,6 +326,7 @@ body {
 }
 .module-option[data-selected="true"] .module-toggle-state { color: var(--c-accent); }
 .module-toggle {
+  position: relative;
   display: inline-flex;
   width: 36px;
   height: 22px;
@@ -344,6 +345,7 @@ body {
   transition: transform var(--dur-fast) var(--spring), background var(--dur-fast) ease;
 }
 .module-toggle[data-on="true"] { background: var(--c-accent); border-color: var(--c-accent); }
+.module-toggle:focus-within { outline: 2px solid var(--c-accent); outline-offset: 3px; }
 .module-toggle[data-on="true"] > span { transform: translateX(14px); background: white; }
 .module-preset-status {
   padding: 4px 9px;
@@ -1074,7 +1076,7 @@ body {
   display: flex; align-items: flex-end; justify-content: center;
 }
 .account-settings-dialog {
-  width: 100%; max-height: min(92dvh, 780px); min-height: min(76dvh, 620px);
+  width: 100%; height: min(92dvh, 780px); max-height: min(92dvh, 780px); min-height: min(76dvh, 620px);
   display: flex; flex-direction: column; overflow: hidden;
   border: 1px solid var(--c-border-strong); border-bottom: 0;
   border-radius: 24px 24px 0 0; background: var(--c-surface); box-shadow: var(--shadow-xl);
@@ -1113,7 +1115,7 @@ body {
   border-color: rgba(36,168,125,0.22); background: rgba(36,168,125,0.10); color: var(--c-accent);
 }
 .account-settings-content {
-  flex: 1; overflow-y: auto; overscroll-behavior: contain;
+  flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain;
   padding: 20px 16px calc(20px + var(--safe-bottom));
 }
 .account-settings-content > .auth-feedback { margin-bottom: 20px; }

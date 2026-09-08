@@ -362,7 +362,7 @@ function ChargeView() {
           .eq("club_id", clubId),
         supabase
           .from("athlete_wellness")
-          .select("athlete_id, date, sleep, energy, soreness, mood, stress, notes")
+          .select("athlete_id, date, sleep, energy, soreness, mood, stress, notes, answers, questionnaire_version_id")
           .eq("club_id", clubId)
           .eq("date", toLocalDateStr(requestDate)),
       ]);
@@ -426,6 +426,8 @@ function ChargeView() {
         mood: row.mood,
         stress: row.stress,
         notes: row.notes,
+        answers: row.answers,
+        questionnaireVersionId: row.questionnaire_version_id,
       })));
       setSessionsForBreakdown(enrichedSessions);
     } catch (err) {

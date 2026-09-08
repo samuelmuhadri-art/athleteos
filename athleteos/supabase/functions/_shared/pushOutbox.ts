@@ -1,5 +1,9 @@
 // Aucun champ texte/destinataire du navigateur n'est utilisé pour construire une Push.
 export const PUSH_EVENT_TEMPLATES = {
+  rule_wellness: { title: "Suivi du bien-être", body: "Un point est à consulter dans les alertes AthleteOS.", moduleKey: "wellness", url: "/" },
+  rule_feedback: { title: "Retour de séance à compléter", body: "Un point est à consulter dans les alertes AthleteOS.", moduleKey: "session_feedback", url: "/" },
+  rule_competition: { title: "Préparation de compétition", body: "Un point est à consulter dans les alertes AthleteOS.", moduleKey: "performances", url: "/" },
+  rule_load: { title: "Suivi de la charge", body: "Un point est à consulter dans les alertes AthleteOS.", moduleKey: "training_load", url: "/" },
   message_received: { title: "Nouveau message", body: "Ouvre la messagerie pour le lire.", moduleKey: "messaging", url: "/" },
   session_changed: { title: "Ton planning a été mis à jour", body: "Consulte ton planning pour voir ta séance.", moduleKey: "planning", url: "/planning" },
   session_proposed: { title: "Nouvelle séance proposée", body: "Une séance attend ta vérification dans le planning.", moduleKey: "planning", url: "/planning" },

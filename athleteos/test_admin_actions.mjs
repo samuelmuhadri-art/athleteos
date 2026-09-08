@@ -107,6 +107,68 @@ async function main() {
     const coachA = await makeUser(`admin-test-coacha-${RUN_ID}@example.invalid`, password, clubA.id, "coach", "Coach A"); auths.push(coachA);
     const athleteA = await makeUser(`admin-test-athletea-${RUN_ID}@example.invalid`, password, clubA.id, "athlete", "Athlete A"); auths.push(athleteA);
     const headB = await makeUser(`admin-test-headb-${RUN_ID}@example.invalid`, password, clubB.id, "head_coach", "Head B"); auths.push(headB);
+    const athleteProfileA = await insertOrThrow("athletes", {
+      club_id: clubA.id,
+      user_id: athleteA.row.id,
+      name: "Athlete A",
+      main_discipline: "100m",
+      group_name: "Sprint",
+    });
+    await insertOrThrow("athlete_wellness", {
+      club_id: clubA.id,
+      athlete_id: athleteProfileA.id,
+      date: new Date().toISOString().slice(0, 10),
+      sleep: 4,
+      energy: 3,
+      soreness: 2,
+      mood: 4,
+      stress: 2,
+      notes: "Donnée personnelle exportable",
+    });
+    await insertOrThrow("messages", {
+      sender_id: coachA.row.id,
+      receiver_id: athleteA.row.id,
+      content: "Message personnel exportable",
+    });
+    await insertOrThrow("messages", {
+      sender_id: headA2.row.id,
+      receiver_id: coachA.row.id,
+      content: "Message sans rapport avec l’athlète",
+    });
+
+    // ── 0. Chaque rôle peut exporter uniquement les données liées à son JWT ──
+    {
+      const res = await callAdmin(athleteA.client, {
+        action: "export_personal_data",
+        userId: headA2.row.id,
+        athleteId: -1,
+      });
+      const exportMessages = res.export?.communications?.messages ?? [];
+      record(
+        "export_personal_data est accessible à l’athlète et ignore les identifiants injectés",
+        res.success === true
+          && res.export?.account?.profile?.id === athleteA.row.id
+          && res.export?.athleteData?.profile?.id === athleteProfileA.id,
+        res.error,
+      );
+      record(
+        "export_personal_data contient le wellness propre et aucune conversation tierce",
+        res.export?.athleteData?.wellness?.length === 1
+          && res.export.athleteData.wellness[0].notes === "Donnée personnelle exportable"
+          && exportMessages.length === 1
+          && exportMessages[0].content === "Message personnel exportable",
+        `wellness=${res.export?.athleteData?.wellness?.length ?? 0} messages=${exportMessages.length}`,
+      );
+    }
+
+    {
+      const preferences = { order:["overview","priorities","wellness","followup"], hidden:["wellness"], defaultGroup:null, feedbackDays:14 };
+      const { error } = await coachA.client.rpc("configure_my_dashboard_preferences", { p_preferences:preferences });
+      if (error) throw error;
+      const own = await callAdmin(coachA.client, { action:"export_personal_data" });
+      const other = await callAdmin(athleteA.client, { action:"export_personal_data", userId:coachA.row.id });
+      record("L’export contient uniquement les préférences dashboard personnelles", own.export?.preferences?.dashboardPreferences?.[0]?.preferences?.feedbackDays === 14 && other.export?.preferences?.dashboardPreferences?.length === 0);
+    }
 
     // ── 1. Coach et athlète refusés sur les actions head coach ────────────
     for (const [label, client] of [["coach", coachA.client], ["athlète", athleteA.client]]) {
@@ -303,6 +365,69 @@ async function main() {
       const hasDenied = (logs ?? []).some(l => l.result === "denied");
       const hasSuccess = (logs ?? []).some(l => l.result === "success");
       record("audit_logs distingue bien success et denied", hasDenied && hasSuccess, `denied=${hasDenied} success=${hasSuccess}`);
+    }
+
+    // ── 8. Départ autonome et conservation du contenu club ──────────────
+    {
+      const denied = await callAdmin(headB.client, {
+        action: "delete_own_account",
+        confirmationEmail: headB.row.email,
+      });
+      const { data: stillPresent } = await admin.from("users").select("id").eq("id", headB.row.id).maybeSingle();
+      record(
+        "delete_own_account protège le dernier head coach",
+        denied.success === false && stillPresent?.id === headB.row.id,
+        denied.success ? "SUPPRESSION AUTORISÉE !" : denied.error,
+      );
+    }
+
+    {
+      const authoredSession = await insertOrThrow("sessions", {
+        club_id: clubA.id,
+        title: "Séance à conserver après départ du coach",
+        session_date: new Date().toISOString().slice(0, 10),
+        time: "18:00",
+        duration_minutes: 60,
+        type: "training",
+        category: "speed",
+        created_by: coachA.row.id,
+      });
+      const removed = await callAdmin(headA2.client, {
+        action: "remove_user",
+        userId: coachA.row.id,
+        idempotencyKey: crypto.randomUUID(),
+      });
+      const [{ data: sessionAfter }, { data: coachAfter }, { data: coachMessages }] = await Promise.all([
+        admin.from("sessions").select("created_by").eq("id", authoredSession.id).single(),
+        admin.from("users").select("id").eq("id", coachA.row.id).maybeSingle(),
+        admin.from("messages").select("id").or(`sender_id.eq.${coachA.row.id},receiver_id.eq.${coachA.row.id}`),
+      ]);
+      record(
+        "remove_user transfère les séances d'un coach et retire ses conversations",
+        removed.success === true
+          && !coachAfter
+          && sessionAfter?.created_by === headA2.row.id
+          && (coachMessages ?? []).length === 0,
+        removed.error,
+      );
+      if (removed.success) auths.splice(auths.indexOf(coachA), 1);
+    }
+
+    {
+      const deleted = await callAdmin(athleteA.client, {
+        action: "delete_own_account",
+        confirmationEmail: athleteA.row.email,
+      });
+      const [{ data: userAfter }, { data: athleteAfter }] = await Promise.all([
+        admin.from("users").select("id").eq("id", athleteA.row.id).maybeSingle(),
+        admin.from("athletes").select("id").eq("id", athleteProfileA.id).maybeSingle(),
+      ]);
+      record(
+        "delete_own_account supprime atomiquement le compte public et la fiche athlète",
+        deleted.success === true && !userAfter && !athleteAfter,
+        deleted.error,
+      );
+      if (deleted.success) auths.splice(auths.indexOf(athleteA), 1);
     }
 
   } finally {

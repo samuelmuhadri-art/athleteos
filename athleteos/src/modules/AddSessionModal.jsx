@@ -13,10 +13,9 @@ import { getDefaultTrainingFocus, isTrainingFocusCompatible } from "../domain/tr
 import { useAccessibleDialog } from "../hooks/useAccessibleDialog";
 import DocumentLibraryField from "../components/documents/DocumentLibraryField";
 import { groupAthletes, isoWeekday, RECURRENCE_OPTIONS } from "../domain/planningEvolution";
-import { supabase } from "../utils/supabaseClient";
-import { mapDocument } from "../services/documentLibrary";
+import SessionTemplateLibrary from "../components/planning/SessionTemplateLibrary";
 
-const AddSessionModal = memo(({ athletes, initialData, initialAthleteIds = [], initialDate, onClose, onAdd }) => {
+const AddSessionModal = memo(({ athletes, initialData, initialAthleteIds = [], initialDate, currentUserId, isHeadCoach = false, onClose, onAdd }) => {
   const isEdit = !!initialData;
   const today  = toLocalDateStr(new Date());
   const [form, setForm]             = useState(() => {
@@ -38,7 +37,6 @@ const AddSessionModal = memo(({ athletes, initialData, initialAthleteIds = [], i
   const [documents, setDocuments] = useState(() => initialData?.documents ?? []);
   const [documentsBusy, setDocumentsBusy] = useState(false);
   const [saveError, setSaveError] = useState(null);
-  const [templates, setTemplates] = useState([]);
   const requestKeyRef = useRef(crypto.randomUUID());
   const initialSnapshotRef = useRef(null);
   const documentSnapshot = useCallback(items => items.map(document => ({
@@ -63,14 +61,6 @@ const AddSessionModal = memo(({ athletes, initialData, initialAthleteIds = [], i
     window.addEventListener("beforeunload", warnBeforeUnload);
     return () => window.removeEventListener("beforeunload", warnBeforeUnload);
   }, [dirty]);
-
-  useEffect(() => {
-    if (isEdit) return undefined;
-    let active = true;
-    supabase.from("session_templates").select("*, session_template_documents(documents(*))").order("updated_at", { ascending:false })
-      .then(({ data }) => { if (active) setTemplates(data ?? []); });
-    return () => { active = false; };
-  }, [isEdit]);
 
   const set = useCallback((key, val) => setForm(f => ({ ...f, [key]: val })), []);
   const toggleAthlete = useCallback(id => {
@@ -156,15 +146,18 @@ const AddSessionModal = memo(({ athletes, initialData, initialAthleteIds = [], i
 
         <div className="flex-1 overflow-y-auto px-6 py-5 space-y-4">
 
-          {!isEdit && templates.length > 0 && <div>
-            <label className={labelCls} style={labelStyle}>Partir d’un modèle</label>
-            <div className="flex gap-2 overflow-x-auto pb-1">{templates.map(template => <button type="button" key={template.id} className="btn-secondary whitespace-nowrap" onClick={() => {
+          {!isEdit && <SessionTemplateLibrary
+            draft={form}
+            documents={documents}
+            currentUserId={currentUserId}
+            isHeadCoach={isHeadCoach}
+            onApply={template => {
               setForm(current => ({ ...current, title:template.title, category:template.category, type:template.type,
                 trainingFocus:template.training_focus, durationMinutes:template.duration_minutes,
                 description:template.description ?? "", instructions:template.instructions ?? "" }));
-              setDocuments((template.session_template_documents ?? []).map(link => mapDocument(link.documents)).filter(Boolean));
-            }}>{template.name}</button>)}</div>
-          </div>}
+              setDocuments(template.documents);
+            }}
+          />}
 
           <div>
             <label htmlFor="session-title" className={labelCls} style={labelStyle}>Titre *</label>

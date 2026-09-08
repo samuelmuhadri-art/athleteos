@@ -21,7 +21,7 @@ import {
 import { getAthleteAxisProfile } from "../../utils/loadAxes";
 import {
   getISOWeek, colorsFor, parsePerf, isSameDay, parseLocalDate, toLocalDateStr,
-  initialsFromName, getDiscHib, DISC_TYPE_COLORS, WELLNESS_QUESTIONS,
+  initialsFromName, getDiscHib, DISC_TYPE_COLORS, WELLNESS_QUESTION_ICONS,
 } from "../shared";
 import AxisRadarCard from "../../components/ui/AxisRadarCard";
 import FormeDetailPanel from "../components/FormeDetailPanel";
@@ -36,6 +36,7 @@ import { getISOWeekInfo, getISOWeekYear, matchesISOWeek } from "../../utils/help
 import { getSessionTrainingFocus } from "../../domain/trainingFocus";
 import CompetitionDetailModal from "../../components/planning/CompetitionDetailModal";
 import { formatCivilDate, parseCivilDate } from "../../utils/dateTime";
+import { configuredWellnessQuestions } from "../../domain/wellnessQuestionnaire";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 function getDiscType(discName) {
@@ -311,7 +312,7 @@ const WeekOverview = memo(({ sessions, today, onOpenPlanning }) => {
 // ═══════════════════════════════════════════════════════════════════════════════
 export default function AthleteDashboard({
   athlete, weeklyCharge, sessions, competitions, lastMessages,
-  coachName, myPerformances, onNavigate, wellnessToday, wellnessHistory = [], onOpenWellness,
+  coachName, myPerformances, onNavigate, wellnessToday, wellnessHistory = [], wellnessQuestionnaire, onOpenWellness,
   confirmedRestDays = [], onConfirmRestDay,
   onOpenInjuryReport, allAthletes, onRpeChange, onStatusChange,
   onFeelingChange, onCommentChange, onRsvpChange,
@@ -325,6 +326,10 @@ export default function AthleteDashboard({
   const [activeMetric, setActiveMetric] = useState(null);
   const [showDailyState, setShowDailyState] = useState(false);
   const [activeCompetition, setActiveCompetition] = useState(null);
+  const activeWellnessQuestions = useMemo(() => configuredWellnessQuestions(wellnessQuestionnaire).map(question => ({
+    ...question,
+    icon:WELLNESS_QUESTION_ICONS[question.icon] ?? Activity,
+  })), [wellnessQuestionnaire]);
 
   const metrics = useMemo(() =>
     getAthleteMetricsForWeek(athlete.id, weeklyCharge, currentWeek, wellnessToday ? [wellnessToday] : [], sessions),
@@ -548,7 +553,7 @@ export default function AthleteDashboard({
               </div>
               <div>
                 <p className="card-title">Ton état du jour</p>
-                <p className="card-subtitle">Tes cinq réponses sont enregistrées</p>
+                <p className="card-subtitle">Tes {activeWellnessQuestions.length} réponse{activeWellnessQuestions.length > 1 ? "s sont" : " est"} enregistrée{activeWellnessQuestions.length > 1 ? "s" : ""}</p>
               </div>
             </div>
             {metrics.wellnessScore !== null && (
@@ -560,18 +565,18 @@ export default function AthleteDashboard({
               </div>
             )}
           </div>
-          <div className="grid grid-cols-5 gap-2">
-            {WELLNESS_QUESTIONS.map(q => {
-              const val  = wellnessToday[q.key];
+          <div className="grid gap-2" style={{ gridTemplateColumns:`repeat(${Math.min(activeWellnessQuestions.length, 5)}, minmax(0, 1fr))` }}>
+            {activeWellnessQuestions.map(q => {
+              const val  = wellnessToday.answers?.[q.key] ?? wellnessToday[q.key];
               const Icon = q.icon;
-              const good = q.inverted ? val <= 2 : val >= 4;
-              const bad  = q.inverted ? val >= 4 : val <= 2;
-              const col  = good ? "#1D9E75" : bad ? "#C0392B" : "#C8890A";
+              const good = val != null && (q.inverted ? val <= 2 : val >= 4);
+              const bad  = val != null && (q.inverted ? val >= 4 : val <= 2);
+              const col  = val == null ? "var(--c-text-3)" : good ? "#1D9E75" : bad ? "#C0392B" : "#C8890A";
               return (
                 <div key={q.key} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "var(--space-1)", padding: "var(--space-2) var(--space-1)", borderRadius: 8, background: "var(--c-surface-2)" }}>
                   <Icon size={13} color={q.color} strokeWidth={2} />
-                  <span style={{ fontSize: 15, fontWeight: 600, color: col, fontVariantNumeric: "tabular-nums", lineHeight: 1 }}>{val}</span>
-                  <span style={{ fontSize: "var(--text-meta)", color: "var(--c-text-3)", textAlign: "center", lineHeight: "var(--leading-meta)" }}>{q.label.split(" ")[0]}</span>
+                  <span style={{ fontSize: 15, fontWeight: 600, color: col, fontVariantNumeric: "tabular-nums", lineHeight: 1 }}>{val ?? "—"}</span>
+                  <span style={{ fontSize: "var(--text-meta)", color: "var(--c-text-3)", textAlign: "center", lineHeight: "var(--leading-meta)" }}>{q.shortLabel}</span>
                 </div>
               );
             })}

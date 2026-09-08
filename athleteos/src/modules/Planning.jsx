@@ -45,7 +45,7 @@ import PlanningEventModal from "../components/planning/PlanningEventModal";
 // ─── Composant principal ──────────────────────────────────────────────────────
 
 function Planning() {
-  const { clubId } = useAuth();
+  const { clubId, profile } = useAuth();
   const { enabledAthleteIds, club: enabledModules } = useModules();
   const { success: showSuccessToast } = useToast();
   const today   = new Date();
@@ -1141,6 +1141,8 @@ function Planning() {
       {sessionModalTarget && (
         <AddSessionModal
           athletes={athletes}
+          currentUserId={profile?.id}
+          isHeadCoach={profile?.role === "head_coach"}
           initialData={sessionModalTarget === "create" ? null : buildFormFromSession(sessionModalTarget)}
           initialAthleteIds={sessionModalTarget === "create" ? initialAthleteIds : []}
           initialDate={initialDate}

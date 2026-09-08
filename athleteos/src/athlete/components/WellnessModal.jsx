@@ -5,23 +5,29 @@
 
 import { useState, useMemo, memo } from "react";
 import { X, CheckCircle, AlertTriangle, Activity } from "lucide-react";
-import { supabase } from "../../utils/supabaseClient";
 import { computeWellnessScore } from "../../utils/chargeCalculations";
-import { WELLNESS_QUESTIONS, toLocalDateStr } from "../shared";
+import { WELLNESS_QUESTION_ICONS, toLocalDateStr } from "../shared";
 import { useAccessibleDialog } from "../../hooks/useAccessibleDialog";
+import { configuredWellnessQuestions, initialWellnessAnswers, legacyWellnessValues, normalizeWellnessQuestionnaire, requiredWellnessComplete } from "../../domain/wellnessQuestionnaire";
+import { submitWellnessResponse } from "../../services/wellnessQuestionnaireService";
 
-const WellnessModal = memo(({ athlete, clubId, onClose, onSaved }) => {
-  const [form, setForm] = useState({
-    sleep: null, energy: null, soreness: null, mood: null, stress: null,
-  });
-  const [notes,  setNotes]  = useState("");
+const WellnessModal = memo(({ configuration, existingWellness, onClose, onSaved }) => {
+  const questionnaire = useMemo(() => normalizeWellnessQuestionnaire(configuration), [configuration]);
+  const questions = useMemo(() => configuredWellnessQuestions(questionnaire).map(question => ({
+    ...question,
+    icon:WELLNESS_QUESTION_ICONS[question.icon] ?? Activity,
+    desc:question.descriptions,
+  })), [questionnaire]);
+  const [form, setForm] = useState(() => initialWellnessAnswers(questionnaire, existingWellness));
+  const [notes,  setNotes]  = useState(existingWellness?.notes ?? "");
   const [saving, setSaving] = useState(false);
   const [err,    setErr]    = useState(null);
   const { dialogRef } = useAccessibleDialog({ onClose, closeDisabled: saving });
 
-  const allAnswered   = Object.values(form).every(v => v !== null);
+  const allAnswered   = requiredWellnessComplete(questionnaire, form);
   const answeredCount = Object.values(form).filter(v => v !== null).length;
-  const previewScore  = useMemo(() => computeWellnessScore(form), [form]);
+  const requiredRemaining = questions.filter(question => question.required && form[question.key] == null).length;
+  const previewScore  = useMemo(() => computeWellnessScore(legacyWellnessValues(form)), [form]);
 
   const scoreColor = previewScore === null ? "var(--c-text-3)"
     : previewScore >= 75 ? "#1D9E75"
@@ -38,19 +44,14 @@ const WellnessModal = memo(({ athlete, clubId, onClose, onSaved }) => {
     setSaving(true); setErr(null);
     try {
       const today = toLocalDateStr(new Date());
-      const { error } = await supabase.from("athlete_wellness").upsert({
-        athlete_id: athlete.id,
-        club_id:    clubId,
-        date:       today,
-        sleep:    form.sleep,
-        energy:   form.energy,
-        soreness: form.soreness,
-        mood:     form.mood,
-        stress:   form.stress,
-        notes:    notes.trim() || null,
-      }, { onConflict: "athlete_id,date" });
-      if (error) throw error;
-      const saved = { ...form, notes: notes.trim() || null, date: today };
+      const result = await submitWellnessResponse({ answers:form, notes:notes.trim(), date:today });
+      const saved = {
+        ...legacyWellnessValues(form),
+        answers:form,
+        questionnaireVersionId:result.questionnaireVersionId,
+        notes:notes.trim() || null,
+        date:today,
+      };
       // Fermer D'ABORD, puis notifier le parent
       onClose();
       onSaved(saved);
@@ -126,11 +127,11 @@ const WellnessModal = memo(({ athlete, clubId, onClose, onSaved }) => {
                   Progression
                 </p>
                 <p style={{ fontSize: 9.5, color: "var(--c-text-3)" }}>
-                  {answeredCount} / {WELLNESS_QUESTIONS.length}
+                  {answeredCount} / {questions.length}
                 </p>
               </div>
               <div style={{ height: 4, background: "var(--c-surface-3)", borderRadius: 99, overflow: "hidden" }}>
-                <div style={{ height: "100%", borderRadius: 99, background: scoreColor, width: `${(answeredCount / WELLNESS_QUESTIONS.length) * 100}%`, transition: "width 0.4s ease" }} />
+                <div style={{ height: "100%", borderRadius: 99, background: scoreColor, width: `${(answeredCount / questions.length) * 100}%`, transition: "width 0.4s ease" }} />
               </div>
             </div>
             {previewScore !== null && (
@@ -153,11 +154,11 @@ const WellnessModal = memo(({ athlete, clubId, onClose, onSaved }) => {
             </div>
           )}
 
-          {WELLNESS_QUESTIONS.map((q) => {
+          {questions.map((q) => {
             const Icon     = q.icon;
             const answered = form[q.key] !== null;
             return (
-              <div key={q.key}>
+              <div key={q.key} role="group" aria-label={q.label}>
                 {/* Label question */}
                 <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
                   <div style={{ width: 30, height: 30, borderRadius: 8, background: q.color + "18", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
@@ -165,6 +166,7 @@ const WellnessModal = memo(({ athlete, clubId, onClose, onSaved }) => {
                   </div>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <span style={{ fontSize: 13, fontWeight: 500, color: "var(--c-text-1)" }}>{q.label}</span>
+                    {!q.required && <span style={{ marginLeft: 6, fontSize: 9.5, color: "var(--c-text-4)" }}>facultatif</span>}
                     {q.inverted && (
                       <span style={{ marginLeft: 6, fontSize: 9.5, fontWeight: 500, color: "var(--c-text-4)", textTransform: "uppercase", letterSpacing: "0.06em" }}>
                         moins = mieux
@@ -184,7 +186,7 @@ const WellnessModal = memo(({ athlete, clubId, onClose, onSaved }) => {
                       ? (visualGood ? "#1D9E75" : visualBad ? "#E05252" : "#E8A020")
                       : undefined;
                     return (
-                      <button key={v}
+                      <button key={v} type="button" aria-label={`${q.label} : ${v} — ${q.desc[v - 1]}`} aria-pressed={selected}
                         onClick={() => setForm(f => ({ ...f, [q.key]: v }))}
                         style={{
                           flex: 1, minHeight: 58,
@@ -234,7 +236,7 @@ const WellnessModal = memo(({ athlete, clubId, onClose, onSaved }) => {
             style={{ flexShrink: 0, minHeight: 44, padding: "0 16px", borderRadius: 10, background: "var(--c-surface-2)", border: "1px solid var(--c-border)", color: "var(--c-text-2)", fontSize: 13, fontWeight: 400, cursor: "pointer", display: "flex", alignItems: "center", gap: 6, opacity: saving ? 0.4 : 1 }}>
             Plus tard
           </button>
-          <button onClick={handleSubmit} disabled={!allAnswered || saving}
+          <button onClick={handleSubmit} disabled={!allAnswered || saving} aria-label={allAnswered ? "Valider le questionnaire" : `${requiredRemaining} question${requiredRemaining > 1 ? "s" : ""} obligatoire${requiredRemaining > 1 ? "s" : ""} restante${requiredRemaining > 1 ? "s" : ""}`}
             style={{
               flex: 1, minHeight: 44, borderRadius: 10, border: "none",
               background: allAnswered ? "linear-gradient(135deg, #1D9E75, #16826C)" : "var(--c-surface-2)",
@@ -253,7 +255,7 @@ const WellnessModal = memo(({ athlete, clubId, onClose, onSaved }) => {
             ) : allAnswered ? (
               <><CheckCircle size={15} strokeWidth={2} />Valider</>
             ) : (
-              `${5 - answeredCount} question${5 - answeredCount > 1 ? "s" : ""} restante${5 - answeredCount > 1 ? "s" : ""}`
+              `${requiredRemaining} question${requiredRemaining > 1 ? "s" : ""} obligatoire${requiredRemaining > 1 ? "s" : ""} restante${requiredRemaining > 1 ? "s" : ""}`
             )}
           </button>
         </div>

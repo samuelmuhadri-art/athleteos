@@ -34,4 +34,13 @@ describe("repère AthleteOS du jour", () => {
     const group = buildGroupDailyState([{ id: 1 }, { id: 2 }], [{ athleteId: 1, sleep: 5, energy: 5, soreness: 1, mood: 5, stress: 1 }]);
     expect(group).toMatchObject({ completed: 1, favorable: 1, average: 100 });
   });
+
+  it("considère un questionnaire configurable comme complété sans fabriquer de score V1", () => {
+    const wellness = { date:"2026-08-01", sleep:4, energy:null, soreness:null, mood:null, stress:null, answers:{ sleep:4, motivation:5 } };
+    const state = buildDailyState({ wellness });
+    expect(state.completed).toBe(true);
+    expect(state.score).toBeNull();
+    expect(state.summary).toContain("aucun score global");
+    expect(buildGroupDailyState([{ id:1 }], [{ athleteId:1, ...wellness }]).completed).toBe(1);
+  });
 });

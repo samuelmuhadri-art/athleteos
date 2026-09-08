@@ -21,6 +21,8 @@ import { initialsFromName } from "../utils/helpers.js";
 import { useModules } from "../hooks/useModules";
 import { moduleKeyForEventType } from "../domain/modules/moduleRegistry";
 import { countUnreadActiveAlerts, filterAlertLifecycle, mergePersonalAlertReadState } from "../domain/alertLifecycle";
+import { alertRuleExplanation } from "../domain/alertRules";
+import { evaluateAlertRules } from "../services/alertRulesService";
 
 // ─── Config UI statique ───────────────────────────────────────────────────────
 
@@ -28,6 +30,7 @@ import { countUnreadActiveAlerts, filterAlertLifecycle, mergePersonalAlertReadSt
 // (voir src/utils/notifications.js) : "charge" pour surcharge/sous-charge ACWR,
 // pas "surcharge" — sinon l'alerte tombe dans le fallback gris sans couleur.
 const TYPE_CONFIG = {
+  wellness:    { label: "Bien-être", icon: Activity, color: "var(--tone-mental)", bg: "rgba(155,132,240,0.15)" },
   charge:      { label: "Charge",      icon: Activity,      color: "var(--tone-danger)", bg: "rgba(226,75,74,0.15)" },
   blessure:    { label: "Blessure",    icon: AlertTriangle, color: "#EF9F27", bg: "rgba(239,159,39,0.15)" },
   absence:     { label: "Absence",     icon: Users,         color: "#378ADD", bg: "rgba(55,138,221,0.15)" },
@@ -141,6 +144,7 @@ function Alerts({ onNavigate }) {
   const [athletes,  setAthletes]  = useState([]);
   const [loading,   setLoading]   = useState(true);
   const [error,     setError]     = useState(null);
+  const [alertEvaluationFailed, setAlertEvaluationFailed] = useState(false);
 
   const [filterType,    setFilterType]    = useState("tous");
   const [filterRead,    setFilterRead]    = useState("tous");
@@ -184,6 +188,9 @@ function Alerts({ onNavigate }) {
         resolvedAt:  a.resolved_at,
         archivedAt:  a.archived_at,
         date:        a.created_at,
+        ruleKey:     a.rule_key,
+        ruleVersion: a.rule_version,
+        triggerData: a.trigger_data,
       }));
       setAlertList(mergePersonalAlertReadState(visibleAlerts, readStatesRes.data ?? []));
 
@@ -201,6 +208,15 @@ function Alerts({ onNavigate }) {
   }, [clubId, effectiveForAthlete, enabledModules]);
 
   useEffect(() => { fetchAll(); }, [fetchAll]);
+
+  useEffect(() => {
+    if (!clubId) return;
+    let active = true;
+    setAlertEvaluationFailed(false);
+    evaluateAlertRules().then(() => { if (active) fetchAll(true); })
+      .catch(() => { if (active) setAlertEvaluationFailed(true); });
+    return () => { active = false; };
+  }, [clubId, fetchAll]);
 
   useEffect(() => {
     if (!clubId) return undefined;
@@ -311,6 +327,7 @@ function Alerts({ onNavigate }) {
 
   return (
     <div className="p-6 max-w-4xl mx-auto space-y-5">
+      {alertEvaluationFailed && <p role="status" className="text-sm" style={{ color:"var(--tone-warning)" }}>Le calcul des nouvelles alertes est momentanément indisponible. Les données déjà enregistrées restent consultables.</p>}
 
       {/* ── En-tête ──────────────────────────────────────────────────────── */}
       <div className="flex items-center justify-between flex-wrap gap-3">
@@ -480,6 +497,17 @@ function Alerts({ onNavigate }) {
                     <p className="text-[12.5px] text-[var(--c-text-2)] mt-1.5 leading-relaxed">
                       {alert.description || "Aucune description."}
                     </p>
+                    {alert.ruleKey && <p className="meta-text mt-2">
+                      {alertRuleExplanation(alert)} · règle v{alert.ruleVersion}
+                    </p>}
+                    {alert.triggerData?.responses?.length > 0 && <details className="mt-2 text-[12px]" style={{ color:"var(--c-text-2)" }}>
+                      <summary className="cursor-pointer py-2">Réponses à l’origine de l’alerte</summary>
+                      <ul className="space-y-1">
+                        {alert.triggerData.responses.map(response => <li key={response.date}>
+                          {formatDate(`${response.date}T12:00:00`)} : {response.value}/5
+                        </li>)}
+                      </ul>
+                    </details>}
 
                     {(alert.type === "session_response" || alert.type === "athlete_session") && onNavigate && (
                       <button

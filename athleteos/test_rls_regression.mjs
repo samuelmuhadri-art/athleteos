@@ -340,10 +340,12 @@ async function main() {
       record("SELECT athlete_wellness (X, positif)", !error && (data ?? []).length === 1, error?.message);
     }
     {
-      const { data, error } = await athleteXClient.from("athlete_wellness")
-        .upsert({ athlete_id: athleteX.id, club_id: clubA.id, date: "2026-07-21", sleep: 5, energy: 5, soreness: 5, mood: 5, stress: 5 }, { onConflict: "athlete_id,date" })
-        .select();
-      record("UPSERT athlete_wellness (X, positif)", !error && (data ?? []).length === 1, error?.message);
+      const { data, error } = await athleteXClient.rpc("submit_wellness_response", {
+        p_answers:{ sleep:5, energy:5, soreness:5, mood:5, stress:5 },
+        p_notes:null,
+        p_date:new Date().toISOString().slice(0, 10),
+      });
+      record("RPC wellness versionnée (X, positif)", !error && Boolean(data?.wellnessId), error?.message);
     }
     {
       const { data, error } = await athleteXClient.from("injuries").insert({ athlete_id: athleteX.id, name: "Auto-signalement", status: "actif" }).select();

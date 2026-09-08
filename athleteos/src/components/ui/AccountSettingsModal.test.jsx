@@ -151,4 +151,46 @@ describe("AccountSettingsModal", () => {
     await waitFor(() => expect(mocks.signOut).toHaveBeenCalledOnce());
     expect(onClose).toHaveBeenCalledOnce();
   });
+
+  it("exporte uniquement les données personnelles préparées par le serveur", async () => {
+    const click = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
+    mocks.invoke.mockResolvedValue({
+      data: { success: true, export: { schemaVersion: 1, account: { email: "coach@club.be" } } },
+      error: null,
+    });
+    renderSettings();
+
+    fireEvent.click(screen.getByRole("button", { name: "Exporter mes données" }));
+
+    await waitFor(() => expect(mocks.invoke).toHaveBeenCalledWith("admin-actions", {
+      body: { action: "export_personal_data" },
+    }));
+    expect(click).toHaveBeenCalledOnce();
+    expect(globalThis.URL.createObjectURL).toHaveBeenCalledOnce();
+    expect(globalThis.URL.revokeObjectURL).toHaveBeenCalledOnce();
+    expect(await screen.findByText("Ton export personnel a été téléchargé.")).toBeTruthy();
+  });
+
+  it("exige l'adresse exacte avant de supprimer son propre compte", async () => {
+    const onClose = vi.fn();
+    renderSettings({ onClose });
+
+    fireEvent.click(screen.getByRole("button", { name: "Supprimer mon compte" }));
+    const dialog = screen.getByRole("dialog", { name: "Supprimer définitivement ton compte ?" });
+    const confirm = screen.getByRole("button", { name: "Supprimer définitivement" });
+    expect(confirm.disabled).toBe(true);
+
+    fireEvent.change(screen.getByLabelText("Adresse email de confirmation"), {
+      target: { value: "coach@club.be" },
+    });
+    expect(confirm.disabled).toBe(false);
+    fireEvent.click(confirm);
+
+    await waitFor(() => expect(mocks.invoke).toHaveBeenCalledWith("admin-actions", {
+      body: { action: "delete_own_account", confirmationEmail: "coach@club.be" },
+    }));
+    await waitFor(() => expect(mocks.signOut).toHaveBeenCalledOnce());
+    expect(onClose).toHaveBeenCalledOnce();
+    expect(dialog.isConnected).toBe(false);
+  });
 });

@@ -141,6 +141,9 @@ jobs:
             test_private_storage.mjs \
             test_document_distribution.mjs \
             test_planning_evolution.mjs \
+            test_wellness_configuration.mjs \
+            test_alert_rules.mjs \
+            test_dashboard_preferences.mjs \
             test_alert_lifecycle.mjs \
             test_scale_30_athletes.mjs \
             test_performance_normalization.mjs
