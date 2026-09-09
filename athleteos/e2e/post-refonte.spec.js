@@ -1,6 +1,7 @@
 /* global document, getComputedStyle, window */
 import { expect, test } from "@playwright/test";
 import { existsSync, readFileSync } from "node:fs";
+import { randomUUID } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 
@@ -52,7 +53,9 @@ for (const viewport of [{ width: 375, height: 812 }, { width: 390, height: 844 }
     await expect(page.getByRole("button", { name: "Retour aux conversations" })).toBeVisible();
 
     const input = page.getByPlaceholder(/Message à Antonin/);
-    await input.fill(`Test responsive ${viewport.width}`);
+    // Each attempt owns its message, including retries against the same database.
+    const message = `Test responsive ${viewport.width} ${randomUUID()}`;
+    await input.fill(message);
     const send = page.getByRole("button", { name: "Envoyer le message" });
     await expect(send).toBeEnabled();
 
@@ -63,7 +66,18 @@ for (const viewport of [{ width: 375, height: 812 }, { width: 390, height: 844 }
     }
 
     await send.click();
-    await expect(page.getByText(`Test responsive ${viewport.width}`, { exact: true })).toBeVisible();
+    // The composer briefly retains the text while the real send finishes.
+    // It must not be mistaken for a delivered message by a page-wide locator.
+    await expect(input).toHaveValue("");
+    const delivered = page.locator("[data-conversation-thread]").getByText(message, { exact: true });
+    await expect(delivered).toHaveCount(1);
+    await expect(delivered).toBeVisible();
+    // A successful optimistic render alone is not proof of persistence.
+    await page.reload();
+    await openMessages(page, viewport.width);
+    await page.getByRole("button", { name: /Antonin Leroy/ }).click();
+    await expect(delivered).toHaveCount(1);
+    await expect(delivered).toBeVisible();
     await page.getByRole("button", { name: "Retour aux conversations" }).click();
     await expect(page.getByRole("heading", { name: "Conversations" })).toBeVisible();
   });

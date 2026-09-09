@@ -36,5 +36,16 @@ Tests unitaires/composants, contrôles des permissions dès qu’elles changent,
 - Navigation clavier de la ré-authentification corrigée : le champ technique destiné au gestionnaire de mots de passe n’entre plus dans la boucle de focus. Export présenté comme une action neutre, distincte de la suppression.
 - Après correction, les **19/19** scénarios dashboard et nouveaux lots ont repassé avec sortie 0, dont le scénario 1440 px précédemment en échec. Cette relance couvre les quatre tailles d’écran et conserve le contrôle de visibilité du bouton Enregistrer.
 - Lint, typecheck et build réussis le 9 septembre, y compris après le correctif dashboard. Aucun échec fonctionnel restant dans les suites exécutées ; cela ne constitue pas une garantie absolue de non-régression ni une recette authentifiée de production.
-- Les trois nouvelles migrations sont appliquées **localement seulement**. Aucun commit/push/déploiement de ces sept lots n’a encore été effectué.
+- À la fin de cette première passe, les trois nouvelles migrations étaient appliquées **localement seulement** et le code n’avait pas encore été poussé. Voir l’état distant actualisé ci-dessous.
 - Procédure et prérequis : `docs/operations/MISE_EN_SERVICE.md`.
+
+## Reprise après le push `ac0b0980` — 9 septembre
+
+- Le dépôt local était propre à la reprise. `git ls-remote` confirme `ac0b09805af7b9d578013384a61709f3450c36f8` sur `main` distant.
+- [Vercel signale un déploiement réussi](https://vercel.com/samuelmuhadri-2777s-projects/athleteoss/4tFsYazkVxzF7yfhF7x7NoV5uWCH). Le bundle servi par l’URL de production contient les nouveaux parcours de ré-authentification et les notices pilote, ainsi que le projet Supabase attendu. Les sondes publiques repassent **9/9**.
+- Le push Git **n’a pas déployé Supabase** : les migrations `20260908020000`, `20260908030000`, `20260908040000` sont toujours absentes du distant. `signup` reste en version 12 et `admin-actions` en version 7, datées du 8 septembre. Ne pas présenter les nouvelles protections serveur ou les affectations comme actives en production.
+- [La CI de ce commit](https://github.com/samuelmuhadri-art/athleteos/actions/runs/34319033854) a passé 149 parcours navigateur sur 150. L’unique échec est une ambiguïté du test de messagerie 390 px : le sélecteur global correspond à la bulle et au champ de saisie, puis aux messages d’essais précédents.
+- Correctif du test : texte unique par tentative, attente de la remise à zéro du champ, recherche dans la conversation, unicité de la bulle et contrôle de persistance après rechargement. Aucun sélecteur `.first()` ajouté pour masquer les doublons, aucune assertion supprimée.
+- Recette locale réelle : `post-refonte.spec.js --repeat-each=3 --workers=2 --retries=1` → **33/33 réussis**, sans retry, en 59,1 secondes. Authentification et base Supabase locales réelles, contrairement aux parcours simulés de la première passe. Build et lint ciblé réussis. Les quatre clubs, sept comptes et données de cette recette ont été supprimés après vérification de leurs identifiants.
+- L’inventaire distant des sauvegardes reste `backups=[]`, PITR désactivé. Choix de l’emplacement de sauvegarde demandé avant toute migration de production. SMTP/domaine, validation des coordonnées légales et service de monitoring restent à finaliser.
+- Le résultat de la CI distante après publication du correctif doit être vérifié séparément ; la réussite locale ne remplace pas cette vérification.
