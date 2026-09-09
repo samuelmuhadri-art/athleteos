@@ -1,0 +1,7 @@
+.club-invite-dialog.reauth-dialog {
+  width: 100%;
+  max-width: 440px;
+  max-height: calc(100dvh - 24px);
+  overflow-y: auto;
+  padding: 24px;
+}

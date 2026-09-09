@@ -50,7 +50,7 @@ export default [
     languageOptions: { globals: { ...globals.node } },
   },
   {
-    files: ['*.config.js', 'test_*.mjs', 'e2e/**/*.{js,mjs}', 'postcss.config.js', 'tailwind.config.js'],
+    files: ['*.config.js', 'test_*.mjs', 'scripts/production-smoke.mjs', 'scripts/local-restore-drill.mjs', 'e2e/**/*.{js,mjs}', 'postcss.config.js', 'tailwind.config.js'],
     languageOptions: { ecmaVersion: 2022, sourceType: 'module', globals: { ...globals.node } },
   },
 ]

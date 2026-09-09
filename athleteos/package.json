@@ -17,7 +17,10 @@
     "test:push-transactions": "node test_push_outbox_transactions.mjs",
     "test:alert-rules": "node test_alert_rules.mjs",
     "test:dashboard": "node test_dashboard_preferences.mjs",
-    "test:integration": "node test_rls_regression.mjs && node test_module_configuration.mjs && node test_signup_regression.mjs && node test_send_push_regression.mjs && node test_push_outbox_transactions.mjs && node test_admin_actions.mjs && node test_import_club_athletes.mjs && node test_charge_model_parity.mjs && node test_axis_model_parity.mjs && node test_competition_transactions.mjs && node test_private_storage.mjs && node test_document_distribution.mjs && node test_planning_evolution.mjs && node test_wellness_configuration.mjs && node test_alert_rules.mjs && node test_dashboard_preferences.mjs && node test_alert_lifecycle.mjs && node test_scale_30_athletes.mjs && node test_performance_normalization.mjs",
+    "test:readiness": "node test_service_readiness.mjs",
+    "test:production-public": "node scripts/production-smoke.mjs",
+    "test:restore-local": "node scripts/local-restore-drill.mjs",
+    "test:integration": "node test_rls_regression.mjs && node test_module_configuration.mjs && node test_signup_regression.mjs && node test_send_push_regression.mjs && node test_push_outbox_transactions.mjs && node test_admin_actions.mjs && node test_service_readiness.mjs && node test_import_club_athletes.mjs && node test_charge_model_parity.mjs && node test_axis_model_parity.mjs && node test_competition_transactions.mjs && node test_private_storage.mjs && node test_document_distribution.mjs && node test_planning_evolution.mjs && node test_wellness_configuration.mjs && node test_alert_rules.mjs && node test_dashboard_preferences.mjs && node test_alert_lifecycle.mjs && node test_scale_30_athletes.mjs && node test_performance_normalization.mjs",
     "reset:smac:dry-run": "node scripts/reset-smac-operational-data.mjs",
     "reset:smac": "node scripts/reset-smac-operational-data.mjs --execute",
     "check": "npm run lint && npm run typecheck && npm run test:coverage && npm run build"

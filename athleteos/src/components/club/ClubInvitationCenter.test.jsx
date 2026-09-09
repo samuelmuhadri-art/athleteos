@@ -24,6 +24,31 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe("ClubInvitationCenter", () => {
+  it("garde les invitations coach indisponibles avec un serveur ancien", async () => {
+    const callAdmin = vi.fn().mockResolvedValue({ invitations: [] });
+    render(<ClubInvitationCenter callAdmin={callAdmin} clubName="Club ami" />);
+    await screen.findByText("Aucune invitation individuelle");
+    expect(screen.getByRole("option", { name: /Coach/ }).disabled).toBe(true);
+    expect(screen.getByRole("option", { name: "Athlète", exact: true }).disabled).toBe(false);
+  });
+
+  it("crée une invitation coach nominative si le serveur la prend en charge", async () => {
+    const callAdmin = vi.fn(async (payload) => payload.action === "list_club_invitations"
+      ? { invitations: [], capabilities: { coachInvitations: true } }
+      : { invitation: { ...existingInvitation, targetRole: "coach", status: "sent" } });
+    render(<ClubInvitationCenter callAdmin={callAdmin} clubName="Club ami" />);
+    await screen.findByText("Aucune invitation individuelle");
+    fireEvent.change(screen.getByLabelText("Inviter comme"), { target: { value: "coach" } });
+    const email = screen.getByLabelText(/Email/);
+    expect(email.required).toBe(true);
+    fireEvent.change(email, { target: { value: "coach@club.be" } });
+    fireEvent.click(screen.getByRole("button", { name: "Créer l’invitation" }));
+    await waitFor(() => expect(callAdmin).toHaveBeenCalledWith(expect.objectContaining({
+      action: "create_club_invitation", targetRole: "coach", recipientEmail: "coach@club.be",
+    })));
+    expect(await screen.findByText("Invitation individuelle prête à être envoyée.")).toBeTruthy();
+  });
+
   it("affiche le suivi et crée une invitation individuelle", async () => {
     const created = { ...existingInvitation, id: "223e4567-e89b-42d3-a456-426614174000", code: "WXYZ6789", recipientName: "Noah", recipientEmail: null, status: "sent" };
     const callAdmin = vi.fn(async (payload) => {

@@ -15,6 +15,7 @@ import { useAuth }    from "./hooks/useAuth";
 import LoginPage      from "./pages/LoginPage";
 import SignupPage     from "./pages/SignupPage";
 import ResetPasswordPage from "./pages/ResetPasswordPage";
+import LegalPage from "./pages/LegalPage";
 import AuthAccessError from "./components/auth/AuthAccessError";
 import AccountSettingsModal from "./components/ui/AccountSettingsModal";
 import InitialAvatar from "./components/ui/InitialAvatar";
@@ -576,6 +577,8 @@ export default function App() {
   const { club, loading: clubLoading, refresh: refreshClub } = useClubBranding(clubId);
   const themeStyle = useMemo(() => getClubThemeVariables(club?.accentColor), [club?.accentColor]);
 
+  const legalSection = new URLSearchParams(globalThis.location?.search ?? "").get("legal");
+  if (["privacy", "terms", "legal"].includes(legalSection)) return <LegalPage section={legalSection} />;
   if (authLoading) return <AuthLoader />;
   // Priorité absolue : tant qu'un nouveau mot de passe n'est pas défini après
   // un clic sur le lien de réinitialisation, on ne route jamais ailleurs.

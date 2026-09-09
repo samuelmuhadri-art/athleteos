@@ -102,6 +102,15 @@ describe("SignupPage", () => {
     expect(mocks.invoke.mock.calls[0][1].body).toMatchObject({ mode: "create_club", clubName: "Club nouveau", company: "", formElapsedMs: 2000 });
     await waitFor(() => expect(screen.getByRole("button", { name: "Créer mon club", exact: true }).disabled).toBe(false));
   });
+  it("attend la confirmation email sans connecter automatiquement ni conserver le champ mot de passe", async () => {
+    mocks.invoke.mockResolvedValue({ data: { success: true, confirmationRequired: true }, error: null });
+    render(<SignupPage onBack={vi.fn()} />); fillNewClub();
+    expect(await screen.findByRole("region", { name: "Confirmation de l’adresse email" })).toBeTruthy();
+    expect(screen.getByText("new@example.invalid")).toBeTruthy();
+    expect(screen.queryByLabelText("Mot de passe")).toBeNull();
+    expect(mocks.signInWithPassword).not.toHaveBeenCalled();
+    expect(mocks.invoke).toHaveBeenCalledTimes(1);
+  });
   it("sort d'une inscription sans réponse et invite à vérifier le compte avant de recommencer", async () => {
     vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] }); mocks.invoke.mockReturnValue(new Promise(() => {}));
     render(<SignupPage onBack={vi.fn()} />); fillNewClub();

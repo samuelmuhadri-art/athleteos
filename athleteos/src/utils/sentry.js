@@ -11,6 +11,7 @@
 // ============================================================
 
 import * as Sentry from "@sentry/react";
+import { sanitizeMonitoringEvent } from "./monitoringPrivacy";
 
 const DSN = import.meta.env.VITE_SENTRY_DSN;
 
@@ -21,7 +22,12 @@ export function initSentry() {
   Sentry.init({
     dsn: DSN,
     environment: import.meta.env.MODE,
-    tracesSampleRate: 0.1,
+    sendDefaultPii: false,
+    tracesSampleRate: 0,
+    autoSessionTracking: false,
+    beforeSend: sanitizeMonitoringEvent,
+    beforeBreadcrumb: () => null,
+    beforeSendTransaction: () => null,
   });
 }
 

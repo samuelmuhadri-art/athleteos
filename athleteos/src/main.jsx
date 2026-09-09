@@ -15,6 +15,7 @@ import { initSentry, captureError } from "./utils/sentry";
 import { PwaInstallProvider } from "./context/PwaInstallContext";
 import AppStatusBanner from "./components/pwa/AppStatusBanner";
 import ToastProvider from "./components/ui/ToastProvider";
+import ReauthenticationProvider from "./components/auth/ReauthenticationProvider";
 
 initSentry();
 // Les rejets de promesse non gérés (fetch échoué non catché, etc.) ne
@@ -26,10 +27,12 @@ createRoot(document.getElementById("root")).render(
     <ErrorBoundary>
       <ToastProvider>
         <AuthProvider>
+          <ReauthenticationProvider>
           <PwaInstallProvider>
             <App />
             <AppStatusBanner />
           </PwaInstallProvider>
+          </ReauthenticationProvider>
         </AuthProvider>
       </ToastProvider>
     </ErrorBoundary>

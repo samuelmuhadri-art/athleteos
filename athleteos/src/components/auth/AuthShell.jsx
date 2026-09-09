@@ -1,5 +1,6 @@
 import { ShieldCheck, Sparkles, UsersRound } from "lucide-react";
 import AthleteOSLogo from "../brand/AthleteOSLogo";
+import LegalLinks from "./LegalLinks";
 
 const PRODUCT_POINTS = [
   { icon: Sparkles, text: "Les actions importantes restent visibles au bon moment." },
@@ -42,6 +43,7 @@ export default function AuthShell({ eyebrow, title, description, children, foote
           </div>
 
           {footer && <div className="auth-footer">{footer}</div>}
+          <LegalLinks />
         </section>
       </div>
     </main>

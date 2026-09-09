@@ -4,7 +4,7 @@ import { QRCodeSVG } from "qrcode.react";
 import { buildInviteUrl } from "../../utils/clubBranding";
 
 const STATUS_META = Object.freeze({
-  sent: { label: "Envoyée", className: "chip-neutral" },
+  sent: { label: "Prête à partager", className: "chip-neutral" },
   opened: { label: "Ouverte", className: "chip-info" },
   accepted: { label: "Acceptée", className: "chip-success" },
   expired: { label: "Expirée", className: "chip-warning" },
@@ -27,18 +27,20 @@ function feedbackError(error, fallback) {
 export default function ClubInvitationCenter({ callAdmin, clubName }) {
   const [invitations, setInvitations] = useState([]);
   const [selectedId, setSelectedId] = useState(null);
-  const [form, setForm] = useState({ recipientName: "", recipientEmail: "", expiresInDays: "7" });
+  const [form, setForm] = useState({ recipientName: "", recipientEmail: "", expiresInDays: "7", targetRole: "athlete" });
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
   const [revokingId, setRevokingId] = useState(null);
   const [confirmRevokeId, setConfirmRevokeId] = useState(null);
   const [feedback, setFeedback] = useState(null);
+  const [coachInvitationsReady, setCoachInvitationsReady] = useState(false);
 
   const loadInvitations = useCallback(async () => {
     setLoading(true);
     try {
       const data = await callAdmin({ action: "list_club_invitations" });
       setInvitations(data.invitations ?? []);
+      setCoachInvitationsReady(data.capabilities?.coachInvitations === true);
       setSelectedId((current) => current ?? data.invitations?.[0]?.id ?? null);
       if (data.migrationPending) setFeedback({ type: "error", text: "La migration des invitations doit encore être appliquée." });
     } catch (error) {
@@ -59,6 +61,10 @@ export default function ClubInvitationCenter({ callAdmin, clubName }) {
   const createInvitation = async (event) => {
     event.preventDefault();
     if (creating) return;
+    if (form.targetRole === "coach" && !coachInvitationsReady) {
+      setFeedback({ type:"error", text:"Le serveur doit être mis à jour avant de pouvoir inviter un coach." });
+      return;
+    }
     setCreating(true);
     setFeedback(null);
     try {
@@ -67,11 +73,12 @@ export default function ClubInvitationCenter({ callAdmin, clubName }) {
         recipientName: form.recipientName.trim() || null,
         recipientEmail: form.recipientEmail.trim() || null,
         expiresInDays: Number(form.expiresInDays),
+        targetRole: form.targetRole,
         idempotencyKey: crypto.randomUUID(),
       });
       setInvitations((current) => [data.invitation, ...current]);
       setSelectedId(data.invitation.id);
-      setForm({ recipientName: "", recipientEmail: "", expiresInDays: "7" });
+      setForm({ recipientName: "", recipientEmail: "", expiresInDays: "7", targetRole: "athlete" });
       setFeedback({ type: "success", text: "Invitation individuelle prête à être envoyée." });
     } catch (error) {
       setFeedback({ type: "error", text: feedbackError(error, "L’invitation n’a pas pu être créée. Réessaie dans un instant.") });
@@ -140,7 +147,7 @@ export default function ClubInvitationCenter({ callAdmin, clubName }) {
           </span>
           <div>
             <h4 id="club-invitation-center-title" className="card-title">Invitations individuelles</h4>
-            <p className="card-subtitle mt-1">Un lien unique par athlète, visible jusqu’à son acceptation.</p>
+            <p className="card-subtitle mt-1">Un lien unique par membre. Copie-le ou partage-le : aucun email n’est envoyé automatiquement ici.</p>
           </div>
         </div>
         <button type="button" className="btn-ghost" onClick={loadInvitations} disabled={loading} style={{ minHeight: 36 }}>
@@ -150,13 +157,20 @@ export default function ClubInvitationCenter({ callAdmin, clubName }) {
 
       <form onSubmit={createInvitation} className="grid gap-3 border-b p-4 md:grid-cols-2" style={{ borderColor: "var(--c-border)", background: "var(--c-surface-2)" }}>
         <label className="block">
-          <span className="club-field-label"><UserRound size={14} aria-hidden="true" /> Nom de l’athlète <small>(facultatif)</small></span>
+          <span className="club-field-label">Inviter comme</span>
+          <select className="input-premium mt-2 w-full" value={form.targetRole} disabled={creating} onChange={(event) => setForm((current) => ({ ...current, targetRole: event.target.value }))}>
+            <option value="athlete">Athlète</option><option value="coach" disabled={!coachInvitationsReady}>Coach{coachInvitationsReady ? "" : " — indisponible pour le moment"}</option>
+          </select>
+          {form.targetRole === "coach" && <p className="text-sm mt-2">Le coach aura les accès du staff au club, sans les droits d’administration du head coach.</p>}
+        </label>
+        <label className="block">
+          <span className="club-field-label"><UserRound size={14} aria-hidden="true" /> Nom du membre <small>(facultatif)</small></span>
           <input className="input-premium mt-2 w-full" value={form.recipientName} maxLength={100} placeholder="Ex. Alice Martin"
             onChange={(event) => setForm((current) => ({ ...current, recipientName: event.target.value }))} />
         </label>
         <label className="block">
-          <span className="club-field-label"><Mail size={14} aria-hidden="true" /> Email <small>(facultatif)</small></span>
-          <input className="input-premium mt-2 w-full" type="email" value={form.recipientEmail} maxLength={254} placeholder="alice@club.be"
+          <span className="club-field-label"><Mail size={14} aria-hidden="true" /> Email <small>{form.targetRole === "coach" ? "(obligatoire)" : "(facultatif)"}</small></span>
+          <input className="input-premium mt-2 w-full" type="email" required={form.targetRole === "coach"} value={form.recipientEmail} maxLength={254} placeholder="alice@club.be"
             onChange={(event) => setForm((current) => ({ ...current, recipientEmail: event.target.value }))} />
         </label>
         <label className="block">
@@ -210,7 +224,7 @@ export default function ClubInvitationCenter({ callAdmin, clubName }) {
                       </div>
                       <span className={`chip ${status.className}`}>{status.label}</span>
                     </div>
-                    <p className="meta-text mt-2">Créée le {formatDate(invitation.createdAt)} · expire le {formatDate(invitation.expiresAt)}</p>
+                    <p className="meta-text mt-2">{invitation.targetRole === "coach" ? "Coach" : "Athlète"} · Créée le {formatDate(invitation.createdAt)} · expire le {formatDate(invitation.expiresAt)}</p>
                   </button>
                 );
               })}

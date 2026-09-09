@@ -1,0 +1,22 @@
+name: Production — disponibilité et protections publiques
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '17 */6 * * *'
+permissions:
+  contents: read
+concurrency:
+  group: production-smoke
+  cancel-in-progress: false
+jobs:
+  public-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: node athleteos/scripts/production-smoke.mjs
+# Activer les notifications d'échec GitHub Actions pour le responsable.
+# Ce job ne remplace ni un monitoring temps réel ni une recette authentifiée.

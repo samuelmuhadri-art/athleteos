@@ -201,6 +201,25 @@ async function main() {
       record("create_club_invitation refusé pour athlète", res.success === false, res.success ? "AUTORISÉ !" : res.error);
     }
 
+    // New staff invitations use server-owned roles, never a role supplied at signup.
+    {
+      const denied = await callAdmin(coachA.client, { action:"create_club_invitation", targetRole:"coach", recipientEmail:`staff-${RUN_ID}@example.invalid` });
+      record("Un coach ne peut pas inviter un autre coach", denied.success === false);
+      const headRole = await callAdmin(headA2.client, { action:"create_club_invitation", targetRole:"head_coach", recipientEmail:`staff-${RUN_ID}@example.invalid` });
+      record("Une invitation ne crée pas de head coach", headRole.success === false);
+      const unnamed = await callAdmin(headA2.client, { action:"create_club_invitation", targetRole:"coach" });
+      record("Email obligatoire pour une invitation coach", unnamed.success === false);
+      const created = await callAdmin(headA2.client, { action:"create_club_invitation", targetRole:"coach", recipientEmail:athleteA.row.email });
+      record("Le responsable crée une invitation coach nominative", created.success === true && created.invitation?.targetRole === "coach");
+      const existingAthlete = await callAdmin(athleteA.client, { action:"accept_club_invitation", inviteCode:created.invitation?.code });
+      record("Une invitation coach ne transforme pas silencieusement un compte athlète", existingAthlete.success === false && /profil athlète/.test(existingAthlete.error ?? ""));
+      const configured = await headA2.client.rpc("configure_coach_following", { p_coach_user_id:coachA.row.id,p_mode:"assigned",p_groups:[],p_athlete_ids:[athleteProfileA.id],p_expected_revision:0 });
+      if(configured.error) throw configured.error;
+      const own = await callAdmin(coachA.client, { action:"export_personal_data" });
+      const other = await callAdmin(athleteA.client, { action:"export_personal_data" });
+      record("L’export inclut uniquement ses propres affectations", own.export?.preferences?.coachFollowing?.[0]?.coach_athlete_assignments?.[0]?.athlete_id === athleteProfileA.id && other.export?.preferences?.coachFollowing?.length === 0);
+    }
+
     // ── 2. Head coach d'un AUTRE club refusé sur un membre/club qui n'est pas le sien ──
     {
       const res = await callAdmin(headB.client, { action: "remove_user", userId: athleteA.row.id });

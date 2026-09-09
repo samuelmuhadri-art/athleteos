@@ -41,6 +41,7 @@ export async function installUxFixture(page, { role = "head_coach", empty = fals
         if (resource === "configure_club_alert_rules") return json(body.p_rules);
         if (resource === "evaluate_club_alert_rules") return json({ ok:true, generated:0 });
         if (resource === "get_my_dashboard_preferences") return json(dashboardPreferences);
+        if (resource === "get_coach_following") return json({ coaches:[{ id:profile.id, name:profile.name, role:profile.role, mode:"club", revision:0, groups:[], athleteIds:[] }], athletes:athletes.map(item => ({ id:item.id, name:item.name, group:item.group_name })) });
         if (resource === "configure_my_dashboard_preferences") { dashboardPreferences = body.p_preferences; return json(dashboardPreferences); }
         if (resource === "get_wellness_questionnaire") return json({ versionId:null, versionNumber:1, isDefault:true, questions:[{ key:"sleep", required:true },{ key:"energy", required:true },{ key:"soreness", required:true },{ key:"mood", required:true },{ key:"stress", required:true }], activeDays:[1,2,3,4,5,6,7], responseVisibility:"staff" });
         if (resource === "configure_wellness_questionnaire") return json({ versionId:4, versionNumber:2 });

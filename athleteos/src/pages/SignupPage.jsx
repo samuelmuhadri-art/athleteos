@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { ArrowLeft, Building2, KeyRound, Lock, Mail, User, UsersRound } from "lucide-react";
 import { supabase } from "../utils/supabaseClient";
 import AuthShell from "../components/auth/AuthShell";
+import EmailConfirmationNotice from "../components/auth/EmailConfirmationNotice";
 import {
   AuthFeedback,
   AuthField,
@@ -23,9 +24,9 @@ const SIGNUP_MODES = Object.freeze([
   },
   {
     id: "join_club",
-    role: "Athlète",
+    role: "Athlète ou coach",
     title: "Rejoindre mon club",
-    description: "Utilise le code transmis par ton coach pour retrouver ton groupe.",
+    description: "Athlète ou coach : utilise l’invitation du responsable du club.",
     icon: UsersRound,
   },
 ]);
@@ -35,6 +36,7 @@ export default function SignupPage({ onBack, initialInviteCode = "" }) {
   const [mode, setMode] = useState(normalizedInviteCode ? "join_club" : "create_club");
   const [form, setForm] = useState({ name: "", email: "", password: "", clubName: "", inviteCode: normalizedInviteCode });
   const [loading, setLoading] = useState(false);
+  const [confirmationEmail, setConfirmationEmail] = useState(null);
   const [error, setError] = useState(null);
   const [inviteCheck, setInviteCheck] = useState(null);
   const [honeypot, setHoneypot] = useState("");
@@ -108,6 +110,11 @@ export default function SignupPage({ onBack, initialInviteCode = "" }) {
       }), "Le serveur met trop de temps à répondre. Ton compte a peut-être été créé : essaie de te connecter avant de recommencer.");
       if (functionError) throw functionError;
       if (!data?.success) throw new Error(data?.error ?? "Une erreur est survenue.");
+      if (data.confirmationRequired) {
+        setConfirmationEmail(form.email.trim());
+        setForm((current) => ({ ...current, password: "" }));
+        return;
+      }
 
       const { error: signInError } = await withAuthTimeout(supabase.auth.signInWithPassword({
         email: form.email.trim(),
@@ -151,6 +158,12 @@ export default function SignupPage({ onBack, initialInviteCode = "" }) {
     <button type="button" onClick={onBack} className="auth-text-action subtle">
       <ArrowLeft size={15} aria-hidden="true" /> J’ai déjà un compte
     </button>
+  );
+
+  if (confirmationEmail) return (
+    <AuthShell eyebrow="Dernière étape" title="Confirme ton adresse email" description="Ton accès reste protégé jusqu’à la vérification de ton adresse.">
+      <EmailConfirmationNotice email={confirmationEmail} onBack={onBack} />
+    </AuthShell>
   );
 
   return (

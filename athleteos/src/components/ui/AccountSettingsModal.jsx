@@ -21,6 +21,8 @@ import {
 } from "lucide-react";
 import { supabase } from "../../utils/supabaseClient";
 import { useAuth } from "../../hooks/useAuth";
+import { useSensitiveActions } from "../../hooks/useSensitiveActions";
+import LegalLinks from "../auth/LegalLinks";
 import {
   AuthFeedback,
   AuthField,
@@ -30,6 +32,7 @@ import { translateAuthError } from "../auth/authFormUtils";
 import { loadClubBranding } from "../../hooks/useClubBranding";
 import { CLUB_ACCENT_PRESETS, DEFAULT_CLUB_ACCENT } from "../../utils/clubBranding";
 import ClubInvitationCenter from "../club/ClubInvitationCenter";
+import CoachFollowingSettings from "../club/CoachFollowingSettings";
 import PwaAccessCard from "../pwa/PwaAccess";
 import ClubModulesSettings from "../modules/ClubModulesSettings";
 import { ConfirmDialog } from "./premium";
@@ -95,6 +98,7 @@ function ActionRow({ children, action }) {
 
 export default function AccountSettingsModal({ onClose, initialSection = "account", onClubUpdated }) {
   const { user, profile, clubId, signOut } = useAuth();
+  const { authenticate, invokeAdmin } = useSensitiveActions();
   const isHeadCoach = profile?.role === "head_coach";
   const initialActiveSection = initialSection === "application"
     ? "application"
@@ -118,6 +122,7 @@ export default function AccountSettingsModal({ onClose, initialSection = "accoun
   const [copied, setCopied] = useState(false);
   const [confirmRegeneration, setConfirmRegeneration] = useState(false);
   const [confirmSignOut, setConfirmSignOut] = useState(false);
+  const [showCoachFollowing, setShowCoachFollowing] = useState(false);
   const [confirmAccountDeletion, setConfirmAccountDeletion] = useState(false);
   const [accountDeletionEmail, setAccountDeletionEmail] = useState("");
   const [accountDeletionError, setAccountDeletionError] = useState(null);
@@ -173,6 +178,7 @@ export default function AccountSettingsModal({ onClose, initialSection = "accoun
 
   useEffect(() => {
     const handleKeyDown = (event) => {
+      if (document.querySelector("[data-reauth-dialog]")) return;
       if (event.key === "Escape") {
         event.preventDefault();
         requestClose();
@@ -198,7 +204,7 @@ export default function AccountSettingsModal({ onClose, initialSection = "accoun
   });
 
   const callAdmin = useCallback(async (payload) => {
-    const { data, error } = await supabase.functions.invoke("admin-actions", { body: payload });
+    const { data, error } = await invokeAdmin(payload);
     if (error) {
       if (error.context?.json) {
         try {
@@ -212,7 +218,7 @@ export default function AccountSettingsModal({ onClose, initialSection = "accoun
     }
     if (!data?.success) throw new Error(readableAdminError(data?.error));
     return data;
-  }, []);
+  }, [invokeAdmin]);
 
   const runAction = async (key, action, successText) => {
     setBusy(key);
@@ -239,10 +245,10 @@ export default function AccountSettingsModal({ onClose, initialSection = "accoun
   const saveEmail = () => {
     if (!email.trim() || email.trim() === user?.email) return;
     runAction("email", async () => {
+      await authenticate();
       const normalizedEmail = email.trim();
       const { error } = await supabase.auth.updateUser({ email: normalizedEmail });
       if (error) throw error;
-      await supabase.from("users").update({ email: normalizedEmail }).eq("id", profile.id);
     }, "Vérifie ta boîte mail pour confirmer la nouvelle adresse.");
   };
 
@@ -252,6 +258,7 @@ export default function AccountSettingsModal({ onClose, initialSection = "accoun
       return;
     }
     runAction("password", async () => {
+      await authenticate();
       const { error } = await supabase.auth.updateUser({ password });
       if (error) throw error;
       setPassword("");
@@ -578,14 +585,14 @@ export default function AccountSettingsModal({ onClose, initialSection = "accoun
                 />
               </ActionRow>
 
-              <section className="settings-signout-card" aria-labelledby="settings-export-title">
+              <section className="settings-signout-card settings-export-card" aria-labelledby="settings-export-title">
                 <div>
                   <h3 id="settings-export-title">Tes données AthleteOS</h3>
                   <p>Télécharge une copie structurée de ton compte et des données qui te concernent.</p>
                 </div>
                 <button
                   type="button"
-                  className="btn-secondary settings-signout-button"
+                  className="btn-secondary settings-export-button"
                   onClick={exportPersonalData}
                   disabled={Boolean(busy)}
                 >
@@ -629,6 +636,7 @@ export default function AccountSettingsModal({ onClose, initialSection = "accoun
                   <Trash2 size={16} aria-hidden="true" /> Supprimer mon compte
                 </button>
               </section>
+              <LegalLinks />
             </div>
           ) : activeSection === "application" ? (
             <div
@@ -829,6 +837,7 @@ export default function AccountSettingsModal({ onClose, initialSection = "accoun
                   )}
 
                   <ClubInvitationCenter callAdmin={callAdmin} clubName={clubName} />
+                  <details className="mt-4" onToggle={(event) => setShowCoachFollowing(event.currentTarget.open)}><summary className="cursor-pointer py-3">Organisation des coachs (facultatif)</summary>{showCoachFollowing && <CoachFollowingSettings />}</details>
                 </>
               )}
             </div>

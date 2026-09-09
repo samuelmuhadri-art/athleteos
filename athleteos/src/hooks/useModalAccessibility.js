@@ -44,6 +44,8 @@ export function useModalAccessibility({
     initialTarget?.focus?.();
 
     const handleKeyDown = (event) => {
+      const securityDialog = document.querySelector("[data-reauth-dialog]");
+      if (securityDialog && securityDialog !== dialogRef.current) return;
       if (event.key === "Escape") {
         event.preventDefault();
         if (!closeDisabledRef.current) onCloseRef.current?.();

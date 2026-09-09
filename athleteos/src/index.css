@@ -1175,6 +1175,8 @@ body {
 .settings-signout-card h3 { color: var(--c-text-1); font-size: var(--text-card-title); line-height: var(--leading-card); font-weight: 700; }
 .settings-signout-card p { margin-top: 4px; color: var(--c-text-3); font-size: var(--text-meta); line-height: var(--leading-meta); }
 .settings-signout-button { justify-content: center; color: var(--tone-danger); border-color: rgba(224,82,82,0.25); }
+.settings-export-card { border-color: var(--c-border); background: var(--c-surface-2); }
+.settings-export-button { justify-content: center; flex-shrink: 0; }
 .settings-loading {
   min-height: 160px; display: flex; align-items: center; justify-content: center; gap: 10px;
   color: var(--c-text-3); font-size: var(--text-secondary); line-height: var(--leading-small);

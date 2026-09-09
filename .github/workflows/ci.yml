@@ -134,6 +134,7 @@ jobs:
             test_send_push_regression.mjs \
             test_push_outbox_transactions.mjs \
             test_admin_actions.mjs \
+            test_service_readiness.mjs \
             test_import_club_athletes.mjs \
             test_charge_model_parity.mjs \
             test_axis_model_parity.mjs \

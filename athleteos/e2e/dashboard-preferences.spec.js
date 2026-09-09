@@ -18,6 +18,7 @@ for (const width of [320,375,768,1440]) {
       await dialog.getByLabel("Groupe par défaut").selectOption("Sprint");
       await dialog.getByLabel("Période des feedbacks récents").selectOption("14");
       await expect(dialog.getByRole("button",{name:"Enregistrer",exact:true})).toBeInViewport();
+      await page.screenshot({path:testInfo.outputPath("dashboard-settings.png"),fullPage:true});
       await dialog.getByRole("button",{name:"Enregistrer",exact:true}).click();
       await expect(dialog).toBeHidden();
       await expect(page.getByLabel("Groupe affiché")).toHaveValue("Sprint");

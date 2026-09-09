@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { createPortal } from "react-dom";
 import { ArrowUp, ArrowDown } from "lucide-react";
 import Modal from "../ui/Modal";
 import { DASHBOARD_BLOCKS, DASHBOARD_CARDS, normalizeDashboardPreferences } from "../../domain/dashboardPreferences";
@@ -20,7 +21,8 @@ export default function DashboardSettings({ preferences, groups, onSaved, onClos
     catch (err) { setError(err.message ?? "Enregistrement impossible."); }
     finally { setSaving(false); }
   };
-  return <Modal title="Personnaliser mon accueil" onClose={onClose} onConfirm={save} confirmLabel="Enregistrer" disabled={saving} loading={saving}>
+  // Keep fixed positioning relative to the viewport, not an animated dashboard ancestor.
+  return createPortal(<Modal title="Personnaliser mon accueil" onClose={onClose} onConfirm={save} confirmLabel="Enregistrer" disabled={saving} loading={saving}>
     <div className="space-y-5">
       <p className="secondary-text">Ces préférences ne changent que ton accueil. Les outils désactivés restent masqués. Place les informations prioritaires en premier.</p>
       <fieldset className="space-y-2"><legend className="card-title mb-2">Blocs principaux</legend>
@@ -39,5 +41,5 @@ export default function DashboardSettings({ preferences, groups, onSaved, onClos
       <button type="button" className="btn-secondary" onClick={() => setDraft(normalizeDashboardPreferences(null))}>Rétablir les valeurs par défaut</button>
       {error && <p role="alert" className="text-sm" style={{ color:"var(--tone-danger)" }}>{error}</p>}
     </div>
-  </Modal>;
+  </Modal>, document.body);
 }

@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { hasRecentPasswordAuthentication } from "../_shared/recentAuthentication.ts";
 
 // ============================================================
 // AthleteOS — supabase/functions/admin-actions/index.ts
@@ -88,6 +89,7 @@ function readableErrorMessage(error: unknown): string {
 // métier) — distincte d'une exception inattendue, pour choisir le bon
 // `result` ('denied' vs 'error') dans le journal d'audit.
 class DeniedError extends Error {}
+class ReauthenticationRequiredError extends DeniedError {}
 class PayloadTooLargeError extends DeniedError {}
 
 async function collectAllRows(
@@ -283,6 +285,10 @@ serve(async (req) => {
     catch { throw new DeniedError("Corps de requête invalide."); }
     currentAction = typeof body.action === "string" ? body.action : null;
     if (!currentAction) throw new DeniedError("Action manquante.");
+    if (["export_personal_data", "delete_own_account", "remove_user", "change_role", "regenerate_invite_code"].includes(currentAction)
+      && !hasRecentPasswordAuthentication(authHeader)) {
+      throw new ReauthenticationRequiredError("Confirme ton mot de passe pour poursuivre cette action sensible.");
+    }
     idempotencyKey =
       typeof body.idempotencyKey === "string" && body.idempotencyKey.trim()
         ? body.idempotencyKey.trim().slice(0, 100)
@@ -315,7 +321,7 @@ serve(async (req) => {
       if (athleteError) throw athleteError;
 
       const [messages, pushSubscriptions, alertReadStates, auditTrail, authoredSessions,
-        authoredTemplates, authoredSeries, authoredPlanningEvents, authoredDocuments, dashboardPreferences] = await Promise.all([
+        authoredTemplates, authoredSeries, authoredPlanningEvents, authoredDocuments, dashboardPreferences, coachFollowing] = await Promise.all([
         collectAllRows(() => admin.from("messages").select("*")
           .or(`sender_id.eq.${caller.id},receiver_id.eq.${caller.id}`).order("created_at", { ascending: true })),
         collectAllRows(() => admin.from("push_subscriptions")
@@ -339,6 +345,9 @@ serve(async (req) => {
           .eq("uploaded_by", caller.id).order("created_at", { ascending: true })),
         collectAllRows(() => admin.from("coach_dashboard_preferences").select("club_id, preferences, updated_at")
           .eq("user_id", caller.id).order("updated_at", { ascending: true })),
+        collectAllRows(() => admin.from("coach_following")
+          .select("mode, revision, updated_at, coach_group_assignments(group_name), coach_athlete_assignments(athlete_id)")
+          .eq("coach_user_id", caller.id).eq("club_id", caller.club_id).order("updated_at", { ascending: true })),
       ]);
 
       let athleteData: Record<string, unknown> | null = null;
@@ -416,7 +425,7 @@ serve(async (req) => {
         },
         membership: { club, role: caller.role },
         communications: { messages },
-        preferences: { pushSubscriptions, alertReadStates, dashboardPreferences },
+        preferences: { pushSubscriptions, alertReadStates, dashboardPreferences, coachFollowing },
         authoredContent: {
           sessions: authoredSessions,
           sessionTemplates: authoredTemplates,
@@ -482,15 +491,18 @@ serve(async (req) => {
       }
       const { data: individualInvitation, error: individualError } = await admin
         .from("club_invitations")
-        .select("id")
+        .select("id, target_role")
         .ilike("code", inviteCode)
         .maybeSingle();
       if (individualError && individualError.code !== "42P01") throw individualError;
 
       if (individualInvitation) {
+        if (individualInvitation.target_role === "coach" && caller.role === "athlete") {
+          throw new DeniedError("Ce compte possède déjà un profil athlète. Demande au responsable de modifier son rôle avant d’utiliser une invitation coach. Aucune donnée n’a été déplacée.");
+        }
         const { data: acceptance, error: acceptError } = await admin.rpc(
           "accept_existing_member_club_invitation",
-          { p_invitation_id: individualInvitation.id, p_user_id: caller.id, p_email: caller.email ?? "" },
+          { p_invitation_id: individualInvitation.id, p_user_id: caller.id, p_email: authUser.email ?? "" },
         );
         if (acceptError) throw acceptError;
         const status = typeof acceptance?.status === "string" ? acceptance.status : "invalid";
@@ -537,18 +549,19 @@ serve(async (req) => {
     if (currentAction === "list_club_invitations") {
       const { data: rows, error } = await admin
         .from("club_invitations")
-        .select("id, code, recipient_name, recipient_email, status, expires_at, opened_at, accepted_at, revoked_at, created_at")
+        .select("id, code, recipient_name, recipient_email, target_role, status, expires_at, opened_at, accepted_at, revoked_at, created_at")
         .eq("club_id", caller.club_id)
         .order("created_at", { ascending: false })
         .limit(100);
       if (error?.code === "42P01") return ok({ invitations: [], migrationPending: true });
       if (error) throw error;
       const now = Date.now();
-      return ok({ invitations: (rows ?? []).map((row) => ({
+      return ok({ capabilities: { coachInvitations: true }, invitations: (rows ?? []).map((row) => ({
         id: row.id,
         code: row.code,
         recipientName: row.recipient_name,
         recipientEmail: row.recipient_email,
+        targetRole: row.target_role,
         status: row.status === "revoked"
           ? "revoked"
           : row.accepted_at
@@ -566,6 +579,12 @@ serve(async (req) => {
 
     if (currentAction === "create_club_invitation") {
       targetClubId = caller.club_id;
+      const targetRole = body.targetRole ?? "athlete";
+      if (targetRole !== "athlete" && targetRole !== "coach") throw new DeniedError("Rôle d’invitation invalide.");
+      if (targetRole === "coach" && !isHeadCoach) throw new DeniedError("Seul le head coach peut inviter un coach.");
+      if (targetRole === "coach" && !hasRecentPasswordAuthentication(authHeader)) {
+        throw new ReauthenticationRequiredError("Confirme ton mot de passe pour inviter un coach.");
+      }
       const cached = await findCachedSuccess();
       if (cached?.invitation) return ok(cached);
       const recipientName = typeof body.recipientName === "string" && body.recipientName.trim()
@@ -577,6 +596,7 @@ serve(async (req) => {
       if (recipientEmail && (recipientEmail.length > 254 || !EMAIL_PATTERN.test(recipientEmail))) {
         throw new DeniedError("Adresse email du destinataire invalide.");
       }
+      if (targetRole === "coach" && !recipientEmail) throw new DeniedError("Indique l’email du coach : son invitation lui est réservée.");
       const expiresInDays = body.expiresInDays == null ? 7 : Number(body.expiresInDays);
       if (![1, 3, 7, 14, 30].includes(expiresInDays)) throw new DeniedError("Durée d’invitation invalide.");
       const expiresAt = new Date(Date.now() + expiresInDays * 86_400_000).toISOString();
@@ -599,15 +619,17 @@ serve(async (req) => {
         code,
         recipient_name: recipientName,
         recipient_email: recipientEmail,
+        target_role: targetRole,
         expires_at: expiresAt,
         created_by: caller.id,
-      }).select("id, code, recipient_name, recipient_email, expires_at, created_at").single();
+      }).select("id, code, recipient_name, recipient_email, target_role, expires_at, created_at").single();
       if (error || !invitation) throw error ?? new Error("Invitation non créée.");
       const responseInvitation = {
         id: invitation.id,
         code: invitation.code,
         recipientName: invitation.recipient_name,
         recipientEmail: invitation.recipient_email,
+        targetRole: invitation.target_role,
         status: "sent",
         expiresAt: invitation.expires_at,
         createdAt: invitation.created_at,
@@ -862,7 +884,9 @@ serve(async (req) => {
       );
     });
     console.error("admin-actions error:", internalMessage);
-    return new Response(JSON.stringify({ success: false, error: clientMessage }), {
+    return new Response(JSON.stringify({ success: false, error: clientMessage,
+      ...(err instanceof ReauthenticationRequiredError ? { code: "reauthentication_required" } : {}),
+    }), {
       status: 200,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });

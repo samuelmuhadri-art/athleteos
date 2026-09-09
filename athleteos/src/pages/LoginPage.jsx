@@ -2,6 +2,7 @@ import { useState } from "react";
 import { ArrowLeft, Lock, Mail } from "lucide-react";
 import { useAuth } from "../hooks/useAuth";
 import AuthShell from "../components/auth/AuthShell";
+import EmailConfirmationNotice from "../components/auth/EmailConfirmationNotice";
 import {
   AuthFeedback,
   AuthField,
@@ -20,6 +21,7 @@ export default function LoginPage({ onSignupClick, inviteCode = "" }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [resetSent, setResetSent] = useState(false);
+  const [confirmationEmail, setConfirmationEmail] = useState(null);
 
   const updateEmail = (value) => {
     setEmail(value);
@@ -35,6 +37,7 @@ export default function LoginPage({ onSignupClick, inviteCode = "" }) {
     try {
       const { error: authError } = await signIn(email.trim(), password);
       if (authError) {
+        if (authError.code === "email_not_confirmed" || authError.message === "Email not confirmed") setConfirmationEmail(email.trim());
         setError(translateAuthError(authError));
         setLoading(false);
         return;
@@ -103,6 +106,7 @@ export default function LoginPage({ onSignupClick, inviteCode = "" }) {
         : "Retrouve ton planning, ton groupe et les actions qui comptent aujourd’hui."}
       footer={footer}
     >
+      {confirmationEmail && <EmailConfirmationNotice email={confirmationEmail} />}
       {mode === "forgot" ? (
         <form className="auth-form" onSubmit={handleForgotSubmit} noValidate>
           {error && <AuthFeedback>{error}</AuthFeedback>}

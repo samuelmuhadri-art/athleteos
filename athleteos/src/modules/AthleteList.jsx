@@ -7,6 +7,8 @@ import { memo, useState, useCallback, useEffect } from "react";
 import { FileSpreadsheet, Plus, SlidersHorizontal, Users as UsersIcon } from "lucide-react";
 import { supabase }  from "../utils/supabaseClient";
 import { useAuth }   from "../hooks/useAuth";
+import { useSensitiveActions } from "../hooks/useSensitiveActions";
+import { followedAthletes } from "../domain/coachFollowing";
 import LoadingState  from "../components/ui/LoadingState";
 import ErrorState    from "../components/ui/ErrorState";
 import { initialsFromName } from "../utils/helpers.js";
@@ -28,6 +30,7 @@ import { firstSupabaseError } from "../utils/supabaseResults";
 
 function AthleteList({ onNavigate }) {
   const { clubId, profile } = useAuth();
+  const { invokeAdmin } = useSensitiveActions();
   const canImportAthletes = profile?.role === "head_coach";
   const { club: clubModules, effectiveForAthlete, saveAthletes } = useModules();
   const availableModuleKeys = Object.entries(clubModules).filter(([, enabled]) => enabled !== false).map(([key]) => key);
@@ -45,6 +48,18 @@ function AthleteList({ onNavigate }) {
   const [importReport,       setImportReport]       = useState(null);
   const [moduleManagerTarget, setModuleManagerTarget] = useState(null);
   const [creationNotice,     setCreationNotice]     = useState(null);
+  const [following, setFollowing] = useState(null);
+  const [onlyFollowing, setOnlyFollowing] = useState(false);
+  useEffect(() => {
+    let active = true;
+    setFollowing(null); setOnlyFollowing(false);
+    if (profile?.role === "coach") {
+      Promise.resolve().then(() => supabase.rpc("get_coach_following")).then((result) => {
+        if (active && !result.error) setFollowing(result.data?.coaches?.find((coach) => String(coach.id) === String(profile.id)) ?? null);
+      }).catch(() => { /* Optional shortcut: existing club view stays usable. */ });
+    }
+    return () => { active = false; };
+  }, [clubId, profile?.id, profile?.role]);
 
   // ═══ Chargement (identique) ═══════════════════════════════════════════════
   const fetchAll = useCallback(async () => {
@@ -257,9 +272,7 @@ function AthleteList({ onNavigate }) {
       if (profile?.role !== "head_coach") {
         throw new Error("Seul le head coach peut supprimer un athlète qui possède un compte.");
       }
-      const { data, error } = await supabase.functions.invoke("admin-actions", {
-        body: { action: "remove_user", userId: athlete.userId, idempotencyKey: crypto.randomUUID() },
-      });
+      const { data, error } = await invokeAdmin({ action: "remove_user", userId: athlete.userId, idempotencyKey: crypto.randomUUID() });
       if (error) throw error;
       if (!data?.success) throw new Error(typeof data?.error === "string" ? data.error : "Suppression impossible.");
     } else {
@@ -267,7 +280,7 @@ function AthleteList({ onNavigate }) {
       if (error) throw error;
     }
     await fetchAll();
-  }, [athletes, fetchAll, profile?.role]);
+  }, [athletes, fetchAll, profile?.role, invokeAdmin]);
 
   const addInjury    = useCallback(async (aid, form) => { const {error:e}=await supabase.from("injuries").insert({athlete_id:aid,name:form.name,location:form.location||null,intensity:form.intensity,status:form.status,start_date:form.startDate||null,notes:form.notes||null}); if(e)throw e; await fetchAll(); }, [fetchAll]);
   const updateInjury = useCallback(async (id,  form) => { const {error:e}=await supabase.from("injuries").update({name:form.name,location:form.location||null,intensity:form.intensity,status:form.status,start_date:form.startDate||null,notes:form.notes||null}).eq("id",id); if(e)throw e; await fetchAll(); }, [fetchAll]);
@@ -364,6 +377,11 @@ function AthleteList({ onNavigate }) {
         </InlineNotice>
       )}
 
+      {following?.mode === "assigned" && <div className="flex flex-wrap items-center gap-3">
+        <button type="button" className={onlyFollowing ? "btn-primary" : "btn-secondary"} aria-pressed={onlyFollowing} onClick={() => setOnlyFollowing((value) => !value)}>Mes athlètes ({followedAthletes(athletes, following).length})</button>
+        {onlyFollowing && <button type="button" className="btn-ghost" onClick={() => setOnlyFollowing(false)}>Voir tout le club</button>}
+      </div>}
+      {onlyFollowing && followedAthletes(athletes, following).length === 0 && <p role="status">Aucun athlète affecté pour le moment. Ton responsable peut organiser le suivi dans les réglages du club.</p>}
       {athletes.length === 0 ? (
         <EmptyState
           icon={UsersIcon}
@@ -376,7 +394,7 @@ function AthleteList({ onNavigate }) {
         />
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-          {athletes.map(a => (
+          {(onlyFollowing ? followedAthletes(athletes, following) : athletes).map(a => (
             <AthleteCard key={a.id} athlete={a} weeklyCharge={weeklyCharge} modules={effectiveForAthlete(a.id)} onClick={setSelectedAthlete} onConfigureTools={(athlete) => setModuleManagerTarget(athlete.id)} />
           ))}
         </div>

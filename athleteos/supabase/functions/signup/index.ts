@@ -22,13 +22,9 @@
 //      scénarios de compensation à gérer qu'avec des inserts séparés. Si le
 //      RPC échoue, on supprime le compte Auth qu'on vient de créer.
 //
-// Stratégie email pilote : email_confirm=true (accès immédiat, pas de mail
-// de vérification envoyé) — décision documentée, pas un oubli. Ce projet n'a
-// pour l'instant aucun fournisseur SMTP configuré dans Supabase Auth ; activer
-// une vraie vérification demande de configurer ça côté dashboard (Auth >
-// Settings > SMTP) puis de repasser email_confirm à false ici. Tant que ça
-// n'est pas fait, le rate limiting + l'anti-bot sont la principale défense
-// contre la création massive de comptes.
+// Activation progressive : SIGNUP_REQUIRE_EMAIL_CONFIRMATION=true uniquement
+// après configuration et test du SMTP ET activation Confirm email dans Auth.
+// Le mode pilote historique reste inchangé tant que ce prérequis manque.
 // ============================================================
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
@@ -125,6 +121,8 @@ serve(async (req) => {
     });
   }
   const admin = createClient(supabaseUrl, serviceRoleKey);
+  const confirmationRequired = Deno.env.get("SIGNUP_REQUIRE_EMAIL_CONFIRMATION") === "true";
+  const emailRedirectTo = Deno.env.get("APP_URL") || "https://athleteos-by-samuelmuhadri.vercel.app";
 
   function fail(status: number, error: string, code?: string) {
     console.error(`signup[${correlationId}] ${status} — ${error}`);
@@ -135,7 +133,7 @@ serve(async (req) => {
   // "Faux succès" volontaire — utilisé uniquement pour l'anti-énumération
   // d'email (voir en-tête de fichier). N'affiche pas les détails internes.
   function fakeSuccess() {
-    return new Response(JSON.stringify({ success: true, correlationId }), {
+    return new Response(JSON.stringify({ success: true, correlationId, confirmationRequired }), {
       status: 200, headers: { ...corsHeaders(origin), "Content-Type": "application/json" },
     });
   }
@@ -293,10 +291,23 @@ serve(async (req) => {
     }
 
     // ── Compte Auth (seul appel hors transaction SQL) ───────────────────
+    if (confirmationRequired) {
+      // Fail closed if the Edge flag and Auth configuration disagree.
+      // Checking this before creating anything avoids unusable partial accounts.
+      try {
+        const settingsResponse = await fetch(`${supabaseUrl}/auth/v1/settings`, {
+          headers: { apikey: serviceRoleKey }, signal: AbortSignal.timeout(5000),
+        });
+        const settings = settingsResponse.ok ? await settingsResponse.json() : null;
+        if (settings?.mailer_autoconfirm !== false) {
+          return fail(503, "Les inscriptions avec confirmation email sont momentanément indisponibles.");
+        }
+      } catch { return fail(503, "Les inscriptions avec confirmation email sont momentanément indisponibles."); }
+    }
     const { data: authData, error: authErr } = await admin.auth.admin.createUser({
       email: emailRaw,
       password,
-      email_confirm: true, // pilote : voir stratégie documentée en en-tête de fichier
+      email_confirm: !confirmationRequired,
     });
     if (authErr) {
       if (isDuplicateEmailError(authErr)) return fakeSuccess(); // anti-énumération
@@ -343,6 +354,9 @@ serve(async (req) => {
       p_reservation_token: reservationToken,
     });
     if (rpcErr) throw rpcErr;
+    // La transaction métier est validée : un incident SMTP ne doit plus
+    // supprimer Auth et laisser un profil orphelin. Le renvoi reste possible.
+    createdAuthUserId = null;
 
     if (individualInvitationId) {
       // La nouvelle RPC a consommé l'invitation dans la même transaction que
@@ -358,7 +372,15 @@ serve(async (req) => {
       if (trackingError) console.error(`signup[${correlationId}] invitation tracking:`, trackingError.message);
     }
 
-    return new Response(JSON.stringify({ success: true, correlationId }), {
+    if (confirmationRequired) {
+      try {
+        const { error: deliveryError } = await admin.auth.resend({
+          type: "signup", email: emailRaw, options: { emailRedirectTo },
+        });
+        if (deliveryError) console.error(`signup[${correlationId}] confirmation delivery failed`);
+      } catch { console.error(`signup[${correlationId}] confirmation delivery unavailable`); }
+    }
+    return new Response(JSON.stringify({ success: true, correlationId, confirmationRequired }), {
       headers: { ...corsHeaders(origin), "Content-Type": "application/json" },
     });
   } catch (err) {

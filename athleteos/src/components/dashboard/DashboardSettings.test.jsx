@@ -9,6 +9,14 @@ import { saveDashboardPreferences } from "../../services/dashboardPreferencesSer
 vi.mock("../../services/dashboardPreferencesService", () => ({ saveDashboardPreferences:vi.fn() }));
 afterEach(() => { cleanup(); vi.clearAllMocks(); });
 describe("dashboard settings", () => {
+  it("renders outside animated dashboard ancestors so the footer stays in the viewport", () => {
+    const { container } = render(<div style={{ transform:"translateY(0)" }}>
+      <DashboardSettings preferences={normalizeDashboardPreferences(null)} groups={[]} onClose={vi.fn()} onSaved={vi.fn()} />
+    </div>);
+    const dialog = screen.getByRole("dialog", { name:"Personnaliser mon accueil" });
+    expect(document.body.contains(dialog)).toBe(true);
+    expect(container.contains(dialog)).toBe(false);
+  });
   it("saves personal visibility, order, group and period", async () => {
     const onSaved = vi.fn(); saveDashboardPreferences.mockImplementation(async value => value);
     render(<DashboardSettings preferences={normalizeDashboardPreferences(null)} groups={["Sprint"]} onClose={vi.fn()} onSaved={onSaved} />);
